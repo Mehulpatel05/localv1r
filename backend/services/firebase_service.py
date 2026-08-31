@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import time
 from typing import Optional
@@ -11,15 +12,19 @@ from config import Config
 db = None
 
 try:
-    if os.path.exists(Config.FIREBASE_CREDENTIALS_PATH):
-        # 1. Load explicit credentials from service account JSON
+    cred_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if cred_json:
+        # Load credentials from environment variable (Render/production)
+        cred = credentials.Certificate(json.loads(cred_json))
+        firebase_admin.initialize_app(cred)
+        print("[INFO] Firebase Admin initialized via environment credentials.")
+    elif os.path.exists(Config.FIREBASE_CREDENTIALS_PATH):
         cred = credentials.Certificate(Config.FIREBASE_CREDENTIALS_PATH)
         firebase_admin.initialize_app(cred)
         print("[INFO] Firebase Admin initialized via service-account credentials.")
     else:
-        # 2. Fallback: Authenticate using Application Default Credentials (ADC)
         firebase_admin.initialize_app()
-        print("[WARN] service-account.json not found. Falling back to Application Default Credentials (ADC).")
+        print("[WARN] Falling back to Application Default Credentials (ADC).")
     
     db = firestore.client()
 except Exception as err:
