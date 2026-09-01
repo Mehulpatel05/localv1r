@@ -557,8 +557,7 @@ async def create_post(
         device_doc = db.collection("devices").document(device_id).get()
         if device_doc.exists:
             device_data = device_doc.to_dict()
-            if not device_data.get("otpVerified"):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OTP_REQUIRED: Phone authentication is required to create a post.")
+            # OTP Check removed as per user request (device-based login only)
             
             # FUTURE: GPS/IP location check can be enforced here independently of OTP
             # if not is_in_vadodara(ip_addr, gps_coords): raise location_error
