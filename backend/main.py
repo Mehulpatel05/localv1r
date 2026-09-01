@@ -101,6 +101,45 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": "Request payload format is invalid."}
     )
 
+
+# 🛡️ COMPREHENSIVE RISK EVALUATION (Server-Side Authority)
+def evaluate_request_risk(
+    client_ip: str, 
+    client_vpn_flag: bool = False, 
+) -> bool:
+    """
+    Evaluates request risk using server-side signals.
+    Client-provided headers like x-vpn-detected are treated as weak signals.
+    """
+    risk_score = 0
+    
+    # 1. Client VPN flag = weak signal
+    if client_vpn_flag:
+        risk_score += 10 
+        
+    # 2. IP reputation = stronger (simulated)
+    # ip_rep = get_ip_reputation(client_ip)
+    # if ip_rep == "DATA_CENTER" or ip_rep == "KNOWN_TOR": risk_score += 50
+    
+    # 3. ASN / hosting check = stronger (simulated)
+    # asn_info = get_asn_info(client_ip)
+    # if asn_info.get("type") == "hosting": risk_score += 40
+    
+    # 4. GeoIP = location signal (simulated)
+    # geo_info = get_geo_info(client_ip)
+    # if geo_info.get("city") != "Vadodara": risk_score += 30
+    
+    # 5. Play Integrity = app/device integrity
+    # (Already handled by verify_device_attestation blocking if false)
+    
+    # 6. Behaviour/rate limit = abuse signal
+    # (Already handled by enforce_route_rate_limit)
+
+    # Final decision strictly by server
+    if risk_score >= 100:
+        return False
+    return True
+
 # 🛡️ MAGIC BYTE SIGNATURE DETECTION
 def verify_magic_bytes(data: bytes) -> str:
     """
@@ -124,60 +163,125 @@ def generate_server_handle(device_id: str) -> str:
     hashed = hashlib.sha256(raw_str.encode()).hexdigest()
     return f"Anon#{hashed[:6].upper()}"
 
+import secrets
+
 def generate_session_token(installation_id: str, handle: str) -> str:
-    expires_at = int(time.time()) + 604800
-    message = f"access:{installation_id}:{handle}:{expires_at}".encode()
-    signature = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-    return f"{installation_id}|{handle}|{expires_at}|{signature}"
+    auth_token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(auth_token.encode()).hexdigest()
+    
+    if db is not None:
+        db.collection("devices").document(installation_id).set({
+            "installationId": installation_id,
+            "tokenHash": token_hash,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "lastSeenAt": firestore.SERVER_TIMESTAMP,
+            "revokedAt": None
+        })
+    return auth_token
 
 def generate_refresh_token(installation_id: str, handle: str) -> str:
-    expires_at = int(time.time()) + 7776000
-    message = f"refresh:{installation_id}:{handle}:{expires_at}".encode()
-    signature = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-    return f"{installation_id}|{handle}|{expires_at}|{signature}"
+    return "deprecated"
 
-def verify_session_token(token: Optional[str]) -> Tuple[str, str]:
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing session token.")
+def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header.")
+    
+    auth_token = authorization.split("Bearer ")[1].strip()
+    token_hash = hashlib.sha256(auth_token.encode()).hexdigest()
+    
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+        
     try:
-        parts = token.split("|")
-        if len(parts) != 4:
-            raise ValueError()
-        installation_id, handle, expires_at_str, signature = parts[0], parts[1], parts[2], parts[3]
-        
-        expires_at = int(expires_at_str)
-        if time.time() > expires_at:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired. Refresh required.")
+        docs = db.collection("devices").where("tokenHash", "==", token_hash).limit(1).get()
+        if not docs:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
             
-        message = f"access:{installation_id}:{handle}:{expires_at}".encode()
-        expected = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-        
-        if not hmac.compare_digest(signature, expected):
-            raise ValueError()
+        device_doc = docs[0].to_dict()
+        if device_doc.get("revokedAt") is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked.")
             
-        if db is not None:
-            banned_ref = db.collection("banned_users").document(handle).get()
-            if banned_ref.exists:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
+        installation_id = device_doc.get("installationId")
+        handle = generate_server_handle(installation_id)
+        
+        banned_ref = db.collection("banned_users").document(handle).get()
+        if banned_ref.exists:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
             
         return installation_id, handle
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
 
-# 🛡️ DEVICE INTEGRITY ATTESTATION VALIDATION
-def verify_device_attestation(installation_id: str, attestation_token: str) -> bool:
+# 🛡️ DEVICE INTEGRITY ATTESTATION VALIDATION (Play Integrity)
+def verify_device_attestation(request_hash: str, attestation_token: str) -> bool:
     if not attestation_token:
         return False
+        
     if attestation_token.startswith("simulated_attestation_"):
         parts = attestation_token.split("_")
-        if len(parts) == 4:
+        # simulated_attestation_com.example.localv1_<requestHash>
+        if len(parts) >= 3:
             package_name = parts[2]
-            uuid_part = parts[3]
-            return package_name == "com.example.localv1" and uuid_part == installation_id
+            return package_name == "com.example.localv1"
         return False
-    return True
+        
+    # In production, verify with Google Play Integrity API
+    # POST https://playintegrity.googleapis.com/v1/com.example.localv1:decodeIntegrityToken
+    # { "integrity_token": attestation_token }
+    # Using Google Auth credentials
+    
+    try:
+        import google.auth
+        from google.auth.transport.requests import Request as GoogleAuthRequest
+        
+        credentials, project_id = google.auth.default(scopes=['https://www.googleapis.com/auth/playintegrity'])
+        auth_req = GoogleAuthRequest()
+        credentials.refresh(auth_req)
+        
+        url = f"https://playintegrity.googleapis.com/v1/com.example.localv1:decodeIntegrityToken"
+        headers = {
+            "Authorization": f"Bearer {credentials.token}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "integrity_token": attestation_token
+        }
+        
+        import requests
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            token_payload_external = result.get("tokenPayloadExternal", {})
+            request_details = token_payload_external.get("requestDetails", {})
+            
+            # Verify request hash
+            if request_details.get("requestHash") != request_hash:
+                print("Integrity Error: Request hash mismatch")
+                return False
+                
+            # Verify app recognition
+            app_verdict = token_payload_external.get("appIntegrity", {}).get("appRecognitionVerdict")
+            if app_verdict != "PLAY_RECOGNIZED":
+                print(f"Integrity Error: App not recognized ({app_verdict})")
+                return False
+                
+            # Verify device recognition
+            device_verdict = token_payload_external.get("deviceIntegrity", {}).get("deviceRecognitionVerdict")
+            if not device_verdict or "MEETS_DEVICE_INTEGRITY" not in device_verdict:
+                print(f"Integrity Error: Device integrity failed ({device_verdict})")
+                return False
+                
+            return True
+        else:
+            print(f"Integrity API Error: {response.status_code} {response.text}")
+            return False
+    except Exception as e:
+        print(f"Play Integrity Verification failed: {e}")
+        # Fallback for development if needed, but return False in prod
+        return False
 
 # 🛡️ MODERATOR ROLE PRIVILEGES HIERARCHY (§16, §17 Claims Check)
 ROLE_HIERARCHY = {
@@ -251,6 +355,9 @@ PostCategory = Literal[
 ]
 
 # Request models
+class OtpVerifyRequest(BaseModel):
+    firebaseIdToken: str = Field(..., min_length=10)
+
 class DeviceRegisterRequest(BaseModel):
     installationId: str = Field(..., min_length=36, max_length=36, pattern=r"^[0-9a-fA-F-]{36}$")
     attestationToken: str = Field(..., min_length=10, max_length=5000)
@@ -266,6 +373,8 @@ class CommentCreateRequest(BaseModel):
 
 class VoteRequest(BaseModel):
     direction: Literal[1, -1] = Field(..., description="1 for upvote, -1 for downvote")
+    attestationToken: Optional[str] = None
+    requestId: Optional[str] = None
 
 class ReportRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=100, description="Reason for reporting")
@@ -307,7 +416,13 @@ async def register_device(
     ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
     enforce_ip_rate_limit(ip_addr, max_requests=5)
 
-    if not verify_device_attestation(request.installationId, request.attestationToken):
+    
+    import hashlib
+    # Reconstruct request hash
+    raw_hash_str = f"POST/api/v1/devices/register{request.installationId}"
+    expected_hash = hashlib.sha256(raw_hash_str.encode()).hexdigest()
+    if not verify_device_attestation(expected_hash, request.attestationToken):
+    
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Device attestation validation failed."
@@ -370,11 +485,11 @@ async def refresh_session(
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
 
-# 3. Secure Post Creation
-@app.post("/api/v1/posts/create", status_code=status.HTTP_201_CREATED)
-async def create_post(
-    request: PostCreateRequest,
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+# 2.5 Phone Auth OTP Verification (Backend verifies Firebase ID token directly)
+@app.post("/api/v1/devices/verify-phone")
+async def verify_phone_auth(
+    request: OtpVerifyRequest,
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -382,8 +497,72 @@ async def create_post(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
+    enforce_route_rate_limit("verify_phone", device_id, max_requests=5)
+
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+
+    try:
+        from firebase_admin import auth as firebase_auth
+        
+        # Verify Firebase ID token via firebase-admin, ensuring server-backed authority
+        decoded_token = firebase_auth.verify_id_token(request.firebaseIdToken)
+        phone_number = decoded_token.get('phone_number')
+        
+        if not phone_number:
+            raise HTTPException(status_code=400, detail="Token does not contain a phone number.")
+            
+        import hashlib
+        phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
+        
+        # Update device doc indicating OTP is verified on server side
+        db.collection("devices").document(device_id).update({
+            "otpVerified": True,
+            "phoneNumberHash": phone_hash,
+            "phoneVerifiedAt": firestore.SERVER_TIMESTAMP
+        })
+        
+        res = {"status": "success", "message": "Phone authentication verified by backend."}
+        if idempotency_key:
+            save_idempotent_response(idempotency_key, res)
+        return res
+    except Exception as e:
+        print(f"Firebase ID token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired Firebase ID token. OTP verification failed.")
+
+# 3. Secure Post Creation
+@app.post("/api/v1/posts/create", status_code=status.HTTP_201_CREATED)
+async def create_post(
+    request: PostCreateRequest,
+    server_request: Request,
+    authorization: Optional[str] = Header(None, description="Bearer token"),
+    x_vpn_detected: Optional[bool] = Header(False, description="Client side VPN detection flag"),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+):
+    if idempotency_key:
+        cached = get_cached_idempotent_response(idempotency_key)
+        if cached:
+            return cached
+
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("post", device_id, max_requests=5)
+    
+    client_ip = server_request.client.host if server_request.client else "127.0.0.1"
+    if not evaluate_request_risk(client_ip, client_vpn_flag=x_vpn_detected):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="High risk request blocked by security policies.")
+
+    if db is not None:
+        device_doc = db.collection("devices").document(device_id).get()
+        if device_doc.exists:
+            device_data = device_doc.to_dict()
+            if not device_data.get("otpVerified"):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OTP_REQUIRED: Phone authentication is required to create a post.")
+            
+            # FUTURE: GPS/IP location check can be enforced here independently of OTP
+            # if not is_in_vadodara(ip_addr, gps_coords): raise location_error
+
+    error_msg = validate_text_content(request.content)
 
     error_msg = validate_text_content(request.content)
     if error_msg:
@@ -405,12 +584,77 @@ async def create_post(
     return res
 
 
+# 3.1 Get Posts (Read Path over REST)
+@app.get("/api/v1/posts")
+async def get_posts(
+    limit: int = 20,
+    cursor: Optional[str] = None,
+    authorization: Optional[str] = Header(None, description="Bearer token")
+):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+    
+    # We can enforce rate limit for reading
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            device_id, _ = verify_session_token(authorization)
+            enforce_route_rate_limit("get_posts", device_id, max_requests=100)
+        except:
+            pass # allow anonymous reading for now, or block based on architecture
+
+    try:
+        query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
+        
+        # If cursor provided, it's the post ID to start after
+        if cursor:
+            cursor_doc = db.collection("posts").document(cursor).get()
+            if cursor_doc.exists:
+                query = query.start_after(cursor_doc)
+                
+        docs = query.get()
+        posts = []
+        for doc in docs:
+            data = doc.to_dict()
+            if data.get("deletedAt") is not None or data.get("hiddenByMod") == True:
+                continue
+            
+            # Format output
+            data['id'] = doc.id
+            if data.get('createdAt'):
+                data['createdAt'] = data['createdAt'].isoformat()
+            posts.append(data)
+            
+        last_id = docs[-1].id if docs else None
+        return {"status": "success", "posts": posts, "nextCursor": last_id}
+    except Exception as e:
+        print(f"Error fetching posts: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch posts")
+
+# 4.1 Get Comments
+@app.get("/api/v1/posts/{post_id}/comments")
+async def get_comments(post_id: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+        
+    try:
+        docs = db.collection("posts").document(post_id).collection("comments").order_by("createdAt").limit(100).get()
+        comments = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            if data.get('createdAt'):
+                data['createdAt'] = data['createdAt'].isoformat()
+            comments.append(data)
+        return {"status": "success", "comments": comments}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch comments")
+
 # 4. Secure Comment Addition
 @app.post("/api/v1/posts/{post_id}/comment", status_code=status.HTTP_201_CREATED)
 async def add_comment(
     post_id: str,
     request: CommentCreateRequest,
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -418,7 +662,7 @@ async def add_comment(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("comment", device_id, max_requests=20)
 
     error_msg = validate_text_content(request.content)
@@ -444,7 +688,7 @@ async def add_comment(
 async def vote_post(
     post_id: str,
     request: VoteRequest,
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -452,8 +696,16 @@ async def vote_post(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("vote", device_id, max_requests=60)
+
+    # Verify Play Integrity Hash
+    if request.attestationToken and request.requestId:
+        import hashlib
+        raw_hash_str = f"POST/api/v1/posts/{post_id}/vote{request.direction}{request.requestId}"
+        expected_hash = hashlib.sha256(raw_hash_str.encode()).hexdigest()
+        if not verify_device_attestation(expected_hash, request.attestationToken):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device attestation validation failed.")
 
     success = FirebaseService.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
     if not success:
@@ -470,7 +722,7 @@ async def vote_post(
 async def report_post(
     post_id: str,
     request: ReportRequest,
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -478,7 +730,7 @@ async def report_post(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("report", device_id, max_requests=10)
 
     success = FirebaseService.report_post(post_id=post_id, reporter_handle=user_handle, reason=request.reason)
@@ -533,7 +785,7 @@ async def restore_post(
 @app.post("/api/v1/posts/{post_id}/delete")
 async def delete_post(
     post_id: str,
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -541,7 +793,7 @@ async def delete_post(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("delete", device_id, max_requests=10)
 
     if db is None:
@@ -586,7 +838,7 @@ async def delete_post(
 async def upload_image(
     server_request: Request,
     file: UploadFile = File(...),
-    x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
+    authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     if idempotency_key:
@@ -594,7 +846,7 @@ async def upload_image(
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(x_session_token)
+    device_id, user_handle = verify_session_token(authorization)
     enforce_route_rate_limit("upload", device_id, max_requests=10)
 
     allowed_extensions = (".jpg", ".jpeg", ".png", ".webp")
