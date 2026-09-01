@@ -1,0 +1,25 @@
+# Flutter/Dart ignore patterns
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Firebase configuration ignores
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Operating System ignores
+.DS_Store
+Thumbs.db
+
+# Secrets & Environment variables
+.env
+backend/.env
+backend/.env.example
+backend/service-account.json
+backend/venv/
+backend/__pycache__/
+*.pyc

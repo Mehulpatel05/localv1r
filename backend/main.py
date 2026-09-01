@@ -172,6 +172,7 @@ def generate_session_token(installation_id: str, handle: str) -> str:
     if db is not None:
         db.collection("devices").document(installation_id).set({
             "installationId": installation_id,
+            "otpVerified": True,
             "tokenHash": token_hash,
             "createdAt": firestore.SERVER_TIMESTAMP,
             "lastSeenAt": firestore.SERVER_TIMESTAMP,
