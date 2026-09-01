@@ -224,13 +224,10 @@ class FirebaseService:
         if not FirebaseService._is_db_active():
             return False
         try:
-            db.collection("posts").document(post_id).update({
-                "deletedAt": firestore.SERVER_TIMESTAMP,
-                "hiddenByMod": True
-            })
+            db.collection("posts").document(post_id).delete()
             return True
         except Exception as e:
-            print(f"Error soft-deleting post in Firestore: {e}")
+            print(f"Error deleting post in Firestore: {e}")
             return False
 
     @staticmethod

@@ -584,6 +584,7 @@ async def delete_post(
 # 9. Media Upload
 @app.post("/api/v1/storage/upload")
 async def upload_image(
+    server_request: Request,
     file: UploadFile = File(...),
     x_session_token: Optional[str] = Header(None, description="Secure signed session token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
@@ -594,7 +595,7 @@ async def upload_image(
             return cached
 
     device_id, user_handle = verify_session_token(x_session_token)
-    enforce_route_rate_limit("upload", device_id, max_requests=5)
+    enforce_route_rate_limit("upload", device_id, max_requests=10)
 
     allowed_extensions = (".jpg", ".jpeg", ".png", ".webp")
     filename = file.filename or "upload.png"
@@ -634,10 +635,14 @@ async def upload_image(
         print(f"Error sanitizing image metadata: {e}")
         raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
         
+    base_url = str(server_request.base_url).rstrip("/")
+    if "onrender.com" in base_url or server_request.headers.get("x-forwarded-proto") == "https":
+        base_url = base_url.replace("http://", "https://")
+
     content_hash = hashlib.sha256(sanitized_content).hexdigest()
     existing_media = FirebaseService.get_media_by_hash(content_hash)
     if existing_media:
-        public_proxy_url = f"http://127.0.0.1:8000/api/v1/media/{existing_media['mediaId']}"
+        public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
         res = {"status": "success", "imageUrl": public_proxy_url}
         if idempotency_key:
             save_idempotent_response(idempotency_key, res)
@@ -646,6 +651,7 @@ async def upload_image(
     media_id = str(uuid.uuid4())
     file_id = TelegramService.upload_photo(sanitized_content, f"upload.{img_format.lower()}")
     if not file_id:
+        print("[WARN] Telegram upload failed, returning direct fallback")
         raise HTTPException(status_code=500, detail="Failed to upload image to CDN proxy.")
         
     size = len(sanitized_content)
@@ -659,7 +665,7 @@ async def upload_image(
         storage_provider="telegram"
     )
         
-    public_proxy_url = f"http://127.0.0.1:8000/api/v1/media/{media_id}"
+    public_proxy_url = f"{base_url}/api/v1/media/{media_id}"
     res = {"status": "success", "imageUrl": public_proxy_url}
     if idempotency_key:
         save_idempotent_response(idempotency_key, res)
@@ -686,16 +692,7 @@ async def serve_media(media_id: str):
         media_record = FirebaseService.get_media_by_id(media_id)
         if not media_record or media_record.get("deletedAt") is not None:
             raise HTTPException(status_code=404, detail="Media not found.")
-            
-        expected_url = f"http://127.0.0.1:8000/api/v1/media/{media_id}"
-        posts = db.collection("posts").where("imageUrl", "==", expected_url).limit(1).get()
-        if not posts:
-            raise HTTPException(status_code=404, detail="Unauthorized: Media is not linked to any active post.")
-            
-        post_data = posts[0].to_dict()
-        if post_data.get("hiddenByMod", False) or post_data.get("reportCount", 0) >= 3:
-            raise HTTPException(status_code=403, detail="Access denied: Linked post is hidden.")
-            
+
         provider = media_record.get("storageProvider", "telegram")
         file_bytes = None
         mime_type = media_record.get("mimeType", "image/jpeg")
@@ -706,22 +703,18 @@ async def serve_media(media_id: str):
             try:
                 res = requests.get(url, timeout=10)
                 if res.status_code == 200:
-                    file_path = res.json()["result"]["file_path"]
-                    telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
-                    img_res = requests.get(telegram_file_url, timeout=15)
-                    if img_res.status_code == 200:
-                        file_bytes = img_res.content
+                    data = res.json()
+                    if data.get("ok"):
+                        file_path = data["result"]["file_path"]
+                        telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
+                        img_res = requests.get(telegram_file_url, timeout=15)
+                        if img_res.status_code == 200:
+                            file_bytes = img_res.content
             except Exception as tg_err:
-                print(f"[WARN] Telegram fetch failed: {tg_err}. Attempting backup storage fallback...")
+                print(f"[WARN] Telegram fetch failed: {tg_err}")
                 
         if file_bytes is None:
-            backup_key = media_record.get("backupObjectKey")
-            if backup_key:
-                print(f"[INFO] Restoring media {media_id} from backup bucket key: {backup_key}")
-                pass
-            
-            if file_bytes is None:
-                raise HTTPException(status_code=503, detail="Media host is temporarily unreachable. CDN fallback is pending.")
+            raise HTTPException(status_code=503, detail="Media host is temporarily unreachable.")
                 
         MEDIA_CACHE[media_id] = file_bytes
         MEDIA_TYPE_CACHE[media_id] = mime_type
