@@ -20,8 +20,6 @@ class PostRepository extends ChangeNotifier {
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
   Map<String, DateTime>? _lastVoteTime; // Debounce timestamps per post
-  
-  VadodaraArea _selectedArea = VadodaraArea.general;
   PostCategory? _selectedCategory;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
@@ -63,7 +61,6 @@ class PostRepository extends ChangeNotifier {
   }
 
   bool get isLoading => _isLoading;
-  VadodaraArea get selectedArea => _selectedArea;
   PostCategory? get selectedCategory => _selectedCategory;
   FeedTab get currentTab => _currentTab;
 
@@ -78,10 +75,6 @@ class PostRepository extends ChangeNotifier {
       if (_currentUserHandle.isNotEmpty && p.reporters.contains(_currentUserHandle)) return false;
       return true;
     }).toList();
-
-    if (_currentTab == FeedTab.nearby || _selectedArea != VadodaraArea.general) {
-      list = list.where((p) => p.area == _selectedArea || p.area == VadodaraArea.general).toList();
-    }
 
     if (_selectedCategory != null) {
       list = list.where((p) => p.category == _selectedCategory).toList();
@@ -146,7 +139,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_shop_post',
             authorHandle: 'local_admin',
             content: 'Used for 6 months. Minor scratches on the back but works perfectly! Selling because I upgraded. Charger included.',
-            area: VadodaraArea.alkapuri,
             category: PostCategory.shop,
             shopTitle: 'Samsung Galaxy S23 (8GB/256GB)',
             shopPrice: '45000',
@@ -162,7 +154,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_room_post',
             authorHandle: 'local_admin',
             content: 'Spacious room for rent with attached bathroom. Fully furnished with bed, AC, and wardrobe. 24/7 water supply and no broker brokerage!',
-            area: VadodaraArea.sayajigunj,
             category: PostCategory.rooms,
             roomTitle: '1 BHK Fully Furnished - Bachelor Friendly',
             roomArea: '550',
@@ -179,7 +170,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_food_post',
             authorHandle: 'foodie_vadi',
             content: 'Absolutely amazing ambiance! The cold coffee here is a must-try. Perfect spot for evening hangouts or reading a book. Staff is super friendly too.',
-            area: VadodaraArea.alkapuri,
             category: PostCategory.food,
             foodTitle: 'Brew & Beans Cafe',
             foodRating: 4.8,
@@ -196,7 +186,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_event_post',
             authorHandle: 'event_manager_v2',
             content: 'Get ready for the biggest weekend party! Live DJ, amazing food stalls, and an unforgettable crowd. Book your tickets before they sell out!',
-            area: VadodaraArea.gotri,
             category: PostCategory.events,
             eventTitle: 'Weekend Sundowner Party',
             eventDate: 'OCT 28, 6:00 PM',
@@ -214,7 +203,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_job_post',
             authorHandle: 'hr_recruiter',
             content: 'We are looking for a passionate Flutter Developer with 2+ years of experience to join our team in Vadodara. Drop your resume at hr@techcorp.in',
-            area: VadodaraArea.alkapuri,
             category: PostCategory.jobs,
             jobTitle: 'Flutter Developer',
             jobCompany: 'TechCorp Vadodara',
@@ -232,7 +220,6 @@ class PostRepository extends ChangeNotifier {
             id: 'demo_service_post',
             authorHandle: 'expert_plumber',
             content: 'Professional plumbing services available 24/7 in Vadodara. Quick response for leaks, pipe fittings, and blockages.',
-            area: VadodaraArea.manjalpur,
             category: PostCategory.services,
             serviceTitle: 'Expert Plumbing & Fitting',
             serviceCategoryText: 'Plumbing',
@@ -378,11 +365,6 @@ class PostRepository extends ChangeNotifier {
     _listenToPosts();
   }
 
-  void setArea(VadodaraArea area) {
-    _selectedArea = area;
-    _listenToPosts();
-  }
-
   // --- Missing API Methods ---
 
   Future<Map<String, String>> _getHeaders() async {
@@ -400,12 +382,6 @@ class PostRepository extends ChangeNotifier {
     };
   }
 
-  VadodaraArea _parseArea(dynamic value) {
-    if (value == null) return VadodaraArea.general;
-    final str = value.toString();
-    return VadodaraArea.values.firstWhere((e) => e.name == str, orElse: () => VadodaraArea.general);
-  }
-
   PostCategory _parseCategory(dynamic value) {
     if (value == null) return PostCategory.services;
     final str = value.toString();
@@ -415,7 +391,6 @@ class PostRepository extends ChangeNotifier {
   Future<void> addPost({
     required String authorHandle,
     required String content,
-    required VadodaraArea area,
     required PostCategory category,
     String? imageUrl,
     // 🏠 Room-specific optional fields
@@ -453,7 +428,6 @@ class PostRepository extends ChangeNotifier {
         body: jsonEncode({
           'authorHandle': authorHandle,
           'content': content,
-          'area': area.name,
           'category': category.name,
           'imageUrl': imageUrl,
           if (roomTitle != null) 'roomTitle': roomTitle,

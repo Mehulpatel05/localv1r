@@ -309,9 +309,6 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                             const SizedBox(width: 6),
                             const Text('•', style: TextStyle(color: Colors.white24)),
                             const SizedBox(width: 6),
-                            Text(
-                              post.area.displayName,
-                              style: const TextStyle(color: Colors.white60, fontSize: 11),
                             ),
                           ],
                         ),

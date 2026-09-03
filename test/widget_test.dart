@@ -9,7 +9,7 @@ void main() {
         id: 'test-123',
         authorHandle: 'Anon#A1B2C3',
         content: 'Verification test post content for Vadodara Local',
-        area: VadodaraArea.alkapuri,
+        
         category: PostCategory.traffic,
         createdAt: DateTime.now(),
         upvotes: 5,

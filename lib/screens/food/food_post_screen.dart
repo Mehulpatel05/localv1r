@@ -27,8 +27,6 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-
-  VadodaraArea _selectedArea = VadodaraArea.general;
   final List<File> _mediaFiles = [];
   String? _errorMessage;
   bool _isPublishing = false;
@@ -41,9 +39,6 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   void initState() {
     super.initState();
     _descController.addListener(_validateLive);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -120,7 +115,6 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
-        area: _selectedArea,
         category: PostCategory.food,
         foodTitle: _titleController.text.trim(),
         foodPrice: _priceController.text.trim(),
@@ -350,18 +344,12 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<VadodaraArea>(
+        child: Container(
           isExpanded: true,
           dropdownColor: const Color(0xFF151D30),
-          value: _selectedArea,
+          
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          items: VadodaraArea.values.map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area.displayName,
-                  style: const TextStyle(color: Colors.white)),
-            );
-          }).toList(),
+          
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

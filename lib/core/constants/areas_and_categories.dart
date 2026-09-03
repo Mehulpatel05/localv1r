@@ -1,19 +1,5 @@
-enum VadodaraArea {
-  alkapuri('Alkapuri'),
-  manjalpur('Manjalpur'),
-  gotri('Gotri'),
-  sayajigunj('Sayajigunj'),
-  karelibaug('Karelibaug'),
-  waghodia('Waghodia'),
-  harni('Harni'),
-  vasna('Vasna'),
-  general('Vadodara — General');
-
-  final String displayName;
-  const VadodaraArea(this.displayName);
-}
-
 enum PostCategory {
+  allChat('All Chat', '💬'),
   services('Local Services', '🔧'),
   food('Food & Cafes', '🍲'),
   rooms('Rooms', '🏠'),

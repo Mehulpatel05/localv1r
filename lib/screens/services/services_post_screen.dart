@@ -25,8 +25,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-
-  VadodaraArea _selectedArea = VadodaraArea.general;
   String _selectedServiceCategory = 'Home Maintenance';
   File? _serviceImage;
   String? _errorMessage;
@@ -49,9 +47,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
   void initState() {
     super.initState();
     _descController.addListener(_validateLive);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -113,7 +108,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
-        area: _selectedArea,
         category: PostCategory.services,
         serviceTitle: _titleController.text.trim(),
         servicePrice: _priceController.text.trim(),
@@ -368,17 +362,11 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         border: Border.all(color: Colors.black12),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<VadodaraArea>(
+        child: Container(
           isExpanded: true,
-          value: _selectedArea,
+          
           icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: VadodaraArea.values.map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area.displayName,
-                  style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
+          
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

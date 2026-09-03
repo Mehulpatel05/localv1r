@@ -5,7 +5,6 @@ class Post {
   final String authorHandle;
   final String content;
   final String? imageUrl;
-  final VadodaraArea area;
   final PostCategory category;
   final DateTime createdAt;
   int upvotes;
@@ -53,7 +52,6 @@ class Post {
     required this.authorHandle,
     required this.content,
     this.imageUrl,
-    required this.area,
     required this.category,
     required this.createdAt,
     this.upvotes = 0,
@@ -93,7 +91,6 @@ class Post {
       'authorHandle': authorHandle,
       'content': content,
       'imageUrl': imageUrl,
-      'area': area.name,
       'category': category.name,
       'createdAt': createdAt.toIso8601String(),
       'upvotes': upvotes,
@@ -132,7 +129,6 @@ class Post {
       authorHandle: json['authorHandle'] as String,
       content: json['content'] as String,
       imageUrl: json['imageUrl'] as String?,
-      area: VadodaraArea.values.byName(json['area'] as String),
       category: PostCategory.values.byName(json['category'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
       upvotes: json['upvotes'] as int? ?? 0,

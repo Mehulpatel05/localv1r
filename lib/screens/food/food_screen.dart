@@ -294,12 +294,6 @@ class _FoodScreenState extends State<FoodScreen> {
                     children: [
                       const Icon(Icons.location_on, size: 14, color: Colors.white54),
                       const SizedBox(width: 4),
-                      Text(
-                        post.area.displayName,
-                        style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(width: 12),
                       const Icon(Icons.circle, size: 4, color: Colors.white24),

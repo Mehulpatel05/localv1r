@@ -28,8 +28,6 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-
-  VadodaraArea _selectedArea = VadodaraArea.general;
   final List<File> _mediaFiles = [];
   String? _errorMessage;
   bool _isPublishing = false;
@@ -39,9 +37,6 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
   void initState() {
     super.initState();
     _descController.addListener(_validateLive);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -144,7 +139,6 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
-        area: _selectedArea,
         category: PostCategory.shop,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         shopTitle: _titleController.text.trim(),
@@ -277,19 +271,12 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                 border: Border.all(color: const Color(0xFF243049)),
               ),
               child: DropdownButtonHideUnderline(
-                child: DropdownButton<VadodaraArea>(
+                child: Container(
                   dropdownColor: const Color(0xFF151D30),
-                  value: _selectedArea,
+                  
                   isExpanded: true,
-                  items: VadodaraArea.values.map((area) {
-                    return DropdownMenuItem(
-                      value: area,
-                      child: Text(area.displayName,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 13)),
-                    );
-                  }).toList(),
-                  onChanged: (val) => setState(() => _selectedArea = val!),
+                  
+                  
                 ),
               ),
             ),

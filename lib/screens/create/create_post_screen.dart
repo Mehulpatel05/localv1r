@@ -25,7 +25,6 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   // Common
   final _contentController = TextEditingController();
-  VadodaraArea _selectedArea = VadodaraArea.general;
   PostCategory _selectedCategory = PostCategory.services;
   String? _errorMessage;
   File? _imageFile;
@@ -36,9 +35,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void initState() {
     super.initState();
     _contentController.addListener(_validateLiveInput);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -112,7 +108,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
-        area: _selectedArea,
         category: _selectedCategory,
         imageUrl: telegramImageUrl,
       );
@@ -301,45 +296,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('NEIGHBORHOOD AREA',
-                            style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF151D30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF243049)),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<VadodaraArea>(
-                              dropdownColor: const Color(0xFF151D30),
-                              value: _selectedArea,
-                              isExpanded: true,
-                              items: VadodaraArea.values.map((area) {
-                                return DropdownMenuItem(
-                                  value: area,
-                                  child: Text(area.displayName,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13)),
-                                );
-                              }).toList(),
-                              onChanged: (val) =>
-                                  setState(() => _selectedArea = val!),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

@@ -473,11 +473,6 @@ async def verify_moderator_session(token: Optional[str], required_role: str) -> 
 
 
 # Enums / Literal Type Constraints (§23)
-VadodaraArea = Literal[
-    "alkapuri", "manjalpur", "gotri", "sayajigunj", "karelibaug", 
-    "waghodia", "harni", "vasna", "general"
-]
-
 PostCategory = Literal[
     "traffic", "services", "food", "educationJobs", "general", "emergency"
 ]
@@ -492,7 +487,6 @@ class DeviceRegisterRequest(BaseModel):
 
 class PostCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
-    area: VadodaraArea = Field(..., description="Target neighborhood area")
     category: PostCategory = Field(..., description="Post category")
     imageUrl: Optional[str] = Field(None, max_length=500)
 

@@ -26,8 +26,6 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
   final _companyController = TextEditingController();
   final _locationController = TextEditingController();
   final _descController = TextEditingController();
-
-  VadodaraArea _selectedArea = VadodaraArea.general;
   String _selectedJobType = 'Full-time';
   File? _bannerImage;
   String? _errorMessage;
@@ -47,9 +45,6 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
   void initState() {
     super.initState();
     _descController.addListener(_validateLive);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -111,7 +106,6 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
-        area: _selectedArea,
         category: PostCategory.jobs,
         jobTitle: _titleController.text.trim(),
         jobCompany: _companyController.text.trim().isEmpty ? 'Confidential' : _companyController.text.trim(),
@@ -381,17 +375,11 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         border: Border.all(color: Colors.black12),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<VadodaraArea>(
+        child: Container(
           isExpanded: true,
-          value: _selectedArea,
+          
           icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: VadodaraArea.values.map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area.displayName,
-                  style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
+          
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

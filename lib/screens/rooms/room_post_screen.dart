@@ -29,8 +29,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   final _areaController = TextEditingController();
   final _rentController = TextEditingController();
   final _descController = TextEditingController();
-
-  VadodaraArea _selectedArea = VadodaraArea.general;
   final List<File> _mediaFiles = [];
   String? _errorMessage;
   bool _isPublishing = false;
@@ -40,9 +38,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   void initState() {
     super.initState();
     _descController.addListener(_validateLive);
-    if (widget.repository.selectedArea != VadodaraArea.general) {
-      _selectedArea = widget.repository.selectedArea;
-    }
   }
 
   @override
@@ -146,7 +141,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
-        area: _selectedArea,
         category: PostCategory.rooms,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         roomTitle: _titleController.text.trim(),
@@ -286,18 +280,11 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                 border: Border.all(color: const Color(0xFF243049)),
               ),
               child: DropdownButtonHideUnderline(
-                child: DropdownButton<VadodaraArea>(
+                child: Container(
                   dropdownColor: const Color(0xFF151D30),
-                  value: _selectedArea,
+                  
                   isExpanded: true,
-                  items: VadodaraArea.values.map((area) {
-                    return DropdownMenuItem(
-                      value: area,
-                      child: Text(area.displayName,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 13)),
-                    );
-                  }).toList(),
+                  
                   onChanged: (val) =>
                       setState(() => _selectedArea = val!),
                 ),
