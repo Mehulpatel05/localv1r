@@ -522,3 +522,64 @@ To protect the client application binary against reverse engineering, decompress
 *   **WebView Disabling:** Embedded HTML WebViews are disabled. External URL navigation redirects to the system's default native web browser after displaying a consent warning modal, keeping app context isolated.
 
 ---
+
+
+## 19. Project File Structure, Deep Code Logic, & Connections
+
+This section provides a deep-dive architectural and functional breakdown of the most critical files, explaining *how* they work, their internal business logic, and how they connect to other components.
+
+### A. Core Flutter Frontend Architecture (`lib/`)
+
+#### 1. `lib/services/post_repository.dart`
+**Role:** Central state manager bridging the Flutter UI with the FastAPI backend.
+**Connections:** Connects to `https://localv1r.onrender.com/api/v1` using standard REST `http` calls.
+**Deep Features & Logic:**
+*   **Optimistic UI & Local Caching:** Uses `SharedPreferences` to cache the user's vote directions locally (`_localVotes`). When a user votes, the UI updates instantly (optimistic increment/decrement) without waiting for the server. It then triggers an asynchronous API call.
+*   **Cursor-Based Pagination:** The `_fetchPosts()` method uses `limit=20` and captures the `nextCursor` from the backend response. When the user scrolls, the cursor is appended to fetch the next batch, preventing duplicate reads and lowering Firestore billing.
+*   **Real-Time Polling vs Streams:** For comments, `listenToComments()` uses an infinite `while(true)` loop with a `Future.delayed(Duration(seconds: 10))` rather than direct Firestore WebSocket streams. This forces all traffic through the API Gateway, maintaining the Zero-Trust architecture.
+*   **Inline Filtering:** Filters out posts locally if `reportCount >= 3` or if the current user has reported them, acting as a secondary UX defense mechanism alongside backend exclusions.
+
+#### 2. `lib/screens/create/create_post_screen.dart`
+**Role:** The UI and client-side validation logic for composing posts.
+**Connections:** Connects to `TelegramStorageService` (for media) and `PostRepository` (for submission).
+**Deep Features & Logic:**
+*   **Live Input Validation:** Subscribes a listener (`_validateLiveInput`) to the `_contentController`. As the user types, it routes the text through `ContentFilter.validateContent(text)`. If profanity or forbidden formats are detected, it disables the publish button immediately.
+*   **Dual-Phase Media Upload:** When publishing with an image, it first calls `TelegramStorageService.uploadImage`. It monitors `_uploadProgress` and displays a UI progress bar. Only after the Telegram CDN returns the image proxy URL does it trigger the final `addPost` repository call.
+
+#### 3. `lib/core/utils/content_filter.dart` (Client-Side)
+**Role:** Fast, client-side regex evaluation.
+**Deep Features & Logic:**
+*   Uses Dart regex patterns to strip zero-width characters and identify immediate abuses. This provides instant feedback, although the backend `utils/moderation.py` acts as the ultimate un-bypassable authority.
+
+---
+
+### B. Python FastAPI Backend Architecture (`backend/`)
+
+#### 1. `backend/main.py`
+**Role:** The primary API Gateway. It validates incoming JWTs, enforces rate limits, handles Play Integrity, and routes verified data to Firebase.
+**Connections:** Directly interfaces with incoming HTTP clients, `firebase_service.py` for storage, and `telegram_service.py` for image uploads.
+**Deep Features & Logic:**
+*   **Dual-Key Rate Limiting:** Maintains two in-memory dictionaries: `RATE_LIMIT_IP_CACHE` (blocks device farm registrations via IP) and `RATE_LIMIT_ROUTE_CACHE` (blocks spam comments/votes keyed by route and session). Uses a sliding window mechanism.
+*   **Replay Protection (Idempotency):** Stores a cache `IDEMPOTENCY_CACHE`. If a mobile client loses connection and resends a `POST /vote` request with the same `Idempotency-Key`, the backend intercepts it and returns the cached HTTP 200 response without triggering a duplicate database write.
+*   **Play Integrity Attestation Verification:** The `verify_device_attestation` function queries Google's servers (`playintegrity.googleapis.com`) using server-to-server Google Auth credentials. It checks `appRecognitionVerdict` and `deviceRecognitionVerdict`. If the device is rooted or spoofed, the function immediately rejects the request.
+*   **JWT Claims Authentication:** The `verify_moderator_session` unpacks JWTs to verify expiry, cryptographic signatures (via `hmac.compare_digest`), issuer (`iss`), and audience (`aud`). It also checks the `REVOKED_TOKENS` RAM cache for instant logout enforcement.
+
+#### 2. `backend/services/firebase_service.py`
+**Role:** Secure Firebase Admin controller.
+**Connections:** Uses `firebase-admin` initialized via a service-account JSON, allowing it to bypass all client-side Firestore security rules.
+**Deep Features & Logic:**
+*   **Transactional Voting (Race-Condition Safe):** The `vote_post` method uses `@firestore.transactional`. It locks the specific post document, reads the current upvote/downvote counts, reads the user's previous vote document, calculates the exact mathematical delta (e.g., removing a downvote to add an upvote requires +1 upvote and -1 downvote), and writes it atomically. This prevents lost votes under heavy traffic.
+*   **Atomic Reporting (One-Report-Per-User):** The `report_post` method checks if the reporter's handle already exists in the `reports` subcollection. If so, it returns true without incrementing. If not, it writes the metadata and atomically increments the `reportCount` on the main post document in a single batch.
+*   **Cryptographic Audit Logging:** The `log_moderator_action` method reads the `currentLogHash` of the previously saved moderation log and embeds it into the new log as `previousLogHash`. It then calculates a new SHA-256 hash using the admin's IP, target, action, and the previous hash, creating a tamper-evident blockchain-like structure.
+
+#### 3. `backend/services/telegram_service.py`
+**Role:** The backend half of the Decoupled Media Proxy.
+**Connections:** Connects to the external Telegram Bot API (`api.telegram.org`).
+**Deep Features & Logic:**
+*   **Upload Pipeline (`upload_photo`):** Receives the raw byte stream from the Flutter client (via FastAPI `UploadFile`), packages it as `multipart/form-data`, and posts it to the Telegram Bot API using the `TELEGRAM_BOT_TOKEN`. Extracts the highest-resolution `file_id` from the JSON response array.
+*   **Download Resolution (`get_download_url`):** Resolves the opaque `file_id` into a temporary public Telegram URL via the `getFile` endpoint. This allows the backend proxy endpoint to fetch the image bytes and stream them securely to the user, keeping the bot token completely hidden from the mobile application.
+
+#### 4. `backend/utils/moderation.py`
+**Role:** Text sanitization and anti-bypass engine.
+**Deep Features & Logic:**
+*   Executes NFKC normalization, homoglyph mapping (converting cyrillic 'а' to ascii 'a'), and zero-width character stripping before evaluating the text against a blocklist of slurs or phone number regex patterns (preventing doxxing).

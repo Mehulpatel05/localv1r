@@ -1,6 +1,7 @@
 import os
 import json
 import hashlib
+import hmac
 import time
 from typing import Optional
 import firebase_admin
@@ -295,22 +296,26 @@ class FirebaseService:
     def log_moderator_action(moderator_id: str, role: str, action: str, target: str, reason: str, request_id: str, ip_address: str) -> bool:
         if not FirebaseService._is_db_active():
             return False
-        try:
-            logs_ref = db.collection("moderation_logs")
-            prev_docs = logs_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(1).get()
             
+        transaction = db.transaction()
+        meta_ref = db.collection("moderation_logs_meta").document("latest")
+        logs_ref = db.collection("moderation_logs")
+        
+        @firestore.transactional
+        def _log_in_transaction(transaction, meta_ref, logs_ref):
+            meta_doc = meta_ref.get(transaction=transaction)
             previous_log_hash = "genesis_hash_0000000000000000"
-            if prev_docs:
-                previous_log_hash = prev_docs[0].to_dict().get("currentLogHash", previous_log_hash)
+            if meta_doc.exists:
+                previous_log_hash = meta_doc.to_dict().get("currentLogHash", previous_log_hash)
                 
             log_id = hashlib.sha256(f"{moderator_id}:{action}:{time.time()}".encode()).hexdigest()[:16]
-            ip_hash = hashlib.sha256(ip_address.encode()).hexdigest()
+            ip_hash = hmac.new(Config.JWT_SECRET.encode(), ip_address.encode(), hashlib.sha256).hexdigest()
             timestamp_sec = int(time.time())
             
             raw_data = f"{log_id}:{moderator_id}:{role}:{action}:{target}:{reason}:{timestamp_sec}:{request_id}:{ip_hash}:{previous_log_hash}"
-            current_log_hash = hashlib.sha256(raw_data.encode()).hexdigest()
+            current_log_hash = hmac.new(Config.JWT_SECRET.encode(), raw_data.encode(), hashlib.sha256).hexdigest()
             
-            logs_ref.document(log_id).set({
+            transaction.set(logs_ref.document(log_id), {
                 "logId": log_id,
                 "moderatorId": moderator_id,
                 "role": role,
@@ -323,7 +328,16 @@ class FirebaseService:
                 "previousLogHash": previous_log_hash,
                 "currentLogHash": current_log_hash
             })
+            
+            transaction.set(meta_ref, {
+                "currentLogHash": current_log_hash,
+                "lastLogId": log_id,
+                "updatedAt": firestore.SERVER_TIMESTAMP
+            })
             return True
+
+        try:
+            return _log_in_transaction(transaction, meta_ref, logs_ref)
         except Exception as e:
             print(f"Error writing moderator audit log: {e}")
             return False

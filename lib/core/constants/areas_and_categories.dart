@@ -14,12 +14,12 @@ enum VadodaraArea {
 }
 
 enum PostCategory {
-  traffic('Traffic', '🚦'),
   services('Local Services', '🔧'),
   food('Food & Cafes', '🍲'),
-  educationJobs('Education/Jobs', '💼'),
-  general('General', '💬'),
-  emergency('Emergency Alert', '🚨');
+  rooms('Rooms', '🏠'),
+  shop('Shop', '🛍️'),
+  events('Events', '🎉'),
+  jobs('Jobs & Referrals', '💼');
 
   final String label;
   final String icon;

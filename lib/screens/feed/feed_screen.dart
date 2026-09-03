@@ -6,6 +6,14 @@ import '../../services/post_repository.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../safety/grievance_center_screen.dart';
+import '../profile/other_user_profile_sheet.dart';
+import '../rooms/rooms_screen.dart';
+import '../shop/shop_screen.dart';
+import '../food/food_screen.dart';
+import '../events/events_screen.dart';
+import '../jobs/jobs_screen.dart';
+import '../services/services_screen.dart';
+
 
 class FeedScreen extends StatefulWidget {
   final PostRepository repository;
@@ -204,6 +212,469 @@ class _FeedScreenState extends State<FeedScreen> {
                     itemCount: PostCategory.values.length,
                     itemBuilder: (context, index) {
                       final cat = PostCategory.values[index];
+                      // 🏠 Rooms chip — opens dedicated Rooms page
+                      if (cat == PostCategory.rooms) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => RoomsScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E3A5F),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFF3B82F6)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🏠',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Rooms',
+                                    style: TextStyle(
+                                      color: Color(0xFF60A5FA),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFF60A5FA)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 🍲 Food chip — opens dedicated Food page
+                      if (cat == PostCategory.food) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => FoodScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3B2A1A), // Warm brown/orange tone
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFFF59E0B)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🍲',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Food',
+                                    style: TextStyle(
+                                      color: Color(0xFFF59E0B),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFFF59E0B)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 🎉 Events chip — opens dedicated Events page
+                      if (cat == PostCategory.events) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => EventsScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF281C43), // Dark purple tone
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFF8B5CF6)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🎉',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Events',
+                                    style: TextStyle(
+                                      color: Color(0xFFC4B5FD),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFFC4B5FD)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 💼 Jobs chip — opens dedicated Jobs page
+                      if (cat == PostCategory.jobs) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => JobsScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B), // Dark slate
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFF64748B)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('💼',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Jobs',
+                                    style: TextStyle(
+                                      color: Color(0xFF94A3B8),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFF94A3B8)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 🛍️ Shop chip — opens dedicated Shop page
+                      if (cat == PostCategory.shop) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => ShopScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A3A2F),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFF10B981)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🛍️',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Shop',
+                                    style: TextStyle(
+                                      color: Color(0xFF10B981),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFF10B981)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 🔧 Local Services chip — opens dedicated Services page
+                      if (cat == PostCategory.services) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 380),
+                                reverseTransitionDuration:
+                                    const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => ServicesScreen(
+                                  repository: widget.repository,
+                                  currentUserHandle:
+                                      widget.currentUserHandle,
+                                ),
+                                transitionsBuilder:
+                                    (_, animation, __, child) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ));
+                                  final fade = Tween<double>(
+                                          begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                    parent: animation,
+                                    curve: const Interval(0.0, 0.6),
+                                  ));
+                                  return FadeTransition(
+                                    opacity: fade,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF), // Light blue
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: const Color(0xFF3B82F6)
+                                        .withOpacity(0.6)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🔧',
+                                      style: TextStyle(fontSize: 13)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Local Services',
+                                    style: TextStyle(
+                                      color: Color(0xFF3B82F6),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: Color(0xFF3B82F6)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // All other chips — normal filter
                       final isSelected = repo.selectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
@@ -211,24 +682,34 @@ class _FeedScreenState extends State<FeedScreen> {
                           onTap: () => repo.setCategory(cat),
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF1F293D),
+                              color: isSelected
+                                  ? const Color(0xFF3B82F6)
+                                  : const Color(0xFF1F293D),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSelected ? const Color(0xFF60A5FA) : const Color(0xFF374151),
+                                color: isSelected
+                                    ? const Color(0xFF60A5FA)
+                                    : const Color(0xFF374151),
                               ),
                             ),
                             child: Row(
                               children: [
-                                Text(cat.icon, style: const TextStyle(fontSize: 13)),
+                                Text(cat.icon,
+                                    style: const TextStyle(fontSize: 13)),
                                 const SizedBox(width: 6),
                                 Text(
                                   cat.label,
                                   style: TextStyle(
-                                    color: isSelected ? Colors.white : Colors.white70,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.white70,
                                     fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ],
@@ -241,45 +722,30 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
 
                 // Feed List
-                Expanded(
-                  child: repo.posts.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: repo.posts.length,
-                          itemBuilder: (context, index) {
-                            final post = repo.posts[index];
-                            return _buildPostCard(post);
-                          },
-                        ),
+                Builder(
+                  builder: (context) {
+                    final feedPosts = repo.selectedCategory == null
+                        ? repo.posts.where((p) => p.category != PostCategory.rooms && p.category != PostCategory.shop && p.category != PostCategory.food && p.category != PostCategory.events && p.category != PostCategory.jobs && p.category != PostCategory.services).toList()
+                        : repo.posts;
+
+                    return Expanded(
+                      child: feedPosts.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: feedPosts.length,
+                              itemBuilder: (context, index) {
+                                final post = feedPosts[index];
+                                return _buildPostCard(post);
+                              },
+                            ),
+                    );
+                  },
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF3B82F6),
-        elevation: 4,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Post Anonymously',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.2,
-          ),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CreatePostScreen(
-                repository: repo,
-                authorHandle: widget.currentUserHandle,
-              ),
-            ),
-          );
-        },
-      ),
+      floatingActionButton: null, // Removed FAB because all categories have dedicated screens
     );
   }
 
@@ -398,12 +864,25 @@ class _FeedScreenState extends State<FeedScreen> {
                 // Header (Author handle + Category + Area)
                 Row(
                   children: [
-                    Text(
-                      post.authorHandle,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF60A5FA),
-                        fontSize: 13,
+                    GestureDetector(
+                      onTap: () {
+                        if (post.authorHandle != widget.currentUserHandle) {
+                          showOtherUserProfileSheet(
+                            context,
+                            partnerHandle: post.authorHandle,
+                            currentUserHandle: widget.currentUserHandle,
+                            repository: widget.repository,
+                          );
+                        }
+                      },
+                      child: Text(
+                        post.authorHandle,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF60A5FA),
+                          fontSize: 13,
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -717,3 +1196,4 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 }
+

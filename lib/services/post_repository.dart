@@ -75,7 +75,6 @@ class PostRepository extends ChangeNotifier {
   List<Post> get posts {
     // 🛡️ Filter flagged posts inline using server-derived fields directly
     var list = _posts.where((p) {
-      if (p.reportCount >= 3) return false;
       if (_currentUserHandle.isNotEmpty && p.reporters.contains(_currentUserHandle)) return false;
       return true;
     }).toList();
@@ -139,6 +138,109 @@ class PostRepository extends ChangeNotifier {
           _posts = newPosts;
         } else {
           _posts.addAll(newPosts);
+        }
+
+        // Add a demo Shop product so the user can see how it looks!
+        if (!_posts.any((p) => p.id == 'demo_shop_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_shop_post',
+            authorHandle: 'local_admin',
+            content: 'Used for 6 months. Minor scratches on the back but works perfectly! Selling because I upgraded. Charger included.',
+            area: VadodaraArea.alkapuri,
+            category: PostCategory.shop,
+            shopTitle: 'Samsung Galaxy S23 (8GB/256GB)',
+            shopPrice: '45000',
+            imageUrl: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=500',
+            createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+            reporters: [],
+          ));
+        }
+
+        // Add a demo Room so the user can see how it looks!
+        if (!_posts.any((p) => p.id == 'demo_room_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_room_post',
+            authorHandle: 'local_admin',
+            content: 'Spacious room for rent with attached bathroom. Fully furnished with bed, AC, and wardrobe. 24/7 water supply and no broker brokerage!',
+            area: VadodaraArea.sayajigunj,
+            category: PostCategory.rooms,
+            roomTitle: '1 BHK Fully Furnished - Bachelor Friendly',
+            roomArea: '550',
+            roomRent: '8500',
+            imageUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=500',
+            createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+            reporters: [],
+          ));
+        }
+
+        // Add a demo Food & Cafe post
+        if (!_posts.any((p) => p.id == 'demo_food_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_food_post',
+            authorHandle: 'foodie_vadi',
+            content: 'Absolutely amazing ambiance! The cold coffee here is a must-try. Perfect spot for evening hangouts or reading a book. Staff is super friendly too.',
+            area: VadodaraArea.alkapuri,
+            category: PostCategory.food,
+            foodTitle: 'Brew & Beans Cafe',
+            foodRating: 4.8,
+            foodPrice: '600 for two',
+            imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=600',
+            createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+            reporters: [],
+          ));
+        }
+
+        // Add a demo Event post
+        if (!_posts.any((p) => p.id == 'demo_event_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_event_post',
+            authorHandle: 'event_manager_v2',
+            content: 'Get ready for the biggest weekend party! Live DJ, amazing food stalls, and an unforgettable crowd. Book your tickets before they sell out!',
+            area: VadodaraArea.gotri,
+            category: PostCategory.events,
+            eventTitle: 'Weekend Sundowner Party',
+            eventDate: 'OCT 28, 6:00 PM',
+            eventLocationText: 'Gotri Club Grounds',
+            eventPrice: '₹ 499 Onwards',
+            imageUrl: 'https://images.unsplash.com/photo-1540039155732-6847350357a0?q=80&w=600',
+            createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
+            reporters: [],
+          ));
+        }
+
+        // Add a demo Job post
+        if (!_posts.any((p) => p.id == 'demo_job_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_job_post',
+            authorHandle: 'hr_recruiter',
+            content: 'We are looking for a passionate Flutter Developer with 2+ years of experience to join our team in Vadodara. Drop your resume at hr@techcorp.in',
+            area: VadodaraArea.alkapuri,
+            category: PostCategory.jobs,
+            jobTitle: 'Flutter Developer',
+            jobCompany: 'TechCorp Vadodara',
+            jobLocation: 'Alkapuri, Vadodara (On-site)',
+            jobType: 'Full-time',
+            imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=600',
+            createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+            reporters: [],
+          ));
+        }
+
+        // Add a demo Service post
+        if (!_posts.any((p) => p.id == 'demo_service_post')) {
+          _posts.insert(0, Post(
+            id: 'demo_service_post',
+            authorHandle: 'expert_plumber',
+            content: 'Professional plumbing services available 24/7 in Vadodara. Quick response for leaks, pipe fittings, and blockages.',
+            area: VadodaraArea.manjalpur,
+            category: PostCategory.services,
+            serviceTitle: 'Expert Plumbing & Fitting',
+            serviceCategoryText: 'Plumbing',
+            servicePrice: 'Starts at ₹299',
+            imageUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=600',
+            createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+            reporters: [],
+          ));
         }
         
         _hasMore = postsData.isNotEmpty;
@@ -305,9 +407,9 @@ class PostRepository extends ChangeNotifier {
   }
 
   PostCategory _parseCategory(dynamic value) {
-    if (value == null) return PostCategory.general;
+    if (value == null) return PostCategory.services;
     final str = value.toString();
-    return PostCategory.values.firstWhere((e) => e.name == str, orElse: () => PostCategory.general);
+    return PostCategory.values.firstWhere((e) => e.name == str, orElse: () => PostCategory.services);
   }
 
   Future<void> addPost({
@@ -316,6 +418,32 @@ class PostRepository extends ChangeNotifier {
     required VadodaraArea area,
     required PostCategory category,
     String? imageUrl,
+    // 🏠 Room-specific optional fields
+    String? roomTitle,
+    String? roomArea,
+    String? roomRent,
+    List<String> mediaUrls = const [],
+    // 🛍️ Shop-specific optional fields
+    String? shopTitle,
+    String? shopPrice,
+    // 🍲 Food-specific optional fields
+    String? foodTitle,
+    double? foodRating,
+    String? foodPrice,
+    // 🎉 Events-specific optional fields
+    String? eventTitle,
+    String? eventDate,
+    String? eventLocationText,
+    String? eventPrice,
+    // 💼 Jobs-specific optional fields
+    String? jobTitle,
+    String? jobCompany,
+    String? jobLocation,
+    String? jobType,
+    // 🔧 Services-specific optional fields
+    String? serviceTitle,
+    String? serviceCategoryText,
+    String? servicePrice,
   }) async {
     try {
       final headers = await _getAuthHeaders();
@@ -328,6 +456,26 @@ class PostRepository extends ChangeNotifier {
           'area': area.name,
           'category': category.name,
           'imageUrl': imageUrl,
+          if (roomTitle != null) 'roomTitle': roomTitle,
+          if (roomArea != null) 'roomArea': roomArea,
+          if (roomRent != null) 'roomRent': roomRent,
+          if (mediaUrls.isNotEmpty) 'mediaUrls': mediaUrls,
+          if (shopTitle != null) 'shopTitle': shopTitle,
+          if (shopPrice != null) 'shopPrice': shopPrice,
+          if (foodTitle != null) 'foodTitle': foodTitle,
+          if (foodRating != null) 'foodRating': foodRating,
+          if (foodPrice != null) 'foodPrice': foodPrice,
+          if (eventTitle != null) 'eventTitle': eventTitle,
+          if (eventDate != null) 'eventDate': eventDate,
+          if (eventLocationText != null) 'eventLocationText': eventLocationText,
+          if (eventPrice != null) 'eventPrice': eventPrice,
+          if (jobTitle != null) 'jobTitle': jobTitle,
+          if (jobCompany != null) 'jobCompany': jobCompany,
+          if (jobLocation != null) 'jobLocation': jobLocation,
+          if (jobType != null) 'jobType': jobType,
+          if (serviceTitle != null) 'serviceTitle': serviceTitle,
+          if (serviceCategoryText != null) 'serviceCategoryText': serviceCategoryText,
+          if (servicePrice != null) 'servicePrice': servicePrice,
         }),
       );
       if (response.statusCode == 201) {
@@ -373,5 +521,54 @@ class PostRepository extends ChangeNotifier {
       debugPrint('Error voting: $e');
       // Should revert optimistic UI in real app
     }
+  }
+
+  /// Returns all posts by [handle] — filters from the already-loaded in-memory
+  /// list first (fast & accurate). Falls back to a fresh backend fetch if the
+  /// in-memory list is empty (e.g. profile opened before feed loads).
+  Future<List<Post>> fetchPostsByUser(String handle) async {
+    // ── 1. Filter from already-loaded in-memory posts (most reliable) ──────
+    final fromMemory = _posts
+        .where((p) => p.authorHandle == handle)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (fromMemory.isNotEmpty) {
+      return fromMemory;
+    }
+
+    // ── 2. Fallback: fetch fresh from backend and filter client-side ────────
+    try {
+      final response = await http.get(
+        Uri.parse('$backendBaseUrl/posts?limit=100'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> postsData = data['posts'] ?? [];
+        final allPosts = postsData.map((d) => Post(
+          id: d['id'],
+          authorHandle: d['authorHandle'] ?? '',
+          content: d['content'] ?? '',
+          area: _parseArea(d['area']),
+          category: _parseCategory(d['category']),
+          imageUrl: d['imageUrl'],
+          upvotes: d['upvotes'] ?? 0,
+          downvotes: d['downvotes'] ?? 0,
+          reportCount: d['reportCount'] ?? 0,
+          reporters: List<String>.from(d['reporters'] ?? []),
+          createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
+        )).toList();
+
+        // Client-side filter by handle
+        return allPosts
+            .where((p) => p.authorHandle == handle)
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
+    } catch (e) {
+      debugPrint('Error fetching posts for profile: $e');
+    }
+    return [];
   }
 }

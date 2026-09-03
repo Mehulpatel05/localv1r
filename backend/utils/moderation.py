@@ -3,6 +3,8 @@ import unicodedata
 import urllib.parse
 from typing import Optional, Tuple
 import requests
+import socket
+import ipaddress
 
 # Regular expressions for sensitive data patterns
 # PHONE_REGEX matches Indian mobile numbers: e.g. +91 9876543210, 98765-43210, 9876543210
@@ -74,6 +76,16 @@ def analyze_phishing_redirects(url: str) -> Tuple[str, bool]:
                 
             # 3. Resolve shortened links
             domain = host.split(":")[0]
+            
+            # SSRF Guard: Resolve IP and check if it's a private, loopback, or metadata IP
+            try:
+                ip = socket.gethostbyname(domain)
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj.is_private or ip_obj.is_loopback or ip == "169.254.169.254":
+                    return current_url, False # Block SSRF attempts
+            except socket.gaierror:
+                pass # Proceed to fail safely or try request
+
             if domain in SHORTENER_DOMAINS:
                 res = requests.head(current_url, allow_redirects=False, timeout=3)
                 if res.status_code in (301, 302, 307, 308) and "Location" in res.headers:

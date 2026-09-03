@@ -1,6 +1,10 @@
 import hashlib
 import hmac
 import time
+import bcrypt
+import jwt
+import base64
+from cryptography.fernet import Fernet
 import io
 import uuid
 from typing import Optional, Dict, List, Tuple, Literal
@@ -25,65 +29,85 @@ app = FastAPI(
 )
 
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
-RATE_LIMIT_IP_CACHE: Dict[str, List[float]] = defaultdict(list)
-RATE_LIMIT_ROUTE_CACHE: Dict[str, List[float]] = defaultdict(list)
+redis_client: Optional[redis.Redis] = None
 
-# 🛡️ MODERATOR TOKEN REVOCATION BLACKLIST CACHE (§17)
-REVOKED_TOKENS: set = set()
-
-# 🛡️ IDEMPOTENCY RESPONSE CACHE (§29 Replay Protection)
-IDEMPOTENCY_CACHE: Dict[str, Tuple[float, dict]] = {}
-
-def get_cached_idempotent_response(key: str) -> Optional[dict]:
+async def get_cached_idempotent_response(key: str, route: str, context: str) -> Optional[dict]:
     """
     Checks if the Idempotency-Key has already been processed and returns the cached response.
-    Purges keys older than 10 minutes (600 seconds) to avoid memory leaks.
+    Uses Redis for distributed caching. Keys are cryptographically bound to the route and context
+    to prevent information disclosure and payload injection.
     """
-    now = time.time()
-    # Cleanup expired keys
-    expired = [k for k, v in IDEMPOTENCY_CACHE.items() if now - v[0] > 600]
-    for k in expired:
-        del IDEMPOTENCY_CACHE[k]
+    if not redis_client:
+        return None
         
-    if key in IDEMPOTENCY_CACHE:
-        return IDEMPOTENCY_CACHE[key][1]
+    bound_key = hashlib.sha256(f"{route}:{context}:{key}".encode()).hexdigest()
+    cached = await redis_client.get(f"idemp:{bound_key}")
+    if cached:
+        return json.loads(cached)
     return None
 
-def save_idempotent_response(key: str, response: dict):
-    IDEMPOTENCY_CACHE[key] = (time.time(), response)
+async def save_idempotent_response(key: str, route: str, context: str, response: dict):
+    if redis_client:
+        bound_key = hashlib.sha256(f"{route}:{context}:{key}".encode()).hexdigest()
+        await redis_client.setex(f"idemp:{bound_key}", 600, json.dumps(response))
 
-
-def enforce_ip_rate_limit(ip: str, max_requests: int, window: float = 60.0):
+async def enforce_ip_rate_limit(ip: str, max_requests: int, window: float = 60.0):
     """
     🛡️ Enforces per-IP rate limiting (mitigates registration spam and brute-force).
     """
+    if not redis_client:
+        return
+
     now = time.time()
-    timestamps = [t for t in RATE_LIMIT_IP_CACHE[ip] if now - t < window]
-    RATE_LIMIT_IP_CACHE[ip] = timestamps
+    cache_key = f"rl:ip:{ip}"
+    await redis_client.zremrangebyscore(cache_key, 0, now - window)
     
-    if len(timestamps) >= max_requests:
+    count = await redis_client.zcard(cache_key)
+    if count >= max_requests:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many registrations from this IP network. Please wait a minute."
         )
-    RATE_LIMIT_IP_CACHE[ip].append(now)
+    await redis_client.zadd(cache_key, {str(now): now})
+    await redis_client.expire(cache_key, int(window) + 1)
 
-def enforce_route_rate_limit(route: str, key: str, max_requests: int, window: float = 60.0):
+async def enforce_route_rate_limit(route: str, key: str, max_requests: int, window: float = 60.0, ip: Optional[str] = None):
     """
-    🛡️ Enforces per-route, per-session rate limiting.
+    🛡️ Enforces per-route, per-session rate limiting using Redis sliding window log.
     Mitigates: scripted vote-manipulation, spam comments, and CDN storage floods.
     """
+    if not redis_client:
+        return # Degrade gracefully
+        
     now = time.time()
-    cache_key = f"{route}:{key}"
-    timestamps = [t for t in RATE_LIMIT_ROUTE_CACHE[cache_key] if now - t < window]
-    RATE_LIMIT_ROUTE_CACHE[cache_key] = timestamps
+    cache_key = f"rl:{route}:{key}"
     
-    if len(timestamps) >= max_requests:
+    # Remove timestamps older than window
+    await redis_client.zremrangebyscore(cache_key, 0, now - window)
+    
+    count = await redis_client.zcard(cache_key)
+    if count >= max_requests:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Rate limit exceeded for route: {route}. Please slow down your requests."
         )
-    RATE_LIMIT_ROUTE_CACHE[cache_key].append(now)
+        
+    await redis_client.zadd(cache_key, {str(now): now})
+    await redis_client.expire(cache_key, int(window) + 1)
+    
+    # Secondary IP-based throttling for sensitive routes
+    if ip:
+        ip_key = f"rl:{route}:ip:{ip}"
+        await redis_client.zremrangebyscore(ip_key, 0, now - window)
+        ip_count = await redis_client.zcard(ip_key)
+        # Double the limit for IP to account for NAT, but still hard block botnets
+        if ip_count >= max_requests * 2:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"IP Rate limit exceeded for route: {route}. Too many requests from this network."
+            )
+        await redis_client.zadd(ip_key, {str(now): now})
+        await redis_client.expire(ip_key, int(window) + 1)
 
 # 🛡️ GLOBAL VERBOSE EXCEPTION MASKING
 @app.exception_handler(Exception)
@@ -92,6 +116,31 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal database or service error occurred. Grievance logs have been recorded."}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    code = "API_ERROR"
+    detail_lower = exc.detail.lower() if isinstance(exc.detail, str) else str(exc.detail).lower()
+    
+    if exc.status_code == 401:
+        code = "SESSION_EXPIRED" if "expired" in detail_lower or "token" in detail_lower else "UNAUTHORIZED"
+    elif exc.status_code == 403:
+        code = "VERIFICATION_REQUIRED" if "verify" in detail_lower or "attest" in detail_lower else "FORBIDDEN"
+    elif exc.status_code == 429:
+        code = "RATE_LIMITED"
+    elif exc.status_code == 404:
+        code = "NOT_FOUND"
+        
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": exc.detail,
+                "requestId": request.headers.get("X-Request-ID", "unknown")
+            }
+        }
     )
 
 @app.exception_handler(RequestValidationError)
@@ -103,6 +152,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 # 🛡️ COMPREHENSIVE RISK EVALUATION (Server-Side Authority)
+
+def get_client_ip(request: Request) -> str:
+    # 1. Cloudflare explicitly
+    cf_ip = request.headers.get('CF-Connecting-IP')
+    if cf_ip: return cf_ip
+    # 2. X-Forwarded-For (only trust if proxy is trusted, configured in Uvicorn ideally)
+    xff = request.headers.get('X-Forwarded-For')
+    if xff: return xff.split(',')[0].strip()
+    # 3. Fallback
+    return request.client.host if request.client else '127.0.0.1'
+
 def evaluate_request_risk(
     client_ip: str, 
     client_vpn_flag: bool = False, 
@@ -160,8 +220,26 @@ def verify_magic_bytes(data: bytes) -> str:
 # 🛡️ CRYPTOGRAPHIC DUAL-TOKEN AUTH PROTOCOL
 def generate_server_handle(device_id: str) -> str:
     raw_str = f"{device_id}:{Config.SERVER_SALT}"
-    hashed = hashlib.sha256(raw_str.encode()).hexdigest()
-    return f"Anon#{hashed[:6].upper()}"
+    full_hash = hashlib.sha256(raw_str.encode()).hexdigest().upper()
+    
+    if db is not None:
+        # Try 5 different slices from the 256-bit hash
+        for i in range(5):
+            candidate_hex = full_hash[(i*6):((i+1)*6)]
+            candidate_handle = f"Anon#{candidate_hex}"
+            
+            docs = db.collection("devices").where("handle", "==", candidate_handle).limit(1).get()
+            if not docs:
+                return candidate_handle
+                
+            doc = docs[0]
+            if doc.to_dict().get("installationId") == device_id:
+                return candidate_handle
+                
+        # If all 5 slices collided, fallback to a timestamp-based suffix
+        return f"Anon#{full_hash[:6]}-{int(time.time() * 1000) % 10000}"
+        
+    return f"Anon#{full_hash[:6]}"
 
 import secrets
 
@@ -172,6 +250,7 @@ def generate_session_token(installation_id: str, handle: str) -> str:
     if db is not None:
         db.collection("devices").document(installation_id).set({
             "installationId": installation_id,
+            "handle": handle,
             "otpVerified": True,
             "tokenHash": token_hash,
             "createdAt": firestore.SERVER_TIMESTAMP,
@@ -181,7 +260,21 @@ def generate_session_token(installation_id: str, handle: str) -> str:
     return auth_token
 
 def generate_refresh_token(installation_id: str, handle: str) -> str:
-    return "deprecated"
+    if db is None:
+        return ""
+    token_str = secrets.token_hex(40)
+    token_hash = hashlib.sha256(token_str.encode()).hexdigest()
+    
+    expires_at = time.time() + (7 * 24 * 3600)
+    db.collection("refresh_tokens").document(token_hash).set({
+        "installationId": installation_id,
+        "handle": handle,
+        "tokenHash": token_hash,
+        "status": "active",
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "expiresAt": expires_at
+    })
+    return token_str
 
 def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
     if not authorization or not authorization.startswith("Bearer "):
@@ -203,7 +296,9 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked.")
             
         installation_id = device_doc.get("installationId")
-        handle = generate_server_handle(installation_id)
+        handle = device_doc.get("handle")
+        if not handle:
+            handle = generate_server_handle(installation_id)
         
         banned_ref = db.collection("banned_users").document(handle).get()
         if banned_ref.exists:
@@ -215,18 +310,29 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
 
+def verify_resource_owner(collection_name: str, resource_id: str, user_handle: str) -> dict:
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+    doc = db.collection(collection_name).document(resource_id).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Resource not found.")
+    data = doc.to_dict()
+    if data.get("authorHandle") != user_handle and data.get("reporterHandle") != user_handle:
+        raise HTTPException(status_code=403, detail="Unauthorized: Resource ownership verification failed.")
+    return data
+
 # 🛡️ DEVICE INTEGRITY ATTESTATION VALIDATION (Play Integrity)
-def verify_device_attestation(request_hash: str, attestation_token: str) -> bool:
+def verify_device_attestation(request_hash: str, attestation_token: str) -> str:
     if not attestation_token:
-        return False
+        return "HIGH"
         
     if attestation_token.startswith("simulated_attestation_"):
         parts = attestation_token.split("_")
         # simulated_attestation_com.example.localv1_<requestHash>
         if len(parts) >= 3:
             package_name = parts[2]
-            return package_name == "com.example.localv1"
-        return False
+            return "LOW" if package_name == "com.example.localv1" else "HIGH"
+        return "HIGH"
         
     # In production, verify with Google Play Integrity API
     # POST https://playintegrity.googleapis.com/v1/com.example.localv1:decodeIntegrityToken
@@ -261,28 +367,36 @@ def verify_device_attestation(request_hash: str, attestation_token: str) -> bool
             # Verify request hash
             if request_details.get("requestHash") != request_hash:
                 print("Integrity Error: Request hash mismatch")
-                return False
+                return "HIGH"
                 
             # Verify app recognition
             app_verdict = token_payload_external.get("appIntegrity", {}).get("appRecognitionVerdict")
             if app_verdict != "PLAY_RECOGNIZED":
                 print(f"Integrity Error: App not recognized ({app_verdict})")
-                return False
+                return "HIGH"
                 
             # Verify device recognition
             device_verdict = token_payload_external.get("deviceIntegrity", {}).get("deviceRecognitionVerdict")
-            if not device_verdict or "MEETS_DEVICE_INTEGRITY" not in device_verdict:
-                print(f"Integrity Error: Device integrity failed ({device_verdict})")
-                return False
+            if not device_verdict:
+                return "HIGH"
                 
-            return True
+            if "MEETS_DEVICE_INTEGRITY" in device_verdict or "MEETS_STRONG_INTEGRITY" in device_verdict:
+                return "LOW"
+            elif "MEETS_BASIC_INTEGRITY" in device_verdict:
+                # Device is recognized but has some modifications (e.g. unlocked bootloader)
+                # Treat as MEDIUM risk (allow, but potentially restrict later)
+                return "MEDIUM"
+            else:
+                print(f"Integrity Error: Device integrity failed ({device_verdict})")
+                return "HIGH"
+                
         else:
             print(f"Integrity API Error: {response.status_code} {response.text}")
-            return False
+            return "HIGH"
     except Exception as e:
         print(f"Play Integrity Verification failed: {e}")
-        # Fallback for development if needed, but return False in prod
-        return False
+        # Fallback for development if needed, but return HIGH in prod
+        return "HIGH"
 
 # 🛡️ MODERATOR ROLE PRIVILEGES HIERARCHY (§16, §17 Claims Check)
 ROLE_HIERARCHY = {
@@ -295,43 +409,54 @@ def generate_mod_session_token(email: str, role: str) -> str:
     jti = str(uuid.uuid4())
     iss = "vadodara-local-backend"
     aud = "vadodara-local-moderator-portal"
-    expires_at = int(time.time()) + 7200  # 2 Hours Short-Lived Access
-    message = f"mod:{jti}:{email}:{role}:{iss}:{aud}:{expires_at}".encode()
-    signature = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-    return f"mod|{jti}|{email}|{role}|{iss}|{aud}|{expires_at}|{signature}"
+    expires_at = int(time.time()) + 900  # 15 Minutes Short-Lived Access
+    
+    payload = {
+        "jti": jti,
+        "sub": email,
+        "role": role,
+        "iss": iss,
+        "aud": aud,
+        "exp": expires_at,
+        "type": "mod"
+    }
+    
+    return jwt.encode(payload, Config.JWT_SECRET, algorithm="HS256")
 
-def verify_moderator_session(token: Optional[str], required_role: str) -> Tuple[str, str]:
+async def verify_moderator_session(token: Optional[str], required_role: str) -> Tuple[str, str]:
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing moderator auth token.")
     try:
-        parts = token.split("|")
-        if len(parts) != 8 or parts[0] != "mod":
-            raise ValueError()
-        _, jti, email, role, iss, aud, expires_at_str, signature = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]
+        payload = jwt.decode(
+            token, 
+            Config.JWT_SECRET, 
+            algorithms=["HS256"], 
+            audience="vadodara-local-moderator-portal",
+            issuer="vadodara-local-backend"
+        )
         
-        # 1. Revocation checks (RAM cache fast track)
-        if jti in REVOKED_TOKENS:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
+        jti = payload.get("jti")
+        email = payload.get("sub")
+        role = payload.get("role")
+        token_type = payload.get("type")
+        
+        if not jti or not email or not role or token_type != "mod":
+            raise ValueError("Invalid token claims")
+        
+        # 1. Revocation checks (Redis lookup)
+        if redis_client:
+            is_revoked = await redis_client.sismember("revoked_tokens", jti)
+            if is_revoked:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
             
-        # 2. Expiry verification
-        if time.time() > int(expires_at_str):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Moderator session expired. Please login again.")
-            
-        # 3. Issuer & Audience claims checks
-        if iss != "vadodara-local-backend" or aud != "vadodara-local-moderator-portal":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token claim verification failed.")
-            
-        # 4. Cryptographic signature check
-        message = f"mod:{jti}:{email}:{role}:{iss}:{aud}:{expires_at_str}".encode()
-        expected = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            raise ValueError()
+        # Role hierarchy check (simple check)
+        if required_role == "superadmin" and role != "superadmin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin privileges required.")
             
         # 5. Revocation checks (Database fallback persistence check)
         if db is not None:
             revoked_doc = db.collection("revoked_tokens").document(jti).get()
             if revoked_doc.exists:
-                REVOKED_TOKENS.add(jti)  # Cache locally
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
             
         # 6. Role Permissions hierarchy checks
@@ -339,10 +464,12 @@ def verify_moderator_session(token: Optional[str], required_role: str) -> Tuple[
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Insufficient privileges.")
             
         return email, role
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid moderator token.")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Moderator session expired. Please login again.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token claim verification failed.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
 
 # Enums / Literal Type Constraints (§23)
@@ -409,25 +536,33 @@ async def register_device(
     server_request: Request,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    ip_addr = get_client_ip(server_request)
+    await enforce_ip_rate_limit(ip_addr, max_requests=5)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
-
-    ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
-    enforce_ip_rate_limit(ip_addr, max_requests=5)
+    
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "register_device", ip_addr)
+        if cached:
+            return cached
 
     
     import hashlib
     # Reconstruct request hash
     raw_hash_str = f"POST/api/v1/devices/register{request.installationId}"
     expected_hash = hashlib.sha256(raw_hash_str.encode()).hexdigest()
-    if not verify_device_attestation(expected_hash, request.attestationToken):
+    
+    risk_level = verify_device_attestation(expected_hash, request.attestationToken)
+    if risk_level == "HIGH":
     
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Device attestation validation failed."
+            detail="Device attestation validation failed (High Risk)."
         )
+        
+    # We could restrict MEDIUM risk devices here (e.g. mark them for captcha later), but for now we allow them.
 
     handle = generate_server_handle(request.installationId)
     session_token = generate_session_token(request.installationId, handle)
@@ -440,50 +575,78 @@ async def register_device(
         "handle": handle
     }
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "register_device", ip_addr, res)
     return res
 
 # 2. Token Refresh Endpoint
 @app.post("/api/v1/devices/refresh")
 async def refresh_session(
-    x_refresh_token: Optional[str] = Header(None, description="Secure signed refresh token"),
+    x_refresh_token: Optional[str] = Header(None, description="Secure refresh token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
-
     if not x_refresh_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token.")
 
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+
     try:
-        parts = x_refresh_token.split("|")
-        if len(parts) != 4:
-            raise ValueError()
-        installation_id, handle, expires_at_str, signature = parts[0], parts[1], parts[2], parts[3]
+        token_hash = hashlib.sha256(x_refresh_token.encode()).hexdigest()
+        token_ref = db.collection("refresh_tokens").document(token_hash)
+        token_doc = token_ref.get()
         
-        expires_at = int(expires_at_str)
-        if time.time() > expires_at:
+        if not token_doc.exists:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
+            
+        data = token_doc.to_dict()
+        installation_id = data.get("installationId")
+        handle = data.get("handle")
+        
+        if idempotency_key:
+            cached = await get_cached_idempotent_response(idempotency_key, "refresh_session", installation_id)
+            if cached:
+                return cached
+        
+        # Check expiration
+        if time.time() > data.get("expiresAt", 0):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired. Please re-register.")
             
-        message = f"refresh:{installation_id}:{handle}:{expires_at}".encode()
-        expected = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-        
-        if not hmac.compare_digest(signature, expected):
-            raise ValueError()
+        # Theft detection (Single-Use check)
+        if data.get("status") == "consumed":
+            # Threat detected! A consumed token is being reused.
+            print(f"[SECURITY] Token theft detected for installation: {installation_id}")
             
+            # Revoke the session token family
+            db.collection("devices").document(installation_id).update({
+                "revokedAt": firestore.SERVER_TIMESTAMP
+            })
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked due to suspicious activity.")
+            
+        if data.get("status") != "active":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is inactive.")
+            
+        # Mark token as consumed
+        token_ref.update({
+            "status": "consumed",
+            "consumedAt": firestore.SERVER_TIMESTAMP
+        })
+        
+        # Issue new token pair
         new_session_token = generate_session_token(installation_id, handle)
+        new_refresh_token = generate_refresh_token(installation_id, handle)
+        
         res = {
             "status": "success",
-            "sessionToken": new_session_token
+            "sessionToken": new_session_token,
+            "refreshToken": new_refresh_token
         }
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "refresh_session", installation_id, res)
         return res
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        print(f"Error in refresh token: {e}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
 
 # 2.5 Phone Auth OTP Verification (Backend verifies Firebase ID token directly)
@@ -493,13 +656,17 @@ async def verify_phone_auth(
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    device_id, user_handle = verify_session_token(authorization)
+    await enforce_route_rate_limit("verify_phone", device_id, max_requests=5)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
 
-    device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("verify_phone", device_id, max_requests=5)
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "verify_phone", device_id)
+        if cached:
+            return cached
 
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -517,16 +684,33 @@ async def verify_phone_auth(
         import hashlib
         phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
         
-        # Update device doc indicating OTP is verified on server side
+        # Identity Recovery / Creation
+        user_ref = db.collection("users").document(phone_hash)
+        user_doc = user_ref.get()
+        
+        final_handle = user_handle
+        if user_doc.exists:
+            # Recover old identity
+            final_handle = user_doc.to_dict().get("handle", user_handle)
+        else:
+            # First-time verification: seal current handle as permanent identity
+            user_ref.set({
+                "userId": phone_hash,
+                "handle": final_handle,
+                "createdAt": firestore.SERVER_TIMESTAMP
+            })
+        
+        # Update device doc indicating OTP is verified on server side and lock in handle
         db.collection("devices").document(device_id).update({
             "otpVerified": True,
             "phoneNumberHash": phone_hash,
-            "phoneVerifiedAt": firestore.SERVER_TIMESTAMP
+            "phoneVerifiedAt": firestore.SERVER_TIMESTAMP,
+            "handle": final_handle
         })
         
-        res = {"status": "success", "message": "Phone authentication verified by backend."}
+        res = {"status": "success", "message": "Phone authentication verified by backend.", "recoveredHandle": final_handle}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "verify_phone", device_id, res)
         return res
     except Exception as e:
         print(f"Firebase ID token verification failed: {e}")
@@ -541,15 +725,15 @@ async def create_post(
     x_vpn_detected: Optional[bool] = Header(False, description="Client side VPN detection flag"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
     device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("post", device_id, max_requests=5)
+    await enforce_route_rate_limit("post", device_id, max_requests=5)
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
+        if cached:
+            return cached
     
-    client_ip = server_request.client.host if server_request.client else "127.0.0.1"
+    client_ip = get_client_ip(server_request)
     if not evaluate_request_risk(client_ip, client_vpn_flag=x_vpn_detected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="High risk request blocked by security policies.")
 
@@ -580,7 +764,7 @@ async def create_post(
         
     res = {"status": "success", "authorHandle": user_handle}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
@@ -598,12 +782,12 @@ async def get_posts(
     if authorization and authorization.startswith("Bearer "):
         try:
             device_id, _ = verify_session_token(authorization)
-            enforce_route_rate_limit("get_posts", device_id, max_requests=100)
+            await enforce_route_rate_limit("get_posts", device_id, max_requests=100)
         except:
             pass # allow anonymous reading for now, or block based on architecture
-
+            
     try:
-        query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
+        query = db.collection("posts").where("hiddenByMod", "==", False).order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
         
         # If cursor provided, it's the post ID to start after
         if cursor:
@@ -654,16 +838,22 @@ async def get_comments(post_id: str):
 async def add_comment(
     post_id: str,
     request: CommentCreateRequest,
+    server_request: Request,
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    device_id, user_handle = verify_session_token(authorization)
+    client_ip = get_client_ip(server_request)
+    await enforce_route_rate_limit("comment", device_id, max_requests=20, ip=client_ip)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
-
-    device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("comment", device_id, max_requests=20)
+    
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "add_comment", user_handle)
+        if cached:
+            return cached
 
     error_msg = validate_text_content(request.content)
     if error_msg:
@@ -679,7 +869,7 @@ async def add_comment(
         
     res = {"status": "success"}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
@@ -688,24 +878,31 @@ async def add_comment(
 async def vote_post(
     post_id: str,
     request: VoteRequest,
+    server_request: Request,
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    device_id, user_handle = verify_session_token(authorization)
+    client_ip = get_client_ip(server_request)
+    await enforce_route_rate_limit("vote", device_id, max_requests=60, ip=client_ip)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
-
-    device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("vote", device_id, max_requests=60)
+    
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "vote_post", user_handle)
+        if cached:
+            return cached
 
     # Verify Play Integrity Hash
     if request.attestationToken and request.requestId:
         import hashlib
         raw_hash_str = f"POST/api/v1/posts/{post_id}/vote{request.direction}{request.requestId}"
         expected_hash = hashlib.sha256(raw_hash_str.encode()).hexdigest()
-        if not verify_device_attestation(expected_hash, request.attestationToken):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device attestation validation failed.")
+        risk_level = verify_device_attestation(expected_hash, request.attestationToken)
+        if risk_level == "HIGH":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device attestation validation failed (High Risk).")
 
     success = FirebaseService.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
     if not success:
@@ -713,7 +910,7 @@ async def vote_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
@@ -722,16 +919,22 @@ async def vote_post(
 async def report_post(
     post_id: str,
     request: ReportRequest,
+    server_request: Request,
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    device_id, user_handle = verify_session_token(authorization)
+    client_ip = get_client_ip(server_request)
+    await enforce_route_rate_limit("report", device_id, max_requests=10, ip=client_ip)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
-
-    device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("report", device_id, max_requests=10)
+    
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "report_post", user_handle)
+        if cached:
+            return cached
 
     success = FirebaseService.report_post(post_id=post_id, reporter_handle=user_handle, reason=request.reason)
     if not success:
@@ -739,7 +942,7 @@ async def report_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
@@ -751,12 +954,8 @@ async def restore_post(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
-    mod_email, mod_role = verify_moderator_session(x_moderator_token, required_role="moderator")
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="moderator")
 
     success = FirebaseService.restore_post(post_id)
     if not success:
@@ -764,7 +963,7 @@ async def restore_post(
         
     # Chained Audit Log
     request_id = str(uuid.uuid4())
-    ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
+    ip_addr = get_client_ip(server_request)
     FirebaseService.log_moderator_action(
         moderator_id=mod_email,
         role=mod_role,
@@ -777,24 +976,30 @@ async def restore_post(
     
     res = {"status": "success"}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
 # 8. Secure BOLA-Protected Deletion
-@app.post("/api/v1/posts/{post_id}/delete")
+@app.delete("/api/v1/posts/{post_id}")
 async def delete_post(
     post_id: str,
+    server_request: Request,
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    device_id, user_handle = verify_session_token(authorization)
+    client_ip = get_client_ip(server_request)
+    await enforce_route_rate_limit("delete", device_id, max_requests=10, ip=client_ip)
     if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
-
-    device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("delete", device_id, max_requests=10)
+    
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "delete_post", user_handle)
+        if cached:
+            return cached
 
     if db is None:
         raise HTTPException(status_code=500, detail="Database connection offline.")
@@ -816,12 +1021,18 @@ async def delete_post(
     image_url = post_data.get("imageUrl")
     if image_url and "/api/v1/media/" in image_url:
         media_id = image_url.split("/api/v1/media/")[-1]
-        FirebaseService.delete_media(media_id)
         
-        if media_id in MEDIA_CACHE:
-            del MEDIA_CACHE[media_id]
-        if media_id in MEDIA_TYPE_CACHE:
-            del MEDIA_TYPE_CACHE[media_id]
+        # Check if ANY OTHER active, non-hidden post references this mediaId
+        other_posts = db.collection("posts").where("imageUrl", "==", image_url).limit(2).get()
+        active_count = sum(1 for p in other_posts if p.id != post_id and p.to_dict().get("deletedAt") is None and not p.to_dict().get("hiddenByMod"))
+        
+        if active_count == 0:
+            FirebaseService.delete_media(media_id)
+            
+            if media_id in MEDIA_CACHE:
+                del MEDIA_CACHE[media_id]
+            if media_id in MEDIA_TYPE_CACHE:
+                del MEDIA_TYPE_CACHE[media_id]
 
     success = FirebaseService.delete_post(post_id)
     if not success:
@@ -829,7 +1040,7 @@ async def delete_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
@@ -841,13 +1052,13 @@ async def upload_image(
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
     device_id, user_handle = verify_session_token(authorization)
-    enforce_route_rate_limit("upload", device_id, max_requests=10)
+    await enforce_route_rate_limit("upload", device_id, max_requests=10)
+    if idempotency_key:
+        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
+        if cached:
+            return cached
 
     allowed_extensions = (".jpg", ".jpeg", ".png", ".webp")
     filename = file.filename or "upload.png"
@@ -887,9 +1098,7 @@ async def upload_image(
         print(f"Error sanitizing image metadata: {e}")
         raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
         
-    base_url = str(server_request.base_url).rstrip("/")
-    if "onrender.com" in base_url or server_request.headers.get("x-forwarded-proto") == "https":
-        base_url = base_url.replace("http://", "https://")
+    base_url = os.environ.get("PRODUCTION_URL", "https://api.vadodaralocal.com").rstrip("/")
 
     content_hash = hashlib.sha256(sanitized_content).hexdigest()
     existing_media = FirebaseService.get_media_by_hash(content_hash)
@@ -897,7 +1106,7 @@ async def upload_image(
         public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
         res = {"status": "success", "imageUrl": public_proxy_url}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
         
     media_id = str(uuid.uuid4())
@@ -920,12 +1129,33 @@ async def upload_image(
     public_proxy_url = f"{base_url}/api/v1/media/{media_id}"
     res = {"status": "success", "imageUrl": public_proxy_url}
     if idempotency_key:
-        save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, res)
     return res
 
 
 # 🛡️ IN-MEMORY BANDWIDTH DOS & CACHE LAYER
-MEDIA_CACHE: Dict[str, bytes] = {}
+
+from collections import OrderedDict
+class LRUCache:
+    def __init__(self, capacity: int):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+    def get(self, key):
+        if key not in self.cache: return None
+        self.cache.move_to_end(key)
+        return self.cache[key]
+    def put(self, key, value):
+        self.cache[key] = value
+        self.cache.move_to_end(key)
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+    def __contains__(self, key):
+        return key in self.cache
+    def __delitem__(self, key):
+        if key in self.cache: del self.cache[key]
+
+MEDIA_CACHE = LRUCache(200) # max 200 items (approx 200 * 5MB = 1GB RAM max)
+
 MEDIA_TYPE_CACHE: Dict[str, str] = {}
 
 
@@ -934,7 +1164,7 @@ MEDIA_TYPE_CACHE: Dict[str, str] = {}
 async def serve_media(media_id: str):
     if media_id in MEDIA_CACHE:
         def iter_bytes():
-            yield MEDIA_CACHE[media_id]
+            yield MEDIA_CACHE.get(media_id)
         return StreamingResponse(iter_bytes(), media_type=MEDIA_TYPE_CACHE.get(media_id, "image/jpeg"))
 
     if db is None:
@@ -968,7 +1198,7 @@ async def serve_media(media_id: str):
         if file_bytes is None:
             raise HTTPException(status_code=503, detail="Media host is temporarily unreachable.")
                 
-        MEDIA_CACHE[media_id] = file_bytes
+        MEDIA_CACHE.put(media_id, file_bytes)
         MEDIA_TYPE_CACHE[media_id] = mime_type
         
         def iter_bytes():
@@ -989,10 +1219,6 @@ async def mod_login(
     request: ModLoginRequest,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -1000,17 +1226,20 @@ async def mod_login(
     try:
         mods_ref = db.collection("moderators")
         mod_doc = mods_ref.document(request.email).get()
-        hashed_pass = hashlib.sha256((request.password + Config.SERVER_SALT).encode()).hexdigest()
+        # Hash password with bcrypt (optional server pepper appended)
+        password_with_pepper = (request.password + Config.SERVER_SALT).encode('utf-8')
         
         if not mod_doc.exists:
             all_mods = mods_ref.limit(1).get()
             if not all_mods and request.email == "admin@vadodara.local" and request.password == "VadodaraLocalSecure2026!":
+                new_hashed_pass = bcrypt.hashpw(password_with_pepper, bcrypt.gensalt()).decode('utf-8')
+                encrypted_mfa = Config.crypto.encrypt(b"BASE32SECRET3232").decode('utf-8')
                 mods_ref.document(request.email).set({
                     "modId": request.email,
                     "email": request.email,
-                    "hashedPassword": hashed_pass,
+                    "hashedPassword": new_hashed_pass,
                     "role": "superadmin",
-                    "mfaSecret": "BASE32SECRET3232",
+                    "mfaSecret": encrypted_mfa,
                     "createdAt": firestore.SERVER_TIMESTAMP,
                     "status": "active"
                 })
@@ -1022,13 +1251,30 @@ async def mod_login(
         if mod_data.get("status") != "active":
             raise HTTPException(status_code=403, detail="This administrative account is suspended.")
             
-        if mod_data.get("hashedPassword") != hashed_pass:
+        stored_hash = mod_data.get("hashedPassword", "")
+        # Fallback for old accounts that might still be using SHA-256 (optional transition logic)
+        is_valid = False
+        try:
+            is_valid = bcrypt.checkpw(password_with_pepper, stored_hash.encode('utf-8'))
+        except ValueError:
+            # If the stored hash is not a valid bcrypt hash, try matching the old sha256
+            old_sha256 = hashlib.sha256((request.password + Config.SERVER_SALT).encode()).hexdigest()
+            if stored_hash == old_sha256:
+                is_valid = True
+                # Automatically upgrade hash (opportunistic hashing)
+                new_hash = bcrypt.hashpw(password_with_pepper, bcrypt.gensalt()).decode('utf-8')
+                mods_ref.document(request.email).update({"hashedPassword": new_hash})
+
+        if not is_valid:
             raise HTTPException(status_code=401, detail="Invalid login credentials.")
             
         expires_at = int(time.time()) + 300
-        message = f"preauth:{request.email}:{expires_at}".encode()
-        signature = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-        pre_auth_token = f"preauth.{request.email}.{expires_at}.{signature}"
+        payload = {
+            "sub": request.email,
+            "exp": expires_at,
+            "type": "preauth"
+        }
+        pre_auth_token = jwt.encode(payload, Config.JWT_SECRET, algorithm="HS256")
         
         res = {
             "status": "success",
@@ -1036,7 +1282,7 @@ async def mod_login(
             "preAuthToken": pre_auth_token
         }
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
     except HTTPException:
         raise
@@ -1049,27 +1295,22 @@ async def mod_verify_mfa(
     request: MfaVerifyRequest,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
     try:
-        parts = request.preAuthToken.split(".")
-        if len(parts) != 4 or parts[0] != "preauth":
-            raise ValueError()
-        _, email, expires_at_str, signature = parts[0], parts[1], parts[2], parts[3]
+        payload = jwt.decode(
+            request.preAuthToken, 
+            Config.JWT_SECRET, 
+            algorithms=["HS256"]
+        )
         
+        email = payload.get("sub")
+        token_type = payload.get("type")
+        
+        if not email or token_type != "preauth":
+            raise ValueError("Invalid pre-auth token claims")
+            
         if email != request.email:
-            raise ValueError()
-            
-        if time.time() > int(expires_at_str):
-            raise HTTPException(status_code=401, detail="Pre-auth session expired. Please re-enter credentials.")
-            
-        message = f"preauth:{email}:{expires_at_str}".encode()
-        expected = hmac.new(Config.JWT_SECRET.encode(), message, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            raise ValueError()
+            raise ValueError("Email mismatch")
             
         if request.mfaCode != "123456":
             raise HTTPException(status_code=401, detail="Invalid MFA verification code.")
@@ -1086,18 +1327,19 @@ async def mod_verify_mfa(
             "role": role
         }
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
-    except HTTPException:
-        raise
-    except Exception:
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Pre-auth session expired. Please re-enter credentials.")
+    except Exception as e:
+        print(f"Error verifying MFA: {e}")
         raise HTTPException(status_code=401, detail="MFA token validation failed.")
 
 @app.get("/api/v1/moderation/queue")
 async def moderation_queue(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
 ):
-    verify_moderator_session(x_moderator_token, required_role="moderator")
+    await verify_moderator_session(x_moderator_token, required_role="moderator")
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -1128,12 +1370,8 @@ async def hide_post(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
-    mod_email, mod_role = verify_moderator_session(x_moderator_token, required_role="moderator")
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="moderator")
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -1145,7 +1383,7 @@ async def hide_post(
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
-        ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
+        ip_addr = get_client_ip(server_request)
         FirebaseService.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
@@ -1158,7 +1396,7 @@ async def hide_post(
         
         res = {"status": "success", "message": "Post successfully hidden."}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
     except Exception as e:
         print(f"Error hiding post: {e}")
@@ -1171,12 +1409,8 @@ async def ban_user(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
-    mod_email, mod_role = verify_moderator_session(x_moderator_token, required_role="admin")
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -1191,7 +1425,7 @@ async def ban_user(
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
-        ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
+        ip_addr = get_client_ip(server_request)
         FirebaseService.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
@@ -1204,7 +1438,7 @@ async def ban_user(
         
         res = {"status": "success", "message": f"Handle {request.targetHandle} has been banned."}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
     except Exception as e:
         print(f"Error banning user: {e}")
@@ -1217,31 +1451,29 @@ async def add_moderator(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
-    mod_email, mod_role = verify_moderator_session(x_moderator_token, required_role="superadmin")
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="superadmin")
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        hashed_pass = hashlib.sha256((request.password + Config.SERVER_SALT).encode()).hexdigest()
+        password_with_pepper = (request.password + Config.SERVER_SALT).encode('utf-8')
+        new_hashed_pass = bcrypt.hashpw(password_with_pepper, bcrypt.gensalt()).decode('utf-8')
+        encrypted_mfa = Config.crypto.encrypt(b"GENERATED_BASE32_MFA_SECRET").decode('utf-8')
         db.collection("moderators").document(request.email).set({
             "modId": request.email,
             "email": request.email,
-            "hashedPassword": hashed_pass,
+            "hashedPassword": new_hashed_pass,
             "role": request.role,
-            "mfaSecret": "GENERATED_BASE32_MFA_SECRET",
+            "mfaSecret": encrypted_mfa,
             "createdAt": firestore.SERVER_TIMESTAMP,
             "status": "active"
         })
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
-        ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
+        ip_addr = get_client_ip(server_request)
         FirebaseService.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
@@ -1254,7 +1486,7 @@ async def add_moderator(
         
         res = {"status": "success", "message": f"Moderator {request.email} added with role: {request.role}."}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
     except Exception as e:
         print(f"Error adding moderator: {e}")
@@ -1267,12 +1499,8 @@ async def remove_moderator(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    if idempotency_key:
-        cached = get_cached_idempotent_response(idempotency_key)
-        if cached:
-            return cached
 
-    mod_email, mod_role = verify_moderator_session(x_moderator_token, required_role="superadmin")
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="superadmin")
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
@@ -1282,7 +1510,7 @@ async def remove_moderator(
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
-        ip_addr = server_request.client.host if server_request.client else "127.0.0.1"
+        ip_addr = get_client_ip(server_request)
         FirebaseService.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
@@ -1295,7 +1523,7 @@ async def remove_moderator(
         
         res = {"status": "success", "message": f"Moderator {email} account has been revoked."}
         if idempotency_key:
-            save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, res)
         return res
     except Exception as e:
         print(f"Error removing moderator: {e}")
@@ -1304,21 +1532,31 @@ async def remove_moderator(
 # 🛡️ MODERATOR LOGOUT & TOKEN REVOCATION
 @app.post("/api/v1/moderation/logout")
 async def mod_logout(
-    x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
+    x_moderator_token: str = Header(..., description="The moderator token to revoke"),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-    """
-    🛡️ Moderator Logout: Registers token in revoked blacklist (§17)
-    """
+
     if not x_moderator_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing moderator auth token.")
-    try:
-        parts = x_moderator_token.split("|")
-        if len(parts) != 8 or parts[0] != "mod":
-            raise ValueError()
-        jti = parts[1]
+        raise HTTPException(status_code=400, detail="Token required.")
         
-        # Blacklist JTI in memory cache for immediate denial
-        REVOKED_TOKENS.add(jti)
+    try:
+        payload = jwt.decode(
+            x_moderator_token, 
+            Config.JWT_SECRET, 
+            algorithms=["HS256"], 
+            audience="vadodara-local-moderator-portal",
+            issuer="vadodara-local-backend"
+        )
+        jti = payload.get("jti")
+        if not jti:
+            raise ValueError("No JTI found")
+            
+        # Revoke the token using Redis and Firestore
+        if redis_client:
+            is_revoked = await redis_client.sismember("revoked_tokens", jti)
+            if is_revoked:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
+            await redis_client.sadd("revoked_tokens", jti)
         
         # Persistent blacklist in database
         if db is not None:
@@ -1326,9 +1564,16 @@ async def mod_logout(
                 "jti": jti,
                 "revokedAt": firestore.SERVER_TIMESTAMP
             })
-        return {"status": "success", "message": "Moderator session successfully logged out."}
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format.")
+            
+        res = {"status": "success", "message": "Successfully logged out."}
+        if idempotency_key:
+            await save_idempotent_response(idempotency_key, res)
+        return res
+    except jwt.ExpiredSignatureError:
+        # Already expired
+        return {"status": "success", "message": "Token was already expired."}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token for logout.")
 
 
 @app.get("/health")

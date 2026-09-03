@@ -66,5 +66,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- ══ PHOTO LIBRARY ══ -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Vadodara Local needs access to your photo library to attach images to posts.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Vadodara Local needs permission to save photos to your library.</string>
+
+	<!-- ══ CAMERA ══ -->
+	<key>NSCameraUsageDescription</key>
+	<string>Vadodara Local needs camera access so you can take and share photos in posts.</string>
+
+	<!-- ══ LOCATION ══ -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Vadodara Local uses your location to show posts from your local area.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Vadodara Local uses your location to show local posts and send area-based alerts.</string>
+
 </dict>
 </plist>
