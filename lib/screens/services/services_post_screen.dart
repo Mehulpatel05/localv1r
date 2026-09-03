@@ -22,6 +22,7 @@ class ServicesPostScreen extends StatefulWidget {
 }
 
 class _ServicesPostScreenState extends State<ServicesPostScreen> {
+  String? _selectedArea;
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -362,11 +363,17 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         border: Border.all(color: Colors.black12),
       ),
       child: DropdownButtonHideUnderline(
-        child: Container(
+        child: DropdownButton<String>(
           isExpanded: true,
-          
+          value: _selectedArea,
           icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          
+          items: <String>[].map((area) {
+            return DropdownMenuItem(
+              value: area,
+              child: Text(area,
+                  style: const TextStyle(color: Colors.black87)),
+            );
+          }).toList(),
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

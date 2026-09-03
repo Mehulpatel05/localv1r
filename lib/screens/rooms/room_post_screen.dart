@@ -25,6 +25,7 @@ class RoomPostScreen extends StatefulWidget {
 }
 
 class _RoomPostScreenState extends State<RoomPostScreen> {
+  String? _selectedArea;
   final _titleController = TextEditingController();
   final _areaController = TextEditingController();
   final _rentController = TextEditingController();
@@ -280,11 +281,18 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                 border: Border.all(color: const Color(0xFF243049)),
               ),
               child: DropdownButtonHideUnderline(
-                child: Container(
+                child: DropdownButton<String>(
                   dropdownColor: const Color(0xFF151D30),
-                  
+                  value: _selectedArea,
                   isExpanded: true,
-                  
+                  items: <String>[].map((area) {
+                    return DropdownMenuItem(
+                      value: area,
+                      child: Text(area,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13)),
+                    );
+                  }).toList(),
                   onChanged: (val) =>
                       setState(() => _selectedArea = val!),
                 ),

@@ -150,6 +150,34 @@ class _FeedScreenState extends State<FeedScreen> {
                   child: Row(
                     children: [
                       // Area Chip
+                      InkWell(
+                        onTap: _showAreaPicker,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1F293D),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF374151)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.location_on, size: 16, color: Color(0xFF60A5FA)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Vadodara',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down, size: 18, color: Colors.white54),
+                            ],
+                          ),
+                        ),
+                      ),
                       const Spacer(),
                       // Tab controller
                       Container(
@@ -185,43 +213,6 @@ class _FeedScreenState extends State<FeedScreen> {
                     itemBuilder: (context, index) {
                       final cat = PostCategory.values[index];
                       // 🏠 Rooms chip — opens dedicated Rooms page
-                                            // 💬 All Chat chip
-                      if (cat == PostCategory.allChat) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('You are already viewing the Global Feed (All Chat)!')),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E3A5F),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.6)),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Text('💬', style: TextStyle(fontSize: 13)),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'All Chat',
-                                    style: TextStyle(
-                                      color: Color(0xFF60A5FA),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-
                       if (cat == PostCategory.rooms) {
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
@@ -897,6 +888,12 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(width: 6),
                     const Text('•', style: TextStyle(color: Colors.white24)),
                     const SizedBox(width: 6),
+                    Text(
+                      'Vadodara',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
                     ),
                     const Spacer(),
                     Container(
@@ -1029,6 +1026,69 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
   }
+
+  void _showAreaPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF151D30),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Choose Area in Vadodara',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const Divider(color: Color(0xFF243049)),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: 0,
+                  itemBuilder: (context, index) {
+                    final area = '';
+                    final isSelected = false;
+                    return ListTile(
+                      leading: Icon(
+                        Icons.location_city,
+                        color: isSelected ? const Color(0xFF3B82F6) : Colors.white30,
+                      ),
+                      title: Text(
+                        area,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_circle, color: Color(0xFF3B82F6))
+                          : null,
+                      onTap: () {
+                        
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showDeleteConfirmation(BuildContext context, String postId) {
     showDialog(
       context: context,

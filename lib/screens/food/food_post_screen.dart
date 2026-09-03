@@ -24,6 +24,7 @@ class FoodPostScreen extends StatefulWidget {
 }
 
 class _FoodPostScreenState extends State<FoodPostScreen> {
+  String? _selectedArea;
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -344,12 +345,18 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
-        child: Container(
+        child: DropdownButton<String>(
           isExpanded: true,
           dropdownColor: const Color(0xFF151D30),
-          
+          value: _selectedArea,
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          
+          items: <String>[].map((area) {
+            return DropdownMenuItem(
+              value: area,
+              child: Text(area,
+                  style: const TextStyle(color: Colors.white)),
+            );
+          }).toList(),
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

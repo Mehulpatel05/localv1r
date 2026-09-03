@@ -23,6 +23,7 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
+  String? _selectedArea;
   // Common
   final _contentController = TextEditingController();
   PostCategory _selectedCategory = PostCategory.services;
@@ -296,7 +297,45 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             children: [
               Row(
                 children: [
-                  
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('NEIGHBORHOOD AREA',
+                            style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF151D30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF243049)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              dropdownColor: const Color(0xFF151D30),
+                              value: _selectedArea,
+                              isExpanded: true,
+                              items: <String>[].map((area) {
+                                return DropdownMenuItem(
+                                  value: area,
+                                  child: Text(area,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 13)),
+                                );
+                              }).toList(),
+                              onChanged: (val) =>
+                                  setState(() => _selectedArea = val!),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

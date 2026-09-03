@@ -117,7 +117,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         backgroundColor: const Color(0xFF151D30),
         elevation: 0,
         title: Text(
-          'Discussion Thread — ${widget.post.area.displayName}',
+          'Discussion Thread — ${'Vadodara'}',
           style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
         ),
         actions: [

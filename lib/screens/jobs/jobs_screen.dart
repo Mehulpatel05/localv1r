@@ -261,7 +261,7 @@ class _JobsScreenState extends State<JobsScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '$location • ${post.area.displayName}',
+                            '$location • ${'Vadodara'}',
                             style: const TextStyle(
                                 color: Colors.black54,
                                 fontSize: 13,

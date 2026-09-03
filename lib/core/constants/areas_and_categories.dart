@@ -1,5 +1,4 @@
 enum PostCategory {
-  allChat('All Chat', '💬'),
   services('Local Services', '🔧'),
   food('Food & Cafes', '🍲'),
   rooms('Rooms', '🏠'),

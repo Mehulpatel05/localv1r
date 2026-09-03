@@ -291,7 +291,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           const Icon(Icons.location_on, size: 12, color: Colors.black38),
                           const SizedBox(width: 4),
                           Expanded(
-                            child:
+                            child: Text(
+                              'Vadodara',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500),
                             ),
                           ),
                         ],

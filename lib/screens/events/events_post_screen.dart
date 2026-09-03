@@ -22,6 +22,7 @@ class EventsPostScreen extends StatefulWidget {
 }
 
 class _EventsPostScreenState extends State<EventsPostScreen> {
+  String? _selectedArea;
   final _titleController = TextEditingController();
   final _dateController = TextEditingController();
   final _locationController = TextEditingController();
@@ -329,12 +330,18 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
-        child: Container(
+        child: DropdownButton<String>(
           isExpanded: true,
           dropdownColor: const Color(0xFF19122A),
-          
+          value: _selectedArea,
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          
+          items: <String>[].map((area) {
+            return DropdownMenuItem(
+              value: area,
+              child: Text(area,
+                  style: const TextStyle(color: Colors.white)),
+            );
+          }).toList(),
           onChanged: (val) {
             if (val != null) setState(() => _selectedArea = val);
           },

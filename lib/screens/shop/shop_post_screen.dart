@@ -25,6 +25,7 @@ class ShopPostScreen extends StatefulWidget {
 }
 
 class _ShopPostScreenState extends State<ShopPostScreen> {
+  String? _selectedArea;
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -271,12 +272,19 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                 border: Border.all(color: const Color(0xFF243049)),
               ),
               child: DropdownButtonHideUnderline(
-                child: Container(
+                child: DropdownButton<String>(
                   dropdownColor: const Color(0xFF151D30),
-                  
+                  value: _selectedArea,
                   isExpanded: true,
-                  
-                  
+                  items: <String>[].map((area) {
+                    return DropdownMenuItem(
+                      value: area,
+                      child: Text(area,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13)),
+                    );
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedArea = val!),
                 ),
               ),
             ),

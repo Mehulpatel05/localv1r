@@ -352,6 +352,11 @@ class _EventsScreenState extends State<EventsScreen> {
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500),
                                 ),
+                                Text(
+                                  'Vadodara',
+                                  style: const TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 12),
                                 ),
                               ],
                             ),
