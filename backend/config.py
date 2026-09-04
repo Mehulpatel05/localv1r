@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
 
 # Load environment variables from .env file
 load_dotenv()
@@ -12,6 +13,9 @@ class Config:
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1000000000000")
     SERVER_SALT = os.getenv("SERVER_SALT", "PLACEHOLDER_SALT_PLEASE_SET_IN_ENV")
     JWT_SECRET = os.getenv("JWT_SECRET", "PLACEHOLDER_JWT_SECRET_PLEASE_SET_IN_ENV")
+    
+    _FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode('utf-8'))
+    crypto = Fernet(_FERNET_KEY.encode('utf-8'))
     
     # Path to Firebase Admin SDK service account key json
     FIREBASE_CREDENTIALS_PATH = os.getenv(
