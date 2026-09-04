@@ -1443,6 +1443,102 @@ async def ban_user(
         print(f"Error banning user: {e}")
         raise HTTPException(status_code=500, detail="Failed to ban user.")
 
+@app.get("/api/v1/moderation/users")
+async def get_all_users(
+    limit: int = 50,
+    x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
+):
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+    
+    try:
+        users_ref = db.collection("profiles").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        users_list = []
+        for doc in users_ref:
+            d = doc.to_dict()
+            users_list.append({
+                "handle": d.get("handle", doc.id),
+                "ownerUid": d.get("ownerUid"),
+                "friendCount": d.get("friendCount", 0),
+                "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
+            })
+        return {"status": "success", "users": users_list}
+    except Exception as e:
+        print(f"Error fetching users: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch users.")
+
+@app.get("/api/v1/moderation/posts")
+async def get_all_posts(
+    category: Optional[PostCategory] = None,
+    limit: int = 50,
+    x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
+):
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+        
+    try:
+        query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit)
+        if category:
+            query = query.where("category", "==", category)
+            
+        posts_ref = query.stream()
+        posts_list = []
+        for doc in posts_ref:
+            d = doc.to_dict()
+            posts_list.append({
+                "id": doc.id,
+                "content": d.get("content", ""),
+                "category": d.get("category", ""),
+                "authorHandle": d.get("authorHandle", "Unknown"),
+                "reportCount": d.get("reportCount", 0),
+                "upvotes": d.get("upvotes", 0),
+                "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
+            })
+        return {"status": "success", "posts": posts_list}
+    except Exception as e:
+        print(f"Error fetching moderation posts: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch moderation posts.")
+
+@app.delete("/api/v1/moderation/users/{handle}")
+async def delete_user(
+    handle: str,
+    server_request: Request,
+    x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
+):
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+        
+    try:
+        # Delete profile
+        db.collection("profiles").document(handle).delete()
+        
+        # We can't delete from auth easily without admin sdk, but deleting profile prevents login since handle is lost
+        # Let's also ban them to be safe
+        db.collection("banned_users").document(handle).set({
+            "handle": handle,
+            "bannedBy": "admin_delete",
+            "reason": "User deleted by admin",
+            "createdAt": firestore.SERVER_TIMESTAMP
+        })
+        
+        # Log action
+        FirebaseService.log_moderator_action(
+            moderator_id=mod_email,
+            role=mod_role,
+            action="delete_user",
+            target=handle,
+            reason="User deleted from moderation panel",
+            request_id=str(uuid.uuid4()),
+            ip_address=get_client_ip(server_request)
+        )
+        return {"status": "success", "message": f"User {handle} deleted and banned."}
+    except Exception as e:
+        print(f"Error deleting user: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete user.")
+
 @app.post("/api/v1/moderation/moderators/add")
 async def add_moderator(
     request: AddModRequest,
