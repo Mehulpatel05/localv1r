@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/post_repository.dart';
@@ -18,9 +19,13 @@ void main() async {
   );
   
   // Initialize Firebase App Check
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.playIntegrity,
-  );
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+    );
+  } catch (e) {
+    debugPrint('AppCheck initialization failed: $e');
+  }
   
   // Register background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -49,11 +54,14 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.dispose();
   }
 
-  // Check login status asynchronously using encrypted secure storage to route the user
+  // Check login status asynchronously using SharedPreferences (faster than SecureStorage) to route the user
   Future<Map<String, dynamic>> _checkAuthStatus() async {
-    const secureStorage = FlutterSecureStorage();
-    final isLoggedInStr = await secureStorage.read(key: 'is_logged_in');
-    final handle = await secureStorage.read(key: 'user_handle') ?? 'Guest';
+    // Enforce a minimum delay so the Splash Screen is visible for branding
+    await Future.delayed(const Duration(milliseconds: 1500));
+    
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedInStr = prefs.getString('is_logged_in');
+    final handle = prefs.getString('user_handle') ?? 'Guest';
     return {
       'isLoggedIn': isLoggedInStr == 'true',
       'userHandle': handle,
@@ -87,10 +95,43 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         future: _checkAuthStatus(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: Color(0xFF0B0F19),
+            return Scaffold(
+              backgroundColor: const Color(0xFF0B0F19),
               body: Center(
-                child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.location_city, size: 90, color: Color(0xFF3B82F6)),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'VADODARA LOCAL',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Explore • Connect • Thrive',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white60,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF3B82F6),
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           }

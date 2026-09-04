@@ -4,7 +4,7 @@ import '../../services/app_permission_service.dart';
 
 /// Full-page permission onboarding screen shown once on first launch.
 class PermissionRequestScreen extends StatefulWidget {
-  final VoidCallback onComplete;
+  final void Function(BuildContext context) onComplete;
 
   const PermissionRequestScreen({super.key, required this.onComplete});
 
@@ -179,7 +179,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                       onPressed: _isRequesting
                           ? null
                           : _hasRequested
-                              ? widget.onComplete   // ← FIXED: calls onComplete
+                              ? () => widget.onComplete(context)   // ← Pass valid context
                               : _requestAll,
                       child: _isRequesting
                           ? const SizedBox(
@@ -200,7 +200,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                   if (!_hasRequested) ...[
                     const SizedBox(height: 10),
                     TextButton(
-                      onPressed: widget.onComplete,
+                      onPressed: () => widget.onComplete(context),
                       child: const Text(
                         'Skip for now',
                         style: TextStyle(color: Colors.white38, fontSize: 13),

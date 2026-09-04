@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../auth/google_login_screen.dart';
@@ -142,8 +142,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await GoogleSignIn().signOut();
       await FirebaseAuth.instance.signOut();
-      const secureStorage = FlutterSecureStorage();
-      await secureStorage.deleteAll();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(

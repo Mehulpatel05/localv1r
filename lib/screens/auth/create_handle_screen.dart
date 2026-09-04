@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/post_repository.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
@@ -97,9 +97,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       });
 
       // Save locally
-      const secureStorage = FlutterSecureStorage();
-      await secureStorage.write(key: 'is_logged_in', value: 'true');
-      await secureStorage.write(key: 'user_handle', value: handle);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('is_logged_in', 'true');
+      await prefs.setString('user_handle', handle);
 
       widget.repository.currentUserHandle = handle;
 
@@ -108,11 +108,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => PermissionRequestScreen(
-            onComplete: () async {
-              const st = FlutterSecureStorage();
-              await st.write(key: 'perms_done', value: 'true');
-              if (context.mounted) {
-                Navigator.of(context).pushReplacement(
+            onComplete: (permContext) async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('perms_done', 'true');
+              if (permContext.mounted) {
+                Navigator.of(permContext).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) => MainScreen(
                       repository: widget.repository,

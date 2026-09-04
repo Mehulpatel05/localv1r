@@ -10,8 +10,12 @@ import '../detail/post_detail_screen.dart';
 import '../friends/friends_screen.dart';
 import '../../services/friend_repository.dart';
 import '../profile/other_user_profile_sheet.dart';
-import '../generic_category/generic_category_screen.dart';
-
+import '../events/events_screen.dart';
+import '../food/food_screen.dart';
+import '../jobs/jobs_screen.dart';
+import '../rooms/rooms_screen.dart';
+import '../services/services_screen.dart';
+import '../shop/shop_screen.dart';
 
 
 
@@ -206,10 +210,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.rooms, title: "Rooms & PGs", 
+                                pageBuilder: (_, __, ___) => RoomsScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {
@@ -283,10 +286,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.food, title: "Food", 
+                                pageBuilder: (_, __, ___) => FoodScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {
@@ -360,10 +362,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.events, title: "Events", 
+                                pageBuilder: (_, __, ___) => EventsScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {
@@ -437,10 +438,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.jobs, title: "Jobs", 
+                                pageBuilder: (_, __, ___) => JobsScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {
@@ -514,10 +514,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.shop, title: "Marketplace", 
+                                pageBuilder: (_, __, ___) => ShopScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {
@@ -591,10 +590,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.services, title: "Services", 
+                                pageBuilder: (_, __, ___) => ServicesScreen(
                                   repository: widget.repository,
-                                  currentUserHandle:
-                                      widget.currentUserHandle,
+                                  currentUserHandle: widget.currentUserHandle,
                                 ),
                                 transitionsBuilder:
                                     (_, animation, __, child) {

@@ -2,12 +2,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class DeviceInfoService {
   static const _channel = MethodChannel('com.example.localv1/device_id');
-  static const _storage = FlutterSecureStorage();
 
   /// Fetches a permanent, stable installation ID that survives Clear Data and App Uninstalls/Reinstalls.
   static Future<String> getInstallationId() async {
@@ -36,9 +35,10 @@ class DeviceInfoService {
       }
     }
 
-    // 3. Fallback: Secure Storage (iOS Keychain / Local Keystore)
+    // 3. Fallback: SharedPreferences
     try {
-      String? installationId = await _storage.read(key: 'app_installation_uuid');
+      final prefs = await SharedPreferences.getInstance();
+      String? installationId = prefs.getString('app_installation_uuid');
       if (installationId != null && installationId.isNotEmpty) {
         return installationId;
       }
@@ -47,7 +47,8 @@ class DeviceInfoService {
     // 4. Generate fresh UUID and persist to storage
     final freshUuid = const Uuid().v4();
     try {
-      await _storage.write(key: 'app_installation_uuid', value: freshUuid);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('app_installation_uuid', freshUuid);
     } catch (_) {}
     return freshUuid;
   }

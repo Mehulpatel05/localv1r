@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'post_repository.dart';
 
@@ -13,8 +13,8 @@ class TelegramStorageService {
   /// 🛡️ Zero client-side tokens are used, preventing API key exposure.
   static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) async {
     try {
-      const storage = FlutterSecureStorage();
-      final sessionToken = await storage.read(key: 'session_token') ?? '';
+      final prefs = await SharedPreferences.getInstance();
+      final sessionToken = prefs.getString('session_token') ?? '';
       
       final uri = Uri.parse(backendUploadUrl);
       final request = http.MultipartRequest('POST', uri)
