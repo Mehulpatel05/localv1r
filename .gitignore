@@ -15,6 +15,10 @@ ios/Runner/GoogleService-Info.plist
 .DS_Store
 Thumbs.db
 
+# Node modules
+node_modules/
+functions/node_modules/
+
 # Secrets & Environment variables
 .env
 backend/.env
