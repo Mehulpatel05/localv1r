@@ -7,6 +7,7 @@ import base64
 from cryptography.fernet import Fernet
 import io
 import uuid
+import redis
 from typing import Optional, Dict, List, Tuple, Literal
 from collections import defaultdict
 from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request
