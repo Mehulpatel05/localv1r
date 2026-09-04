@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -174,6 +175,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: const Color(0xFF151D30),
               child: CustomScrollView(
                 slivers: [
+                  SliverAppBar(
+                    backgroundColor: const Color(0xFF151D30),
+                    elevation: 0,
+                    pinned: true,
+                    title: const Text('Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Color(0xFF3B82F6)),
+                        onPressed: () {
+                          Share.share('Hey! Join me on Vadodara Local. My username is @${widget.currentUserHandle}. Download the app now to connect!');
+                        },
+                      ),
+                    ],
+                  ),
                   // ── Header / Hero ──────────────────────────────────────────
                   SliverToBoxAdapter(
                     child: Container(

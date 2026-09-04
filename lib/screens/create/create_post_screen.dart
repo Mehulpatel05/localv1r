@@ -26,7 +26,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String? _selectedArea;
   // Common
   final _contentController = TextEditingController();
-  PostCategory _selectedCategory = PostCategory.services;
+  PostCategory _selectedCategory = PostCategory.general;
   String? _errorMessage;
   File? _imageFile;
   bool _isPublishing = false;

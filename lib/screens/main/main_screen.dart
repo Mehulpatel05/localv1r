@@ -3,6 +3,8 @@ import '../../services/post_repository.dart';
 import '../feed/feed_screen.dart';
 import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
+import '../communities/communities_list_screen.dart';
+import '../../services/community_repository.dart';
 
 class MainScreen extends StatefulWidget {
   final PostRepository repository;
@@ -21,15 +23,18 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   late final List<Widget> _screens;
+  late final CommunityRepository _communityRepository;
 
   @override
   void initState() {
     super.initState();
+    _communityRepository = CommunityRepository()..currentUserHandle = widget.currentUserHandle;
     _screens = [
       FeedScreen(
         repository: widget.repository,
         currentUserHandle: widget.currentUserHandle,
       ),
+      CommunitiesListScreen(repository: _communityRepository),
       ChatListScreen(
         currentUserHandle: widget.currentUserHandle,
       ),
@@ -68,8 +73,9 @@ class _MainScreenState extends State<MainScreen> {
             child: Row(
               children: [
                 _buildNavItem(index: 0, icon: Icons.home_rounded, label: 'Home'),
-                _buildNavItem(index: 1, icon: Icons.chat_bubble_rounded, label: 'Chats'),
-                _buildNavItem(index: 2, icon: Icons.person_rounded, label: 'Profile'),
+                _buildNavItem(index: 1, icon: Icons.group_rounded, label: 'Communities'),
+                _buildNavItem(index: 2, icon: Icons.chat_bubble_rounded, label: 'Chats'),
+                _buildNavItem(index: 3, icon: Icons.person_rounded, label: 'Profile'),
               ],
             ),
           ),

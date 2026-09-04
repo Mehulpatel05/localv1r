@@ -20,7 +20,7 @@ class PostRepository extends ChangeNotifier {
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
   Map<String, DateTime>? _lastVoteTime; // Debounce timestamps per post
-  PostCategory? _selectedCategory;
+  PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
 
@@ -382,9 +382,9 @@ class PostRepository extends ChangeNotifier {
   }
 
   PostCategory _parseCategory(dynamic value) {
-    if (value == null) return PostCategory.services;
+    if (value == null) return PostCategory.general;
     final str = value.toString();
-    return PostCategory.values.firstWhere((e) => e.name == str, orElse: () => PostCategory.services);
+    return PostCategory.values.firstWhere((e) => e.name == str, orElse: () => PostCategory.general);
   }
 
   Future<void> addPost({

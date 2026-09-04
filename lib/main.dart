@@ -3,6 +3,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/post_repository.dart';
+import 'services/notification_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'screens/main/main_screen.dart';
 import 'screens/auth/google_login_screen.dart';
 
@@ -11,6 +13,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Register background message handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   runApp(const VadodaraLocalApp());
 }
 
@@ -67,6 +71,8 @@ class VadodaraLocalApp extends StatelessWidget {
           if (data != null && data['isLoggedIn'] == true) {
             final handle = data['userHandle'] as String;
             postRepository.currentUserHandle = handle;
+            // Initialize push notifications after login
+            NotificationService().initialize();
             return MainScreen(
               repository: postRepository,
               currentUserHandle: handle,

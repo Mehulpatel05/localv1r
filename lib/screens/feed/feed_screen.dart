@@ -3,9 +3,12 @@ import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
+import '../communities/create_community_screen.dart';
+import '../../services/community_repository.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
-import '../safety/grievance_center_screen.dart';
+import '../friends/friends_screen.dart';
+import '../../services/friend_repository.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../rooms/rooms_screen.dart';
 import '../shop/shop_screen.dart';
@@ -88,13 +91,45 @@ class _FeedScreenState extends State<FeedScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Grievance, Legal & DPDP Act',
-            icon: const Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 24),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => GrievanceCenterScreen(repository: repo)),
+          StreamBuilder<int>(
+            stream: (FriendRepository()..currentUserHandle = widget.currentUserHandle).getPendingRequestCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return IconButton(
+                tooltip: 'Friends',
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.people, color: Color(0xFF60A5FA), size: 26),
+                    if (count > 0)
+                      Positioned(
+                        right: -6,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FriendsScreen(
+                        repository: FriendRepository()..currentUserHandle = widget.currentUserHandle,
+                        currentUserHandle: widget.currentUserHandle,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -143,60 +178,6 @@ class _FeedScreenState extends State<FeedScreen> {
             )
           : Column(
               children: [
-                // Top area selector & Filter tabs
-                Container(
-                  color: const Color(0xFF151D30),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    children: [
-                      // Area Chip
-                      InkWell(
-                        onTap: _showAreaPicker,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1F293D),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF374151)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on, size: 16, color: Color(0xFF60A5FA)),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Vadodara',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_drop_down, size: 18, color: Colors.white54),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      // Tab controller
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1F293D),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            _buildTabButton(FeedTab.latest, 'Latest'),
-                            _buildTabButton(FeedTab.trending, 'Trending 🔥'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
                 // Horizontal Category filter bar
                 Container(
                   height: 52,
@@ -724,9 +705,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 // Feed List
                 Builder(
                   builder: (context) {
-                    final feedPosts = repo.selectedCategory == null
-                        ? repo.posts.where((p) => p.category != PostCategory.rooms && p.category != PostCategory.shop && p.category != PostCategory.food && p.category != PostCategory.events && p.category != PostCategory.jobs && p.category != PostCategory.services).toList()
-                        : repo.posts;
+                    final feedPosts = repo.posts;
 
                     return Expanded(
                       child: feedPosts.isEmpty
@@ -745,7 +724,50 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ],
             ),
-      floatingActionButton: null, // Removed FAB because all categories have dedicated screens
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF3B82F6),
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: const Color(0xFF151D30),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+            builder: (ctx) {
+              return SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.edit, color: Colors.white),
+                      title: const Text('Create Global Post', style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => CreatePostScreen(repository: widget.repository, authorHandle: widget.currentUserHandle)));
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.group, color: Colors.white),
+                      title: const Text('Create New Group', style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => CreateCommunityScreen(repository: CommunityRepository()..currentUserHandle = widget.currentUserHandle, isChannel: false)));
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.campaign, color: Colors.white),
+                      title: const Text('Create New Channel', style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => CreateCommunityScreen(repository: CommunityRepository()..currentUserHandle = widget.currentUserHandle, isChannel: true)));
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
