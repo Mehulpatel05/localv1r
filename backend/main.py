@@ -1361,7 +1361,42 @@ async def moderation_queue(
         return {"status": "success", "queue": reported_posts}
     except Exception as e:
         print(f"Error fetching moderation queue: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch moderation queue.")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch moderation queue: {str(e)}")
+
+@app.get("/api/v1/moderation/stats")
+async def get_admin_stats(
+    x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
+):
+    mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="moderator")
+    
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+        
+    try:
+        # We can use .count() aggregation in Firestore for efficiency
+        users_count_query = db.collection("profiles").count()
+        users_count_res = users_count_query.get()
+        total_users = users_count_res[0][0].value if users_count_res else 0
+        
+        posts_count_query = db.collection("posts").count()
+        posts_count_res = posts_count_query.get()
+        total_posts = posts_count_res[0][0].value if posts_count_res else 0
+        
+        reports_count_query = db.collection("posts").where("reportCount", ">=", 1).count()
+        reports_count_res = reports_count_query.get()
+        pending_reports = reports_count_res[0][0].value if reports_count_res else 0
+        
+        return {
+            "status": "success", 
+            "stats": {
+                "totalUsers": total_users,
+                "totalPosts": total_posts,
+                "pendingReports": pending_reports
+            }
+        }
+    except Exception as e:
+        print(f"Error fetching admin stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stats: {str(e)}")
 
 @app.post("/api/v1/posts/{post_id}/hide")
 async def hide_post(
@@ -1480,27 +1515,50 @@ async def get_all_posts(
         raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit)
+        base_query = db.collection("posts")
         if category:
-            query = query.where("category", "==", category)
+            base_query = base_query.where("category", "==", category)
             
-        posts_ref = query.stream()
         posts_list = []
-        for doc in posts_ref:
-            d = doc.to_dict()
-            posts_list.append({
-                "id": doc.id,
-                "content": d.get("content", ""),
-                "category": d.get("category", ""),
-                "authorHandle": d.get("authorHandle", "Unknown"),
-                "reportCount": d.get("reportCount", 0),
-                "upvotes": d.get("upvotes", 0),
-                "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
-            })
+        try:
+            # Attempt to order chronologically (requires composite index if category is present)
+            ordered_query = base_query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit)
+            posts_ref = ordered_query.stream()
+            for doc in posts_ref:
+                d = doc.to_dict()
+                posts_list.append({
+                    "id": doc.id,
+                    "content": d.get("content", ""),
+                    "category": d.get("category", ""),
+                    "authorHandle": d.get("authorHandle", "Unknown"),
+                    "reportCount": d.get("reportCount", 0),
+                    "upvotes": d.get("upvotes", 0),
+                    "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
+                })
+        except Exception as e:
+            # If it fails due to a missing index, fallback to unordered query
+            if "index" in str(e).lower() or "precondition" in str(e).lower():
+                print(f"[WARN] Missing index for category + createdAt. Falling back to unordered query. Error: {e}")
+                posts_list = []
+                fallback_query = base_query.limit(limit)
+                for doc in fallback_query.stream():
+                    d = doc.to_dict()
+                    posts_list.append({
+                        "id": doc.id,
+                        "content": d.get("content", ""),
+                        "category": d.get("category", ""),
+                        "authorHandle": d.get("authorHandle", "Unknown"),
+                        "reportCount": d.get("reportCount", 0),
+                        "upvotes": d.get("upvotes", 0),
+                        "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
+                    })
+            else:
+                raise e
+
         return {"status": "success", "posts": posts_list}
     except Exception as e:
         print(f"Error fetching moderation posts: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch moderation posts.")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch posts: {str(e)}")
 
 @app.delete("/api/v1/moderation/users/{handle}")
 async def delete_user(
