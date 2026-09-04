@@ -21,7 +21,9 @@ void main() async {
   // Initialize Firebase App Check
   try {
     await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
+      androidProvider: const bool.fromEnvironment('dart.vm.product') 
+          ? AndroidProvider.playIntegrity 
+          : AndroidProvider.debug,
     );
   } catch (e) {
     debugPrint('AppCheck initialization failed: $e');
