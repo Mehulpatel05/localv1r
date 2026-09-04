@@ -1,6 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{db}/documents {
+  match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function myUid() { return request.auth.uid; }
 
@@ -26,21 +26,24 @@ service cloud.firestore {
 
     // Chats: only participants can read/write.
     match /chats/{chatId} {
-      allow read, write: if signedIn(); // Chat doc itself is still relaxed for merge
+      allow read, write: if signedIn() && myUid() in resource.data.participantsUids;
       match /messages/{msgId} {
-        allow read: if signedIn();
+        allow read: if signedIn() &&
+          myUid() in get(/databases/$(database)/documents/chats/$(chatId)).data.participantsUids;
         allow create: if signedIn() && request.resource.data.senderUid == myUid();
         allow update, delete: if false; // messages are immutable
       }
     }
 
     // Communities: members read; only admin edits community doc.
-    // NOTE: Temporarily allowing broader access until the frontend fully sends UIDs.
     match /communities/{cid} {
-      allow read, create, update, delete: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.adminUid == myUid();
+      allow update, delete: if signedIn() && resource.data.adminUid == myUid();
     }
     match /community_members/{id} {
-      allow read, create, delete: if signedIn();
+      allow read: if signedIn();
+      allow create, delete: if signedIn() && request.resource.data.userUid == myUid();
     }
     match /community_messages/{id} {
       allow read: if signedIn();
@@ -48,14 +51,25 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Blocks
+    // Blocks: only the blocker owns their block docs.
     match /blocks/{id} {
-      allow read, write: if signedIn();
+      allow read, write: if signedIn() && request.resource.data.blockerUid == myUid();
     }
-    
-    // Friendships
-    match /friendships/{id} {
-      allow read, write: if signedIn();
+
+    // Posts can only be read if not flagged/hidden
+    match /posts/{postId} {
+      allow read: if resource.data.get('hiddenByMod', false) == false
+                   && resource.data.get('reportCount', 0) < 3;
+      allow write: if false; // Block client direct writes
+    }
+    match /posts/{postId}/comments/{commentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Admin logs are admin-only, completely blocked for clients
+    match /moderators/{modId} {
+      allow read, write: if false;
     }
 
     match /{document=**} { allow read, write: if false; } // deny everything else

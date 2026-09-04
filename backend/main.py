@@ -12,6 +12,7 @@ from collections import defaultdict
 from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PIL import Image
 import requests
@@ -26,6 +27,14 @@ app = FastAPI(
     title="Vadodara Local Secure API Gateway",
     description="Secure backend proxy for anonymous community posting, voting, and media uploads.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
