@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_model.dart';
 
 class CommunityRepository {
@@ -35,11 +36,12 @@ class CommunityRepository {
   }
 
   // Get messages for a specific community
-  Stream<List<CommunityMessage>> getCommunityMessages(String communityId) {
+  Stream<List<CommunityMessage>> getCommunityMessages(String communityId, {int limit = 30}) {
     return _db
         .collection('community_messages')
         .where('communityId', isEqualTo: communityId)
         .orderBy('timestamp', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) => CommunityMessage.fromMap(doc.data(), doc.id)).toList();
@@ -72,34 +74,58 @@ class CommunityRepository {
 
   // Join a community
   Future<void> joinCommunity(String communityId) async {
-    final memberRef = _db.collection('community_members').doc('${_currentUserHandle}_$communityId');
-    final doc = await memberRef.get();
-    if (!doc.exists) {
-      await memberRef.set({
-        'userHandle': _currentUserHandle,
-        'communityId': communityId,
-        'role': 'member',
-        'joinedAt': FieldValue.serverTimestamp(),
-      });
-      // Increment member count
-      await _db.collection('communities').doc(communityId).update({
-        'memberCount': FieldValue.increment(1),
-      });
+    final memberId = '${communityId}_$_currentUserHandle';
+    final docRef = _db.collection('community_members').doc(memberId);
+    final doc = await docRef.get();
+    if (doc.exists) return; // already a member
+
+    await docRef.set({
+      'communityId': communityId,
+      'userHandle': _currentUserHandle,
+      'joinedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _db.collection('communities').doc(communityId).update({
+      'memberCount': FieldValue.increment(1),
+    });
+  }
+
+  Future<void> leaveCommunity(String communityId) async {
+    final memberId = '${communityId}_$_currentUserHandle';
+    await _db.collection('community_members').doc(memberId).delete();
+    
+    await _db.collection('communities').doc(communityId).update({
+      'memberCount': FieldValue.increment(-1),
+    });
+  }
+
+  Future<void> deleteCommunity(String communityId) async {
+    // Note: In a real app, you'd also delete all members and messages in a batch/function.
+    // Here we'll delete the community document itself.
+    final doc = await _db.collection('communities').doc(communityId).get();
+    if (doc.exists && doc.data()?['adminHandle'] == _currentUserHandle) {
+      await _db.collection('communities').doc(communityId).delete();
+    } else {
+      throw Exception('Only the admin can delete the community.');
     }
   }
   
   Future<bool> isMember(String communityId) async {
-    final memberRef = _db.collection('community_members').doc('${_currentUserHandle}_$communityId');
+    final memberRef = _db.collection('community_members').doc('${communityId}_$_currentUserHandle');
     final doc = await memberRef.get();
     return doc.exists;
   }
 
   // Send a message
   Future<void> sendMessage(String communityId, String content) async {
+    final isMem = await isMember(communityId);
+    if (!isMem) throw Exception("Must be a member to post.");
+
     if (content.trim().isEmpty) return;
     await _db.collection('community_messages').add({
       'communityId': communityId,
       'authorHandle': _currentUserHandle,
+      'authorUid': FirebaseAuth.instance.currentUser?.uid,
       'content': content.trim(),
       'timestamp': FieldValue.serverTimestamp(),
     });

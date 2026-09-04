@@ -50,19 +50,38 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
+    final RegExp handleRegex = RegExp(r'^[a-z0-9]{3,20}$');
+    if (!handleRegex.hasMatch(handle)) {
+      setState(() => _errorMessage = 'Username must be 3-20 characters (only lowercase letters & numbers)');
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // Check if handle is taken (case-insensitive if needed, simple check here)
-      final existing = await FirebaseFirestore.instance
-          .collection('users')
-          .where('handle', isEqualTo: handle)
-          .get();
+      final handleRef = FirebaseFirestore.instance.collection('profiles').doc(handle);
+      
+      final isSuccess = await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final doc = await transaction.get(handleRef);
+        if (doc.exists) {
+          return false;
+        }
+        
+        // Save to profiles collection (Public Data) atomically
+        transaction.set(handleRef, {
+          'handle': handle,
+          'ownerUid': widget.user.uid,
+          'friendCount': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        
+        return true;
+      });
 
-      if (existing.docs.isNotEmpty) {
+      if (!isSuccess) {
         setState(() {
           _errorMessage = 'Username is already taken. Please choose another.';
           _isLoading = false;
@@ -70,7 +89,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         return;
       }
 
-      // Save to users collection
+      // Save to users collection (Private Data)
       await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
         'handle': handle,
         'email': widget.user.email,

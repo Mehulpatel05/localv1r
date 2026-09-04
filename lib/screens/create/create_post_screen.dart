@@ -96,13 +96,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               if (mounted) setState(() => _uploadProgress = p);
             },
           );
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error uploading image: $e');
+        }
         if (telegramImageUrl == null || telegramImageUrl.isEmpty) {
           try {
             final bytes = await _imageFile!.readAsBytes();
             telegramImageUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
           } catch (e) {
             debugPrint('Failed to encode image to base64: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to process image: $e')),
+              );
+            }
           }
         }
       }
@@ -118,16 +125,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
-            content: Text('Your post is live in the community feed!'),
+            content: Text('Post published successfully!'),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _errorMessage = 'Error publishing post: $e';
-          _isPublishing = false;
-        });
+        setState(() => _isPublishing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Failed to publish post: $e'),
+          ),
+        );
       }
     }
   }

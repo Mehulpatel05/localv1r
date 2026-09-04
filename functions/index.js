@@ -71,14 +71,16 @@ exports.sendChatMessageNotification = onDocumentCreated(
     if (!snap) return;
 
     const messageData = snap.data();
-    const senderHandle = messageData.senderId;
-    const text = messageData.text || "Sent an image/file";
+    const senderHandle = messageData.senderHandle;
+    const text = messageData.content || "Sent an image/file";
     
     // We need to figure out who the receiver is.
-    // chatId is usually "handle1_handle2".
     const chatId = event.params.chatId;
-    const handles = chatId.split("_");
-    const receiverHandle = handles.find(h => h !== senderHandle);
+    const chatDoc = await admin.firestore().collection("chats").doc(chatId).get();
+    if (!chatDoc.exists) return;
+    
+    const participants = chatDoc.data().participants || [];
+    const receiverHandle = participants.find(h => h !== senderHandle);
 
     if (!receiverHandle) return;
 

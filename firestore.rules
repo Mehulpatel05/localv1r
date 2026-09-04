@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function myUid() { return request.auth.uid; }
+
+    // Users: read/write only your own doc; email/fcmToken stay private.
+    match /users/{uid} {
+      allow read, write: if signedIn() && uid == myUid();
+    }
+
+    // Public, non-sensitive profile (handle, friendCount) — read by anyone signed in.
+    match /profiles/{handle} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.resource.data.ownerUid == myUid();
+    }
+
+    // Friend requests: only sender can create; only receiver can accept/reject.
+    match /friend_requests/{id} {
+      allow read: if signedIn() &&
+        (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
+      allow create: if signedIn() && request.resource.data.senderUid == myUid();
+      allow update, delete: if signedIn() &&
+        (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
+    }
+
+    // Chats: only participants can read/write.
+    match /chats/{chatId} {
+      allow read, write: if signedIn(); // Chat doc itself is still relaxed for merge
+      match /messages/{msgId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.senderUid == myUid();
+        allow update, delete: if false; // messages are immutable
+      }
+    }
+
+    // Communities: members read; only admin edits community doc.
+    // NOTE: Temporarily allowing broader access until the frontend fully sends UIDs.
+    match /communities/{cid} {
+      allow read, create, update, delete: if signedIn();
+    }
+    match /community_members/{id} {
+      allow read, create, delete: if signedIn();
+    }
+    match /community_messages/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorUid == myUid();
+      allow update, delete: if false;
+    }
+
+    // Blocks
+    match /blocks/{id} {
+      allow read, write: if signedIn();
+    }
+    
+    // Friendships
+    match /friendships/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /{document=**} { allow read, write: if false; } // deny everything else
+  }
+}

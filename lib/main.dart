@@ -5,21 +5,49 @@ import 'firebase_options.dart';
 import 'services/post_repository.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'screens/main/main_screen.dart';
 import 'screens/auth/google_login_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Initialize Firebase App Check
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.playIntegrity,
+  );
+  
   // Register background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   runApp(const VadodaraLocalApp());
 }
 
-class VadodaraLocalApp extends StatelessWidget {
+class VadodaraLocalApp extends StatefulWidget {
   const VadodaraLocalApp({super.key});
+
+  @override
+  State<VadodaraLocalApp> createState() => _VadodaraLocalAppState();
+}
+
+class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
+  late final PostRepository postRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    postRepository = PostRepository();
+  }
+
+  @override
+  void dispose() {
+    postRepository.dispose();
+    super.dispose();
+  }
 
   // Check login status asynchronously using encrypted secure storage to route the user
   Future<Map<String, dynamic>> _checkAuthStatus() async {
@@ -34,9 +62,9 @@ class VadodaraLocalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final postRepository = PostRepository();
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Vadodara Local',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

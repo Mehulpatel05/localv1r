@@ -280,35 +280,31 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header.")
     
-    auth_token = authorization.split("Bearer ")[1].strip()
-    token_hash = hashlib.sha256(auth_token.encode()).hexdigest()
+    id_token = authorization.split("Bearer ")[1].strip()
     
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        docs = db.collection("devices").where("tokenHash", "==", token_hash).limit(1).get()
-        if not docs:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
-            
-        device_doc = docs[0].to_dict()
-        if device_doc.get("revokedAt") is not None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked.")
-            
-        installation_id = device_doc.get("installationId")
-        handle = device_doc.get("handle")
-        if not handle:
-            handle = generate_server_handle(installation_id)
+        from firebase_admin import auth as firebase_auth
+        decoded_token = firebase_auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
         
+        user_doc = db.collection("users").document(uid).get()
+        if not user_doc.exists:
+            handle = f"Anon#{uid[:6]}" 
+        else:
+            handle = user_doc.to_dict().get("handle", f"Anon#{uid[:6]}")
+            
         banned_ref = db.collection("banned_users").document(handle).get()
         if banned_ref.exists:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
             
-        return installation_id, handle
+        return uid, handle
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid Firebase token: {e}")
 
 def verify_resource_owner(collection_name: str, resource_id: str, user_handle: str) -> dict:
     if db is None:
@@ -327,12 +323,7 @@ def verify_device_attestation(request_hash: str, attestation_token: str) -> str:
         return "HIGH"
         
     if attestation_token.startswith("simulated_attestation_"):
-        parts = attestation_token.split("_")
-        # simulated_attestation_com.example.localv1_<requestHash>
-        if len(parts) >= 3:
-            package_name = parts[2]
-            return "LOW" if package_name == "com.example.localv1" else "HIGH"
-        return "HIGH"
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Simulated attestation is not allowed in production.")
         
     # In production, verify with Google Play Integrity API
     # POST https://playintegrity.googleapis.com/v1/com.example.localv1:decodeIntegrityToken
@@ -767,6 +758,7 @@ async def create_post(
 async def get_posts(
     limit: int = 20,
     cursor: Optional[str] = None,
+    author: Optional[str] = None,
     authorization: Optional[str] = Header(None, description="Bearer token")
 ):
     if db is None:
@@ -781,7 +773,11 @@ async def get_posts(
             pass # allow anonymous reading for now, or block based on architecture
             
     try:
-        query = db.collection("posts").where("hiddenByMod", "==", False).order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
+        query = db.collection("posts").where("hiddenByMod", "==", False)
+        if author:
+            query = query.where("authorHandle", "==", author)
+            
+        query = query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
         
         # If cursor provided, it's the post ID to start after
         if cursor:

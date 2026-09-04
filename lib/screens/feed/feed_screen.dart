@@ -10,12 +10,13 @@ import '../detail/post_detail_screen.dart';
 import '../friends/friends_screen.dart';
 import '../../services/friend_repository.dart';
 import '../profile/other_user_profile_sheet.dart';
-import '../rooms/rooms_screen.dart';
-import '../shop/shop_screen.dart';
-import '../food/food_screen.dart';
-import '../events/events_screen.dart';
-import '../jobs/jobs_screen.dart';
-import '../services/services_screen.dart';
+import '../generic_category/generic_category_screen.dart';
+
+
+
+
+
+
 
 
 class FeedScreen extends StatefulWidget {
@@ -205,7 +206,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => RoomsScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.rooms, title: "Rooms & PGs", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,
@@ -282,7 +283,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => FoodScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.food, title: "Food", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,
@@ -359,7 +360,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => EventsScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.events, title: "Events", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,
@@ -436,7 +437,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => JobsScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.jobs, title: "Jobs", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,
@@ -513,7 +514,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => ShopScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.shop, title: "Marketplace", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,
@@ -590,7 +591,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                     const Duration(milliseconds: 380),
                                 reverseTransitionDuration:
                                     const Duration(milliseconds: 300),
-                                pageBuilder: (_, __, ___) => ServicesScreen(
+                                pageBuilder: (_, __, ___) => GenericCategoryScreen(category: PostCategory.services, title: "Services", 
                                   repository: widget.repository,
                                   currentUserHandle:
                                       widget.currentUserHandle,

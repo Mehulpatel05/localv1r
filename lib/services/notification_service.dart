@@ -4,6 +4,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../main.dart';
+import '../screens/chat/chat_list_screen.dart';
+import '../screens/friends/friends_screen.dart';
 
 /// Top-level background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -130,7 +133,7 @@ class NotificationService {
       try {
         final data = jsonDecode(response.payload!);
         debugPrint('Notification tapped with data: $data');
-        // Navigation can be handled here via a global navigator key
+        _navigateToScreen(data);
       } catch (_) {}
     }
   }
@@ -138,7 +141,19 @@ class NotificationService {
   /// Called when user taps a notification (background/terminated FCM)
   void _handleNotificationTap(RemoteMessage message) {
     debugPrint('Notification opened: ${message.data}');
-    // Navigation can be handled here via a global navigator key
+    _navigateToScreen(message.data);
+  }
+
+  void _navigateToScreen(Map<String, dynamic> data) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    final type = data['type'];
+    if (type == 'chat') {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatListScreen()));
+    } else if (type == 'friend_request') {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FriendsScreen()));
+    }
   }
 
   // ── Manual notification sending helpers (for local triggers) ──

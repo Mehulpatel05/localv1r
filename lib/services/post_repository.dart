@@ -1,5 +1,6 @@
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,7 @@ import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../services/device_service.dart';
 
-enum FeedTab { latest, trending, nearby }
+enum FeedTab { latest, trending }
 
 class PostRepository extends ChangeNotifier {
     // ⚠️ CONFIGURATION: Replace with your deployed FastAPI server URL.
@@ -19,12 +20,11 @@ class PostRepository extends ChangeNotifier {
   List<Post> _posts = [];
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
-  Map<String, DateTime>? _lastVoteTime; // Debounce timestamps per post
   PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
 
-  String? _lastDoc;
+
   bool _isLoadingMore = false;
   bool _hasMore = true;
 
@@ -132,103 +132,8 @@ class PostRepository extends ChangeNotifier {
           _posts.addAll(newPosts);
         }
 
-        // Add a demo Shop product so the user can see how it looks!
-        if (!_posts.any((p) => p.id == 'demo_shop_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_shop_post',
-            authorHandle: 'local_admin',
-            content: 'Used for 6 months. Minor scratches on the back but works perfectly! Selling because I upgraded. Charger included.',
-            category: PostCategory.shop,
-            shopTitle: 'Samsung Galaxy S23 (8GB/256GB)',
-            shopPrice: '45000',
-            imageUrl: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=500',
-            createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-            reporters: [],
-          ));
-        }
+        // Demo posts removed for production
 
-        // Add a demo Room so the user can see how it looks!
-        if (!_posts.any((p) => p.id == 'demo_room_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_room_post',
-            authorHandle: 'local_admin',
-            content: 'Spacious room for rent with attached bathroom. Fully furnished with bed, AC, and wardrobe. 24/7 water supply and no broker brokerage!',
-            category: PostCategory.rooms,
-            roomTitle: '1 BHK Fully Furnished - Bachelor Friendly',
-            roomArea: '550',
-            roomRent: '8500',
-            imageUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=500',
-            createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-            reporters: [],
-          ));
-        }
-
-        // Add a demo Food & Cafe post
-        if (!_posts.any((p) => p.id == 'demo_food_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_food_post',
-            authorHandle: 'foodie_vadi',
-            content: 'Absolutely amazing ambiance! The cold coffee here is a must-try. Perfect spot for evening hangouts or reading a book. Staff is super friendly too.',
-            category: PostCategory.food,
-            foodTitle: 'Brew & Beans Cafe',
-            foodRating: 4.8,
-            foodPrice: '600 for two',
-            imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=600',
-            createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-            reporters: [],
-          ));
-        }
-
-        // Add a demo Event post
-        if (!_posts.any((p) => p.id == 'demo_event_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_event_post',
-            authorHandle: 'event_manager_v2',
-            content: 'Get ready for the biggest weekend party! Live DJ, amazing food stalls, and an unforgettable crowd. Book your tickets before they sell out!',
-            category: PostCategory.events,
-            eventTitle: 'Weekend Sundowner Party',
-            eventDate: 'OCT 28, 6:00 PM',
-            eventLocationText: 'Gotri Club Grounds',
-            eventPrice: '₹ 499 Onwards',
-            imageUrl: 'https://images.unsplash.com/photo-1540039155732-6847350357a0?q=80&w=600',
-            createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
-            reporters: [],
-          ));
-        }
-
-        // Add a demo Job post
-        if (!_posts.any((p) => p.id == 'demo_job_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_job_post',
-            authorHandle: 'hr_recruiter',
-            content: 'We are looking for a passionate Flutter Developer with 2+ years of experience to join our team in Vadodara. Drop your resume at hr@techcorp.in',
-            category: PostCategory.jobs,
-            jobTitle: 'Flutter Developer',
-            jobCompany: 'TechCorp Vadodara',
-            jobLocation: 'Alkapuri, Vadodara (On-site)',
-            jobType: 'Full-time',
-            imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=600',
-            createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-            reporters: [],
-          ));
-        }
-
-        // Add a demo Service post
-        if (!_posts.any((p) => p.id == 'demo_service_post')) {
-          _posts.insert(0, Post(
-            id: 'demo_service_post',
-            authorHandle: 'expert_plumber',
-            content: 'Professional plumbing services available 24/7 in Vadodara. Quick response for leaks, pipe fittings, and blockages.',
-            category: PostCategory.services,
-            serviceTitle: 'Expert Plumbing & Fitting',
-            serviceCategoryText: 'Plumbing',
-            servicePrice: 'Starts at ₹299',
-            imageUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=600',
-            createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-            reporters: [],
-          ));
-        }
-        
         _hasMore = postsData.isNotEmpty;
       }
     } catch (e) {
@@ -246,6 +151,7 @@ class PostRepository extends ChangeNotifier {
 
 
   Stream<List<Comment>> listenToComments(String postId) async* {
+    int backoffSeconds = 2;
     while (true) {
       try {
         final response = await http.get(Uri.parse('$backendBaseUrl/posts/$postId/comments'), headers: await _getHeaders());
@@ -259,11 +165,19 @@ class PostRepository extends ChangeNotifier {
             content: d['content'] ?? '',
             createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
           )).toList();
+          
+          // Reset backoff on success
+          backoffSeconds = 2;
+        } else {
+          // Increase backoff on error/non-200
+          if (backoffSeconds < 60) backoffSeconds *= 2;
         }
       } catch (e) {
         debugPrint('Error fetching comments: $e');
+        // Increase backoff on network error
+        if (backoffSeconds < 60) backoffSeconds *= 2;
       }
-      await Future.delayed(const Duration(seconds: 10)); // Poll every 10s
+      await Future.delayed(Duration(seconds: backoffSeconds));
     }
   }
 
@@ -342,13 +256,14 @@ class PostRepository extends ChangeNotifier {
       ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
-        debugPrint('Delete post warning from server: ${response.body}');
+        throw Exception('Delete post warning from server: ${response.body}');
       }
     } catch (e) {
       debugPrint('Error deleting post via backend: $e');
-    } catch (e) {
-      debugPrint('Error deleting post via backend: $e');
-      // If error occurs, let it stay removed locally or log
+      // Revert optimistic removal
+      if (removedIndex != -1) {
+        _listenToPosts(); // Re-fetch to restore the correct state
+      }
     }
   }
 
@@ -373,8 +288,9 @@ class PostRepository extends ChangeNotifier {
   }
 
   Future<Map<String, String>> _getAuthHeaders() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'accessToken') ?? await storage.read(key: 'session_token') ?? '';
+    final user = FirebaseAuth.instance.currentUser;
+    final token = user != null ? await user.getIdToken() : '';
+    
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -492,7 +408,19 @@ class PostRepository extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error voting: $e');
-      // Should revert optimistic UI in real app
+      // Revert optimistic UI
+      final revertIndex = _posts.indexWhere((p) => p.id == postId);
+      if (revertIndex != -1) {
+        final p = _posts[revertIndex];
+        if (direction == 1) p.upvotes--;
+        if (direction == -1) p.downvotes--;
+        if (oldVote == 1) p.upvotes++;
+        if (oldVote == -1) p.downvotes++;
+        
+        _localVotes[postId] = oldVote;
+        _saveLocalVotes();
+        notifyListeners();
+      }
     }
   }
 
@@ -510,10 +438,10 @@ class PostRepository extends ChangeNotifier {
       return fromMemory;
     }
 
-    // ── 2. Fallback: fetch fresh from backend and filter client-side ────────
+    // ── 2. Fallback: fetch fresh from backend ────────
     try {
       final response = await http.get(
-        Uri.parse('$backendBaseUrl/posts?limit=100'),
+        Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle'),
         headers: await _getHeaders(),
       );
       if (response.statusCode == 200) {
@@ -532,11 +460,7 @@ class PostRepository extends ChangeNotifier {
           createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
         )).toList();
 
-        // Client-side filter by handle
-        return allPosts
-            .where((p) => p.authorHandle == handle)
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return allPosts;
       }
     } catch (e) {
       debugPrint('Error fetching posts for profile: $e');

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PersonalChatScreen extends StatefulWidget {
   final String currentUserHandle;
@@ -17,17 +18,29 @@ class PersonalChatScreen extends StatefulWidget {
 
 class _PersonalChatScreenState extends State<PersonalChatScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   late String _chatId;
+  int _messageLimit = 30;
 
   @override
   void initState() {
     super.initState();
     _chatId = _getChatId(widget.currentUserHandle, widget.partnerHandle);
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      setState(() {
+        _messageLimit += 30;
+      });
+    }
   }
 
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -51,6 +64,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       transaction.set(messageRef, {
         'senderHandle': widget.currentUserHandle,
+        'senderUid': FirebaseAuth.instance.currentUser?.uid,
         'content': text,
         'timestamp': now,
       });
@@ -97,6 +111,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   .doc(_chatId)
                   .collection('messages')
                   .orderBy('timestamp', descending: true)
+                  .limit(_messageLimit)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -115,6 +130,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 final messages = snapshot.data!.docs;
 
                 return ListView.builder(
+                  controller: _scrollController,
                   reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,

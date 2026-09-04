@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/friend_request_model.dart';
 import '../models/friendship_model.dart';
 import '../models/block_model.dart';
@@ -68,10 +69,25 @@ class FriendRepository {
       throw Exception('Cannot send request: relationship already exists');
     }
 
+    // Fetch receiverUid from profiles
+    final profileDoc = await _db.collection('profiles').doc(receiverHandle).get();
+    if (!profileDoc.exists) {
+      throw Exception('User not found.');
+    }
+    final receiverUid = profileDoc.data()?['ownerUid'];
+    if (receiverUid == null) {
+      throw Exception('User profile is incomplete.');
+    }
+
+    final senderUid = FirebaseAuth.instance.currentUser?.uid;
+    if (senderUid == null) throw Exception('Not authenticated.');
+
     final docId = '${_currentUserHandle}_$receiverHandle';
     await _db.collection('friend_requests').doc(docId).set({
       'senderHandle': _currentUserHandle,
+      'senderUid': senderUid,
       'receiverHandle': receiverHandle,
+      'receiverUid': receiverUid,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -91,6 +107,9 @@ class FriendRepository {
         if (!doc.exists) {
           throw Exception('Friend request no longer exists.');
         }
+        if (doc.data()?['status'] != 'pending') {
+          throw Exception('Friend request is already processed.');
+        }
 
         // Update request status
         transaction.update(requestRef, {
@@ -104,11 +123,14 @@ class FriendRepository {
           'users': [senderHandle, _currentUserHandle],
           'createdAt': FieldValue.serverTimestamp(),
         });
-      });
 
-      // Update friend counts (outside transaction for simplicity)
-      await _incrementFriendCount(senderHandle, 1);
-      await _incrementFriendCount(_currentUserHandle, 1);
+        // Update friend counts atomically
+        final senderProfileRef = _db.collection('profiles').doc(senderHandle);
+        final currentProfileRef = _db.collection('profiles').doc(_currentUserHandle);
+        
+        transaction.update(senderProfileRef, {'friendCount': FieldValue.increment(1)});
+        transaction.update(currentProfileRef, {'friendCount': FieldValue.increment(1)});
+      });
     } catch (e) {
       rethrow;
     }
@@ -263,14 +285,8 @@ class FriendRepository {
 
   // ── Helper: Increment friend count ──
   Future<void> _incrementFriendCount(String handle, int delta) async {
-    final snap = await _db.collection('users')
-        .where('handle', isEqualTo: handle)
-        .limit(1)
-        .get();
-    if (snap.docs.isNotEmpty) {
-      await snap.docs.first.reference.update({
-        'friendCount': FieldValue.increment(delta),
-      });
-    }
+    await _db.collection('profiles').doc(handle).update({
+      'friendCount': FieldValue.increment(delta),
+    }).catchError((_) {}); // Ignore if profile doesn't exist
   }
 }

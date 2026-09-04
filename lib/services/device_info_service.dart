@@ -60,10 +60,10 @@ class DeviceInfoService {
         return token;
       } catch (e) {
         debugPrint('Play Integrity Token error: $e');
-        return "simulated_attestation_com.example.localv1_$requestHash";
+        throw Exception("Play Integrity attestation failed.");
       }
     }
-    // For iOS or other platforms, return simulated token
-    return "simulated_attestation_com.example.localv1_$requestHash";
+    // For non-Android platforms, we cannot provide Play Integrity
+    throw Exception("Play Integrity attestation is only supported on Android.");
   }
 }

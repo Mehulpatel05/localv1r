@@ -18,14 +18,32 @@ class CommunityChatScreen extends StatefulWidget {
 }
 
 class _CommunityChatScreenState extends State<CommunityChatScreen> {
-  final _messageController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool _isMember = false;
   bool _isLoading = true;
+  int _messageLimit = 30;
 
   @override
   void initState() {
     super.initState();
     _checkMembership();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      setState(() {
+        _messageLimit += 30;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkMembership() async {
@@ -42,6 +60,25 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     setState(() => _isLoading = true);
     await widget.repository.joinCommunity(widget.community.id);
     await _checkMembership();
+  }
+
+  Future<void> _leaveCommunity() async {
+    setState(() => _isLoading = true);
+    await widget.repository.leaveCommunity(widget.community.id);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _deleteCommunity() async {
+    setState(() => _isLoading = true);
+    try {
+      await widget.repository.deleteCommunity(widget.community.id);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -70,12 +107,26 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             ),
           ],
         ),
+        actions: [
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+              tooltip: 'Delete Community',
+              onPressed: () => _deleteCommunity(),
+            )
+          else if (_isMember)
+            IconButton(
+              icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+              tooltip: 'Leave Community',
+              onPressed: () => _leaveCommunity(),
+            )
+        ],
       ),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder<List<CommunityMessage>>(
-              stream: widget.repository.getCommunityMessages(widget.community.id),
+              stream: widget.repository.getCommunityMessages(widget.community.id, limit: _messageLimit),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -87,6 +138,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                   );
                 }
                 return ListView.builder(
+                  controller: _scrollController,
                   reverse: true,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
