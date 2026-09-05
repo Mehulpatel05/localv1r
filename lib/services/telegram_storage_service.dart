@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'post_repository.dart';
 
 class TelegramStorageService {
@@ -13,8 +14,8 @@ class TelegramStorageService {
   /// 🛡️ Zero client-side tokens are used, preventing API key exposure.
   static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final sessionToken = prefs.getString('session_token') ?? '';
+      final user = FirebaseAuth.instance.currentUser;
+      final sessionToken = user != null ? await user.getIdToken() : '';
       
       final uri = Uri.parse(backendUploadUrl);
       final request = http.MultipartRequest('POST', uri)
