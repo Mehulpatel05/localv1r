@@ -48,12 +48,14 @@ class FirebaseService:
         return True
 
     @staticmethod
-    def create_post(author_handle: str, content: str, area: str, category: str, image_url: Optional[str] = None) -> bool:
+    def create_post(author_handle: str, content: str, category: str, area: Optional[str] = None, image_url: Optional[str] = None, **kwargs) -> bool:
         if not FirebaseService._is_db_active():
             return False
         try:
             posts_ref = db.collection("posts")
-            posts_ref.add({
+            
+            # Base document
+            doc_data = {
                 "authorHandle": author_handle,
                 "content": content,
                 "imageUrl": image_url,
@@ -68,7 +70,14 @@ class FirebaseService:
                 "hiddenByMod": False,
                 "reporters": [],
                 "reportCount": 0
-            })
+            }
+            
+            # Add all non-None kwargs
+            for k, v in kwargs.items():
+                if v is not None:
+                    doc_data[k] = v
+                    
+            posts_ref.add(doc_data)
             return True
         except Exception as e:
             print(f"Error creating post in Firestore: {e}")

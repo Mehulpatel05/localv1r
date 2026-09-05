@@ -22,7 +22,7 @@ class ServicesPostScreen extends StatefulWidget {
 }
 
 class _ServicesPostScreenState extends State<ServicesPostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -54,6 +54,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
   void dispose() {
     _titleController.dispose();
     _priceController.dispose();
+    _areaController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -110,6 +111,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.services,
+        area: _areaController.text.trim(),
         serviceTitle: _titleController.text.trim(),
         servicePrice: _priceController.text.trim(),
         serviceCategoryText: _selectedServiceCategory,
@@ -243,11 +245,41 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                             color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildDropdown(
-                      items: _serviceCategories,
-                      value: _selectedServiceCategory,
-                      onChanged: (val) => setState(() => _selectedServiceCategory = val!),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 44,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _serviceCategories.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final cat = _serviceCategories[index];
+                          final isSelected = _selectedServiceCategory == cat;
+                          return ChoiceChip(
+                            label: Text(cat),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() => _selectedServiceCategory = cat);
+                              }
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: const Color(0xFFEFF6FF),
+                            labelStyle: TextStyle(
+                              color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isSelected ? const Color(0xFF3B82F6) : Colors.black12,
+                                width: isSelected ? 1.5 : 1.0,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                     const SizedBox(height: 20),
 
@@ -258,7 +290,11 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildAreaDropdown(),
+                    _buildTextField(
+                      controller: _areaController,
+                      hint: 'e.g. Alkapuri, Vadodara',
+                      icon: Icons.location_on_outlined,
+                    ),
                     const SizedBox(height: 20),
 
                     // Description
@@ -325,62 +361,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
     );
   }
 
-  Widget _buildDropdown({
-    required List<String> items,
-    required String value,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: value,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: items.map((type) {
-            return DropdownMenuItem(
-              value: type,
-              child: Text(type, style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: _selectedArea,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: <String>[].map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area,
-                  style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _selectedArea = val);
-          },
-        ),
-      ),
-    );
-  }
 
   Widget _buildImageUpload() {
     if (_serviceImage != null) {

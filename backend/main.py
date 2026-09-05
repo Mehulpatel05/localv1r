@@ -490,6 +490,27 @@ class PostCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
     category: PostCategory = Field(..., description="Post category")
     imageUrl: Optional[str] = Field(None, max_length=500)
+    area: Optional[str] = None
+    roomTitle: Optional[str] = None
+    roomArea: Optional[str] = None
+    roomRent: Optional[str] = None
+    mediaUrls: Optional[list[str]] = None
+    shopTitle: Optional[str] = None
+    shopPrice: Optional[str] = None
+    foodTitle: Optional[str] = None
+    foodRating: Optional[float] = None
+    foodPrice: Optional[str] = None
+    eventTitle: Optional[str] = None
+    eventDate: Optional[str] = None
+    eventLocationText: Optional[str] = None
+    eventPrice: Optional[str] = None
+    jobTitle: Optional[str] = None
+    jobCompany: Optional[str] = None
+    jobLocation: Optional[str] = None
+    jobType: Optional[str] = None
+    serviceTitle: Optional[str] = None
+    serviceCategoryText: Optional[str] = None
+    servicePrice: Optional[str] = None
 
 class CommentCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=1000)
@@ -752,7 +773,27 @@ async def create_post(
         content=request.content,
         area=request.area,
         category=request.category,
-        image_url=request.imageUrl
+        image_url=request.imageUrl,
+        roomTitle=request.roomTitle,
+        roomArea=request.roomArea,
+        roomRent=request.roomRent,
+        mediaUrls=request.mediaUrls,
+        shopTitle=request.shopTitle,
+        shopPrice=request.shopPrice,
+        foodTitle=request.foodTitle,
+        foodRating=request.foodRating,
+        foodPrice=request.foodPrice,
+        eventTitle=request.eventTitle,
+        eventDate=request.eventDate,
+        eventLocationText=request.eventLocationText,
+        eventPrice=request.eventPrice,
+        jobTitle=request.jobTitle,
+        jobCompany=request.jobCompany,
+        jobLocation=request.jobLocation,
+        jobType=request.jobType,
+        serviceTitle=request.serviceTitle,
+        serviceCategoryText=request.serviceCategoryText,
+        servicePrice=request.servicePrice
     )
     if not success:
         raise HTTPException(status_code=500, detail="Failed to publish post.")

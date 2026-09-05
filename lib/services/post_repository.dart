@@ -308,6 +308,7 @@ class PostRepository extends ChangeNotifier {
     required String content,
     required PostCategory category,
     String? imageUrl,
+    String? area,
     // 🏠 Room-specific optional fields
     String? roomTitle,
     String? roomArea,
@@ -345,6 +346,7 @@ class PostRepository extends ChangeNotifier {
           'content': content,
           'category': category.name,
           'imageUrl': imageUrl,
+          if (area != null) 'area': area,
           if (roomTitle != null) 'roomTitle': roomTitle,
           if (roomArea != null) 'roomArea': roomArea,
           if (roomRent != null) 'roomRent': roomRent,
