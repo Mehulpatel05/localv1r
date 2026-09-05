@@ -168,7 +168,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [

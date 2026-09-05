@@ -824,7 +824,7 @@ async def get_posts(
             pass # allow anonymous reading for now, or block based on architecture
             
     try:
-        query = db.collection("posts").where("hiddenByMod", "==", False)
+        query = db.collection("posts")
         if author:
             query = query.where("authorHandle", "==", author)
             
