@@ -108,13 +108,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   itemBuilder: (context, i) => _buildServiceCard(posts[i]),
                 ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF3B82F6),
+        backgroundColor: const Color(0xFFF1F5F9),
         elevation: 4,
-        icon: const Icon(Icons.handyman_rounded, color: Colors.white),
+        icon: const Icon(Icons.handyman_rounded, color: Colors.black87),
         label: const Text(
           'Offer a Service',
-          style: TextStyle(
-              color: Colors.white,
+          style: TextStyle(color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
@@ -169,7 +168,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.black87,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
@@ -222,7 +221,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                         ),
                         child: const Center(
-                          child: Icon(Icons.home_repair_service, color: Colors.white, size: 40),
+                          child: Icon(Icons.home_repair_service, color: Colors.black87, size: 40),
                         ),
                       ),
                     
@@ -238,8 +237,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         ),
                         child: Text(
                           category,
-                          style: const TextStyle(
-                              color: Colors.white,
+                          style: const TextStyle(color: Colors.black87,
                               fontSize: 10,
                               fontWeight: FontWeight.bold),
                         ),
@@ -310,13 +308,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         children: [
                           CircleAvatar(
                             radius: 8,
-                            backgroundColor: const Color(0xFF3B82F6),
+                            backgroundColor: const Color(0xFFF1F5F9),
                             child: Text(
                               post.authorHandle[0].toUpperCase(),
                               style: const TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white),
+                                  color: Colors.black87),
                             ),
                           ),
                           const SizedBox(width: 6),

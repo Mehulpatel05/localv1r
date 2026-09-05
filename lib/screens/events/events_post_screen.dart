@@ -22,7 +22,8 @@ class EventsPostScreen extends StatefulWidget {
 }
 
 class _EventsPostScreenState extends State<EventsPostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _dateController = TextEditingController();
   final _locationController = TextEditingController();
@@ -45,6 +46,8 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
     _dateController.dispose();
     _locationController.dispose();
     _priceController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -94,6 +97,9 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
       if (_bannerImage != null) {
         setState(() => _uploadProgress = 0.5);
         imageUrl = await TelegramStorageService.uploadImage(_bannerImage!);
+        if (imageUrl == null || imageUrl.isEmpty) {
+          throw Exception('Image upload failed. Please try again.');
+        }
       }
 
       setState(() => _uploadProgress = 0.9);
@@ -102,6 +108,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.events,
+        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
         eventTitle: _titleController.text.trim(),
         eventDate: _dateController.text.trim(),
         eventLocationText: _locationController.text.trim(),
@@ -131,12 +138,13 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0B19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F0B19),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        iconTheme: const IconThemeData(color: Colors.black87),
         title: const Text('Host an Event',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
         actions: [
           if (_isPublishing)
             const Padding(
@@ -144,7 +152,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
               child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6))),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
             )
           else
             TextButton(
@@ -153,7 +161,8 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                 'Publish',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: _canPublish ? const Color(0xFF8B5CF6) : Colors.white38,
+                  fontSize: 16,
+                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
                 ),
               ),
             )
@@ -193,7 +202,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                     // Event Name
                     const Text('Event Name',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -207,21 +216,46 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                     // Date & Time
                     const Text('Date & Time',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
                     _buildTextField(
                       controller: _dateController,
-                      hint: 'e.g. OCT 28, 9:00 PM',
+                      hint: 'Select Date & Time',
                       icon: Icons.calendar_today_rounded,
+                      readOnly: true,
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2030),
+                        );
+                        if (date != null && mounted) {
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                          );
+                          if (time != null) {
+                            final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                            final monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+                            final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+                            final amPm = time.period == DayPeriod.am ? 'AM' : 'PM';
+                            final minute = time.minute.toString().padLeft(2, '0');
+                            setState(() {
+                              _dateController.text = '${monthNames[dt.month - 1]} ${dt.day}, $hour:$minute $amPm';
+                            });
+                          }
+                        }
+                      },
                     ),
                     const SizedBox(height: 20),
                     
                     // Specific Location
                     const Text('Venue Name / Address',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -235,7 +269,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                     // Price (Cost for Two)
                     const Text('Ticket Price',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -246,20 +280,40 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Area
-                    const Text('General Area',
+                    // Location fields
+                    const Text('Location Details',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildAreaDropdown(),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: _buildTextField(
+                            controller: _areaController,
+                            hint: 'Local Area (e.g. Alkapuri)',
+                            icon: Icons.map_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: _cityController,
+                            hint: 'City/State',
+                            icon: Icons.location_city_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 20),
 
                     // Description
                     const Text('Event Description',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -267,15 +321,19 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                       controller: _descController,
                       maxLines: 5,
                       maxLength: 400,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      style: const TextStyle(color: Colors.black87, fontSize: 15),
                       decoration: InputDecoration(
                         hintText: 'What is this event about? Who is performing?',
-                        hintStyle: const TextStyle(color: Colors.white24),
+                        hintStyle: const TextStyle(color: Colors.black38),
                         filled: true,
-                        fillColor: const Color(0xFF19122A),
+                        fillColor: const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.black12),
                         ),
                       ),
                     ),
@@ -284,7 +342,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                     // Media
                     const Text('Banner Image',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -302,51 +360,31 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
     required String hint,
     required IconData icon,
     TextInputType type = TextInputType.text,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     return TextField(
       controller: controller,
       keyboardType: type,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
+      readOnly: readOnly,
+      onTap: onTap,
+      style: const TextStyle(color: Colors.black87, fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24),
-        prefixIcon: Icon(icon, color: const Color(0xFF8B5CF6).withOpacity(0.7), size: 20),
+        hintStyle: const TextStyle(color: Colors.black38),
+        prefixIcon: Icon(icon, color: Colors.black54, size: 20),
         filled: true,
-        fillColor: const Color(0xFF19122A),
+        fillColor: const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.black12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.black12),
         ),
       ),
       onChanged: (_) => setState(() {}),
-    );
-  }
-
-  Widget _buildAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF19122A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          dropdownColor: const Color(0xFF19122A),
-          value: _selectedArea,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          items: <String>[].map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area,
-                  style: const TextStyle(color: Colors.white)),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _selectedArea = val);
-          },
-        ),
-      ),
     );
   }
 
@@ -394,17 +432,17 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
         height: 150,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFF19122A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3), width: 1.5, style: BorderStyle.solid),
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.black12, width: 1.0, style: BorderStyle.solid),
         ),
-        child: Column(
+        child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_photo_alternate_outlined, color: const Color(0xFF8B5CF6).withOpacity(0.8), size: 40),
-            const SizedBox(height: 12),
-            const Text('Upload Banner Image',
-                style: TextStyle(color: Colors.white54, fontSize: 14)),
+            Icon(Icons.add_photo_alternate_outlined, color: Colors.black45, size: 40),
+            SizedBox(height: 12),
+            Text('Upload Banner Image',
+                style: TextStyle(color: Colors.black54, fontSize: 14)),
           ],
         ),
       ),
@@ -416,14 +454,14 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: Color(0xFF8B5CF6)),
+          const CircularProgressIndicator(color: Color(0xFF3B82F6)),
           const SizedBox(height: 24),
           Text(
             _uploadProgress < 0.9
                 ? 'Uploading banner image... ${(_uploadProgress * 100).toInt()}%'
                 : 'Publishing event...',
             style: const TextStyle(
-                color: Colors.white70,
+                color: Colors.black87,
                 fontSize: 16,
                 fontWeight: FontWeight.bold),
           ),

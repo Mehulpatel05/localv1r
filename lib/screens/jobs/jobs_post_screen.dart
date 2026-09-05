@@ -22,7 +22,8 @@ class JobsPostScreen extends StatefulWidget {
 }
 
 class _JobsPostScreenState extends State<JobsPostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _companyController = TextEditingController();
   final _locationController = TextEditingController();
@@ -53,6 +54,8 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
     _titleController.dispose();
     _companyController.dispose();
     _locationController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -108,6 +111,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.jobs,
+        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
         jobTitle: _titleController.text.trim(),
         jobCompany: _companyController.text.trim().isEmpty ? 'Confidential' : _companyController.text.trim(),
         jobLocation: _locationController.text.trim().isEmpty ? 'Remote / Undisclosed' : _locationController.text.trim(),
@@ -151,7 +155,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
               child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0A66C2))),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
             )
           else
             TextButton(
@@ -161,7 +165,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: _canPublish ? const Color(0xFF0A66C2) : Colors.black26,
+                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
                 ),
               ),
             )
@@ -246,22 +250,72 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
                             color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildDropdown(
-                      items: _jobTypes,
-                      value: _selectedJobType,
-                      onChanged: (val) => setState(() => _selectedJobType = val!),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 44,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _jobTypes.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final type = _jobTypes[index];
+                          final isSelected = _selectedJobType == type;
+                          return ChoiceChip(
+                            label: Text(type),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() => _selectedJobType = type);
+                              }
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: const Color(0xFFEFF6FF),
+                            labelStyle: TextStyle(
+                              color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isSelected ? const Color(0xFF3B82F6) : Colors.black12,
+                                width: isSelected ? 1.5 : 1.0,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                     const SizedBox(height: 20),
 
-                    // General Area
-                    const Text('General Area',
+                    // Location fields
+                    const Text('Location Details',
                         style: TextStyle(
                             color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildAreaDropdown(),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: _buildTextField(
+                            controller: _areaController,
+                            hint: 'Local Area (e.g. Alkapuri)',
+                            icon: Icons.map_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: _cityController,
+                            hint: 'City/State',
+                            icon: Icons.location_city_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 20),
 
                     // Description
@@ -280,7 +334,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
                         hintText: 'Share the job requirements, how to apply, or what kind of referral you need...',
                         hintStyle: const TextStyle(color: Colors.black38),
                         filled: true,
-                        fillColor: const Color(0xFFF3F2EF),
+                        fillColor: const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: Colors.black12),
@@ -324,7 +378,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         hintStyle: const TextStyle(color: Colors.black38),
         prefixIcon: Icon(icon, color: Colors.black54, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF3F2EF),
+        fillColor: const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.black12),
@@ -338,62 +392,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
     );
   }
 
-  Widget _buildDropdown({
-    required List<String> items,
-    required String value,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F2EF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: value,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: items.map((type) {
-            return DropdownMenuItem(
-              value: type,
-              child: Text(type, style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
 
-  Widget _buildAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F2EF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: _selectedArea,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.black54),
-          items: <String>[].map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area,
-                  style: const TextStyle(color: Colors.black87)),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _selectedArea = val);
-          },
-        ),
-      ),
-    );
-  }
 
   Widget _buildBannerUpload() {
     if (_bannerImage != null) {
@@ -440,7 +439,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         height: 100,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFFF3F2EF),
+          color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.black12, width: 1),
         ),
@@ -462,7 +461,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: Color(0xFF0A66C2)),
+          const CircularProgressIndicator(color: Color(0xFF3B82F6)),
           const SizedBox(height: 24),
           Text(
             _uploadProgress < 0.9

@@ -48,28 +48,28 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF0D1220),
+          color: Colors.white,
           border: const Border(
-            top: BorderSide(color: Color(0xFF1E2D47), width: 1),
+            top: BorderSide(color: Colors.black12, width: 1),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 12,
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
               offset: const Offset(0, -2),
             ),
           ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
                 _buildNavItem(index: 0, icon: Icons.home_rounded, label: 'Home'),
@@ -91,7 +91,7 @@ class _MainScreenState extends State<MainScreen> {
   }) {
     final isSelected = _currentIndex == index;
     final selectedColor = const Color(0xFF3B82F6);
-    final unselectedColor = Colors.white38;
+    final unselectedColor = Colors.black38;
 
     return Expanded(
       child: GestureDetector(
@@ -101,7 +101,7 @@ class _MainScreenState extends State<MainScreen> {
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: isSelected ? selectedColor.withOpacity(0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(14),

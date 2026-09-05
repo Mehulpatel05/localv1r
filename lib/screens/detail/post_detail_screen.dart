@@ -74,16 +74,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Delete Post?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete Post?', style: TextStyle(color: Colors.black87)),
         content: const Text(
           'Are you sure you want to permanently delete this anonymous post? This action cannot be undone.',
-          style: TextStyle(color: Colors.white70, fontSize: 14),
+          style: TextStyle(color: Colors.black54, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F1D1D)),
@@ -100,7 +100,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 );
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.black87)),
           ),
         ],
       ),
@@ -112,13 +112,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final repo = widget.repository;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
           'Discussion Thread — ${'Vadodara'}',
-          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.bold),
         ),
         actions: [
           if (widget.post.authorHandle == widget.currentUserHandle)
@@ -159,19 +159,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           const SizedBox(width: 8),
                           Text(
                             '${widget.post.category.icon} ${widget.post.category.label}',
-                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            style: const TextStyle(color: Colors.black38, fontSize: 11),
                           ),
                           const Spacer(),
                           Text(
                             _formatTime(widget.post.createdAt),
-                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            style: const TextStyle(color: Colors.black38, fontSize: 11),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
                         widget.post.content,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.45),
+                        style: const TextStyle(color: Colors.black87, fontSize: 16, height: 1.45),
                       ),
                       if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) ...[
                         const SizedBox(height: 12),
@@ -189,14 +189,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           const SizedBox(width: 4),
                           Text(
                             '${widget.post.score} votes',
-                            style: const TextStyle(color: Colors.white60, fontSize: 12),
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
                           ),
                           const SizedBox(width: 16),
                           const Icon(Icons.mode_comment_outlined, size: 15, color: Colors.white30),
                           const SizedBox(width: 4),
                           Text(
                             '${widget.post.commentCount} comments',
-                            style: const TextStyle(color: Colors.white60, fontSize: 12),
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
                           ),
                         ],
                       ),
@@ -209,7 +209,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const Text(
                   'NEIGHBOR COMMENTS',
                   style: TextStyle(
-                    color: Colors.white38,
+                    color: Colors.black38,
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                     letterSpacing: 1.0,
@@ -238,12 +238,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(height: 8),
                               const Text(
                                 'No replies yet',
-                                style: TextStyle(color: Colors.white38, fontSize: 13),
+                                style: TextStyle(color: Colors.black38, fontSize: 13),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Ask for details or reply as "${widget.currentUserHandle}"',
-                                style: const TextStyle(color: Colors.white24, fontSize: 11),
+                                style: const TextStyle(color: Colors.black26, fontSize: 11),
                               ),
                             ],
                           ),
@@ -263,7 +263,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF111827),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF1F293D)),
+                            border: Border.all(color: const Color(0xFFF8FAFC)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,14 +281,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   const Spacer(),
                                   Text(
                                     _formatTime(comment.createdAt),
-                                    style: const TextStyle(color: Colors.white24, fontSize: 11),
+                                    style: const TextStyle(color: Colors.black26, fontSize: 11),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 comment.content,
-                                style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+                                style: const TextStyle(color: Colors.black54, fontSize: 14, height: 1.4),
                               ),
                             ],
                           ),
@@ -309,17 +309,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.white70, size: 16),
+                  const Icon(Icons.error_outline, color: Colors.black54, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _commentError!,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Colors.black87, fontSize: 12),
                     ),
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, color: Colors.white60, size: 14),
+                    icon: const Icon(Icons.close, color: Colors.black54, size: 14),
                     onPressed: () => setState(() => _commentError = null),
                   ),
                 ],
@@ -335,7 +335,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               bottom: MediaQuery.of(context).padding.bottom + 10,
             ),
             decoration: const BoxDecoration(
-              color: Color(0xFF151D30),
+              color: Colors.white,
               border: Border(
                 top: BorderSide(color: Color(0xFF243049), width: 1),
               ),
@@ -345,16 +345,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0B0F19),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: const Color(0xFF243049)),
+                      border: Border.all(color: Colors.black12),
                     ),
                     child: TextField(
                       controller: _commentController,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.black87, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Reply anonymously as ${widget.currentUserHandle}...',
-                        hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+                        hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: InputBorder.none,
                         focusedBorder: InputBorder.none,

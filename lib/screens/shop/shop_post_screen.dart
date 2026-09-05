@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +25,8 @@ class ShopPostScreen extends StatefulWidget {
 }
 
 class _ShopPostScreenState extends State<ShopPostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -43,6 +44,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
     _priceController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
@@ -129,18 +132,16 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
           );
         } catch (_) {}
         if (url == null || url.isEmpty) {
-          try {
-            final bytes = await file.readAsBytes();
-            url = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-          } catch (_) {}
+          throw Exception('Failed to upload one or more images. Please check your connection and try again.');
         }
-        if (url != null && url.isNotEmpty) uploadedUrls.add(url);
+        if (url.isNotEmpty) uploadedUrls.add(url);
       }
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.shop,
+        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         shopTitle: _titleController.text.trim(),
         shopPrice: _priceController.text.trim(),
@@ -171,7 +172,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
             style: const TextStyle(
-                color: Colors.white38,
+                color: Colors.black54,
                 fontSize: 10,
                 fontWeight: FontWeight.bold)),
       );
@@ -189,25 +190,25 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
         maxLines: maxLines,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
-        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+        style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.4),
         decoration: InputDecoration(
           hintText: hint,
           prefixText: prefixText,
-          prefixStyle: const TextStyle(color: Colors.white70, fontSize: 14),
-          hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+          prefixStyle: const TextStyle(color: Colors.black87, fontSize: 14),
+          hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
           filled: true,
-          fillColor: const Color(0xFF151D30),
+          fillColor: const Color(0xFFF8FAFC),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF243049)),
+            borderSide: const BorderSide(color: Colors.black12),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF243049)),
+            borderSide: const BorderSide(color: Colors.black12),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF10B981)),
+            borderSide: const BorderSide(color: Color(0xFF3B82F6)),
           ),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -217,18 +218,18 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white70),
+          icon: const Icon(Icons.close, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           '🛍️ Sell a Product',
           style: TextStyle(
-              color: Colors.white,
+              color: Colors.black87,
               fontSize: 16,
               fontWeight: FontWeight.bold),
         ),
@@ -237,7 +238,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
@@ -263,30 +264,25 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Area dropdown ──────────────────────────────────────────
-            _label('NEIGHBORHOOD AREA'),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF151D30),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF243049)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  dropdownColor: const Color(0xFF151D30),
-                  value: _selectedArea,
-                  isExpanded: true,
-                  items: <String>[].map((area) {
-                    return DropdownMenuItem(
-                      value: area,
-                      child: Text(area,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 13)),
-                    );
-                  }).toList(),
-                  onChanged: (val) => setState(() => _selectedArea = val!),
+            _label('LOCATION DETAILS'),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _field(
+                    controller: _areaController,
+                    hint: 'Local Area (e.g. Alkapuri)',
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 1,
+                  child: _field(
+                    controller: _cityController,
+                    hint: 'City',
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
 
@@ -305,7 +301,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
               hint: 'e.g. 15000',
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              prefixText: 'Rs. ',
+              prefixText: '₹ ',
             ),
             const SizedBox(height: 14),
 
@@ -338,8 +334,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                           width: 100,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF243049)),
-                            color: const Color(0xFF151D30),
+                            border: Border.all(color: Colors.black12),
+                            color: const Color(0xFFF8FAFC),
                             image: isVideo
                                 ? null
                                 : DecorationImage(
@@ -349,7 +345,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                           child: isVideo
                               ? const Center(
                                   child: Icon(Icons.videocam,
-                                      color: Colors.white54, size: 36))
+                                      color: Colors.black26, size: 36))
                               : null,
                         ),
                         Positioned(
@@ -380,8 +376,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF10B981),
-                      side: const BorderSide(color: Color(0xFF243049)),
+                      foregroundColor: const Color(0xFF3B82F6),
+                      side: const BorderSide(color: Colors.black12),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -398,8 +394,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF10B981),
-                      side: const BorderSide(color: Color(0xFF243049)),
+                      foregroundColor: const Color(0xFF3B82F6),
+                      side: const BorderSide(color: Colors.black12),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -421,9 +417,9 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF151D30),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF243049)),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,13 +429,13 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                       children: [
                         const Text('Uploading Media...',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: Colors.black87,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold)),
                         Text(
                             '${(_uploadProgress * 100).toStringAsFixed(0)}%',
                             style: const TextStyle(
-                                color: Color(0xFF10B981),
+                                color: Color(0xFF3B82F6),
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold)),
                       ],
@@ -447,8 +443,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                     const SizedBox(height: 10),
                     LinearProgressIndicator(
                       value: _uploadProgress > 0 ? _uploadProgress : null,
-                      backgroundColor: const Color(0xFF243049),
-                      color: const Color(0xFF10B981),
+                      backgroundColor: Colors.black12,
+                      color: const Color(0xFF3B82F6),
                       minHeight: 6,
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -491,23 +487,23 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withOpacity(0.4),
+                color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: const Color(0xFF334155).withOpacity(0.5)),
+                    color: const Color(0xFF3B82F6).withOpacity(0.3)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.lock_person,
-                      color: const Color(0xFF10B981).withOpacity(0.8),
+                      color: const Color(0xFF3B82F6),
                       size: 16),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'Posted anonymously under your session handle. Your phone & name are never shown.',
                       style: TextStyle(
-                          color: Colors.white54, fontSize: 11, height: 1.5),
+                          color: Colors.black54, fontSize: 11, height: 1.5),
                     ),
                   ),
                 ],

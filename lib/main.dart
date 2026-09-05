@@ -78,18 +78,20 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       title: 'Vadodara Local',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0F19),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.white,
         primaryColor: const Color(0xFF3B82F6),
-        colorScheme: const ColorScheme.dark(
+        colorScheme: const ColorScheme.light(
           primary: Color(0xFF3B82F6),
           secondary: Color(0xFF60A5FA),
-          surface: Color(0xFF151D30),
-          error: Color(0xFFEF4444),
+          surface: Colors.white,
+          error: Colors.red,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF151D30),
-          iconTheme: IconThemeData(color: Colors.white),
+          backgroundColor: Colors.white,
+          elevation: 1,
+          iconTheme: IconThemeData(color: Colors.black87),
+          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         useMaterial3: true,
       ),
@@ -98,7 +100,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Scaffold(
-              backgroundColor: const Color(0xFF0B0F19),
+              backgroundColor: Colors.white,
               body: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -110,7 +112,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Colors.black87,
                         letterSpacing: 2,
                       ),
                     ),
@@ -119,7 +121,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                       'Explore • Connect • Thrive',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white60,
+                        color: Colors.black54,
                         letterSpacing: 1.2,
                       ),
                     ),

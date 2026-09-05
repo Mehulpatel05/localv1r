@@ -24,15 +24,15 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> with Sing
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Communities', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        title: const Text('Communities', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF3B82F6),
           labelColor: const Color(0xFF3B82F6),
-          unselectedLabelColor: Colors.white54,
+          unselectedLabelColor: Colors.black54,
           tabs: const [
             Tab(text: 'My Groups & Channels'),
             Tab(text: 'Discover'),
@@ -62,7 +62,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> with Sing
             child: Text(
               "You haven't joined any communities yet.\\nGo to 'Discover' to find some!",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: Colors.black54),
             ),
           );
         }
@@ -89,7 +89,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> with Sing
             child: Text(
               "No public communities yet.\\nCreate the first one!",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: Colors.black54),
             ),
           );
         }
@@ -112,14 +112,14 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> with Sing
           color: Colors.white,
         ),
       ),
-      title: Text(community.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      title: Text(community.name, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
       subtitle: Text(
         community.description,
-        style: const TextStyle(color: Colors.white54),
+        style: const TextStyle(color: Colors.black54),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Text('${community.memberCount} members', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+      trailing: Text('${community.memberCount} members', style: const TextStyle(color: Colors.black38, fontSize: 12)),
       onTap: () {
         Navigator.push(
           context,

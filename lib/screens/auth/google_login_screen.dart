@@ -116,7 +116,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -139,7 +139,7 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.white70,
+                  color: Colors.black54,
                 ),
               ),
               const SizedBox(height: 48),

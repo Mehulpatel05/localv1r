@@ -39,15 +39,15 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Friends', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        title: const Text('Friends', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF3B82F6),
           labelColor: const Color(0xFF3B82F6),
-          unselectedLabelColor: Colors.white54,
+          unselectedLabelColor: Colors.black54,
           tabs: [
             StreamBuilder<int>(
               stream: widget.repository.getPendingRequestCount(),
@@ -68,7 +68,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                           ),
                           child: Text(
                             '$count',
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -109,7 +109,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               children: [
                 Icon(Icons.person_add_disabled, size: 48, color: Colors.white24),
                 SizedBox(height: 12),
-                Text('No pending requests', style: TextStyle(color: Colors.white54, fontSize: 15)),
+                Text('No pending requests', style: TextStyle(color: Colors.black54, fontSize: 15)),
               ],
             ),
           );
@@ -131,9 +131,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF243049)),
+        border: Border.all(color: Colors.black12),
       ),
       child: Row(
         children: [
@@ -162,12 +162,12 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               children: [
                 Text(
                   '@${req.senderHandle}',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Wants to be your friend',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ],
             ),
@@ -242,9 +242,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               children: [
                 Icon(Icons.group_off, size: 48, color: Colors.white24),
                 SizedBox(height: 12),
-                Text('No friends yet', style: TextStyle(color: Colors.white54, fontSize: 15)),
+                Text('No friends yet', style: TextStyle(color: Colors.black54, fontSize: 15)),
                 SizedBox(height: 4),
-                Text('Send friend requests from user profiles!', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                Text('Send friend requests from user profiles!', style: TextStyle(color: Colors.black38, fontSize: 12)),
               ],
             ),
           );
@@ -266,9 +266,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF243049)),
+        border: Border.all(color: Colors.black12),
       ),
       child: ListTile(
         leading: Container(
@@ -287,7 +287,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             ),
           ),
         ),
-        title: Text('@$handle', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('@$handle', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -308,8 +308,8 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             ),
             // More options
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.white38),
-              color: const Color(0xFF1F293D),
+              icon: const Icon(Icons.more_vert, color: Colors.black38),
+              color: const Color(0xFFF8FAFC),
               onSelected: (value) {
                 if (value == 'unfriend') _showUnfriendDialog(handle);
                 if (value == 'block') _showBlockDialog(handle);
@@ -321,7 +321,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     children: [
                       Icon(Icons.person_remove, color: Colors.orangeAccent, size: 18),
                       SizedBox(width: 8),
-                      Text('Unfriend', style: TextStyle(color: Colors.white)),
+                      Text('Unfriend', style: TextStyle(color: Colors.black87)),
                     ],
                   ),
                 ),
@@ -359,13 +359,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Remove Friend', style: TextStyle(color: Colors.white)),
-        content: Text('Remove @$handle from your friends?', style: const TextStyle(color: Colors.white70)),
+        backgroundColor: Colors.white,
+        title: const Text('Remove Friend', style: TextStyle(color: Colors.black87)),
+        content: Text('Remove @$handle from your friends?', style: const TextStyle(color: Colors.black54)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           TextButton(
             onPressed: () async {
@@ -396,16 +396,16 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Block User', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Block User', style: TextStyle(color: Colors.black87)),
         content: Text(
           'Block @$handle? They won\'t be able to send you friend requests or messages.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Colors.black54),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           TextButton(
             onPressed: () async {
@@ -448,7 +448,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               children: [
                 Icon(Icons.send, size: 48, color: Colors.white24),
                 SizedBox(height: 12),
-                Text('No sent requests', style: TextStyle(color: Colors.white54, fontSize: 15)),
+                Text('No sent requests', style: TextStyle(color: Colors.black54, fontSize: 15)),
               ],
             ),
           );
@@ -462,9 +462,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF151D30),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF243049)),
+                border: Border.all(color: Colors.black12),
               ),
               child: Row(
                 children: [
@@ -487,7 +487,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('@${req.receiverHandle}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        Text('@${req.receiverHandle}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
                         const Text('Request pending...', style: TextStyle(color: Colors.amber, fontSize: 12)),
                       ],
                     ),

@@ -143,7 +143,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF151D30),
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
@@ -158,7 +158,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: Colors.black26,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -219,7 +219,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   Text(
                     _userData!['bio'] as String,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white60, fontSize: 13, height: 1.4),
+                    style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.4),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -228,9 +228,9 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F293D),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF374151)),
+                    border: Border.all(color: Colors.black12),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -239,7 +239,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                       const SizedBox(width: 6),
                       Text(
                         '$_postCount posts',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        style: const TextStyle(color: Colors.black54, fontSize: 13),
                       ),
                     ],
                   ),
@@ -256,7 +256,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white70,
+                          foregroundColor: Colors.black54,
                           side: const BorderSide(color: Color(0xFF374151)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -422,16 +422,16 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Block User', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Block User', style: TextStyle(color: Colors.black87)),
         content: Text(
           'Block @$_targetHandle? They won\'t be able to send you friend requests or messages.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Colors.black54),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           TextButton(
             onPressed: () async {

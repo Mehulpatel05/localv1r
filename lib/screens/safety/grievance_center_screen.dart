@@ -40,11 +40,11 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF151D30),
-          title: const Text('Grievance Filed Successfully', style: TextStyle(color: Colors.white)),
+          backgroundColor: Colors.white,
+          title: const Text('Grievance Filed Successfully', style: TextStyle(color: Colors.black87)),
           content: Text(
             'Under Section 79 of IT Rules 2021, your ticket has been registered. Our Grievance Officer in Vadodara will process this request within the 24-hour statutory timeline.\n\nTicket Reference ID: VL-GR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.45),
+            style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.45),
           ),
           actions: [
             TextButton(
@@ -67,13 +67,13 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
     final reportedPosts = widget.repository.reportedPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Compliance & Grievance',
-          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontSize: 15, fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
@@ -110,7 +110,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                         const SizedBox(height: 8),
                         const Text(
                           'This application operates under Section 79 of the Information Technology Act, 2000. We comply with Intermediary Guidelines (IT Rules 2021) and the Digital Personal Data Protection (DPDP) Act 2023. \n\nWe provide a mechanism to report and take down illegal content, defamation, intellectual property theft, or privacy violations within statutory timelines.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.45),
+                          style: TextStyle(color: Colors.black54, fontSize: 12, height: 1.45),
                         ),
                       ],
                     ),
@@ -120,15 +120,15 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                   // Grievance contact details
                   const Text(
                     'DESIGNATED GRIEVANCE OFFICER DETAILS',
-                    style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                    style: TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF151D30),
+                      color: Colors.black26,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF243049)),
+                      border: Border.all(color: Colors.black12),
                     ),
                     child: const Column(
                       children: [
@@ -147,24 +147,24 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                   // Interactive Content Removal Request Form
                   const Text(
                     'FILE A TAKEDOWN / COMPLAINT TICKET',
-                    style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                    style: TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
                   ),
                   const SizedBox(height: 10),
                   const Text(
                     'Identify the post or comment violating rules and submit below. We will investigate and remove compliant content immediately.',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(height: 14),
 
                   // Email input
                   TextFormField(
                     controller: _emailController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
                       labelText: 'Your Contact Email (Will be kept private)',
-                      labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                      labelStyle: const TextStyle(color: Colors.black54, fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFF151D30),
+                      fillColor: const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: Color(0xFF243049)),
@@ -182,12 +182,12 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                   // Target content description
                   TextFormField(
                     controller: _postLinkController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
                       labelText: 'Identifier / Handle of Post / Target Area',
-                      labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                      labelStyle: const TextStyle(color: Colors.black54, fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFF151D30),
+                      fillColor: const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: Color(0xFF243049)),
@@ -206,12 +206,12 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                   TextFormField(
                     controller: _reasonController,
                     maxLines: 3,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
                       labelText: 'Detailed Reason for Removal Request',
-                      labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                      labelStyle: const TextStyle(color: Colors.black54, fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFF151D30),
+                      fillColor: const Color(0xFFF8FAFC),
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -252,12 +252,12 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
             const SizedBox(height: 16),
             const Text(
               '⚖️ COMMUNITY MODERATOR QUEUE (MVP DEMO)',
-              style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              style: TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
             ),
             const SizedBox(height: 10),
             const Text(
               'As a trusted resident moderator, you can review flagged content below and take action to either Restore or Permanently Ban the post.',
-              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
+              style: TextStyle(color: Colors.black54, fontSize: 12, height: 1.4),
             ),
             const SizedBox(height: 14),
 
@@ -267,7 +267,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF111827),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF1F293D)),
+                  border: Border.all(color: const Color(0xFFF8FAFC)),
                 ),
                 child: const Row(
                   children: [
@@ -276,7 +276,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                     Expanded(
                       child: Text(
                         'All clean! There are no flagged posts currently pending moderation review.',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                        style: TextStyle(color: Colors.black54, fontSize: 13),
                       ),
                     ),
                   ],
@@ -307,18 +307,18 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                               style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             const SizedBox(width: 6),
-                            const Text('•', style: TextStyle(color: Colors.white24)),
+                            const Text('•', style: TextStyle(color: Colors.black26)),
                             const SizedBox(width: 6),
                             Text(
                               'Vadodara',
-                              style: const TextStyle(color: Colors.white60, fontSize: 11),
+                              style: const TextStyle(color: Colors.black54, fontSize: 11),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
                           post.content,
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          style: const TextStyle(color: Colors.black54, fontSize: 13),
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -396,14 +396,14 @@ class _GrievanceInfoRow extends StatelessWidget {
           const SizedBox(width: 10),
           Text(
             '$title:',
-            style: const TextStyle(color: Colors.white38, fontSize: 13),
+            style: const TextStyle(color: Colors.black38, fontSize: 13),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.end,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
         ],

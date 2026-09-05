@@ -94,16 +94,16 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     final canPost = !_isLoading && _isMember && (!widget.community.isChannel || isAdmin);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.community.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             Text(
               widget.community.isChannel ? 'Channel' : 'Group',
-              style: const TextStyle(fontSize: 12, color: Colors.white54),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),
@@ -134,7 +134,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return const Center(
-                    child: Text('No messages yet. Say hi!', style: TextStyle(color: Colors.white54)),
+                    child: Text('No messages yet. Say hi!', style: TextStyle(color: Colors.black54)),
                   );
                 }
                 return ListView.builder(
@@ -154,7 +154,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: const Color(0xFF151D30),
+              color: Colors.white,
               child: ElevatedButton(
                 onPressed: _joinCommunity,
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
@@ -167,11 +167,11 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: const Color(0xFF151D30),
+              color: Colors.white,
               child: const Text(
                 'Only admins can broadcast messages here.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: Colors.black54),
               ),
             )
         ],
@@ -186,7 +186,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isMe ? const Color(0xFF3B82F6) : const Color(0xFF1F293D),
+          color: isMe ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(16).copyWith(
             bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(16),
             bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(0),
@@ -198,14 +198,14 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             if (!isMe && !widget.community.isChannel)
               Text(
                 msg.authorHandle,
-                style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             const SizedBox(height: 4),
-            Text(msg.content, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            Text(msg.content, style: const TextStyle(color: Colors.black87, fontSize: 14)),
             const SizedBox(height: 4),
             Text(
               DateFormat('hh:mm a').format(msg.timestamp),
-              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9),
+              style: TextStyle(color: Colors.black87.withOpacity(0.5), fontSize: 9),
             ),
           ],
         ),
@@ -215,19 +215,19 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   Widget _buildMessageInput() {
     return Container(
-      color: const Color(0xFF151D30),
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8).copyWith(bottom: MediaQuery.of(context).padding.bottom + 8),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: InputDecoration(
                 hintText: 'Type a message...',
-                hintStyle: const TextStyle(color: Colors.white38),
+                hintStyle: const TextStyle(color: Colors.black38),
                 filled: true,
-                fillColor: const Color(0xFF0B0F19),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

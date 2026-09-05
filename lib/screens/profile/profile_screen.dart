@@ -117,16 +117,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Sign Out?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Sign Out?', style: TextStyle(color: Colors.black87)),
         content: const Text(
           'You will be returned to the login screen.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Colors.black54),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
@@ -166,20 +166,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
           : RefreshIndicator(
               onRefresh: _loadProfileData,
               color: const Color(0xFF3B82F6),
-              backgroundColor: const Color(0xFF151D30),
+              backgroundColor: Colors.white,
               child: CustomScrollView(
                 slivers: [
                   SliverAppBar(
-                    backgroundColor: const Color(0xFF151D30),
+                    backgroundColor: Colors.white,
                     elevation: 0,
                     pinned: true,
-                    title: const Text('Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    title: const Text('Profile', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
                     actions: [
                       IconButton(
                         icon: const Icon(Icons.share, color: Color(0xFF3B82F6)),
@@ -193,9 +193,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SliverToBoxAdapter(
                     child: Container(
                       decoration: const BoxDecoration(
-                        color: Color(0xFF151D30),
+                        color: Colors.white,
                         border: Border(
-                          bottom: BorderSide(color: Color(0xFF243049)),
+                          bottom: BorderSide(color: Colors.black12),
                         ),
                       ),
                       padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
@@ -241,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -249,7 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           // Email
                           Text(
                             _userData?['email'] as String? ?? '',
-                            style: const TextStyle(color: Colors.white54, fontSize: 13),
+                            style: const TextStyle(color: Colors.black54, fontSize: 13),
                           ),
                           const SizedBox(height: 20),
 
@@ -258,9 +258,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               _buildStat('${_userPosts.length}', 'Posts'),
-                              Container(width: 1, height: 32, color: const Color(0xFF243049)),
+                              Container(width: 1, height: 32, color: Colors.black12),
                               _buildStat('$_totalUpvotes', 'Upvotes'),
-                              Container(width: 1, height: 32, color: const Color(0xFF243049)),
+                              Container(width: 1, height: 32, color: Colors.black12),
                               _buildStat(
                                 _userData?['createdAt'] != null
                                     ? _formatDate((_userData!['createdAt'] as dynamic).toDate())
@@ -280,9 +280,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF151D30),
+                        color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF243049)),
+                        border: Border.all(color: Colors.black12),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,7 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const Text(
                                 'Bio',
                                 style: TextStyle(
-                                  color: Colors.white70,
+                                  color: Colors.black54,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
@@ -314,14 +314,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (_isEditingBio) ...[
                             TextField(
                               controller: _bioController,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Colors.black87),
                               maxLines: 3,
                               maxLength: 160,
                               decoration: InputDecoration(
                                 hintText: 'Tell the city something about yourself...',
-                                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                                hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
                                 enabledBorder: OutlineInputBorder(
-                                  borderSide: const BorderSide(color: Color(0xFF243049)),
+                                  borderSide: const BorderSide(color: Colors.black12),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 focusedBorder: OutlineInputBorder(
@@ -329,8 +329,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 filled: true,
-                                fillColor: const Color(0xFF0F1524),
-                                counterStyle: const TextStyle(color: Colors.white38),
+                                fillColor: const Color(0xFFF1F5F9),
+                                counterStyle: const TextStyle(color: Colors.black38),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -339,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               children: [
                                 TextButton(
                                   onPressed: () => setState(() => _isEditingBio = false),
-                                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                                  child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
                                 ),
                                 const SizedBox(width: 8),
                                 ElevatedButton(
@@ -352,9 +352,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
                                         )
-                                      : const Text('Save', style: TextStyle(color: Colors.white)),
+                                      : const Text('Save', style: TextStyle(color: Colors.black87)),
                                 ),
                               ],
                             ),
@@ -365,8 +365,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   : 'No bio yet. Tap Edit to add one.',
                               style: TextStyle(
                                 color: (_userData?['bio'] as String?)?.isNotEmpty == true
-                                    ? Colors.white70
-                                    : Colors.white30,
+                                    ? Colors.black54
+                                    : Colors.black38,
                                 fontSize: 14,
                                 height: 1.5,
                               ),
@@ -387,7 +387,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Text(
                             'My Posts (${_userPosts.length})',
                             style: const TextStyle(
-                              color: Colors.white70,
+                              color: Colors.black54,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
@@ -404,11 +404,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.all(32),
                             child: Column(
                               children: [
-                                const Icon(Icons.edit_note, size: 48, color: Colors.white24),
+                                const Icon(Icons.edit_note, size: 48, color: Colors.black26),
                                 const SizedBox(height: 12),
                                 const Text(
                                   'No posts yet.',
-                                  style: TextStyle(color: Colors.white54, fontSize: 15),
+                                  style: TextStyle(color: Colors.black54, fontSize: 15),
                                 ),
                               ],
                             ),
@@ -449,8 +449,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: const TextStyle(color: Colors.black87,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
@@ -458,7 +457,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 11),
+          style: const TextStyle(color: Colors.black54, fontSize: 11),
         ),
       ],
     );
@@ -469,9 +468,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
+        color: Colors.black87,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF243049)),
+        border: Border.all(color: Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,18 +480,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1F293D),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   '${post.category.icon} ${post.category.label}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: const TextStyle(color: Colors.black54, fontSize: 11),
                 ),
               ),
               const Spacer(),
               Text(
                 _formatDate(post.createdAt),
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                style: const TextStyle(color: Colors.black38, fontSize: 11),
               ),
             ],
           ),
@@ -501,22 +500,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             post.content,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.45),
+            style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.45),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               const Icon(Icons.arrow_upward, size: 14, color: Color(0xFF10B981)),
               const SizedBox(width: 3),
-              Text('${post.upvotes}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Text('${post.upvotes}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
               const SizedBox(width: 12),
-              const Icon(Icons.arrow_downward, size: 14, color: Colors.white30),
+              const Icon(Icons.arrow_downward, size: 14, color: Colors.black38),
               const SizedBox(width: 3),
-              Text('${post.downvotes}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Text('${post.downvotes}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
               const SizedBox(width: 12),
               const Icon(Icons.location_on, size: 13, color: Color(0xFF60A5FA)),
               const SizedBox(width: 3),
-              Text('Vadodara', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              Text('Vadodara', style: const TextStyle(color: Colors.black54, fontSize: 11)),
             ],
           ),
         ],

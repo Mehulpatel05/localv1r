@@ -23,7 +23,8 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   // Common
   final _contentController = TextEditingController();
   PostCategory _selectedCategory = PostCategory.general;
@@ -42,6 +43,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void dispose() {
     _contentController.removeListener(_validateLiveInput);
     _contentController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
     super.dispose();
   }
 
@@ -100,22 +103,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           debugPrint('Error uploading image: $e');
         }
         if (telegramImageUrl == null || telegramImageUrl.isEmpty) {
-          try {
-            final bytes = await _imageFile!.readAsBytes();
-            telegramImageUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-          } catch (e) {
-            debugPrint('Failed to encode image to base64: $e');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to process image: $e')),
-              );
-            }
-          }
+          throw Exception('Image upload failed. Please try again.');
         }
       }
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
+        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
         category: _selectedCategory,
         imageUrl: telegramImageUrl,
       );
@@ -146,7 +140,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
             style: const TextStyle(
-                color: Colors.white38,
+                color: Colors.black54,
                 fontSize: 10,
                 fontWeight: FontWeight.bold)),
       );
@@ -164,17 +158,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         maxLines: maxLines,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
-        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+        style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.4),
         decoration: InputDecoration(
           hintText: hint,
           prefixText: prefixText,
-          prefixStyle: const TextStyle(color: Colors.white70, fontSize: 14),
-          hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+          prefixStyle: const TextStyle(color: Colors.black87, fontSize: 14),
+          hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
           filled: true,
-          fillColor: const Color(0xFF151D30),
+          fillColor: const Color(0xFFF8FAFC),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF243049)),
+            borderSide: const BorderSide(color: Colors.black12),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
@@ -194,16 +188,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         TextField(
           controller: _contentController,
           maxLines: 8,
-          style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+          style: const TextStyle(color: Colors.black87, fontSize: 15, height: 1.4),
           decoration: InputDecoration(
             hintText:
                 'Ask a question, share traffic status, warn about police checkers, or vent about civic issues...',
-            hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
             filled: true,
-            fillColor: const Color(0xFF151D30),
+            fillColor: const Color(0xFFF8FAFC),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF243049)),
+              borderSide: const BorderSide(color: Colors.black12),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -221,7 +215,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF243049)),
+                  border: Border.all(color: Colors.black12),
                   image: DecorationImage(
                       image: FileImage(_imageFile!), fit: BoxFit.cover),
                 ),
@@ -244,8 +238,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         else
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF60A5FA),
-              side: const BorderSide(color: Color(0xFF243049)),
+              foregroundColor: const Color(0xFF3B82F6),
+              side: const BorderSide(color: Colors.black12),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -260,18 +254,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white70),
+          icon: const Icon(Icons.close, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Post Anonymously',
           style: const TextStyle(
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
           Padding(
@@ -311,36 +305,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('NEIGHBORHOOD AREA',
+                        const Text('LOCATION DETAILS',
                             style: TextStyle(
-                                color: Colors.white38,
+                                color: Colors.black54,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF151D30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF243049)),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              dropdownColor: const Color(0xFF151D30),
-                              value: _selectedArea,
-                              isExpanded: true,
-                              items: <String>[].map((area) {
-                                return DropdownMenuItem(
-                                  value: area,
-                                  child: Text(area,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13)),
-                                );
-                              }).toList(),
-                              onChanged: (val) =>
-                                  setState(() => _selectedArea = val!),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: _buildTextField(
+                                controller: _areaController,
+                                hint: 'Local Area',
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 1,
+                              child: _buildTextField(
+                                controller: _cityController,
+                                hint: 'City',
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -352,20 +340,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       children: [
                         const Text('POST CATEGORY',
                             style: TextStyle(
-                                color: Colors.white38,
+                                color: Colors.black54,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF151D30),
+                            color: const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF243049)),
+                            border: Border.all(color: Colors.black12),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<PostCategory>(
-                              dropdownColor: const Color(0xFF151D30),
+                              dropdownColor: Colors.white,
                               value: _selectedCategory,
                               isExpanded: true,
                               items: PostCategory.values
@@ -386,7 +374,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                         child: Text(cat.label,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
-                                                color: Colors.white,
+                                                color: Colors.black87,
                                                 fontSize: 13)),
                                       ),
                                     ],
@@ -410,9 +398,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF151D30),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF243049)),
+                    border: Border.all(color: Colors.black12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +410,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         children: [
                           const Text('Uploading Media...',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: Colors.black87,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold)),
                           Text(
@@ -437,7 +425,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       const SizedBox(height: 12),
                       LinearProgressIndicator(
                         value: _uploadProgress > 0 ? _uploadProgress : null,
-                        backgroundColor: const Color(0xFF243049),
+                        backgroundColor: Colors.black12,
                         color: const Color(0xFF3B82F6),
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(4),
@@ -445,7 +433,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       const SizedBox(height: 8),
                       const Text(
                         'Please wait, this might take a moment depending on your network.',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                     ],
                   ),
@@ -482,10 +470,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B).withOpacity(0.4),
+                  color: const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF334155).withOpacity(0.5)),
+                      color: const Color(0xFF3B82F6).withOpacity(0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,12 +481,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     Row(
                       children: [
                         Icon(Icons.lock_person,
-                            color: const Color(0xFF60A5FA).withOpacity(0.8),
+                            color: const Color(0xFF3B82F6),
                             size: 18),
                         const SizedBox(width: 8),
                         const Text('Anonymity & Compliance Note',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: Colors.black87,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold)),
                       ],
@@ -507,7 +495,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     const Text(
                       "Your personal identity (phone, name) is never shown. You are posting under a randomized handle for this session. \n\nUnder India's IT Rules 2021 and DPDP Act 2023, doxxing, harassment, and sharing personal contacts is prohibited. We retain internal cryptographic identifiers for legal notices and repeat offender protection.",
                       style: TextStyle(
-                          color: Colors.white54, fontSize: 11, height: 1.5),
+                          color: Colors.black54, fontSize: 11, height: 1.5),
                     ),
                   ],
                 ),

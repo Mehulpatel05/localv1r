@@ -80,9 +80,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         title: Row(
           children: [
@@ -97,7 +97,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             const SizedBox(width: 12),
             Text(
               widget.partnerHandle,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+              style: const TextStyle(color: Colors.black87, fontSize: 16),
             ),
           ],
         ),
@@ -122,7 +122,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   return const Center(
                     child: Text(
                       'No messages yet. Say hi!',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(color: Colors.black54),
                     ),
                   );
                 }
@@ -144,7 +144,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isMe ? const Color(0xFF3B82F6) : const Color(0xFF1F293D),
+                          color: isMe ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(16),
                             topRight: const Radius.circular(16),
@@ -154,7 +154,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         ),
                         child: Text(
                           msg['content'] ?? '',
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: isMe ? Colors.white : Colors.black87),
                         ),
                       ),
                     );
@@ -166,8 +166,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
-              color: Color(0xFF151D30),
-              border: Border(top: BorderSide(color: Color(0xFF243049))),
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.black12)),
             ),
             child: SafeArea(
               child: Row(
@@ -175,16 +175,16 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        hintStyle: const TextStyle(color: Colors.white38),
+                        hintStyle: const TextStyle(color: Colors.black38),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFF0F1524),
+                        fillColor: const Color(0xFFF1F5F9),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       ),
                     ),

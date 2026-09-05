@@ -105,11 +105,10 @@ class _JobsScreenState extends State<JobsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF0A66C2), // LinkedIn blue
         elevation: 4,
-        icon: const Icon(Icons.add_box_rounded, color: Colors.white),
+        icon: const Icon(Icons.add_box_rounded, color: Colors.black87),
         label: const Text(
           'Post a Job',
-          style: TextStyle(
-              color: Colors.white,
+          style: TextStyle(color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
@@ -166,7 +165,7 @@ class _JobsScreenState extends State<JobsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.black87,
         border: Border(
           top: BorderSide(color: Colors.grey.shade300),
           bottom: BorderSide(color: Colors.grey.shade300),

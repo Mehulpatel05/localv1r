@@ -14,13 +14,13 @@ class ChatListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -48,17 +48,17 @@ class ChatListScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_bubble_outline_rounded, size: 64, color: Colors.white24),
+                  Icon(Icons.chat_bubble_outline_rounded, size: 64, color: Colors.black26),
                   SizedBox(height: 16),
                   Text(
                     'No messages yet',
-                    style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
                   Text(
                     'Start a conversation by tapping a username\non the home feed.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white38, fontSize: 13),
+                    style: TextStyle(color: Colors.black38, fontSize: 13),
                   ),
                 ],
               ),
@@ -86,13 +86,13 @@ class ChatListScreen extends StatelessWidget {
                 ),
                 title: Text(
                   partnerHandle,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
                   lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54),
+                  style: const TextStyle(color: Colors.black54),
                 ),
                 onTap: () {
                   Navigator.push(

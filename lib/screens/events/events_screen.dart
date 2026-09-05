@@ -53,7 +53,7 @@ class _EventsScreenState extends State<EventsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.white70, size: 28),
+              color: Colors.black54, size: 28),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Row(
@@ -62,8 +62,7 @@ class _EventsScreenState extends State<EventsScreen> {
             SizedBox(width: 8),
             Text(
               'Events & Meetups',
-              style: TextStyle(
-                  color: Colors.white,
+              style: TextStyle(color: Colors.black87,
                   fontWeight: FontWeight.bold,
                   fontSize: 18),
             ),
@@ -108,11 +107,10 @@ class _EventsScreenState extends State<EventsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF8B5CF6),
         elevation: 6,
-        icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+        icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.black87),
         label: const Text(
           'Host an Event',
-          style: TextStyle(
-              color: Colors.white,
+          style: TextStyle(color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
@@ -142,7 +140,7 @@ class _EventsScreenState extends State<EventsScreen> {
             const Text(
               'No upcoming events',
               style: TextStyle(
-                  color: Colors.white70,
+                  color: Colors.black54,
                   fontSize: 18,
                   fontWeight: FontWeight.bold),
             ),
@@ -150,7 +148,7 @@ class _EventsScreenState extends State<EventsScreen> {
             const Text(
               'Be the first to host an event or party in your area!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 13),
+              style: TextStyle(color: Colors.black38, fontSize: 13),
             ),
           ],
         ),
@@ -239,7 +237,7 @@ class _EventsScreenState extends State<EventsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Colors.black87,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
@@ -286,8 +284,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         ),
                         child: Text(
                           price,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: const TextStyle(color: Colors.black87,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
@@ -308,8 +305,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: const TextStyle(color: Colors.black87,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.5,
@@ -348,14 +344,14 @@ class _EventsScreenState extends State<EventsScreen> {
                                 Text(
                                   location,
                                   style: const TextStyle(
-                                      color: Colors.white70,
+                                      color: Colors.black54,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500),
                                 ),
                                 Text(
                                   'Vadodara',
                                   style: const TextStyle(
-                                      color: Colors.white38,
+                                      color: Colors.black38,
                                       fontSize: 12),
                                 ),
                               ],
@@ -374,7 +370,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.white60,
+                          color: Colors.black54,
                           fontSize: 14,
                           height: 1.4,
                         ),
@@ -392,14 +388,14 @@ class _EventsScreenState extends State<EventsScreen> {
                               style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white),
+                                  color: Colors.black87),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '@${post.authorHandle}',
                             style: const TextStyle(
-                                color: Colors.white70,
+                                color: Colors.black54,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -407,7 +403,7 @@ class _EventsScreenState extends State<EventsScreen> {
                           Text(
                             _timeAgo(post.createdAt),
                             style: const TextStyle(
-                                color: Colors.white38, fontSize: 11),
+                                color: Colors.black38, fontSize: 11),
                           ),
                         ],
                       ),
@@ -434,7 +430,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                   icon: Icon(
                                     Icons.keyboard_arrow_up_rounded,
                                     size: 22,
-                                    color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.white60,
+                                    color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.black54,
                                   ),
                                   onPressed: () => widget.repository.votePost(post.id, 1),
                                 ),
@@ -454,7 +450,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                   icon: Icon(
                                     Icons.keyboard_arrow_down_rounded,
                                     size: 22,
-                                    color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white60,
+                                    color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54,
                                   ),
                                   onPressed: () => widget.repository.votePost(post.id, -1),
                                 ),
@@ -466,11 +462,11 @@ class _EventsScreenState extends State<EventsScreen> {
                           // Comments Icon
                           Row(
                             children: [
-                              const Icon(Icons.mode_comment_outlined, size: 18, color: Colors.white60),
+                              const Icon(Icons.mode_comment_outlined, size: 18, color: Colors.black54),
                               const SizedBox(width: 6),
                               Text(
                                 '${post.commentCount}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                style: const TextStyle(color: Colors.black54, fontSize: 13),
                               ),
                             ],
                           ),

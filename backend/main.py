@@ -1139,7 +1139,7 @@ async def upload_image(
         print(f"Error sanitizing image metadata: {e}")
         raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
         
-    base_url = os.environ.get("PRODUCTION_URL", "https://api.vadodaralocal.com").rstrip("/")
+    base_url = os.environ.get("PRODUCTION_URL", "https://localv1r.onrender.com").rstrip("/")
 
     content_hash = hashlib.sha256(sanitized_content).hexdigest()
     existing_media = FirebaseService.get_media_by_hash(content_hash)

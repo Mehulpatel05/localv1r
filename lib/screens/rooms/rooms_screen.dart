@@ -47,13 +47,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
     final posts = _roomPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.white70, size: 28),
+              color: Colors.black54, size: 28),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Row(
@@ -62,8 +62,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             SizedBox(width: 8),
             Text(
               'Rooms in Vadodara',
-              style: TextStyle(
-                  color: Colors.white,
+              style: TextStyle(color: Colors.black87,
                   fontSize: 17,
                   fontWeight: FontWeight.bold),
             ),
@@ -77,14 +76,14 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1F293D),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF374151)),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Text(
                   '${posts.length} listings',
                   style: const TextStyle(
-                      color: Colors.white54,
+                      color: Colors.black54,
                       fontSize: 12,
                       fontWeight: FontWeight.w500),
                 ),
@@ -113,14 +112,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   itemBuilder: (context, i) => _buildRoomCard(posts[i]),
                 ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF3B82F6),
+        backgroundColor: const Color(0xFFF1F5F9),
         elevation: 4,
         icon: const Icon(Icons.add_home_work_rounded,
-            color: Colors.white),
+            color: Colors.black87),
         label: const Text(
           'List Your Room',
-          style: TextStyle(
-              color: Colors.white,
+          style: TextStyle(color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
@@ -151,7 +149,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             const Text(
               'No rooms listed yet',
               style: TextStyle(
-                  color: Colors.white70,
+                  color: Colors.black54,
                   fontSize: 18,
                   fontWeight: FontWeight.bold),
             ),
@@ -160,7 +158,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
               'Be the first to list a room for rent in Vadodara.',
               textAlign: TextAlign.center,
               style:
-                  TextStyle(color: Colors.white38, fontSize: 13),
+                  TextStyle(color: Colors.black38, fontSize: 13),
             ),
           ],
         ),
@@ -182,9 +180,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
+        color: Colors.black87,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF243049), width: 1),
+        border: Border.all(color: Colors.black12, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -219,7 +217,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.favorite_border,
-                        color: Colors.white, size: 18),
+                        color: Colors.black87, size: 18),
                   ),
                 ),
               ],
@@ -235,8 +233,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     // Rent
                     Text(
                       '₹ $rent / mo',
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: const TextStyle(color: Colors.black87,
                           fontSize: 18,
                           fontWeight: FontWeight.bold),
                     ),
@@ -248,7 +245,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Colors.white70,
+                          color: Colors.black54,
                           fontSize: 14),
                     ),
                     
@@ -258,7 +255,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Icon(Icons.location_on, size: 12, color: Colors.white38),
+                        const Icon(Icons.location_on, size: 12, color: Colors.black38),
                         const SizedBox(width: 2),
                         Expanded(
                           child: Text(
@@ -266,7 +263,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: Colors.white38,
+                                color: Colors.black38,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -274,7 +271,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         Text(
                           timeStr,
                           style: const TextStyle(
-                              color: Colors.white38,
+                              color: Colors.black38,
                               fontSize: 10,
                               fontWeight: FontWeight.bold),
                         ),

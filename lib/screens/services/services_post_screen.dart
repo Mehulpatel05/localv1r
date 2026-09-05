@@ -22,7 +22,8 @@ class ServicesPostScreen extends StatefulWidget {
 }
 
 class _ServicesPostScreenState extends State<ServicesPostScreen> {
-  final _areaController = TextEditingController(text: 'Vadodara');
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -55,6 +56,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
     _titleController.dispose();
     _priceController.dispose();
     _areaController.dispose();
+    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -111,7 +113,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.services,
-        area: _areaController.text.trim(),
+        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
         serviceTitle: _titleController.text.trim(),
         servicePrice: _priceController.text.trim(),
         serviceCategoryText: _selectedServiceCategory,
@@ -283,17 +285,33 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // General Area
-                    const Text('Location',
+                    // Location fields
+                    const Text('Location Details',
                         style: TextStyle(
                             color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildTextField(
-                      controller: _areaController,
-                      hint: 'e.g. Alkapuri, Vadodara',
-                      icon: Icons.location_on_outlined,
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: _buildTextField(
+                            controller: _areaController,
+                            hint: 'Local Area (e.g. Alkapuri)',
+                            icon: Icons.map_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: _cityController,
+                            hint: 'City/State',
+                            icon: Icons.location_city_outlined,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
 

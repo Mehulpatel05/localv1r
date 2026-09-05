@@ -47,13 +47,13 @@ class _FoodScreenState extends State<FoodScreen> {
     final posts = _foodPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.white70, size: 28),
+              color: Colors.black54, size: 28),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Row(
@@ -62,8 +62,7 @@ class _FoodScreenState extends State<FoodScreen> {
             SizedBox(width: 8),
             Text(
               'Food & Cafes',
-              style: TextStyle(
-                  color: Colors.white,
+              style: TextStyle(color: Colors.black87,
                   fontWeight: FontWeight.bold,
                   fontSize: 18),
             ),
@@ -77,14 +76,14 @@ class _FoodScreenState extends State<FoodScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1F293D),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF374151)),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Text(
                   '${posts.length} spots',
                   style: const TextStyle(
-                      color: Colors.white54,
+                      color: Colors.black54,
                       fontSize: 12,
                       fontWeight: FontWeight.w500),
                 ),
@@ -108,11 +107,10 @@ class _FoodScreenState extends State<FoodScreen> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFFF59E0B),
         elevation: 4,
-        icon: const Icon(Icons.rate_review_rounded, color: Colors.white),
+        icon: const Icon(Icons.rate_review_rounded, color: Colors.black87),
         label: const Text(
           'Post a Review',
-          style: TextStyle(
-              color: Colors.white,
+          style: TextStyle(color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
@@ -142,7 +140,7 @@ class _FoodScreenState extends State<FoodScreen> {
             const Text(
               'No food spots listed yet',
               style: TextStyle(
-                  color: Colors.white70,
+                  color: Colors.black54,
                   fontSize: 18,
                   fontWeight: FontWeight.bold),
             ),
@@ -150,7 +148,7 @@ class _FoodScreenState extends State<FoodScreen> {
             const Text(
               'Share your favorite cafe or restaurant review!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 13),
+              style: TextStyle(color: Colors.black38, fontSize: 13),
             ),
           ],
         ),
@@ -168,9 +166,9 @@ class _FoodScreenState extends State<FoodScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
+        color: Colors.black87,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF243049)),
+        border: Border.all(color: Colors.black12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -230,7 +228,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.bookmark_border,
-                        color: Colors.white, size: 22),
+                        color: Colors.black87, size: 22),
                   ),
                 ),
               ],
@@ -251,8 +249,7 @@ class _FoodScreenState extends State<FoodScreen> {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: const TextStyle(color: Colors.black87,
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
@@ -274,14 +271,13 @@ class _FoodScreenState extends State<FoodScreen> {
                           children: [
                             Text(
                               rating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: const TextStyle(color: Colors.black87,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 2),
                             const Icon(Icons.star_rounded,
-                                color: Colors.white, size: 14),
+                                color: Colors.black87, size: 14),
                           ],
                         ),
                       ),
@@ -292,17 +288,17 @@ class _FoodScreenState extends State<FoodScreen> {
                   // Area and Price row
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 14, color: Colors.white54),
+                      const Icon(Icons.location_on, size: 14, color: Colors.black54),
                       const SizedBox(width: 4),
                       Text(
                         'Vadodara',
                         style: const TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black54,
                             fontSize: 14,
                             fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(width: 12),
-                      const Icon(Icons.circle, size: 4, color: Colors.white24),
+                      const Icon(Icons.circle, size: 4, color: Colors.black26),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -310,7 +306,7 @@ class _FoodScreenState extends State<FoodScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: Colors.white54,
+                              color: Colors.black54,
                               fontSize: 13),
                         ),
                       ),
@@ -326,7 +322,7 @@ class _FoodScreenState extends State<FoodScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white60,
+                      color: Colors.black54,
                       fontSize: 14,
                       height: 1.4,
                     ),
@@ -351,7 +347,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       Text(
                         '@${post.authorHandle}',
                         style: const TextStyle(
-                            color: Colors.white54,
+                            color: Colors.black54,
                             fontSize: 12,
                             fontWeight: FontWeight.bold),
                       ),
@@ -359,7 +355,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       Text(
                         _timeAgo(post.createdAt),
                         style: const TextStyle(
-                            color: Colors.white38, fontSize: 11),
+                            color: Colors.black38, fontSize: 11),
                       ),
                     ],
                   ),
@@ -374,7 +370,7 @@ class _FoodScreenState extends State<FoodScreen> {
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF243049)),
+                          border: Border.all(color: Colors.black12),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -385,7 +381,7 @@ class _FoodScreenState extends State<FoodScreen> {
                               icon: Icon(
                                 Icons.arrow_upward_rounded,
                                 size: 18,
-                                color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.white60,
+                                color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.black54,
                               ),
                               onPressed: () => widget.repository.votePost(post.id, 1),
                             ),
@@ -405,7 +401,7 @@ class _FoodScreenState extends State<FoodScreen> {
                               icon: Icon(
                                 Icons.arrow_downward_rounded,
                                 size: 18,
-                                color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white60,
+                                color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54,
                               ),
                               onPressed: () => widget.repository.votePost(post.id, -1),
                             ),
@@ -417,11 +413,11 @@ class _FoodScreenState extends State<FoodScreen> {
                       // Comments Icon
                       Row(
                         children: [
-                          const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.white60),
+                          const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.black54),
                           const SizedBox(width: 6),
                           Text(
                             '${post.commentCount}',
-                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            style: const TextStyle(color: Colors.black54, fontSize: 13),
                           ),
                         ],
                       ),

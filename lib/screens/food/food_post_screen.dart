@@ -24,7 +24,8 @@ class FoodPostScreen extends StatefulWidget {
 }
 
 class _FoodPostScreenState extends State<FoodPostScreen> {
-  String? _selectedArea;
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController(text: 'Vadodara');
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -46,6 +47,8 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   void dispose() {
     _titleController.dispose();
     _priceController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -146,12 +149,13 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B0F19),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        iconTheme: const IconThemeData(color: Colors.black87),
         title: const Text('Post Food Review',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
         actions: [
           if (_isPublishing)
             const Padding(
@@ -159,7 +163,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
               child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
             )
           else
             TextButton(
@@ -168,7 +172,8 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                 'Publish',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: _canPublish ? const Color(0xFFF59E0B) : Colors.white38,
+                  fontSize: 16,
+                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
                 ),
               ),
             )
@@ -208,7 +213,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     // Restaurant/Dish Name
                     const Text('Restaurant / Dish Name',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -222,23 +227,23 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     // Rating Slider
                     const Text('Your Rating',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFF59E0B)),
+                        const Icon(Icons.star_rounded, color: Color(0xFF3B82F6)),
                         const SizedBox(width: 8),
                         Text('${_rating.toStringAsFixed(1)} / 5.0', 
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
                         Expanded(
                           child: Slider(
                             value: _rating,
                             min: 1.0,
                             max: 5.0,
                             divisions: 8,
-                            activeColor: const Color(0xFFF59E0B),
+                            activeColor: const Color(0xFF3B82F6),
                             onChanged: (val) {
                               setState(() => _rating = val);
                             },
@@ -251,7 +256,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     // Price (Cost for Two)
                     const Text('Cost (Approx)',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -262,20 +267,40 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Area
-                    const Text('Location',
+                    // Location fields
+                    const Text('Location Details',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildAreaDropdown(),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: _buildTextField(
+                            controller: _areaController,
+                            hint: 'Local Area (e.g. Alkapuri)',
+                            icon: Icons.map_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: _cityController,
+                            hint: 'City/State',
+                            icon: Icons.location_city_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 20),
 
                     // Description
                     const Text('Your Review',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -283,15 +308,19 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                       controller: _descController,
                       maxLines: 5,
                       maxLength: 400,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      style: const TextStyle(color: Colors.black87, fontSize: 15),
                       decoration: InputDecoration(
                         hintText: 'How was the food, ambiance, and service?',
-                        hintStyle: const TextStyle(color: Colors.white24),
+                        hintStyle: const TextStyle(color: Colors.black38),
                         filled: true,
-                        fillColor: const Color(0xFF151D30),
+                        fillColor: const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.black12),
                         ),
                       ),
                     ),
@@ -300,7 +329,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     // Media
                     const Text('Photos (Up to 8)',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black87,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
@@ -321,49 +350,27 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
     return TextField(
       controller: controller,
       keyboardType: type,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
+      style: const TextStyle(color: Colors.black87, fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24),
-        prefixIcon: Icon(icon, color: Colors.white38, size: 20),
+        hintStyle: const TextStyle(color: Colors.black38),
+        prefixIcon: Icon(icon, color: Colors.black54, size: 20),
         filled: true,
-        fillColor: const Color(0xFF151D30),
+        fillColor: const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.black12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.black12),
         ),
       ),
       onChanged: (_) => setState(() {}),
     );
   }
 
-  Widget _buildAreaDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151D30),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          dropdownColor: const Color(0xFF151D30),
-          value: _selectedArea,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          items: <String>[].map((area) {
-            return DropdownMenuItem(
-              value: area,
-              child: Text(area,
-                  style: const TextStyle(color: Colors.white)),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _selectedArea = val);
-          },
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildMediaGrid() {
     return Column(
@@ -383,18 +390,18 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF151D30),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF243049)),
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.black12),
                   ),
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add_photo_alternate, color: Color(0xFFF59E0B)),
+                      Icon(Icons.add_photo_alternate, color: Color(0xFF3B82F6)),
                       SizedBox(height: 4),
                       Text('Add',
                           style:
-                              TextStyle(color: Colors.white54, fontSize: 12)),
+                              TextStyle(color: Colors.black54, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -440,14 +447,14 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+          const CircularProgressIndicator(color: Color(0xFF3B82F6)),
           const SizedBox(height: 24),
           Text(
             _uploadProgress < 0.9
                 ? 'Uploading photos... ${(_uploadProgress * 100).toInt()}%'
                 : 'Publishing review...',
             style: const TextStyle(
-                color: Colors.white70,
+                color: Colors.black87,
                 fontSize: 16,
                 fontWeight: FontWeight.bold),
           ),

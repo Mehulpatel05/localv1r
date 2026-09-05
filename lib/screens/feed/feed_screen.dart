@@ -59,9 +59,9 @@ class _FeedScreenState extends State<FeedScreen> {
     final repo = widget.repository;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
+        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
         title: Row(
@@ -78,7 +78,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF60A5FA),
+                  color: Colors.black87,
                   letterSpacing: 1.5,
                 ),
               ),
@@ -88,7 +88,7 @@ class _FeedScreenState extends State<FeedScreen> {
               'Local',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: Colors.black87,
                 fontSize: 20,
                 letterSpacing: 0.5,
               ),
@@ -105,7 +105,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    const Icon(Icons.people, color: Color(0xFF60A5FA), size: 26),
+                    const Icon(Icons.people, color: Colors.black87, size: 26),
                     if (count > 0)
                       Positioned(
                         right: -6,
@@ -118,7 +118,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           ),
                           child: Text(
                             '$count',
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.black87, fontSize: 9, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -144,9 +144,9 @@ class _FeedScreenState extends State<FeedScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1F293D),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF374151)),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -163,7 +163,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     Text(
                       widget.currentUserHandle,
                       style: const TextStyle(
-                        color: Colors.white70,
+                        color: Colors.black54,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -187,7 +187,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 Container(
                   height: 52,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF0F1524),
+                    color: Colors.white,
                     border: Border(
                       bottom: BorderSide(color: Color(0xFF1F293D), width: 1),
                     ),
@@ -244,11 +244,10 @@ class _FeedScreenState extends State<FeedScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E3A5F),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                    color: const Color(0xFF3B82F6)
-                                        .withOpacity(0.6)),
+                                    color: Colors.black12),
                               ),
                               child: const Row(
                                 children: [
@@ -258,7 +257,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                   Text(
                                     'Rooms',
                                     style: TextStyle(
-                                      color: Color(0xFF60A5FA),
+                                      color: Colors.black87,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -627,8 +626,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                 color: const Color(0xFFEFF6FF), // Light blue
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                    color: const Color(0xFF3B82F6)
-                                        .withOpacity(0.6)),
+                                    color: Colors.black12),
                               ),
                               child: const Row(
                                 children: [
@@ -667,12 +665,12 @@ class _FeedScreenState extends State<FeedScreen> {
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? const Color(0xFF3B82F6)
-                                  : const Color(0xFF1F293D),
+                                  : const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: isSelected
                                     ? const Color(0xFF60A5FA)
-                                    : const Color(0xFF374151),
+                                    : Colors.black12,
                               ),
                             ),
                             child: Row(
@@ -685,7 +683,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                   style: TextStyle(
                                     color: isSelected
                                         ? Colors.white
-                                        : Colors.white70,
+                                        : Colors.black54,
                                     fontSize: 12,
                                     fontWeight: isSelected
                                         ? FontWeight.bold
@@ -729,7 +727,7 @@ class _FeedScreenState extends State<FeedScreen> {
         onPressed: () {
           showModalBottomSheet(
             context: context,
-            backgroundColor: const Color(0xFF151D30),
+            backgroundColor: Colors.white,
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
             builder: (ctx) {
               return SafeArea(
@@ -738,7 +736,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   children: [
                     ListTile(
                       leading: const Icon(Icons.edit, color: Colors.white),
-                      title: const Text('Create Global Post', style: TextStyle(color: Colors.white)),
+                      title: const Text('Create Global Post', style: TextStyle(color: Colors.black87)),
                       onTap: () {
                         Navigator.pop(ctx);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => CreatePostScreen(repository: widget.repository, authorHandle: widget.currentUserHandle)));
@@ -746,7 +744,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.group, color: Colors.white),
-                      title: const Text('Create New Group', style: TextStyle(color: Colors.white)),
+                      title: const Text('Create New Group', style: TextStyle(color: Colors.black87)),
                       onTap: () {
                         Navigator.pop(ctx);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => CreateCommunityScreen(repository: CommunityRepository()..currentUserHandle = widget.currentUserHandle, isChannel: false)));
@@ -754,7 +752,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.campaign, color: Colors.white),
-                      title: const Text('Create New Channel', style: TextStyle(color: Colors.white)),
+                      title: const Text('Create New Channel', style: TextStyle(color: Colors.black87)),
                       onTap: () {
                         Navigator.pop(ctx);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => CreateCommunityScreen(repository: CommunityRepository()..currentUserHandle = widget.currentUserHandle, isChannel: true)));
@@ -785,7 +783,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white60,
+            color: isSelected ? Colors.white : Colors.black54,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 12,
           ),
@@ -805,20 +803,20 @@ class _FeedScreenState extends State<FeedScreen> {
             const SizedBox(height: 16),
             const Text(
               'No posts in this area yet',
-              style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
               'Be the first to warn or update neighbors in Vadodara anonymously.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 13),
+              style: TextStyle(color: Colors.black38, fontSize: 13),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1F293D),
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Color(0xFF374151)),
+                backgroundColor: const Color(0xFFF8FAFC),
+                foregroundColor: Colors.black87,
+                side: const BorderSide(color: Colors.black12),
               ),
               icon: const Icon(Icons.add),
               label: const Text('Add First Post'),
@@ -846,10 +844,10 @@ class _FeedScreenState extends State<FeedScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: post.isEmergency ? const Color(0xFF3A1A22) : const Color(0xFF151D30),
+        color: post.isEmergency ? const Color(0xFFFEF2F2) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: post.isEmergency ? const Color(0xFFEF4444).withOpacity(0.6) : const Color(0xFF243049),
+          color: post.isEmergency ? const Color(0xFFFCA5A5) : Colors.black12,
           width: post.isEmergency ? 1.5 : 1,
         ),
         boxShadow: [
@@ -900,19 +898,19 @@ class _FeedScreenState extends State<FeedScreen> {
                         post.authorHandle,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF60A5FA),
+                          color: Colors.black87,
                           fontSize: 13,
                           decoration: TextDecoration.underline,
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    const Text('•', style: TextStyle(color: Colors.white24)),
+                    const Text('•', style: TextStyle(color: Colors.black26)),
                     const SizedBox(width: 6),
                     Text(
                       'Vadodara',
                       style: const TextStyle(
-                        color: Colors.white54,
+                        color: Colors.black54,
                         fontSize: 12,
                       ),
                     ),
@@ -923,7 +921,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         color: Colors.black.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: post.isEmergency ? const Color(0xFFEF4444).withOpacity(0.3) : const Color(0xFF243049),
+                          color: post.isEmergency ? const Color(0xFFFECACA) : Colors.black12,
                         ),
                       ),
                       child: Row(
@@ -933,7 +931,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           const SizedBox(width: 4),
                           Text(
                             post.category.label,
-                            style: const TextStyle(fontSize: 11, color: Colors.white70),
+                            style: const TextStyle(fontSize: 11, color: Colors.black54),
                           ),
                         ],
                       ),
@@ -946,7 +944,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 Text(
                   post.content,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Colors.black87,
                     fontSize: 15,
                     height: 1.45,
                   ),
@@ -970,7 +968,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF243049)),
+                        border: Border.all(color: Colors.black12),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -981,7 +979,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             icon: Icon(
                               Icons.arrow_upward_rounded,
                               size: 18,
-                              color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.white60,
+                              color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.black54,
                             ),
                             onPressed: () => repo.votePost(post.id, 1),
                           ),
@@ -1001,7 +999,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             icon: Icon(
                               Icons.arrow_downward_rounded,
                               size: 18,
-                              color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white60,
+                              color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54,
                             ),
                             onPressed: () => repo.votePost(post.id, -1),
                           ),
@@ -1013,11 +1011,11 @@ class _FeedScreenState extends State<FeedScreen> {
                     // Comments Icon
                     Row(
                       children: [
-                        const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.white60),
+                        const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.black54),
                         const SizedBox(width: 6),
                         Text(
                           '${post.commentCount}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          style: const TextStyle(color: Colors.black54, fontSize: 13),
                         ),
                       ],
                     ),
@@ -1051,7 +1049,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void _showAreaPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151D30),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1067,7 +1065,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 child: Text(
                   'Choose Area in Vadodara',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Colors.black87,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -1088,7 +1086,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       title: Text(
                         area,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white70,
+                          color: isSelected ? Colors.white : Colors.black54,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
@@ -1114,16 +1112,16 @@ class _FeedScreenState extends State<FeedScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151D30),
-        title: const Text('Delete Post?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete Post?', style: TextStyle(color: Colors.black87)),
         content: const Text(
           'Are you sure you want to permanently delete this anonymous post? This action cannot be undone.',
-          style: TextStyle(color: Colors.white70, fontSize: 14),
+          style: TextStyle(color: Colors.black54, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F1D1D)),
@@ -1139,7 +1137,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 );
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.black87)),
           ),
         ],
       ),
@@ -1149,7 +1147,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void _showReportSheet(String postId) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151D30),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1164,7 +1162,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 const Text(
                   'Report Content',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Colors.black87,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -1172,7 +1170,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 const SizedBox(height: 6),
                 const Text(
                   'Reports are reviewed within 24h as per IT Act Rules 2021.',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: Colors.black38, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
                 _buildReportOption(ctx, postId, 'Harassment / Impersonation'),
@@ -1191,7 +1189,7 @@ class _FeedScreenState extends State<FeedScreen> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.report_problem, color: Colors.amberAccent, size: 20),
-      title: Text(reason, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+      title: Text(reason, style: const TextStyle(color: Colors.black54, fontSize: 14)),
       trailing: const Icon(Icons.chevron_right, color: Colors.white30),
       onTap: () {
         widget.repository.reportPost(postId, widget.currentUserHandle);
@@ -1206,7 +1204,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 Expanded(
                   child: Text(
                     'Content reported for "$reason". It has been hidden from your feed.',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.black87, fontSize: 13),
                   ),
                 ),
               ],

@@ -77,7 +77,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -121,7 +121,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                   const Text(
                     'Allow the following permissions so the app\nworks fully for you.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.5),
+                    style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5),
                   ),
                 ],
               ),
@@ -151,7 +151,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                   if (_hasRequested && _hasPermanentlyDenied) ...[
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
+                        foregroundColor: Colors.black54,
                         side: const BorderSide(color: Color(0xFF374151)),
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
@@ -203,7 +203,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                       onPressed: () => widget.onComplete(context),
                       child: const Text(
                         'Skip for now',
-                        style: TextStyle(color: Colors.white38, fontSize: 13),
+                        style: TextStyle(color: Colors.black38, fontSize: 13),
                       ),
                     ),
                   ],
@@ -251,14 +251,13 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.title,
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: const TextStyle(color: Colors.black87,
                         fontWeight: FontWeight.bold,
                         fontSize: 15)),
                 const SizedBox(height: 3),
                 Text(item.reason,
                     style: const TextStyle(
-                        color: Colors.white54, fontSize: 12, height: 1.4)),
+                        color: Colors.black54, fontSize: 12, height: 1.4)),
               ],
             ),
           ),

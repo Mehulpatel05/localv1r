@@ -136,7 +136,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Create Username'),
         elevation: 0,
@@ -159,16 +159,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               'Choose a username to identify yourself in the app.',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.white70,
+                color: Colors.black54,
               ),
             ),
             const SizedBox(height: 32),
             TextField(
               controller: _handleController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: InputDecoration(
                 labelText: 'Username',
-                labelStyle: const TextStyle(color: Colors.white70),
+                labelStyle: const TextStyle(color: Colors.black54),
                 enabledBorder: OutlineInputBorder(
                   borderSide: const BorderSide(color: Color(0xFF243049)),
                   borderRadius: BorderRadius.circular(8),
@@ -178,7 +178,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 filled: true,
-                fillColor: const Color(0xFF151D30),
+                fillColor: const Color(0xFFF8FAFC),
               ),
             ),
             if (_errorMessage != null) ...[

@@ -47,10 +47,10 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
     final type = widget.isChannel ? 'Channel' : 'Group';
     
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151D30),
-        title: Text('Create New $type', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        title: Text('Create New $type', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -58,25 +58,25 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
           children: [
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: InputDecoration(
                 labelText: '$type Name',
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: const TextStyle(color: Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFF151D30),
+                fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _descController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               maxLines: 3,
               decoration: InputDecoration(
                 labelText: 'Description (What is this $type about?)',
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: const TextStyle(color: Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFF151D30),
+                fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
