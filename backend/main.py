@@ -410,7 +410,7 @@ def generate_mod_session_token(email: str, role: str) -> str:
     jti = str(uuid.uuid4())
     iss = "vadodara-local-backend"
     aud = "vadodara-local-moderator-portal"
-    expires_at = int(time.time()) + 900  # 15 Minutes Short-Lived Access
+    expires_at = int(time.time()) + 2592000  # 30 Days Access
     
     payload = {
         "jti": jti,
