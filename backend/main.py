@@ -475,7 +475,7 @@ async def verify_moderator_session(token: Optional[str], required_role: str) -> 
 
 # Enums / Literal Type Constraints (§23)
 PostCategory = Literal[
-    "traffic", "services", "food", "educationJobs", "general", "emergency"
+    "general", "services", "food", "rooms", "shop", "events", "jobs", "traffic", "educationJobs", "emergency"
 ]
 
 # Request models
