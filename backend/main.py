@@ -476,7 +476,7 @@ async def verify_moderator_session(token: Optional[str], required_role: str) -> 
 
 # Enums / Literal Type Constraints (§23)
 PostCategory = Literal[
-    "general", "services", "food", "rooms", "shop", "events", "jobs", "traffic", "educationJobs", "emergency"
+    "general", "services", "food", "rooms", "shop", "events", "jobs"
 ]
 
 # Request models
@@ -849,7 +849,29 @@ async def get_posts(
             if cursor_doc.exists:
                 query = query.start_after(cursor_doc)
                 
-        docs = query.get()
+        try:
+            docs = query.get()
+        except Exception as e:
+            if "index" in str(e).lower() or "precondition" in str(e).lower():
+                print(f"[WARN] Missing index in get_posts. Fallback to manual filter. Error: {e}")
+                fallback_query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(300)
+                if cursor and cursor_doc.exists:
+                    fallback_query = fallback_query.start_after(cursor_doc)
+                
+                raw_docs = fallback_query.get()
+                docs = []
+                for doc in raw_docs:
+                    data = doc.to_dict()
+                    if author and data.get("authorHandle") != author: continue
+                    if cityId and data.get("cityId") != cityId: continue
+                    if areaId and data.get("areaId") != areaId: continue
+                    if category and data.get("category") != category: continue
+                    docs.append(doc)
+                    if len(docs) >= min(limit, 50):
+                        break
+            else:
+                raise e
+                
         posts = []
         for doc in docs:
             data = doc.to_dict()
