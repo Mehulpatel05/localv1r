@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/location/location_selector_field.dart';
+import '../../core/location/location_models.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -25,8 +27,9 @@ class ShopPostScreen extends StatefulWidget {
 }
 
 class _ShopPostScreenState extends State<ShopPostScreen> {
-  final _areaController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Vadodara');
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -44,8 +47,6 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
     _priceController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
@@ -141,7 +142,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.shop,
-        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
+        cityId: _selectedGeoCity!.id,
+          areaId: _selectedGeoArea!.id,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         shopTitle: _titleController.text.trim(),
         shopPrice: _priceController.text.trim(),
@@ -265,24 +267,13 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
           children: [
             // ── Area dropdown ──────────────────────────────────────────
             _label('LOCATION DETAILS'),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _field(
-                    controller: _areaController,
-                    hint: 'Local Area (e.g. Alkapuri)',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 1,
-                  child: _field(
-                    controller: _cityController,
-                    hint: 'City',
-                  ),
-                ),
-              ],
+            LocationSelectorField(
+              onLocationSelected: (city, area) {
+                setState(() {
+                  _selectedGeoCity = city;
+                  _selectedGeoArea = area;
+                });
+              },
             ),
             const SizedBox(height: 16),
 

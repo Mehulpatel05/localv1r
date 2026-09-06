@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/areas_and_categories.dart';
+import '../../core/location/location_chip.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
@@ -66,23 +67,7 @@ class _FeedScreenState extends State<FeedScreen> {
         centerTitle: false,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.5), width: 1),
-              ),
-              child: const Text(
-                'VADODARA',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
+            const LocationChip(),
             const SizedBox(width: 8),
             const Text(
               'Local',
@@ -895,12 +880,11 @@ class _FeedScreenState extends State<FeedScreen> {
                         }
                       },
                       child: Text(
-                        post.authorHandle,
+                        '@${post.authorHandle}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Colors.blue,
                           fontSize: 13,
-                          decoration: TextDecoration.underline,
                         ),
                       ),
                     ),
@@ -918,7 +902,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                           color: post.isEmergency ? const Color(0xFFFECACA) : Colors.black12,
@@ -944,7 +928,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 Text(
                   post.content,
                   style: const TextStyle(
-                    color: Colors.black87,
+                    color: Colors.black,
                     fontSize: 15,
                     height: 1.45,
                   ),
@@ -966,7 +950,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     Container(
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: Colors.black12),
                       ),
@@ -990,7 +974,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               fontWeight: FontWeight.bold,
                               color: post.userVote == 1
                                   ? const Color(0xFF10B981)
-                                  : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white),
+                                  : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black87),
                             ),
                           ),
                           IconButton(

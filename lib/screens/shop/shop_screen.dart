@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -22,15 +24,20 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
+  late final PostRepository _localRepo;
+
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onUpdate);
+    _localRepo = PostRepository(context.read<LocationService>());
+    _localRepo.setCategory(PostCategory.shop);
+    _localRepo.addListener(_onUpdate);
   }
 
   @override
   void dispose() {
-    widget.repository.removeListener(_onUpdate);
+    _localRepo.removeListener(_onUpdate);
+    _localRepo.dispose();
     super.dispose();
   }
 
@@ -38,13 +45,11 @@ class _ShopScreenState extends State<ShopScreen> {
     if (mounted) setState(() {});
   }
 
-  List<Post> get _shopPosts => widget.repository.posts
-      .where((p) => p.category == PostCategory.shop)
-      .toList();
+  
 
   @override
   Widget build(BuildContext context) {
-    final posts = _shopPosts;
+    final posts = _localRepo.allPosts;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -92,7 +97,7 @@ class _ShopScreenState extends State<ShopScreen> {
           ),
         ],
       ),
-      body: widget.repository.isLoading
+      body: _localRepo.isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFF10B981)))
           : posts.isEmpty
@@ -176,7 +181,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.black12, width: 1),
       ),
@@ -213,7 +218,7 @@ class _ShopScreenState extends State<ShopScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.favorite_border,
-                        color: Colors.black87, size: 18),
+                        color: Colors.white, size: 18),
                   ),
                 ),
               ],
@@ -241,7 +246,7 @@ class _ShopScreenState extends State<ShopScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Colors.black54,
+                          color: Colors.black,
                           fontSize: 14),
                     ),
                     

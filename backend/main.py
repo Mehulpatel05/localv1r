@@ -491,7 +491,8 @@ class PostCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
     category: PostCategory = Field(..., description="Post category")
     imageUrl: Optional[str] = Field(None, max_length=500)
-    area: Optional[str] = None
+    cityId: str = Field(..., pattern=r"^[A-Z]{2}-[A-Z]{3}$")
+    areaId: str = Field(..., pattern=r"^[A-Z]{2}-[A-Z]{3}-[A-Z0-9_]+$")
     roomTitle: Optional[str] = None
     roomArea: Optional[str] = None
     roomRent: Optional[str] = None
@@ -763,7 +764,8 @@ async def create_post(
             # FUTURE: GPS/IP location check can be enforced here independently of OTP
             # if not is_in_vadodara(ip_addr, gps_coords): raise location_error
 
-    error_msg = validate_text_content(request.content)
+    if not request.areaId.startswith(request.cityId + "-"):
+        raise HTTPException(400, "areaId does not belong to cityId")
 
     error_msg = validate_text_content(request.content)
     if error_msg:
@@ -772,7 +774,8 @@ async def create_post(
     success = FirebaseService.create_post(
         author_handle=user_handle,
         content=request.content,
-        area=request.area,
+        cityId=request.cityId,
+        areaId=request.areaId,
         category=request.category,
         image_url=request.imageUrl,
         roomTitle=request.roomTitle,
@@ -801,7 +804,7 @@ async def create_post(
         
     res = {"status": "success", "authorHandle": user_handle}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "create_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -811,6 +814,9 @@ async def get_posts(
     limit: int = 20,
     cursor: Optional[str] = None,
     author: Optional[str] = None,
+    cityId: Optional[str] = None,
+    areaId: Optional[str] = None,
+    category: Optional[str] = None,
     authorization: Optional[str] = Header(None, description="Bearer token")
 ):
     if db is None:
@@ -828,6 +834,12 @@ async def get_posts(
         query = db.collection("posts")
         if author:
             query = query.where("authorHandle", "==", author)
+        if cityId:
+            query = query.where("cityId", "==", cityId)
+        if areaId:
+            query = query.where("areaId", "==", areaId)
+        if category:
+            query = query.where("category", "==", category)
             
         query = query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
         
@@ -911,7 +923,7 @@ async def add_comment(
         
     res = {"status": "success"}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "add_comment", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -952,7 +964,7 @@ async def vote_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "vote_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -984,7 +996,7 @@ async def report_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "report_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -1018,7 +1030,7 @@ async def restore_post(
     
     res = {"status": "success"}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "restore_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -1082,7 +1094,7 @@ async def delete_post(
         
     res = {"status": "success"}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "delete_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -1148,7 +1160,7 @@ async def upload_image(
         public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
         res = {"status": "success", "imageUrl": public_proxy_url}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "upload_image", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
         
     media_id = str(uuid.uuid4())
@@ -1171,7 +1183,7 @@ async def upload_image(
     public_proxy_url = f"{base_url}/api/v1/media/{media_id}"
     res = {"status": "success", "imageUrl": public_proxy_url}
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, res)
+        await save_idempotent_response(idempotency_key, "upload_image", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
@@ -1324,7 +1336,7 @@ async def mod_login(
             "preAuthToken": pre_auth_token
         }
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "mod_login", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except HTTPException:
         raise
@@ -1369,7 +1381,7 @@ async def mod_verify_mfa(
             "role": role
         }
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "mod_verify_mfa", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Pre-auth session expired. Please re-enter credentials.")
@@ -1473,7 +1485,7 @@ async def hide_post(
         
         res = {"status": "success", "message": "Post successfully hidden."}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "hide_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except Exception as e:
         print(f"Error hiding post: {e}")
@@ -1515,7 +1527,7 @@ async def ban_user(
         
         res = {"status": "success", "message": f"Handle {request.targetHandle} has been banned."}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "ban_user", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except Exception as e:
         print(f"Error banning user: {e}")
@@ -1682,7 +1694,7 @@ async def add_moderator(
         
         res = {"status": "success", "message": f"Moderator {request.email} added with role: {request.role}."}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "add_moderator", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except Exception as e:
         print(f"Error adding moderator: {e}")
@@ -1719,7 +1731,7 @@ async def remove_moderator(
         
         res = {"status": "success", "message": f"Moderator {email} account has been revoked."}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "remove_moderator", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except Exception as e:
         print(f"Error removing moderator: {e}")
@@ -1763,7 +1775,7 @@ async def mod_logout(
             
         res = {"status": "success", "message": "Successfully logged out."}
         if idempotency_key:
-            await save_idempotent_response(idempotency_key, res)
+            await save_idempotent_response(idempotency_key, "mod_logout", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except jwt.ExpiredSignatureError:
         # Already expired

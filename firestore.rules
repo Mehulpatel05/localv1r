@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function myUid() { return request.auth.uid; }
 
+    match /city_waitlist/{docId} {
+      allow create: if signedIn();
+      allow read: if false;
+    }
+
     // Users: read/write only your own doc; email/fcmToken stay private.
     match /users/{uid} {
       allow read, write: if signedIn() && uid == myUid();
@@ -22,6 +27,12 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.senderUid == myUid();
       allow update, delete: if signedIn() &&
         (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
+    }
+
+    match /friendships/{id} {
+      allow read: if signedIn() && myUid() in resource.data.usersUids;
+      allow create: if signedIn() && myUid() in request.resource.data.usersUids;
+      allow update, delete: if signedIn() && myUid() in resource.data.usersUids;
     }
 
     // Chats: only participants can read/write.
@@ -53,7 +64,8 @@ service cloud.firestore {
 
     // Blocks: only the blocker owns their block docs.
     match /blocks/{id} {
-      allow read, write: if signedIn() && request.resource.data.blockerUid == myUid();
+      allow read: if signedIn() && resource.data.blockerUid == myUid();
+      allow write: if signedIn() && request.resource.data.blockerUid == myUid();
     }
 
     // Posts can only be read if not flagged/hidden

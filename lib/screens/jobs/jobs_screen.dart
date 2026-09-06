@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -38,13 +40,11 @@ class _JobsScreenState extends State<JobsScreen> {
     if (mounted) setState(() {});
   }
 
-  List<Post> get _jobPosts => widget.repository.posts
-      .where((p) => p.category == PostCategory.jobs)
-      .toList();
+  
 
   @override
   Widget build(BuildContext context) {
-    final posts = _jobPosts;
+    final posts = _localRepo.allPosts;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F2EF), // LinkedIn style background
@@ -91,7 +91,7 @@ class _JobsScreenState extends State<JobsScreen> {
           ),
         ],
       ),
-      body: widget.repository.isLoading
+      body: _localRepo.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF0A66C2)))
           : posts.isEmpty
               ? _buildEmpty()
@@ -165,7 +165,7 @@ class _JobsScreenState extends State<JobsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: Colors.white,
         border: Border(
           top: BorderSide(color: Colors.grey.shade300),
           bottom: BorderSide(color: Colors.grey.shade300),
@@ -213,7 +213,7 @@ class _JobsScreenState extends State<JobsScreen> {
                           Text(
                             '@${post.authorHandle}',
                             style: const TextStyle(
-                                color: Colors.black87,
+                                color: Colors.blue,
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -300,7 +300,7 @@ class _JobsScreenState extends State<JobsScreen> {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.black87,
+                    color: Colors.black,
                     fontSize: 14,
                     height: 1.4,
                   ),

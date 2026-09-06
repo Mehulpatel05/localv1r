@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -38,18 +40,16 @@ class _EventsScreenState extends State<EventsScreen> {
     if (mounted) setState(() {});
   }
 
-  List<Post> get _eventPosts => widget.repository.posts
-      .where((p) => p.category == PostCategory.events)
-      .toList();
+  
 
   @override
   Widget build(BuildContext context) {
-    final posts = _eventPosts;
+    final posts = _localRepo.allPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0B19), // Dark purple/black for nightlife vibe
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF19122A),
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
@@ -76,23 +76,23 @@ class _EventsScreenState extends State<EventsScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF281C43),
+                  color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Text(
                   '${posts.length} events',
                   style: const TextStyle(
-                      color: Color(0xFFC4B5FD),
+                      color: Colors.black87,
                       fontSize: 12,
-                      fontWeight: FontWeight.w500),
+                      fontWeight: FontWeight.w600),
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: widget.repository.isLoading
+      body: _localRepo.isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
           : posts.isEmpty
@@ -179,12 +179,12 @@ class _EventsScreenState extends State<EventsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF19122A),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2E224D)),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withOpacity(0.1),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -224,7 +224,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     else
                       Container(
                         height: 180,
-                        color: const Color(0xFF332057),
+                        color: const Color(0xFFE2E8F0),
                         child: const Center(
                           child: Text('🎊', style: TextStyle(fontSize: 64)),
                         ),
@@ -237,11 +237,11 @@ class _EventsScreenState extends State<EventsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.black87,
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
+                              color: Colors.black.withOpacity(0.08),
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
@@ -278,9 +278,9 @@ class _EventsScreenState extends State<EventsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+                          border: Border.all(color: Colors.grey.shade300),
                         ),
                         child: Text(
                           price,
@@ -361,7 +361,7 @@ class _EventsScreenState extends State<EventsScreen> {
                       ),
                       
                       const SizedBox(height: 16),
-                      const Divider(color: Color(0xFF2E224D), height: 1),
+                      Divider(color: Colors.grey.shade200, height: 1),
                       const SizedBox(height: 16),
 
                       // Event Description
@@ -370,7 +370,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.black54,
+                          color: Colors.black,
                           fontSize: 14,
                           height: 1.4,
                         ),
@@ -388,14 +388,14 @@ class _EventsScreenState extends State<EventsScreen> {
                               style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87),
+                                  color: Colors.white),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '@${post.authorHandle}',
                             style: const TextStyle(
-                                color: Colors.black54,
+                                color: Colors.blue,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -417,9 +417,9 @@ class _EventsScreenState extends State<EventsScreen> {
                           Container(
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.3),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFF2E224D)),
+                              border: Border.all(color: Colors.grey.shade200),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -441,7 +441,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                     fontWeight: FontWeight.bold,
                                     color: post.userVote == 1
                                         ? const Color(0xFF10B981)
-                                        : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white),
+                                        : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black87),
                                   ),
                                 ),
                                 IconButton(

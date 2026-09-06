@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/location/location_selector_field.dart';
+import '../../core/location/location_models.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -23,8 +25,9 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  final _areaController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Vadodara');
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+
   // Common
   final _contentController = TextEditingController();
   PostCategory _selectedCategory = PostCategory.general;
@@ -43,8 +46,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void dispose() {
     _contentController.removeListener(_validateLiveInput);
     _contentController.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
@@ -109,7 +110,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
-        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
+        cityId: _selectedGeoCity!.id,
+          areaId: _selectedGeoArea!.id,
         category: _selectedCategory,
         imageUrl: telegramImageUrl,
       );
@@ -311,24 +313,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: _buildTextField(
-                                controller: _areaController,
-                                hint: 'Local Area',
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 1,
-                              child: _buildTextField(
-                                controller: _cityController,
-                                hint: 'City',
-                              ),
-                            ),
-                          ],
+                        LocationSelectorField(
+                          onLocationSelected: (city, area) {
+                            setState(() {
+                              _selectedGeoCity = city;
+                              _selectedGeoArea = area;
+                            });
+                          },
                         ),
                       ],
                     ),

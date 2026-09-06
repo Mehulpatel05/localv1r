@@ -56,6 +56,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
     _messageController.clear();
 
+    final partnerProfile = await FirebaseFirestore.instance.collection('profiles').doc(widget.partnerHandle).get();
+    final partnerUid = partnerProfile.data()?['ownerUid'];
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+
     final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
     final messageRef = chatRef.collection('messages').doc();
 
@@ -64,13 +68,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       transaction.set(messageRef, {
         'senderHandle': widget.currentUserHandle,
-        'senderUid': FirebaseAuth.instance.currentUser?.uid,
+        'senderUid': myUid,
         'content': text,
         'timestamp': now,
       });
 
       transaction.set(chatRef, {
         'participants': [widget.currentUserHandle, widget.partnerHandle],
+        'participantsUids': [myUid, partnerUid],
         'lastMessage': text,
         'updatedAt': now,
       }, SetOptions(merge: true));

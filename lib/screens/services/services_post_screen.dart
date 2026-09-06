@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/location/location_selector_field.dart';
+import '../../core/location/location_models.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
@@ -22,8 +24,9 @@ class ServicesPostScreen extends StatefulWidget {
 }
 
 class _ServicesPostScreenState extends State<ServicesPostScreen> {
-  final _areaController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Vadodara');
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -55,8 +58,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
   void dispose() {
     _titleController.dispose();
     _priceController.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -113,7 +114,8 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.services,
-        area: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
+        cityId: _selectedGeoCity!.id,
+          areaId: _selectedGeoArea!.id,
         serviceTitle: _titleController.text.trim(),
         servicePrice: _priceController.text.trim(),
         serviceCategoryText: _selectedServiceCategory,
@@ -292,27 +294,14 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: _buildTextField(
-                            controller: _areaController,
-                            hint: 'Local Area (e.g. Alkapuri)',
-                            icon: Icons.map_outlined,
-                          ),
+                    LocationSelectorField(
+                          onLocationSelected: (city, area) {
+                            setState(() {
+                              _selectedGeoCity = city;
+                              _selectedGeoArea = area;
+                            });
+                          },
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 1,
-                          child: _buildTextField(
-                            controller: _cityController,
-                            hint: 'City/State',
-                            icon: Icons.location_city_outlined,
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 20),
 
                     // Description

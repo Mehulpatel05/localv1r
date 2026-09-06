@@ -141,10 +141,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: widget.post.isEmergency ? const Color(0xFF3A1A22) : const Color(0xFF151D30),
+                    color: widget.post.isEmergency ? const Color(0xFFFEE2E2) : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: widget.post.isEmergency ? const Color(0xFFEF4444).withOpacity(0.5) : const Color(0xFF243049),
+                      color: widget.post.isEmergency ? const Color(0xFFEF4444).withOpacity(0.5) : const Color(0xFFE2E8F0),
                     ),
                   ),
                   child: Column(
@@ -153,25 +153,25 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       Row(
                         children: [
                           Text(
-                            widget.post.authorHandle,
-                            style: const TextStyle(color: Color(0xFF60A5FA), fontWeight: FontWeight.bold, fontSize: 13),
+                            '@${widget.post.authorHandle}',
+                            style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '${widget.post.category.icon} ${widget.post.category.label}',
-                            style: const TextStyle(color: Colors.black38, fontSize: 11),
+                            style: const TextStyle(color: Colors.black54, fontSize: 11),
                           ),
                           const Spacer(),
                           Text(
                             _formatTime(widget.post.createdAt),
-                            style: const TextStyle(color: Colors.black38, fontSize: 11),
+                            style: const TextStyle(color: Colors.black54, fontSize: 11),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
                         widget.post.content,
-                        style: const TextStyle(color: Colors.black87, fontSize: 16, height: 1.45),
+                        style: const TextStyle(color: Colors.black, fontSize: 16, height: 1.45),
                       ),
                       if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) ...[
                         const SizedBox(height: 12),
@@ -261,9 +261,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF111827),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFF8FAFC)),
+                            border: Border.all(color: Colors.black12),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,9 +271,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               Row(
                                 children: [
                                   Text(
-                                    comment.authorHandle,
+                                    '@${comment.authorHandle}',
                                     style: const TextStyle(
-                                      color: Color(0xFF38BDF8),
+                                      color: Colors.blue,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
                                     ),
@@ -288,7 +288,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 comment.content,
-                                style: const TextStyle(color: Colors.black54, fontSize: 14, height: 1.4),
+                                style: const TextStyle(color: Colors.black, fontSize: 14, height: 1.4),
                               ),
                             ],
                           ),

@@ -48,7 +48,7 @@ class FirebaseService:
         return True
 
     @staticmethod
-    def create_post(author_handle: str, content: str, category: str, area: Optional[str] = None, image_url: Optional[str] = None, **kwargs) -> bool:
+    def create_post(author_handle: str, content: str, category: str, cityId: str, areaId: str, image_url: Optional[str] = None, **kwargs) -> bool:
         if not FirebaseService._is_db_active():
             return False
         try:
@@ -59,7 +59,9 @@ class FirebaseService:
                 "authorHandle": author_handle,
                 "content": content,
                 "imageUrl": image_url,
-                "area": area,
+                "cityId": cityId,
+                "stateId": cityId.split("-")[0] if "-" in cityId else "GJ",
+                "areaId": areaId,
                 "category": category,
                 "createdAt": firestore.SERVER_TIMESTAMP,
                 "upvotes": 0,

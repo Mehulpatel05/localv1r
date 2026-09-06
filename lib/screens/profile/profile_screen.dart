@@ -468,7 +468,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.black12),
       ),
@@ -482,6 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.black12),
                 ),
                 child: Text(
                   '${post.category.icon} ${post.category.label}',
@@ -500,7 +501,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             post.content,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.45),
+            style: const TextStyle(color: Colors.black, fontSize: 14, height: 1.45),
           ),
           const SizedBox(height: 10),
           Row(

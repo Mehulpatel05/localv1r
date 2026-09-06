@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/location/location_selector_field.dart';
+import '../../core/location/location_models.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -24,8 +26,9 @@ class FoodPostScreen extends StatefulWidget {
 }
 
 class _FoodPostScreenState extends State<FoodPostScreen> {
-  final _areaController = TextEditingController();
-  final _cityController = TextEditingController(text: 'Vadodara');
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
@@ -47,8 +50,6 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   void dispose() {
     _titleController.dispose();
     _priceController.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
     super.dispose();
@@ -119,6 +120,8 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
+        cityId: _selectedGeoCity!.id,
+        areaId: _selectedGeoArea!.id,
         category: PostCategory.food,
         foodTitle: _titleController.text.trim(),
         foodPrice: _priceController.text.trim(),
@@ -173,7 +176,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
+                  color: _canPublish ? Colors.black : Colors.black26,
                 ),
               ),
             )
@@ -233,7 +236,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFF3B82F6)),
+                        const Icon(Icons.star_rounded, color: Colors.black),
                         const SizedBox(width: 8),
                         Text('${_rating.toStringAsFixed(1)} / 5.0', 
                           style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
@@ -243,7 +246,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                             min: 1.0,
                             max: 5.0,
                             divisions: 8,
-                            activeColor: const Color(0xFF3B82F6),
+                            activeColor: Colors.black,
                             onChanged: (val) {
                               setState(() => _rating = val);
                             },
@@ -274,27 +277,14 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: _buildTextField(
-                            controller: _areaController,
-                            hint: 'Local Area (e.g. Alkapuri)',
-                            icon: Icons.map_outlined,
-                          ),
+                    LocationSelectorField(
+                          onLocationSelected: (city, area) {
+                            setState(() {
+                              _selectedGeoCity = city;
+                              _selectedGeoArea = area;
+                            });
+                          },
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 1,
-                          child: _buildTextField(
-                            controller: _cityController,
-                            hint: 'City/State',
-                            icon: Icons.location_city_outlined,
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 20),
 
                     // Description
@@ -313,7 +303,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                         hintText: 'How was the food, ambiance, and service?',
                         hintStyle: const TextStyle(color: Colors.black38),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: Colors.black12),
@@ -356,7 +346,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
         hintStyle: const TextStyle(color: Colors.black38),
         prefixIcon: Icon(icon, color: Colors.black54, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.black12),

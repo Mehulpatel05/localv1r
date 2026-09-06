@@ -121,6 +121,7 @@ class FriendRepository {
         final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
         transaction.set(friendshipRef, {
           'users': [senderHandle, _currentUserHandle],
+          'usersUids': [requestData['senderUid'], FirebaseAuth.instance.currentUser?.uid],
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -185,6 +186,7 @@ class FriendRepository {
     // Create block
     await _db.collection('blocks').doc(blockDocId).set({
       'blockerHandle': _currentUserHandle,
+        'blockerUid': FirebaseAuth.instance.currentUser?.uid,
       'blockedHandle': otherHandle,
       'createdAt': FieldValue.serverTimestamp(),
     });

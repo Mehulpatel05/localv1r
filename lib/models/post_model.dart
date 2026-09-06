@@ -15,6 +15,11 @@ class Post {
   final int reportCount;
   final List<String> reporters;
 
+  final String? stateId;
+  final String? cityId;
+  final String? areaId;
+  final String? areaName;
+
   // 🏠 Room-specific fields (only for PostCategory.rooms)
   final String? roomTitle;
   final String? roomArea;
@@ -54,6 +59,10 @@ class Post {
     this.imageUrl,
     required this.category,
     required this.createdAt,
+    this.stateId,
+    this.cityId,
+    this.areaId,
+    this.areaName,
     this.upvotes = 0,
     this.downvotes = 0,
     this.commentCount = 0,
@@ -93,6 +102,10 @@ class Post {
       'imageUrl': imageUrl,
       'category': category.name,
       'createdAt': createdAt.toIso8601String(),
+      'stateId': stateId,
+      'cityId': cityId,
+      'areaId': areaId,
+      'areaName': areaName,
       'upvotes': upvotes,
       'downvotes': downvotes,
       'commentCount': commentCount,

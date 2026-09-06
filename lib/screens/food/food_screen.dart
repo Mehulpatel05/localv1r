@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -38,13 +40,11 @@ class _FoodScreenState extends State<FoodScreen> {
     if (mounted) setState(() {});
   }
 
-  List<Post> get _foodPosts => widget.repository.posts
-      .where((p) => p.category == PostCategory.food)
-      .toList();
+  
 
   @override
   Widget build(BuildContext context) {
-    final posts = _foodPosts;
+    final posts = _localRepo.allPosts;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -92,7 +92,7 @@ class _FoodScreenState extends State<FoodScreen> {
           ),
         ],
       ),
-      body: widget.repository.isLoading
+      body: _localRepo.isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
           : posts.isEmpty
@@ -166,7 +166,7 @@ class _FoodScreenState extends State<FoodScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12),
         boxShadow: [
@@ -211,7 +211,7 @@ class _FoodScreenState extends State<FoodScreen> {
                 else
                   Container(
                     height: 180,
-                    color: const Color(0xFF1E3A3A),
+                    color: const Color(0xFFE2E8F0),
                     child: const Center(
                       child: Text('🍲', style: TextStyle(fontSize: 64)),
                     ),
@@ -228,7 +228,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.bookmark_border,
-                        color: Colors.black87, size: 22),
+                        color: Colors.white, size: 22),
                   ),
                 ),
               ],
@@ -271,13 +271,13 @@ class _FoodScreenState extends State<FoodScreen> {
                           children: [
                             Text(
                               rating.toStringAsFixed(1),
-                              style: const TextStyle(color: Colors.black87,
+                              style: const TextStyle(color: Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 2),
                             const Icon(Icons.star_rounded,
-                                color: Colors.black87, size: 14),
+                                color: Colors.white, size: 14),
                           ],
                         ),
                       ),
@@ -313,7 +313,7 @@ class _FoodScreenState extends State<FoodScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Divider(color: Color(0xFF243049), height: 1),
+                  Divider(color: Colors.grey.shade200, height: 1),
                   const SizedBox(height: 12),
 
                   // User Review Content
@@ -322,7 +322,7 @@ class _FoodScreenState extends State<FoodScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.black54,
+                      color: Colors.black,
                       fontSize: 14,
                       height: 1.4,
                     ),
@@ -340,14 +340,14 @@ class _FoodScreenState extends State<FoodScreen> {
                           style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.black),
+                              color: Colors.white),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         '@${post.authorHandle}',
                         style: const TextStyle(
-                            color: Colors.black54,
+                            color: Colors.blue,
                             fontSize: 12,
                             fontWeight: FontWeight.bold),
                       ),
@@ -368,7 +368,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       Container(
                         height: 36,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: Colors.black12),
                         ),
@@ -392,7 +392,7 @@ class _FoodScreenState extends State<FoodScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: post.userVote == 1
                                     ? const Color(0xFF10B981)
-                                    : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.white),
+                                    : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black87),
                               ),
                             ),
                             IconButton(

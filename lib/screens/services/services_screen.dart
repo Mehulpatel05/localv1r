@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -38,13 +40,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (mounted) setState(() {});
   }
 
-  List<Post> get _servicePosts => widget.repository.posts
-      .where((p) => p.category == PostCategory.services)
-      .toList();
+  
 
   @override
   Widget build(BuildContext context) {
-    final posts = _servicePosts;
+    final posts = _localRepo.allPosts;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -91,7 +91,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           ),
         ],
       ),
-      body: widget.repository.isLoading
+      body: _localRepo.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
           : posts.isEmpty
               ? _buildEmpty()
@@ -274,7 +274,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.black54,
+                          color: Colors.black,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           height: 1.2,
@@ -324,7 +324,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  color: Colors.black87,
+                                  color: Colors.blue,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold),
                             ),

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/location/location_selector_field.dart';
+import '../../core/location/location_models.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -25,9 +27,10 @@ class RoomPostScreen extends StatefulWidget {
 }
 
 class _RoomPostScreenState extends State<RoomPostScreen> {
-  final _cityController = TextEditingController(text: 'Vadodara');
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+
   final _titleController = TextEditingController();
-  final _areaController = TextEditingController();
   final _rentController = TextEditingController();
   final _descController = TextEditingController();
   final List<File> _mediaFiles = [];
@@ -44,8 +47,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
     _rentController.dispose();
     _descController.removeListener(_validateLive);
     _descController.dispose();
@@ -140,10 +141,12 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
+        cityId: _selectedGeoCity!.id,
+        areaId: _selectedGeoArea!.id,
         category: PostCategory.rooms,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         roomTitle: _titleController.text.trim(),
-        roomArea: '${_areaController.text.trim()}, ${_cityController.text.trim()}',
+        roomArea: '${_selectedGeoArea?.name ?? \'\'}, ${_selectedGeoCity?.name ?? \'\'}',
         roomRent: _rentController.text.trim(),
         mediaUrls: uploadedUrls,
       );
@@ -269,24 +272,13 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
           children: [
             // ── Area dropdown ──────────────────────────────────────────
             _label('LOCATION DETAILS'),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _field(
-                    controller: _areaController,
-                    hint: 'Local Area (e.g. Alkapuri)',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 1,
-                  child: _field(
-                    controller: _cityController,
-                    hint: 'City',
-                  ),
-                ),
-              ],
+            LocationSelectorField(
+              onLocationSelected: (city, area) {
+                setState(() {
+                  _selectedGeoCity = city;
+                  _selectedGeoArea = area;
+                });
+              },
             ),
             const SizedBox(height: 16),
 

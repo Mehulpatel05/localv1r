@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/post_repository.dart';
 import 'services/notification_service.dart';
@@ -42,16 +43,20 @@ class VadodaraLocalApp extends StatefulWidget {
 }
 
 class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
+  late final LocationService locationService;
   late final PostRepository postRepository;
 
   @override
   void initState() {
     super.initState();
-    postRepository = PostRepository();
+    locationService = LocationService();
+    postRepository = PostRepository(locationService);
+    locationService.load();
   }
 
   @override
   void dispose() {
+    locationService.dispose();
     postRepository.dispose();
     super.dispose();
   }
@@ -73,7 +78,11 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   @override
   Widget build(BuildContext context) {
 
-    return MaterialApp(
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: locationService),
+      ],
+      child: MaterialApp(
       navigatorKey: navigatorKey,
       title: 'Vadodara Local',
       debugShowCheckedModeBanner: false,
@@ -155,6 +164,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
           }
         },
       ),
+    ),
     );
   }
 }

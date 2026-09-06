@@ -9,6 +9,7 @@ import '../core/constants/areas_and_categories.dart';
 import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../services/device_service.dart';
+import '../core/location/location_service.dart';
 
 enum FeedTab { latest, trending }
 
@@ -20,13 +21,21 @@ class PostRepository extends ChangeNotifier {
   List<Post> _posts = [];
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
-  PostCategory? _selectedCategory = PostCategory.general;
+  PostCategory? _selectedCategory;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
 
-
   bool _isLoadingMore = false;
   bool _hasMore = true;
+
+  final LocationService locationService;
+
+  PostRepository(this.locationService) {
+    locationService.addListener(_listenToPosts);
+  }
+
+  // Remove the old loadPosts or call _listenToPosts inside constructor
+
 
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
@@ -69,21 +78,27 @@ class PostRepository extends ChangeNotifier {
     _listenToPosts();
   }
 
-  List<Post> get posts {
-    // 🛡️ Filter flagged posts inline using server-derived fields directly
+  List<Post> get allPosts {
     var list = _posts.where((p) {
       if (_currentUserHandle.isNotEmpty && p.reporters.contains(_currentUserHandle)) return false;
       return true;
     }).toList();
 
-    if (_selectedCategory != null) {
-      list = list.where((p) => p.category == _selectedCategory).toList();
-    }
-
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+
+    return list;
+  }
+
+  List<Post> get posts {
+    // 🛡️ Filter flagged posts inline using server-derived fields directly
+    var list = allPosts;
+
+    if (_selectedCategory != null) {
+      list = list.where((p) => p.category == _selectedCategory).toList();
     }
 
     return list;
@@ -102,11 +117,22 @@ class PostRepository extends ChangeNotifier {
     }
     
     try {
-      final url = _nextCursor == null 
-        ? '$backendBaseUrl/posts?limit=20'
-        : '$backendBaseUrl/posts?limit=20&cursor=$_nextCursor';
+      final cityId = locationService.cityId;
+      final areaId = locationService.areaId;
+      final categoryStr = _selectedCategory?.name;
+      
+      var uri = Uri.parse('$backendBaseUrl/posts');
+      final queryParams = <String, String>{
+        'limit': '20',
+        if (_nextCursor != null) 'cursor': _nextCursor!,
+        'cityId': cityId,
+        if (areaId != null) 'areaId': areaId,
+        if (categoryStr != null) 'category': categoryStr,
+      };
+      
+      uri = uri.replace(queryParameters: queryParams);
         
-      final response = await http.get(Uri.parse(url), headers: await _getHeaders());
+      final response = await http.get(uri, headers: await _getHeaders());
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -121,9 +147,14 @@ class PostRepository extends ChangeNotifier {
           imageUrl: d['imageUrl'],
           upvotes: d['upvotes'] ?? 0,
           downvotes: d['downvotes'] ?? 0,
+          commentCount: d['commentCount'] ?? 0,
           reportCount: d['reportCount'] ?? 0,
           reporters: List<String>.from(d['reporters'] ?? []),
           createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
+          stateId: d['stateId'],
+          cityId: d['cityId'],
+          areaId: d['areaId'],
+          areaName: d['areaName'],
           roomTitle: d['roomTitle'],
           roomArea: d['roomArea'],
           roomRent: d['roomRent'],
@@ -242,22 +273,6 @@ class PostRepository extends ChangeNotifier {
     return _posts.where((p) => p.reportCount > 0).toList();
   }
 
-  /// REST call to Backend for moderation restore
-  Future<void> restorePost(String postId) async {
-    // Note: Restore and Admin actions can be securely verified on backend (or roles)
-    try {
-      final headers = await _getAuthHeaders();
-      final response = await http.post(
-        Uri.parse('$backendBaseUrl/posts/$postId/restore'),
-        headers: headers,
-      );
-      if (response.statusCode != 200) {
-        debugPrint('Restore failed: ${response.body}');
-      }
-    } catch (e) {
-      debugPrint('Error restoring post: $e');
-    }
-  }
 
   /// REST call to Backend for permanent deletion with instant UI response
   Future<void> deletePostPermanently(String postId) async {
@@ -270,8 +285,8 @@ class PostRepository extends ChangeNotifier {
 
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.post(
-        Uri.parse('$backendBaseUrl/posts/$postId/delete'),
+      final response = await http.delete(
+        Uri.parse('$backendBaseUrl/posts/$postId'),
         headers: headers,
       ).timeout(const Duration(seconds: 8));
 
@@ -328,7 +343,8 @@ class PostRepository extends ChangeNotifier {
     required String content,
     required PostCategory category,
     String? imageUrl,
-    String? area,
+    required String cityId,
+    required String areaId,
     // 🏠 Room-specific optional fields
     String? roomTitle,
     String? roomArea,
@@ -366,7 +382,8 @@ class PostRepository extends ChangeNotifier {
           'content': content,
           'category': category.name,
           'imageUrl': imageUrl,
-          if (area != null) 'area': area,
+          'cityId': cityId,
+          'areaId': areaId,
           if (roomTitle != null) 'roomTitle': roomTitle,
           if (roomArea != null) 'roomArea': roomArea,
           if (roomRent != null) 'roomRent': roomRent,

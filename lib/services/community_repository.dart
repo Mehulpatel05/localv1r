@@ -59,13 +59,15 @@ class CommunityRepository {
       'description': description,
       'isChannel': isChannel,
       'adminHandle': _currentUserHandle,
+      'adminUid': FirebaseAuth.instance.currentUser?.uid,
       'memberCount': 1,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
     // Auto-join the creator
-    await _db.collection('community_members').doc('${_currentUserHandle}_${docRef.id}').set({
+    await _db.collection('community_members').doc('${docRef.id}_$_currentUserHandle').set({
       'userHandle': _currentUserHandle,
+      'userUid': FirebaseAuth.instance.currentUser?.uid,
       'communityId': docRef.id,
       'role': 'admin',
       'joinedAt': FieldValue.serverTimestamp(),
@@ -82,6 +84,7 @@ class CommunityRepository {
     await docRef.set({
       'communityId': communityId,
       'userHandle': _currentUserHandle,
+      'userUid': FirebaseAuth.instance.currentUser?.uid,
       'joinedAt': FieldValue.serverTimestamp(),
     });
 
