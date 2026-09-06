@@ -146,7 +146,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
         category: PostCategory.rooms,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         roomTitle: _titleController.text.trim(),
-        roomArea: '${_selectedGeoArea?.name ?? \'\'}, ${_selectedGeoCity?.name ?? \'\'}',
+        roomArea: '${_selectedGeoArea?.name ?? ""}, ${_selectedGeoCity?.name ?? ""}',
         roomRent: _rentController.text.trim(),
         mediaUrls: uploadedUrls,
       );

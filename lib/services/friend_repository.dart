@@ -121,7 +121,7 @@ class FriendRepository {
         final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
         transaction.set(friendshipRef, {
           'users': [senderHandle, _currentUserHandle],
-          'usersUids': [requestData['senderUid'], FirebaseAuth.instance.currentUser?.uid],
+          'usersUids': [doc.data()?['senderUid'], FirebaseAuth.instance.currentUser?.uid],
           'createdAt': FieldValue.serverTimestamp(),
         });
 

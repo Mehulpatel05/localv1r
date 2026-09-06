@@ -30,17 +30,11 @@ class PostRepository extends ChangeNotifier {
 
   final LocationService locationService;
 
-  PostRepository(this.locationService) {
-    locationService.addListener(_listenToPosts);
-  }
-
-  // Remove the old loadPosts or call _listenToPosts inside constructor
-
-
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
 
-  PostRepository() {
+  PostRepository(this.locationService) {
+    locationService.addListener(_listenToPosts);
     _loadLocalVotes().then((_) {
       _listenToPosts();
     });
@@ -84,6 +78,10 @@ class PostRepository extends ChangeNotifier {
       return true;
     }).toList();
 
+    if (_selectedCategory != null) {
+      list = list.where((p) => p.category == _selectedCategory).toList();
+    }
+
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
@@ -123,7 +121,7 @@ class PostRepository extends ChangeNotifier {
       
       var uri = Uri.parse('$backendBaseUrl/posts');
       final queryParams = <String, String>{
-        'limit': '20',
+        'limit': '50',
         if (_nextCursor != null) 'cursor': _nextCursor!,
         'cityId': cityId,
         if (areaId != null) 'areaId': areaId,

@@ -24,17 +24,19 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> {
+  late final PostRepository _localRepo;
+
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onRepoChanged);
+    _localRepo = PostRepository(context.read<LocationService>());
+    _localRepo.setCategory(PostCategory.jobs);
+    _localRepo.addListener(_onRepoChanged);
   }
 
-  @override
-  void dispose() {
-    widget.repository.removeListener(_onRepoChanged);
-    super.dispose();
-  }
+
+
+
 
   void _onRepoChanged() {
     if (mounted) setState(() {});
@@ -387,3 +389,4 @@ class _JobsScreenState extends State<JobsScreen> {
     return '${diff.inDays}d';
   }
 }
+

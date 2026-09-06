@@ -24,17 +24,19 @@ class ServicesScreen extends StatefulWidget {
 }
 
 class _ServicesScreenState extends State<ServicesScreen> {
+  late final PostRepository _localRepo;
+
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onRepoChanged);
+    _localRepo = PostRepository(context.read<LocationService>());
+    _localRepo.setCategory(PostCategory.services);
+    _localRepo.addListener(_onRepoChanged);
   }
 
-  @override
-  void dispose() {
-    widget.repository.removeListener(_onRepoChanged);
-    super.dispose();
-  }
+
+
+
 
   void _onRepoChanged() {
     if (mounted) setState(() {});
@@ -342,3 +344,4 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 }
+

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/friend_repository.dart';
 import '../../services/post_repository.dart';
@@ -347,7 +348,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             builder: (_) => OtherUserProfileSheet(
               partnerHandle: handle,
               currentUserHandle: widget.currentUserHandle,
-              repository: PostRepository(),
+              repository: context.read<PostRepository>(),
             ),
           );
         },

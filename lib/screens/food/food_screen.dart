@@ -24,17 +24,19 @@ class FoodScreen extends StatefulWidget {
 }
 
 class _FoodScreenState extends State<FoodScreen> {
+  late final PostRepository _localRepo;
+
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onRepoChanged);
+    _localRepo = PostRepository(context.read<LocationService>());
+    _localRepo.setCategory(PostCategory.food);
+    _localRepo.addListener(_onRepoChanged);
   }
 
-  @override
-  void dispose() {
-    widget.repository.removeListener(_onRepoChanged);
-    super.dispose();
-  }
+
+
+
 
   void _onRepoChanged() {
     if (mounted) setState(() {});
@@ -441,3 +443,4 @@ class _FoodScreenState extends State<FoodScreen> {
     return '${diff.inDays}d ago';
   }
 }
+
