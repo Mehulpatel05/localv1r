@@ -1030,67 +1030,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  void _showAreaPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Text(
-                  'Choose Area in Vadodara',
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              const Divider(color: Color(0xFF243049)),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: 0,
-                  itemBuilder: (context, index) {
-                    final area = '';
-                    final isSelected = false;
-                    return ListTile(
-                      leading: Icon(
-                        Icons.location_city,
-                        color: isSelected ? const Color(0xFF3B82F6) : Colors.white30,
-                      ),
-                      title: Text(
-                        area,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black54,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle, color: Color(0xFF3B82F6))
-                          : null,
-                      onTap: () {
-                        
-                        Navigator.pop(ctx);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  // Area picker is handled by LocationChip in the AppBar (tap the location badge).
 
   void _showDeleteConfirmation(BuildContext context, String postId) {
     showDialog(

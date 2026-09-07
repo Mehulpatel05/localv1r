@@ -881,7 +881,8 @@ async def get_posts(
             # Format output
             data['id'] = doc.id
             if data.get('createdAt'):
-                data['createdAt'] = data['createdAt'].isoformat()
+                ca = data['createdAt']
+                data['createdAt'] = ca.isoformat() if hasattr(ca, 'isoformat') else str(ca)
             posts.append(data)
             
         last_id = docs[-1].id if docs else None
@@ -903,7 +904,8 @@ async def get_comments(post_id: str):
             data = doc.to_dict()
             data['id'] = doc.id
             if data.get('createdAt'):
-                data['createdAt'] = data['createdAt'].isoformat()
+                ca = data['createdAt']
+                data['createdAt'] = ca.isoformat() if hasattr(ca, 'isoformat') else str(ca)
             comments.append(data)
         return {"status": "success", "comments": comments}
     except Exception as e:
