@@ -302,6 +302,25 @@ class PostRepository extends ChangeNotifier {
 
   // --- Missing UI State Methods ---
 
+  /// Restore a moderated/hidden post back to the community feed
+  Future<void> restorePost(String postId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$backendBaseUrl/posts/$postId/restore'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        _listenToPosts(); // Re-fetch to show restored post
+      } else {
+        debugPrint('Restore post failed: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('Error restoring post: $e');
+    }
+  }
+
   void setCategory(PostCategory? cat) {
     _selectedCategory = cat;
     _listenToPosts();

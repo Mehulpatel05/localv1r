@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.localv1"
+    namespace = "com.nearhood.app"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -20,11 +20,11 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.localv1"
+        applicationId = "com.nearhood.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

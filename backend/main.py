@@ -1122,6 +1122,34 @@ async def delete_post(
     return res
 
 
+# 8b. Restore Post (Moderator)
+@app.post("/api/v1/posts/{post_id}/restore")
+async def restore_post(
+    post_id: str,
+    server_request: Request,
+    authorization: Optional[str] = Header(None),
+):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database offline.")
+    try:
+        _, user_handle = verify_session_token(authorization)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unauthorized.")
+
+    doc_ref = db.collection("posts").document(post_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Post not found.")
+
+    doc_ref.update({
+        "hiddenByMod": False,
+        "deletedAt": None,
+        "restoredBy": user_handle,
+        "restoredAt": firestore.SERVER_TIMESTAMP,
+    })
+    return {"status": "success", "message": "Post restored to community feed."}
+
+
 # 9. Media Upload
 @app.post("/api/v1/storage/upload")
 async def upload_image(

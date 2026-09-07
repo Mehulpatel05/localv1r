@@ -85,7 +85,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       ],
       child: MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'Vadodara Local',
+      title: 'Nearhood',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.light,
