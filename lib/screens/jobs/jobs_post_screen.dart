@@ -112,8 +112,8 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.jobs,
-        cityId: _selectedGeoCity!.id,
-          areaId: _selectedGeoArea!.id,
+        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
+          areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         jobTitle: _titleController.text.trim(),
         jobCompany: _companyController.text.trim().isEmpty ? 'Confidential' : _companyController.text.trim(),
         jobLocation: _locationController.text.trim().isEmpty ? 'Remote / Undisclosed' : _locationController.text.trim(),
@@ -466,3 +466,4 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
     );
   }
 }
+

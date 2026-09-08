@@ -1,11 +1,11 @@
 {
-    "name": "localv1",
-    "short_name": "localv1",
+    "name": "Nearhood",
+    "short_name": "Nearhood",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Nearhood — Your local community app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

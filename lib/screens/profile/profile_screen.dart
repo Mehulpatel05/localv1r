@@ -184,7 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       IconButton(
                         icon: const Icon(Icons.share, color: Color(0xFF3B82F6)),
                         onPressed: () {
-                          Share.share('Hey! Join me on Vadodara Local. My username is @${widget.currentUserHandle}. Download the app now to connect!');
+                          Share.share('Hey! Join me on Nearhood. My username is @${widget.currentUserHandle}. Download the app now to connect!');
                         },
                       ),
                     ],
@@ -516,7 +516,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 12),
               const Icon(Icons.location_on, size: 13, color: Color(0xFF60A5FA)),
               const SizedBox(width: 3),
-              Text('Vadodara', style: const TextStyle(color: Colors.black54, fontSize: 11)),
+              Text(post.areaName ?? 'Nearhood', style: const TextStyle(color: Colors.black54, fontSize: 11)),
             ],
           ),
         ],

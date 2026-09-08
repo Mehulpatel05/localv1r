@@ -120,8 +120,8 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
-        cityId: _selectedGeoCity!.id,
-        areaId: _selectedGeoArea!.id,
+        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
+        areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         category: PostCategory.food,
         foodTitle: _titleController.text.trim(),
         foodPrice: _priceController.text.trim(),
@@ -453,3 +453,4 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
     );
   }
 }
+

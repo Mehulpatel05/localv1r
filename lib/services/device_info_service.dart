@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class DeviceInfoService {
-  static const _channel = MethodChannel('com.example.localv1/device_id');
+  static const _channel = MethodChannel('com.nearhood.app/device_id');
 
   /// Fetches a permanent, stable installation ID that survives Clear Data and App Uninstalls/Reinstalls.
   static Future<String> getInstallationId() async {

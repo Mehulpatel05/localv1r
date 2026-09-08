@@ -260,7 +260,7 @@ class _ShopScreenState extends State<ShopScreen> {
                         const SizedBox(width: 2),
                         Expanded(
                           child: Text(
-                            'Vadodara'.toUpperCase(),
+                            (post.areaName ?? 'Nearhood').toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

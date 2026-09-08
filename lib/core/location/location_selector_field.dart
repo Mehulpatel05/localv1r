@@ -17,17 +17,32 @@ class LocationSelectorField extends StatefulWidget {
 
 class _LocationSelectorFieldState extends State<LocationSelectorField> {
   GeoArea? _selectedArea;
+  bool _initialized = false;
 
   @override
   Widget build(BuildContext context) {
     final locationService = context.watch<LocationService>();
     final city = locationService.city;
 
+    if (!_initialized || (_selectedArea != null && _selectedArea!.cityId != city.id)) {
+      final generalArea = city.areas.where((a) => a.id.contains('GENERAL') || a.name.toLowerCase().contains('general')).firstOrNull;
+      _selectedArea = locationService.area ?? generalArea ?? (city.areas.isNotEmpty ? city.areas.first : null);
+      _initialized = true;
+      if (_selectedArea != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedArea != null) {
+            widget.onLocationSelected(city, _selectedArea!);
+          }
+        });
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Read-only City Field
         TextFormField(
+          key: ValueKey(city.id),
           initialValue: city.name,
           readOnly: true,
           decoration: const InputDecoration(

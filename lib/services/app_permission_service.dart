@@ -59,7 +59,7 @@ class AppPermissionService {
       return 'Needed to pick photos from storage when creating a post.';
     }
     if (permission == Permission.locationWhenInUse) {
-      return 'Used to show posts from your local area in Vadodara.';
+      return 'Used to show posts from your local area in your local area.';
     }
     if (permission == Permission.camera) {
       return 'Allows you to take a photo directly and attach it to a post.';

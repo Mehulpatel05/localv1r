@@ -27,8 +27,8 @@ class NotificationService {
 
   // Android notification channel
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'vadodara_local_channel',
-    'Vadodara Local Notifications',
+    'nearhood_channel',
+    'Nearhood Notifications',
     description: 'Notifications for friend requests, messages, and more',
     importance: Importance.high,
     playSound: true,

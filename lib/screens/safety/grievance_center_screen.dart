@@ -43,7 +43,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
           backgroundColor: Colors.white,
           title: const Text('Grievance Filed Successfully', style: TextStyle(color: Colors.black87)),
           content: Text(
-            'Under Section 79 of IT Rules 2021, your ticket has been registered. Our Grievance Officer in Vadodara will process this request within the 24-hour statutory timeline.\n\nTicket Reference ID: VL-GR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+            'Under Section 79 of IT Rules 2021, your ticket has been registered. Our Grievance Officer in Vadodara will process this request within the 24-hour statutory timeline.\n\nTicket Reference ID: NH-GR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
             style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.45),
           ),
           actions: [
@@ -134,7 +134,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                       children: [
                         _GrievanceInfoRow(icon: Icons.person_outline, title: 'Officer Name', value: 'R. K. Patel (Compliance Lead)'),
                         Divider(color: Color(0xFF243049)),
-                        _GrievanceInfoRow(icon: Icons.email_outlined, title: 'Email Address', value: 'grievance@vadodaralocal.in'),
+                        _GrievanceInfoRow(icon: Icons.email_outlined, title: 'Email Address', value: 'grievance@nearhood.app'),
                         Divider(color: Color(0xFF243049)),
                         _GrievanceInfoRow(icon: Icons.business_outlined, title: 'Office Location', value: 'Alkapuri, Vadodara, Gujarat, India'),
                         Divider(color: Color(0xFF243049)),
@@ -310,7 +310,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                             const Text('•', style: TextStyle(color: Colors.black26)),
                             const SizedBox(width: 6),
                             Text(
-                              'Vadodara',
+                              post.areaName ?? 'Nearhood',
                               style: const TextStyle(color: Colors.black54, fontSize: 11),
                             ),
                           ],

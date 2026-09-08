@@ -142,8 +142,8 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.shop,
-        cityId: _selectedGeoCity!.id,
-          areaId: _selectedGeoArea!.id,
+        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
+          areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         shopTitle: _titleController.text.trim(),
         shopPrice: _priceController.text.trim(),
@@ -506,3 +506,4 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
     );
   }
 }
+

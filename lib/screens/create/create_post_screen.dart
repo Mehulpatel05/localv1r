@@ -107,11 +107,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           throw Exception('Image upload failed. Please try again.');
         }
       }
+      final locService = widget.repository.locationService;
+      final effectiveCity = _selectedGeoCity ?? locService.city;
+      final effectiveArea = _selectedGeoArea ?? locService.area ?? (effectiveCity.areas.isNotEmpty ? effectiveCity.areas.first : null);
+
+      if (effectiveArea == null) {
+        throw Exception('Please select an area before publishing.');
+      }
+
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
-        cityId: _selectedGeoCity!.id,
-          areaId: _selectedGeoArea!.id,
+        cityId: effectiveCity.id,
+        areaId: effectiveArea.id,
         category: _selectedCategory,
         imageUrl: telegramImageUrl,
       );

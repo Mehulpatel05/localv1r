@@ -792,7 +792,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Be the first to warn or update neighbors in Vadodara anonymously.',
+              'Be the first to warn or update neighbors in Nearhood anonymously.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black38, fontSize: 13),
             ),
@@ -892,7 +892,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     const Text('•', style: TextStyle(color: Colors.black26)),
                     const SizedBox(width: 6),
                     Text(
-                      'Vadodara',
+                      post.areaName ?? 'Nearhood',
                       style: const TextStyle(
                         color: Colors.black54,
                         fontSize: 12,

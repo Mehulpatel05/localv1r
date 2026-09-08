@@ -29,7 +29,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       icon: Icons.location_on_rounded,
       color: Color(0xFF10B981),
       title: 'Location',
-      reason: 'Automatically show posts from your local area in Vadodara.',
+      reason: 'Automatically show posts from your local area in your city.',
     ),
     _PermItem(
       permission: Permission.photos,
@@ -108,12 +108,12 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Vadodara Local\nNeeds Access',
+                    'Nearhood\nNeeds Access',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87,
                       height: 1.3,
                     ),
                   ),
@@ -152,7 +152,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.black54,
-                        side: const BorderSide(color: Color(0xFF374151)),
+                        side: const BorderSide(color: Colors.black12),
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -223,14 +223,14 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       decoration: BoxDecoration(
         color: item.granted
             ? item.color.withOpacity(0.08)
-            : const Color(0xFF151D30),
+            : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: item.granted
               ? item.color.withOpacity(0.5)
               : item.denied
                   ? Colors.redAccent.withOpacity(0.4)
-                  : const Color(0xFF243049),
+                  : const BorderSide(color: Colors.black12).color,
           width: 1.2,
         ),
       ),
@@ -240,7 +240,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: item.color.withOpacity(0.15),
+              color: item.color.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(item.icon, color: item.color, size: 22),
@@ -269,7 +269,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
             const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 24)
           else
             const Icon(Icons.radio_button_unchecked,
-                color: Colors.white24, size: 24),
+                color: Colors.black26, size: 24),
         ],
       ),
     );

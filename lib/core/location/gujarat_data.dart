@@ -12,6 +12,7 @@ const kGujarat = GeoState(
       lat: 22.3072,
       lng: 73.1812,
       areas: [
+        GeoArea(id: 'GJ-VAD-GENERAL', cityId: 'GJ-VAD', name: 'General / All Vadodara'),
         GeoArea(id: 'GJ-VAD-ALKAPURI', cityId: 'GJ-VAD', name: 'Alkapuri', pincode: '390007'),
         GeoArea(id: 'GJ-VAD-SAYAJIGUNJ', cityId: 'GJ-VAD', name: 'Sayajigunj', pincode: '390005'),
         GeoArea(id: 'GJ-VAD-GOTRI', cityId: 'GJ-VAD', name: 'Gotri', pincode: '390021'),

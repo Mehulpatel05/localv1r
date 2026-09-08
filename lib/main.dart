@@ -118,7 +118,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                     const Icon(Icons.location_city, size: 90, color: Color(0xFF3B82F6)),
                     const SizedBox(height: 24),
                     const Text(
-                      'VADODARA LOCAL',
+                      'NEARHOOD',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

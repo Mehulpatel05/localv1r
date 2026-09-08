@@ -114,8 +114,8 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         category: PostCategory.services,
-        cityId: _selectedGeoCity!.id,
-          areaId: _selectedGeoArea!.id,
+        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
+          areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         serviceTitle: _titleController.text.trim(),
         servicePrice: _priceController.text.trim(),
         serviceCategoryText: _selectedServiceCategory,
@@ -452,3 +452,4 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
     );
   }
 }
+

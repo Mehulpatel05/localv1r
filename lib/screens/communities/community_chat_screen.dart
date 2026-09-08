@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
+import 'community_members_screen.dart';
 import 'package:intl/intl.dart';
 
 class CommunityChatScreen extends StatefulWidget {
@@ -32,7 +33,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   void _scrollListener() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       setState(() {
         _messageLimit += 30;
       });
@@ -62,13 +64,56 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     await _checkMembership();
   }
 
+  // Feature #15: Leave confirmation dialog
   Future<void> _leaveCommunity() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave Community?'),
+        content: Text(
+          'Are you sure you want to leave "${widget.community.name}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     setState(() => _isLoading = true);
     await widget.repository.leaveCommunity(widget.community.id);
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _deleteCommunity() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Community?'),
+        content: Text(
+          'This will permanently delete "${widget.community.name}" and all its messages.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     setState(() => _isLoading = true);
     try {
       await widget.repository.deleteCommunity(widget.community.id);
@@ -76,7 +121,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -90,8 +136,11 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = widget.community.adminHandle == widget.repository.currentUserHandle;
-    final canPost = !_isLoading && _isMember && (!widget.community.isChannel || isAdmin);
+    final isAdmin =
+        widget.community.adminHandle == widget.repository.currentUserHandle;
+    final canPost = !_isLoading &&
+        _isMember &&
+        (!widget.community.isChannel || isAdmin);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -100,33 +149,55 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.community.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             Text(
-              widget.community.isChannel ? 'Channel' : 'Group',
+              widget.community.name,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${widget.community.isChannel ? 'Channel' : 'Group'} · ${widget.community.memberCount} members',
               style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),
         actions: [
+          // Feature #10: Members list button
+          if (_isMember)
+            IconButton(
+              icon: const Icon(Icons.people_outline, color: Colors.black54),
+              tooltip: 'Members',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CommunityMembersScreen(
+                      repository: widget.repository,
+                      community: widget.community,
+                    ),
+                  ),
+                );
+              },
+            ),
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
               tooltip: 'Delete Community',
-              onPressed: () => _deleteCommunity(),
+              onPressed: _deleteCommunity,
             )
           else if (_isMember)
             IconButton(
               icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
               tooltip: 'Leave Community',
-              onPressed: () => _leaveCommunity(),
-            )
+              onPressed: _leaveCommunity,
+            ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder<List<CommunityMessage>>(
-              stream: widget.repository.getCommunityMessages(widget.community.id, limit: _messageLimit),
+              stream: widget.repository.getCommunityMessages(
+                  widget.community.id,
+                  limit: _messageLimit),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -134,7 +205,10 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return const Center(
-                    child: Text('No messages yet. Say hi!', style: TextStyle(color: Colors.black54)),
+                    child: Text(
+                      'No messages yet. Say hi!',
+                      style: TextStyle(color: Colors.black54),
+                    ),
                   );
                 }
                 return ListView.builder(
@@ -143,7 +217,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
-                    final isMe = msg.authorHandle == widget.repository.currentUserHandle;
+                    final isMe =
+                        msg.authorHandle == widget.repository.currentUserHandle;
                     return _buildMessageBubble(msg, isMe);
                   },
                 );
@@ -157,8 +232,10 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
               color: Colors.white,
               child: ElevatedButton(
                 onPressed: _joinCommunity,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
-                child: Text('Join ${widget.community.isChannel ? 'Channel' : 'Group'}'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6)),
+                child: Text(
+                    'Join ${widget.community.isChannel ? 'Channel' : 'Group'}'),
               ),
             )
           else if (canPost)
@@ -173,7 +250,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.black54),
               ),
-            )
+            ),
         ],
       ),
     );
@@ -188,8 +265,10 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         decoration: BoxDecoration(
           color: isMe ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(16).copyWith(
-            bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(16),
-            bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(0),
+            bottomRight:
+                isMe ? const Radius.circular(0) : const Radius.circular(16),
+            bottomLeft:
+                isMe ? const Radius.circular(16) : const Radius.circular(0),
           ),
         ),
         child: Column(
@@ -197,15 +276,30 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
           children: [
             if (!isMe && !widget.community.isChannel)
               Text(
-                msg.authorHandle,
-                style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold),
+                '@${msg.authorHandle}',
+                style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
               ),
             const SizedBox(height: 4),
-            Text(msg.content, style: const TextStyle(color: Colors.black87, fontSize: 14)),
+            // Bug #2 fixed: white text on blue bubble, dark on light bubble
+            Text(
+              msg.content,
+              style: TextStyle(
+                color: isMe ? Colors.white : Colors.black87,
+                fontSize: 14,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               DateFormat('hh:mm a').format(msg.timestamp),
-              style: TextStyle(color: Colors.black87.withOpacity(0.5), fontSize: 9),
+              style: TextStyle(
+                color: isMe
+                    ? Colors.white.withValues(alpha: 0.7)
+                    : Colors.black87.withValues(alpha: 0.5),
+                fontSize: 9,
+              ),
             ),
           ],
         ),
@@ -216,24 +310,28 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   Widget _buildMessageInput() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8).copyWith(bottom: MediaQuery.of(context).padding.bottom + 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8).copyWith(
+          bottom: MediaQuery.of(context).padding.bottom + 8),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _messageController,
               style: const TextStyle(color: Colors.black87),
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 hintText: 'Type a message...',
                 hintStyle: const TextStyle(color: Colors.black38),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(0xFFF1F5F9),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
               ),
+              onSubmitted: (_) => _sendMessage(),
             ),
           ),
           const SizedBox(width: 8),

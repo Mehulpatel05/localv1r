@@ -351,7 +351,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                       fontWeight: FontWeight.w500),
                                 ),
                                 Text(
-                                  'Vadodara',
+                                  post.areaName ?? 'Nearhood',
                                   style: const TextStyle(
                                       color: Colors.black38,
                                       fontSize: 12),

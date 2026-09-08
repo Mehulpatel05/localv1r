@@ -141,8 +141,8 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
-        cityId: _selectedGeoCity!.id,
-        areaId: _selectedGeoArea!.id,
+        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
+        areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         category: PostCategory.rooms,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         roomTitle: _titleController.text.trim(),
@@ -529,3 +529,4 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
     );
   }
 }
+

@@ -66,7 +66,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             Text('🏠', style: TextStyle(fontSize: 20)),
             SizedBox(width: 8),
             Text(
-              'Rooms in Vadodara',
+              'Rooms Near You',
               style: TextStyle(color: Colors.black87,
                   fontSize: 17,
                   fontWeight: FontWeight.bold),
@@ -160,7 +160,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Be the first to list a room for rent in Vadodara.',
+              'Be the first to list a room for rent in Nearhood.',
               textAlign: TextAlign.center,
               style:
                   TextStyle(color: Colors.black38, fontSize: 13),
@@ -264,7 +264,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         const SizedBox(width: 2),
                         Expanded(
                           child: Text(
-                            'Vadodara'.toUpperCase(),
+                            (post.areaName ?? 'Nearhood').toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

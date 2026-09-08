@@ -293,7 +293,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       const Icon(Icons.location_on, size: 14, color: Colors.black54),
                       const SizedBox(width: 4),
                       Text(
-                        'Vadodara',
+                        post.areaName ?? 'Nearhood',
                         style: const TextStyle(
                             color: Colors.black54,
                             fontSize: 14,

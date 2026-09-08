@@ -126,11 +126,11 @@ class _GoogleLoginScreenState extends State<GoogleLoginScreen> {
               const Icon(Icons.location_city, size: 80, color: Color(0xFF3B82F6)),
               const SizedBox(height: 24),
               const Text(
-                'Vadodara Local',
+                'Nearhood',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 12),
