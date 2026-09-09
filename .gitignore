@@ -8,13 +8,13 @@
 build/
 
 # Firebase configuration ignores
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
+# android/app/google-services.json
+# ios/Runner/GoogleService-Info.plist
 
 # Operating System ignores
 .DS_Store
 Thumbs.db
-
+   
 # Node modules
 node_modules/
 functions/node_modules/

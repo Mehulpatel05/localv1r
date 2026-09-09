@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
 import 'community_chat_screen.dart';
@@ -25,7 +25,6 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
     _tabController = TabController(length: 2, vsync: this);
   }
 
-  // Bug #5 fixed: TabController dispose
   @override
   void dispose() {
     _tabController.dispose();
@@ -54,7 +53,6 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
           ],
         ),
       ),
-      // Feature #12: FAB to create community
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF3B82F6),
         icon: const Icon(Icons.add, color: Colors.white),
@@ -101,11 +99,12 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                 backgroundColor: Color(0xFF3B82F6),
                 child: Icon(Icons.group, color: Colors.white),
               ),
-              title: const Text('Group', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text('Group',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: const Text('Everyone can send messages'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(
+                final created = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
                     builder: (_) => CreateCommunityScreen(
@@ -114,6 +113,10 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                     ),
                   ),
                 );
+                // F7: Auto-switch to My Groups & Channels tab
+                if (created == true && mounted) {
+                  _tabController.animateTo(0);
+                }
               },
             ),
             ListTile(
@@ -121,11 +124,12 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                 backgroundColor: Color(0xFFEF4444),
                 child: Icon(Icons.campaign, color: Colors.white),
               ),
-              title: const Text('Channel', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text('Channel',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: const Text('Only admins can broadcast'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(
+                final created = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
                     builder: (_) => CreateCommunityScreen(
@@ -134,6 +138,10 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                     ),
                   ),
                 );
+                // F7: Auto-switch to My Groups & Channels tab
+                if (created == true && mounted) {
+                  _tabController.animateTo(0);
+                }
               },
             ),
             const SizedBox(height: 16),
@@ -150,22 +158,38 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        // F3: Error state — Firestore down ya permissions issue
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
+                const SizedBox(height: 12),
+                const Text('Could not load communities.',
+                    style: TextStyle(color: Colors.black54)),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => setState(() {}),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
         final communities = snapshot.data ?? [];
         if (communities.isEmpty) {
           return const Center(
             child: Text(
-              // Bug #1 fixed: actual newline
               "You haven't joined any communities yet.\nGo to 'Discover' to find some!",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black54),
             ),
           );
         }
-        // Feature #16: Pull to refresh
         return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {}); // triggers stream rebuild
-          },
+          onRefresh: () async => setState(() {}),
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: communities.length,
@@ -178,22 +202,13 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
     );
   }
 
-  // Feature #13: Unread badge tile for My Communities
   Widget _buildMyTile(CommunityModel community) {
     return FutureBuilder<int>(
       future: widget.repository.getUnreadCount(community.id),
       builder: (context, unreadSnap) {
         final unread = unreadSnap.data ?? 0;
         return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: community.isChannel
-                ? const Color(0xFFEF4444)
-                : const Color(0xFF3B82F6),
-            child: Icon(
-              community.isChannel ? Icons.campaign : Icons.group,
-              color: Colors.white,
-            ),
-          ),
+          leading: _communityAvatar(community),
           title: Text(
             community.name,
             style: TextStyle(
@@ -235,7 +250,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
           onTap: () async {
             await widget.repository.markAsRead(community.id);
             if (context.mounted) {
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => CommunityChatScreen(
@@ -244,6 +259,8 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                   ),
                 ),
               );
+              // B3: force FutureBuilder to re-run getUnreadCount — clears stale badge
+              if (context.mounted) setState(() {});
             }
           },
         );
@@ -252,21 +269,40 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
   }
 
   Widget _buildDiscover() {
-    // Bug #4 fixed: getDiscoverCommunities filters already-joined ones
     return StreamBuilder<List<CommunityModel>>(
       stream: widget.repository.getDiscoverCommunities(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        // F3: Error state for Discover tab
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
+                const SizedBox(height: 12),
+                const Text('Could not load communities.',
+                    style: TextStyle(color: Colors.black54)),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => setState(() {}),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
         final all = snapshot.data ?? [];
-
-        // Feature #8: Filter by search query
         final communities = _searchQuery.isEmpty
             ? all
             : all
                 .where((c) =>
-                    c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    c.name
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()) ||
                     c.description
                         .toLowerCase()
                         .contains(_searchQuery.toLowerCase()))
@@ -274,7 +310,6 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
 
         return Column(
           children: [
-            // Feature #8: Search bar
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
               child: TextField(
@@ -283,11 +318,12 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                 decoration: InputDecoration(
                   hintText: 'Search communities...',
                   hintStyle: const TextStyle(color: Colors.black38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.black38),
+                  prefixIcon:
+                      const Icon(Icons.search, color: Colors.black38),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon:
-                              const Icon(Icons.clear, color: Colors.black38),
+                          icon: const Icon(Icons.clear,
+                              color: Colors.black38),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -317,12 +353,16 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
               )
             else
               Expanded(
-                child: ListView.builder(
-                  itemCount: communities.length,
-                  itemBuilder: (context, index) {
-                    return _buildCommunityTile(communities[index],
-                        showJoinBadge: true);
-                  },
+                // F1: Pull to refresh in Discover tab
+                child: RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: communities.length,
+                    itemBuilder: (context, index) {
+                      return _buildDiscoverTile(communities[index]);
+                    },
+                  ),
                 ),
               ),
           ],
@@ -331,49 +371,77 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
     );
   }
 
-  Widget _buildCommunityTile(CommunityModel community,
-      {bool showJoinBadge = false}) {
+  Widget _buildDiscoverTile(CommunityModel community) {
+    final typeLabel = community.isChannel ? 'Channel' : 'Group';
+    final memberText = community.memberCount == 1
+        ? '1 member'
+        : '${community.memberCount} members';
+
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: community.isChannel
-            ? const Color(0xFFEF4444)
-            : const Color(0xFF3B82F6),
-        child: Icon(
-          community.isChannel ? Icons.campaign : Icons.group,
-          color: Colors.white,
-        ),
-      ),
+      // B4 fixed: use shared _communityAvatar so imageUrl shows in Discover too
+      leading: _communityAvatar(community),
       title: Text(
         community.name,
         style: const TextStyle(
             color: Colors.black87, fontWeight: FontWeight.bold),
       ),
-      subtitle: Text(
-        community.description,
-        style: const TextStyle(color: Colors.black54),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: showJoinBadge
-          ? Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6),
-                borderRadius: BorderRadius.circular(12),
+      // F2: Show type + member count + description
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: community.isChannel
+                      ? const Color(0xFFFFEDE7)
+                      : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  typeLabel,
+                  style: TextStyle(
+                    color: community.isChannel
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF3B82F6),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-              child: const Text(
-                'Join',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
+              const SizedBox(width: 6),
+              Text(
+                memberText,
+                style: const TextStyle(color: Colors.black45, fontSize: 11),
               ),
-            )
-          : Text(
-              '${community.memberCount} members',
-              style: const TextStyle(color: Colors.black38, fontSize: 12),
+            ],
+          ),
+          if (community.description.isNotEmpty)
+            Text(
+              community.description,
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
+        ],
+      ),
+      isThreeLine: community.description.isNotEmpty,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3B82F6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Join',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold),
+        ),
+      ),
       onTap: () {
         Navigator.push(
           context,
@@ -385,6 +453,23 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _communityAvatar(CommunityModel community) {
+    final bg = community.isChannel ? const Color(0xFFEF4444) : const Color(0xFF3B82F6);
+    if (community.imageUrl != null && community.imageUrl!.isNotEmpty) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(community.imageUrl!),
+        backgroundColor: bg,
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: bg,
+      child: Icon(
+        community.isChannel ? Icons.campaign : Icons.group,
+        color: Colors.white,
+      ),
     );
   }
 }
