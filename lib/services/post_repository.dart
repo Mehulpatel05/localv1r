@@ -117,6 +117,8 @@ class PostRepository extends ChangeNotifier {
     try {
       final cityId = locationService.cityId;
       final areaId = locationService.areaId;
+      // Don't send areaId filter for GENERAL area — it means "all areas"
+      final effectiveAreaId = (areaId != null && !areaId.contains('GENERAL')) ? areaId : null;
       final categoryStr = _selectedCategory?.name;
       
       var uri = Uri.parse('$backendBaseUrl/posts');
@@ -124,7 +126,7 @@ class PostRepository extends ChangeNotifier {
         'limit': '50',
         if (_nextCursor != null) 'cursor': _nextCursor!,
         'cityId': cityId,
-        if (areaId != null) 'areaId': areaId,
+        if (effectiveAreaId != null) 'areaId': effectiveAreaId,
         if (categoryStr != null) 'category': categoryStr,
       };
       

@@ -854,21 +854,38 @@ async def get_posts(
         except Exception as e:
             if "index" in str(e).lower() or "precondition" in str(e).lower():
                 print(f"[WARN] Missing index in get_posts. Fallback to manual filter. Error: {e}")
-                fallback_query = db.collection("posts").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(300)
-                if cursor and cursor_doc.exists:
-                    fallback_query = fallback_query.start_after(cursor_doc)
+                # Fetch all docs for this city (or all if no city), then manually filter+sort
+                fallback_base = db.collection("posts")
+                if cityId:
+                    fallback_base = fallback_base.where("cityId", "==", cityId)
+                raw_docs = fallback_base.get()
                 
-                raw_docs = fallback_query.get()
-                docs = []
+                # Manual filter on remaining params
+                filtered = []
                 for doc in raw_docs:
                     data = doc.to_dict()
                     if author and data.get("authorHandle") != author: continue
-                    if cityId and data.get("cityId") != cityId: continue
                     if areaId and data.get("areaId") != areaId: continue
                     if category and data.get("category") != category: continue
-                    docs.append(doc)
-                    if len(docs) >= min(limit, 50):
-                        break
+                    filtered.append(doc)
+                
+                # Sort by createdAt descending manually
+                def _get_ts(d):
+                    ca = d.to_dict().get("createdAt")
+                    try:
+                        return ca.timestamp() if hasattr(ca, "timestamp") else 0
+                    except:
+                        return 0
+                filtered.sort(key=_get_ts, reverse=True)
+                
+                # Apply pagination
+                start_index = 0
+                if cursor:
+                    for i, d in enumerate(filtered):
+                        if d.id == cursor:
+                            start_index = i + 1
+                            break
+                docs = filtered[start_index : start_index + min(limit, 50)]
             else:
                 raise e
                 
