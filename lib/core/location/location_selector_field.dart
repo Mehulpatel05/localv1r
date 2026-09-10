@@ -7,9 +7,9 @@ class LocationSelectorField extends StatefulWidget {
   final void Function(GeoCity city, GeoArea area) onLocationSelected;
 
   const LocationSelectorField({
-    Key? key,
+    super.key,
     required this.onLocationSelected,
-  }) : super(key: key);
+  });
 
   @override
   State<LocationSelectorField> createState() => _LocationSelectorFieldState();
@@ -61,9 +61,16 @@ class _LocationSelectorFieldState extends State<LocationSelectorField> {
           ),
           value: _selectedArea,
           items: city.areas.map((area) {
+            final isGeneral = area.id.contains('GENERAL') || area.name.toLowerCase().contains('general');
             return DropdownMenuItem<GeoArea>(
               value: area,
-              child: Text(area.name),
+              child: Text(
+                isGeneral ? 'General / All ${city.name} (Whole City)' : area.name,
+                style: TextStyle(
+                  fontWeight: isGeneral ? FontWeight.bold : FontWeight.normal,
+                  color: isGeneral ? const Color(0xFF3B82F6) : Colors.black87,
+                ),
+              ),
             );
           }).toList(),
           onChanged: (area) {

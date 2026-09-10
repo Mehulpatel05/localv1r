@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
+import '../../core/location/location_chip.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -34,15 +35,16 @@ class _FoodScreenState extends State<FoodScreen> {
     _localRepo.addListener(_onRepoChanged);
   }
 
-
-
-
+  @override
+  void dispose() {
+    _localRepo.removeListener(_onRepoChanged);
+    _localRepo.dispose();
+    super.dispose();
+  }
 
   void _onRepoChanged() {
     if (mounted) setState(() {});
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -60,8 +62,8 @@ class _FoodScreenState extends State<FoodScreen> {
         ),
         title: const Row(
           children: [
-            Text('🍲', style: TextStyle(fontSize: 22)),
-            SizedBox(width: 8),
+            Text('🍲', style: TextStyle(fontSize: 20)),
+            SizedBox(width: 6),
             Text(
               'Food & Cafes',
               style: TextStyle(color: Colors.black87,
@@ -70,28 +72,9 @@ class _FoodScreenState extends State<FoodScreen> {
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.black12),
-                ),
-                child: Text(
-                  '${posts.length} spots',
-                  style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500),
-                ),
-              ),
-            ),
-          ),
+        actions: const [
+          Center(child: LocationChip()),
+          SizedBox(width: 12),
         ],
       ),
       body: _localRepo.isLoading

@@ -247,21 +247,19 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen>
                   style:
                       const TextStyle(color: Colors.black38, fontSize: 12),
                 ),
-          onTap: () async {
-            await widget.repository.markAsRead(community.id);
-            if (context.mounted) {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CommunityChatScreen(
-                    repository: widget.repository,
-                    community: community,
-                  ),
+          onTap: () {
+            widget.repository.markAsRead(community.id);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommunityChatScreen(
+                  repository: widget.repository,
+                  community: community,
                 ),
-              );
-              // B3: force FutureBuilder to re-run getUnreadCount — clears stale badge
-              if (context.mounted) setState(() {});
-            }
+              ),
+            ).then((_) {
+              if (mounted) setState(() {});
+            });
           },
         );
       },

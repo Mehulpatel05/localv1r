@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'post_repository.dart';
 
@@ -14,34 +14,61 @@ class TelegramStorageService {
   /// 🛡️ Zero client-side tokens are used, preventing API key exposure.
   static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) async {
     try {
+      if (!await file.exists()) {
+        debugPrint('File does not exist: ${file.path}');
+        return null;
+      }
+
       final user = FirebaseAuth.instance.currentUser;
       final sessionToken = user != null ? await user.getIdToken() : '';
       
       final uri = Uri.parse(backendUploadUrl);
-      final request = http.MultipartRequest('POST', uri)
-        ..headers['authorization'] = 'Bearer $sessionToken';
+      final request = http.MultipartRequest('POST', uri);
 
-      final length = await file.length();
-      int bytesUploaded = 0;
+      if (sessionToken != null && sessionToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $sessionToken';
+      }
 
-      final stream = http.ByteStream(file.openRead().map((chunk) {
-        bytesUploaded += chunk.length;
-        if (onProgress != null) {
-          onProgress(bytesUploaded / length);
-        }
-        return chunk;
-      }));
+      final ext = file.path.split('.').last.toLowerCase();
+      MediaType contentType;
+      if (ext == 'png') {
+        contentType = MediaType('image', 'png');
+      } else if (ext == 'webp') {
+        contentType = MediaType('image', 'webp');
+      } else if (ext == 'gif') {
+        contentType = MediaType('image', 'gif');
+      } else {
+        contentType = MediaType('image', 'jpeg');
+      }
 
-      request.files.add(http.MultipartFile('file', stream, length, filename: file.path.split(Platform.pathSeparator).last));
+      final bytes = await file.readAsBytes();
+      final filename = 'image_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+          contentType: contentType,
+        ),
+      );
+
+      if (onProgress != null) {
+        onProgress(0.5);
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
+
+      if (onProgress != null) {
+        onProgress(1.0);
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['imageUrl'] as String?;
       } else {
-        debugPrint('Image upload backend failed: ${response.body}');
+        debugPrint('Image upload backend failed (${response.statusCode}): ${response.body}');
       }
       return null;
     } catch (e) {

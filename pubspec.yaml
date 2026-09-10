@@ -48,6 +48,7 @@ dependencies:
   image_picker: ^1.1.2
   provider: ^6.1.2
   http: ^1.6.0 # Upgraded to newer version for security and performance
+  http_parser: ^4.1.2
   crypto: ^3.0.3
   share_plus: ^13.3.0
   firebase_messaging: ^16.6.0

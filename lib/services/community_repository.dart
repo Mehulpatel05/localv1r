@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_model.dart';
@@ -63,31 +63,37 @@ class CommunityRepository {
 
   // Feature #13: Get unread message count
   Future<int> getUnreadCount(String communityId) async {
-    final memberDoc = await _db
-        .collection('community_members')
-        .doc('${communityId}_$currentUserHandle')
-        .get();
+    try {
+      final memberDoc = await _db
+          .collection('community_members')
+          .doc('${communityId}_$currentUserHandle')
+          .get();
 
-    DateTime lastRead = DateTime.fromMillisecondsSinceEpoch(0);
-    if (memberDoc.exists && memberDoc.data()?['lastReadAt'] != null) {
-      lastRead = (memberDoc.data()!['lastReadAt'] as Timestamp).toDate();
+      DateTime lastRead = DateTime.fromMillisecondsSinceEpoch(0);
+      if (memberDoc.exists && memberDoc.data()?['lastReadAt'] != null) {
+        lastRead = (memberDoc.data()!['lastReadAt'] as Timestamp).toDate();
+      }
+
+      final unread = await _db
+          .collection('community_messages')
+          .where('communityId', isEqualTo: communityId)
+          .where('timestamp', isGreaterThan: Timestamp.fromDate(lastRead))
+          .get();
+
+      return unread.docs.length;
+    } catch (_) {
+      return 0;
     }
-
-    final unread = await _db
-        .collection('community_messages')
-        .where('communityId', isEqualTo: communityId)
-        .where('timestamp', isGreaterThan: Timestamp.fromDate(lastRead))
-        .get();
-
-    return unread.docs.length;
   }
 
-  // Feature #13: Mark community as read
+  // Feature #13: Mark community as read (safe merge so it never throws if doc is missing)
   Future<void> markAsRead(String communityId) async {
-    final memberId = '${communityId}_$currentUserHandle';
-    await _db.collection('community_members').doc(memberId).update({
-      'lastReadAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      final memberId = '${communityId}_$currentUserHandle';
+      await _db.collection('community_members').doc(memberId).set({
+        'lastReadAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Stream<List<CommunityMessage>> getCommunityMessages(String communityId,
@@ -249,11 +255,34 @@ class CommunityRepository {
   }
 
   Future<bool> isMember(String communityId) async {
-    final doc = await _db
-        .collection('community_members')
-        .doc('${communityId}_$currentUserHandle')
-        .get();
-    return doc.exists;
+    try {
+      final doc = await _db
+          .collection('community_members')
+          .doc('${communityId}_$currentUserHandle')
+          .get();
+      if (doc.exists) return true;
+
+      // Fallback: check if current user is the admin/creator of this community
+      final commDoc = await _db.collection('communities').doc(communityId).get();
+      if (commDoc.exists && commDoc.data()?['adminHandle'] == currentUserHandle) {
+        // Auto-heal missing member doc
+        await _db
+            .collection('community_members')
+            .doc('${communityId}_$currentUserHandle')
+            .set({
+          'userHandle': currentUserHandle,
+          'userUid': FirebaseAuth.instance.currentUser?.uid,
+          'communityId': communityId,
+          'role': 'admin',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'lastReadAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   // Feature #10: Get all members of a community

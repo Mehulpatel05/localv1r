@@ -42,6 +42,9 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   void initState() {
     super.initState();
     _community = widget.community; // B5: init from widget
+    final isAdmin = widget.community.adminHandle == widget.repository.currentUserHandle;
+    _isMember = isAdmin;
+    _isLoading = !isAdmin;
     _checkMembership();
     _scrollController.addListener(_scrollListener);
   }
@@ -68,6 +71,16 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Future<void> _checkMembership() async {
+    final isAdmin = _community.adminHandle == widget.repository.currentUserHandle;
+    if (isAdmin) {
+      if (mounted) {
+        setState(() {
+          _isMember = true;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
     final isMember = await widget.repository.isMember(widget.community.id);
     if (mounted) {
       setState(() {

@@ -19,9 +19,9 @@ class LocationChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFF3B82F6).withOpacity(0.15),
+          color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.5), width: 1),
+          border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -103,28 +103,62 @@ class _AreaPickerSheet extends StatelessWidget {
             child: Text('AREA', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: city.areas.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  final isSelected = locationService.area == null;
-                  return ListTile(
-                    leading: Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? Colors.blue : Colors.grey),
-                    title: const Text('All of City (default)'),
-                    onTap: () {
-                      locationService.setArea(null);
-                      Navigator.pop(context);
-                    },
-                  );
-                }
-                final area = city.areas[index - 1];
-                final isSelected = locationService.area?.id == area.id;
-                return ListTile(
-                  leading: Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? Colors.blue : Colors.grey),
-                  title: Text(area.name),
-                  onTap: () {
-                    locationService.setArea(area);
-                    Navigator.pop(context);
+            child: Builder(
+              builder: (context) {
+                // Filter out generic "General / All" duplicate item from specific areas list
+                final specificAreas = city.areas
+                    .where((a) => !a.id.contains('GENERAL') && !a.name.toLowerCase().contains('general / all'))
+                    .toList();
+
+                return ListView.builder(
+                  itemCount: specificAreas.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      final isSelected = locationService.area == null;
+                      return ListTile(
+                        leading: Icon(
+                          isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                          color: isSelected ? const Color(0xFF3B82F6) : Colors.grey,
+                        ),
+                        title: Text(
+                          'All of ${city.name} (Default)',
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Show posts from entire ${city.name}',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        onTap: () {
+                          locationService.setArea(null);
+                          Navigator.pop(context);
+                        },
+                      );
+                    }
+                    final area = specificAreas[index - 1];
+                    final isSelected = locationService.area?.id == area.id;
+                    return ListTile(
+                      leading: Icon(
+                        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        color: isSelected ? const Color(0xFF3B82F6) : Colors.grey,
+                      ),
+                      title: Text(
+                        area.name,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                        ),
+                      ),
+                      subtitle: area.pincode != null
+                          ? Text('PIN: ${area.pincode}', style: const TextStyle(fontSize: 11, color: Colors.grey))
+                          : null,
+                      onTap: () {
+                        locationService.setArea(area);
+                        Navigator.pop(context);
+                      },
+                    );
                   },
                 );
               },
