@@ -11,7 +11,8 @@ import uuid
 import redis
 from typing import Optional, Dict, List, Tuple, Literal
 from collections import defaultdict
-from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request
+import anyio
+from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -802,13 +803,41 @@ async def create_post(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to publish post.")
         
+    POSTS_CACHE.clear() # Invalidate feed cache so new post shows instantly
     res = {"status": "success", "authorHandle": user_handle}
     if idempotency_key:
         await save_idempotent_response(idempotency_key, "create_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
-# 3.1 Get Posts (Read Path over REST)
+# 🛡️ HIGH-CONCURRENCY POSTS & FEED QUERY CACHE
+class PostsQueryCache:
+    def __init__(self, ttl_seconds: float = 3.0):
+        self.cache: Dict[str, Tuple[float, dict]] = {}
+        self.ttl = ttl_seconds
+        
+    def get(self, key: str) -> Optional[dict]:
+        if key in self.cache:
+            ts, data = self.cache[key]
+            if time.time() - ts < self.ttl:
+                return data
+            else:
+                del self.cache[key]
+        return None
+        
+    def put(self, key: str, data: dict):
+        self.cache[key] = (time.time(), data)
+        if len(self.cache) > 300:
+            oldest = min(self.cache.keys(), key=lambda k: self.cache[k][0])
+            del self.cache[oldest]
+            
+    def clear(self):
+        self.cache.clear()
+
+POSTS_CACHE = PostsQueryCache(ttl_seconds=3.0)
+
+
+# 3.1 Get Posts (Read Path over REST - Non-blocking & Cached for 1000+ concurrent users)
 @app.get("/api/v1/posts")
 async def get_posts(
     limit: int = 20,
@@ -822,15 +851,22 @@ async def get_posts(
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
     
-    # We can enforce rate limit for reading
+    # 1. High-concurrency RAM cache check (< 0.5ms response for concurrent readers)
+    cache_key = f"{cityId}:{areaId}:{category}:{author}:{cursor}:{limit}"
+    cached_res = POSTS_CACHE.get(cache_key)
+    if cached_res:
+        return cached_res
+    
+    # Rate limit check
     if authorization and authorization.startswith("Bearer "):
         try:
             device_id, _ = verify_session_token(authorization)
-            await enforce_route_rate_limit("get_posts", device_id, max_requests=100)
+            await enforce_route_rate_limit("get_posts", device_id, max_requests=200)
         except:
-            pass # allow anonymous reading for now, or block based on architecture
-            
-    try:
+            pass
+
+    # 2. Non-blocking Firestore worker
+    def _sync_fetch_posts():
         query = db.collection("posts")
         if author:
             query = query.where("authorHandle", "==", author)
@@ -843,7 +879,6 @@ async def get_posts(
             
         query = query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
         
-        # If cursor provided, it's the post ID to start after
         if cursor:
             cursor_doc = db.collection("posts").document(cursor).get()
             if cursor_doc.exists:
@@ -854,13 +889,11 @@ async def get_posts(
         except Exception as e:
             if "index" in str(e).lower() or "precondition" in str(e).lower():
                 print(f"[WARN] Missing index in get_posts. Fallback to manual filter. Error: {e}")
-                # Fetch all docs for this city (or all if no city), then manually filter+sort
                 fallback_base = db.collection("posts")
                 if cityId:
                     fallback_base = fallback_base.where("cityId", "==", cityId)
                 raw_docs = fallback_base.get()
                 
-                # Manual filter on remaining params
                 filtered = []
                 for doc in raw_docs:
                     data = doc.to_dict()
@@ -869,7 +902,6 @@ async def get_posts(
                     if category and data.get("category") != category: continue
                     filtered.append(doc)
                 
-                # Sort by createdAt descending manually
                 def _get_ts(d):
                     ca = d.to_dict().get("createdAt")
                     try:
@@ -878,7 +910,6 @@ async def get_posts(
                         return 0
                 filtered.sort(key=_get_ts, reverse=True)
                 
-                # Apply pagination
                 start_index = 0
                 if cursor:
                     for i, d in enumerate(filtered):
@@ -895,7 +926,6 @@ async def get_posts(
             if data.get("deletedAt") is not None or data.get("hiddenByMod") == True:
                 continue
             
-            # Format output
             data['id'] = doc.id
             if data.get('createdAt'):
                 ca = data['createdAt']
@@ -904,6 +934,11 @@ async def get_posts(
             
         last_id = docs[-1].id if docs else None
         return {"status": "success", "posts": posts, "nextCursor": last_id}
+
+    try:
+        res = await anyio.to_thread.run_sync(_sync_fetch_posts)
+        POSTS_CACHE.put(cache_key, res)
+        return res
     except Exception as e:
         print(f"Error fetching posts: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch posts")
@@ -1277,57 +1312,75 @@ class LRUCache:
     def __delitem__(self, key):
         if key in self.cache: del self.cache[key]
 
-MEDIA_CACHE = LRUCache(200) # max 200 items (approx 200 * 5MB = 1GB RAM max)
+MEDIA_CACHE = LRUCache(500) # max 500 items in RAM for high-speed delivery
 
 MEDIA_TYPE_CACHE: Dict[str, str] = {}
 
 
-# 10. Secure Media Proxy Endpoint
+# 10. Secure Media Proxy Endpoint (High-Performance Cached CDN Gateway)
 @app.get("/api/v1/media/{media_id}")
-async def serve_media(media_id: str):
-    if media_id in MEDIA_CACHE:
-        def iter_bytes():
-            yield MEDIA_CACHE.get(media_id)
-        return StreamingResponse(iter_bytes(), media_type=MEDIA_TYPE_CACHE.get(media_id, "image/jpeg"))
+async def serve_media(media_id: str, request: Request):
+    # Support HTTP 304 Not Modified
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match.strip('"') == media_id:
+        return Response(status_code=304)
+
+    mime_type = MEDIA_TYPE_CACHE.get(media_id, "image/jpeg")
+    cached_bytes = MEDIA_CACHE.get(media_id)
+    if cached_bytes:
+        return Response(
+            content=cached_bytes,
+            media_type=mime_type,
+            headers={
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "ETag": f'"{media_id}"',
+            }
+        )
 
     if db is None:
         raise HTTPException(status_code=500, detail="Database connection offline.")
         
     try:
-        media_record = FirebaseService.get_media_by_id(media_id)
-        if not media_record or media_record.get("deletedAt") is not None:
-            raise HTTPException(status_code=404, detail="Media not found.")
+        def _fetch_media_sync():
+            media_record = FirebaseService.get_media_by_id(media_id)
+            if not media_record or media_record.get("deletedAt") is not None:
+                return None, None
+            provider = media_record.get("storageProvider", "telegram")
+            file_bytes = None
+            m_type = media_record.get("mimeType", "image/jpeg")
+            if provider == "telegram":
+                file_id = media_record.get("telegramFileId")
+                url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
+                try:
+                    res = requests.get(url, timeout=10)
+                    if res.status_code == 200:
+                        data = res.json()
+                        if data.get("ok"):
+                            file_path = data["result"]["file_path"]
+                            telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
+                            img_res = requests.get(telegram_file_url, timeout=15)
+                            if img_res.status_code == 200:
+                                file_bytes = img_res.content
+                except Exception as tg_err:
+                    print(f"[WARN] Telegram fetch failed: {tg_err}")
+            return file_bytes, m_type
 
-        provider = media_record.get("storageProvider", "telegram")
-        file_bytes = None
-        mime_type = media_record.get("mimeType", "image/jpeg")
+        file_bytes, mime_type = await anyio.to_thread.run_sync(_fetch_media_sync)
         
-        if provider == "telegram":
-            file_id = media_record.get("telegramFileId")
-            url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
-            try:
-                res = requests.get(url, timeout=10)
-                if res.status_code == 200:
-                    data = res.json()
-                    if data.get("ok"):
-                        file_path = data["result"]["file_path"]
-                        telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
-                        img_res = requests.get(telegram_file_url, timeout=15)
-                        if img_res.status_code == 200:
-                            file_bytes = img_res.content
-            except Exception as tg_err:
-                print(f"[WARN] Telegram fetch failed: {tg_err}")
-                
         if file_bytes is None:
-            raise HTTPException(status_code=503, detail="Media host is temporarily unreachable.")
+            raise HTTPException(status_code=404, detail="Media not found or CDN is offline.")
                 
         MEDIA_CACHE.put(media_id, file_bytes)
         MEDIA_TYPE_CACHE[media_id] = mime_type
         
-        def iter_bytes():
-            yield file_bytes
-            
-        return StreamingResponse(iter_bytes(), media_type=mime_type)
+        return Response(
+            content=file_bytes,
+            media_type=mime_type,
+            headers={
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "ETag": f'"{media_id}"',
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
