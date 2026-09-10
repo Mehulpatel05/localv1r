@@ -196,6 +196,10 @@ class PostRepository extends ChangeNotifier {
     }
   }
 
+  Future<void> refresh() async {
+    await _fetchPosts(refresh: true);
+  }
+
   void _listenToPosts() {
     _fetchPosts(refresh: true);
   }

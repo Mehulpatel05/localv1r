@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
 import '../../core/location/location_chip.dart';
@@ -77,41 +77,57 @@ class _ServicesScreenState extends State<ServicesScreen> {
           SizedBox(width: 12),
         ],
       ),
-      body: _localRepo.isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-          : posts.isEmpty
-              ? _buildEmpty()
-              : GridView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(12, 16, 12, 100),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.65, // Adjust for image + content
+      body: RefreshIndicator(
+        onRefresh: _localRepo.refresh,
+        color: const Color(0xFF3B82F6),
+        child: _localRepo.isLoading
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
+            : posts.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: _buildEmpty(),
+                    ),
+                  )
+                : GridView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 100),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.65,
+                    ),
+                    itemCount: posts.length,
+                    itemBuilder: (context, i) => _buildServiceCard(posts[i]),
                   ),
-                  itemCount: posts.length,
-                  itemBuilder: (context, i) => _buildServiceCard(posts[i]),
-                ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFFF1F5F9),
         elevation: 4,
         icon: const Icon(Icons.handyman_rounded, color: Colors.black87),
         label: const Text(
           'Offer a Service',
-          style: TextStyle(color: Colors.black87,
+          style: TextStyle(
+              color: Colors.black87,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ServicesPostScreen(
-              repository: widget.repository,
-              authorHandle: widget.currentUserHandle,
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ServicesPostScreen(
+                repository: _localRepo,
+                authorHandle: widget.currentUserHandle,
+              ),
             ),
-          ),
-        ),
+          );
+          _localRepo.refresh();
+        },
       ),
     );
   }
@@ -159,7 +175,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -176,7 +192,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               MaterialPageRoute(
                 builder: (_) => PostDetailScreen(
                   post: post,
-                  repository: widget.repository,
+                  repository: _localRepo,
                   currentUserHandle: widget.currentUserHandle,
                 ),
               ),
@@ -296,7 +312,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             radius: 8,
                             backgroundColor: const Color(0xFFF1F5F9),
                             child: Text(
-                              post.authorHandle[0].toUpperCase(),
+                              post.authorHandle.isNotEmpty ? post.authorHandle[0].toUpperCase() : 'A',
                               style: const TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.bold,
@@ -328,4 +344,3 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 }
-

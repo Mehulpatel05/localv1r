@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
 import '../../core/location/location_chip.dart';
@@ -9,7 +9,7 @@ import '../../services/post_repository.dart';
 import '../detail/post_detail_screen.dart';
 import 'jobs_post_screen.dart';
 
-/// Dedicated Jobs & Referrals screen.
+/// Dedicated Jobs & Careers screen (Professional / LinkedIn inspired).
 class JobsScreen extends StatefulWidget {
   final PostRepository repository;
   final String currentUserHandle;
@@ -51,7 +51,7 @@ class _JobsScreenState extends State<JobsScreen> {
     final posts = _localRepo.allPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F2EF), // LinkedIn style background
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
@@ -64,7 +64,7 @@ class _JobsScreenState extends State<JobsScreen> {
             Text('💼', style: TextStyle(fontSize: 20)),
             SizedBox(width: 6),
             Text(
-              'Jobs',
+              'Jobs & Hiring',
               style: TextStyle(
                   color: Colors.black87,
                   fontWeight: FontWeight.bold,
@@ -77,19 +77,30 @@ class _JobsScreenState extends State<JobsScreen> {
           SizedBox(width: 12),
         ],
       ),
-      body: _localRepo.isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0A66C2)))
-          : posts.isEmpty
-              ? _buildEmpty()
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(
-                      top: 12, bottom: 100),
-                  itemCount: posts.length,
-                  itemBuilder: (context, i) => _buildJobCard(posts[i]),
-                ),
+      body: RefreshIndicator(
+        onRefresh: _localRepo.refresh,
+        color: const Color(0xFF0A66C2),
+        child: _localRepo.isLoading
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF0A66C2)))
+            : posts.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: _buildEmpty(),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(top: 12, bottom: 100),
+                    itemCount: posts.length,
+                    itemBuilder: (context, i) => _buildJobCard(posts[i]),
+                  ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF0A66C2), // LinkedIn blue
+        backgroundColor: const Color(0xFF0A66C2),
         elevation: 4,
         icon: const Icon(Icons.add_box_rounded, color: Colors.black87),
         label: const Text(
@@ -98,15 +109,18 @@ class _JobsScreenState extends State<JobsScreen> {
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => JobsPostScreen(
-              repository: widget.repository,
-              authorHandle: widget.currentUserHandle,
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => JobsPostScreen(
+                repository: _localRepo,
+                authorHandle: widget.currentUserHandle,
+              ),
             ),
-          ),
-        ),
+          );
+          _localRepo.refresh();
+        },
       ),
     );
   }
@@ -140,237 +154,190 @@ class _JobsScreenState extends State<JobsScreen> {
     );
   }
 
-  // ── Job card (LinkedIn/Professional Style) ─────────────────────────────
+  // ── Job card (LinkedIn / Indeed Vibe) ──────────────────────────────────
   Widget _buildJobCard(Post post) {
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
-    final title = post.jobTitle ?? 'Untitled Position';
-    final company = post.jobCompany ?? 'Confidential Company';
-    final location = post.jobLocation ?? 'Location not specified';
+    final title = post.jobTitle ?? 'Job Opportunity';
+    final company = post.jobCompany ?? 'Verified Employer';
+    final location = post.jobLocation ?? (post.areaName ?? 'Vadodara');
     final jobType = post.jobType ?? 'Full-time';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => PostDetailScreen(
                   post: post,
-                  repository: widget.repository,
+                  repository: _localRepo,
                   currentUserHandle: widget.currentUserHandle,
                 ),
               ),
             );
           },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header (Author info) ───────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: const Color(0xFFE0E7FF),
-                      child: Text(
-                        post.authorHandle[0].toUpperCase(),
-                        style: const TextStyle(
-                            fontSize: 18,
+                    // Company Logo Avatar
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          company.isNotEmpty ? company[0].toUpperCase() : '💼',
+                          style: const TextStyle(
+                            color: Color(0xFF0A66C2),
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF4F46E5)),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
+
+                    // Job Title & Company
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '@${post.authorHandle}',
+                            title,
                             style: const TextStyle(
-                                color: Colors.blue,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold),
+                              color: Colors.black87,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            _timeAgo(post.createdAt),
+                            company,
                             style: const TextStyle(
-                                color: Colors.black54, fontSize: 12),
+                              color: Colors.black54,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, size: 12, color: Colors.black38),
+                              const SizedBox(width: 2),
+                              Text(
+                                location,
+                                style: const TextStyle(color: Colors.black38, fontSize: 11),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.more_horiz, color: Colors.black54),
-                  ],
-                ),
-              ),
-              
-              // ── Job Details Section ─────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      company,
-                      style: const TextStyle(
-                        color: Color(0xFF0A66C2), // LinkedIn blue for company
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_city_rounded, size: 14, color: Colors.black54),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            '$location • ${post.areaName ?? 'Nearhood'}',
-                            style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    
-                    // Badges (Job Type)
+
+                    // Job Type Pill
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F2EF),
-                        borderRadius: BorderRadius.circular(4),
+                        color: const Color(0xFFE0F2FE),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         jobType,
                         style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0284C7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
                   ],
                 ),
-              ),
-              
-              // ── Description ───────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
+
+                const SizedBox(height: 12),
+
+                // Description
+                Text(
                   post.content,
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
+                    color: Colors.black87,
+                    fontSize: 13,
                     height: 1.4,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
 
-              // ── Optional Banner Image ──────────────────────────────────
-              if (hasImage)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: SafeImage(
-                    imageUrl: post.imageUrl!,
-                    height: 180,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-              
-              const Divider(height: 1, color: Color(0xFFE5E7EB)),
-              
-              // ── Actions (Upvotes/Downvotes, Comments count) ────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Row(
-                  children: [
-                    // Upvote/Downvote container
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.thumb_up_alt_rounded,
-                            size: 20,
-                            color: post.userVote == 1 ? const Color(0xFF0A66C2) : Colors.black45,
-                          ),
-                          onPressed: () => widget.repository.votePost(post.id, 1),
-                        ),
-                        Text(
-                          '${post.score}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: post.userVote == 1
-                                ? const Color(0xFF0A66C2)
-                                : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.thumb_down_alt_rounded,
-                            size: 20,
-                            color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black45,
-                          ),
-                          onPressed: () => widget.repository.votePost(post.id, -1),
-                        ),
-                      ],
+                // Image if available
+                if (hasImage) ...[
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SafeImage(
+                      imageUrl: post.imageUrl!,
+                      height: 140,
+                      width: double.infinity,
                     ),
-                    const SizedBox(width: 16),
+                  ),
+                ],
 
-                    // Comments Icon
-                    Row(
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                const SizedBox(height: 8),
+
+                // Footer: Author & Action
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Posted by @${post.authorHandle}',
+                      style: const TextStyle(color: Colors.black38, fontSize: 11),
+                    ),
+                    const Row(
                       children: [
-                        const Icon(Icons.comment_rounded, size: 18, color: Colors.black45),
-                        const SizedBox(width: 6),
                         Text(
-                          '${post.commentCount} Comments',
-                          style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w600),
+                          'View Details',
+                          style: TextStyle(
+                            color: Color(0xFF0A66C2),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                        SizedBox(width: 2),
+                        Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Color(0xFF0A66C2)),
                       ],
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    return '${diff.inDays}d';
-  }
 }
-

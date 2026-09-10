@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
 import '../../core/location/location_chip.dart';
@@ -9,7 +9,7 @@ import '../../services/post_repository.dart';
 import '../detail/post_detail_screen.dart';
 import 'events_post_screen.dart';
 
-/// Dedicated Events & Meetups screen.
+/// Dedicated Events & Meetups screen (Eventbrite / Party aesthetic).
 class EventsScreen extends StatefulWidget {
   final PostRepository repository;
   final String currentUserHandle;
@@ -51,22 +51,22 @@ class _EventsScreenState extends State<EventsScreen> {
     final posts = _localRepo.allPosts;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.black54, size: 28),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Row(
           children: [
-            Text('🎉', style: TextStyle(fontSize: 20)),
+            Text('🎪', style: TextStyle(fontSize: 20)),
             SizedBox(width: 6),
             Text(
-              'Events',
-              style: TextStyle(color: Colors.black87,
+              'Events & Meetups',
+              style: TextStyle(
+                  color: Colors.black87,
                   fontWeight: FontWeight.bold,
                   fontSize: 18),
             ),
@@ -77,18 +77,30 @@ class _EventsScreenState extends State<EventsScreen> {
           SizedBox(width: 12),
         ],
       ),
-      body: _localRepo.isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
-          : posts.isEmpty
-              ? _buildEmpty()
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(
-                      top: 16, bottom: 100, left: 14, right: 14),
-                  itemCount: posts.length,
-                  itemBuilder: (context, i) => _buildEventCard(posts[i]),
-                ),
+      body: RefreshIndicator(
+        onRefresh: _localRepo.refresh,
+        color: const Color(0xFF8B5CF6),
+        child: _localRepo.isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
+            : posts.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: _buildEmpty(),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(
+                        top: 16, bottom: 100, left: 14, right: 14),
+                    itemCount: posts.length,
+                    itemBuilder: (context, i) => _buildEventCard(posts[i]),
+                  ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF8B5CF6),
         elevation: 6,
@@ -99,15 +111,18 @@ class _EventsScreenState extends State<EventsScreen> {
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EventsPostScreen(
-              repository: widget.repository,
-              authorHandle: widget.currentUserHandle,
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventsPostScreen(
+                repository: _localRepo,
+                authorHandle: widget.currentUserHandle,
+              ),
             ),
-          ),
-        ),
+          );
+          _localRepo.refresh();
+        },
       ),
     );
   }
@@ -149,330 +164,218 @@ class _EventsScreenState extends State<EventsScreen> {
     final location = post.eventLocationText ?? 'Location revealed soon';
     final price = post.eventPrice ?? 'Free';
 
-    // Parse date for badge (Assuming format like "OCT 28, 6:00 PM" or something similar)
-    // For demo purposes, we will split by space to try getting month and day.
     String badgeTop = 'DATE';
     String badgeBottom = 'TBA';
     if (date.contains(' ')) {
       final parts = date.split(' ');
-      if (parts.length >= 2) {
-        badgeTop = parts[0].replaceAll(',', '').toUpperCase(); // e.g. OCT
-        badgeBottom = parts[1].replaceAll(',', ''); // e.g. 28
-      }
+      badgeTop = parts.first.toUpperCase();
+      badgeBottom = parts.length > 1 ? parts[1].replaceAll(',', '') : '';
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PostDetailScreen(
-                  post: post,
-                  repository: widget.repository,
-                  currentUserHandle: widget.currentUserHandle,
-                ),
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(
+                post: post,
+                repository: _localRepo,
+                currentUserHandle: widget.currentUserHandle,
               ),
-            );
-          },
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Banner Image with Date Badge ──────────────────────────────────
-                Stack(
-                  children: [
-                    if (hasImage)
-                      SafeImage(
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Image Banner & Date Badge ──────────────────────────────
+              Stack(
+                children: [
+                  if (hasImage)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      child: SafeImage(
                         imageUrl: post.imageUrl!,
-                        height: 200,
-                        borderRadius: BorderRadius.zero,
-                      )
-                    else
-                      Container(
                         height: 180,
-                        color: const Color(0xFFE2E8F0),
-                        child: const Center(
-                          child: Text('🎊', style: TextStyle(fontSize: 64)),
-                        ),
+                        width: double.infinity,
+                        borderRadius: BorderRadius.zero,
                       ),
-                    
-                    // Date Badge Overlay
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                    )
+                  else
+                    Container(
+                      height: 120,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        child: Column(
-                          children: [
-                            Text(
-                              badgeTop,
-                              style: const TextStyle(
-                                color: Color(0xFFEF4444), // Red month
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1,
-                              ),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.celebration, color: Colors.white54, size: 48),
+                      ),
+                    ),
+
+                  // Event Date Badge
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            badgeTop,
+                            style: const TextStyle(
+                              color: Color(0xFF8B5CF6),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
                             ),
-                            Text(
-                              badgeBottom,
-                              style: const TextStyle(
-                                color: Colors.black87,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                              ),
+                          ),
+                          Text(
+                            badgeBottom,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Price Tag Badge
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        price,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
+                  ),
+                ],
+              ),
+
+              // ── Details Section ─────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     
-                    // Price tag overlay
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade300),
+                    // Location & Venue
+                    Row(
+                      children: [
+                        const Icon(Icons.place_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          price,
-                          style: const TextStyle(color: Colors.black87,
-                            fontSize: 13,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    
+                    Text(
+                      post.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 14, color: Colors.black38),
+                        const SizedBox(width: 4),
+                        Text(
+                          post.areaName ?? 'Nearhood',
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '@${post.authorHandle}',
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-
-                // ── Details Section ─────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.black87,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Date & Time row
-                      Row(
-                        children: [
-                          const Icon(Icons.access_time_filled_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              date,
-                              style: const TextStyle(
-                                  color: Color(0xFFC4B5FD),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Area and Location row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  location,
-                                  style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                                Text(
-                                  post.areaName ?? 'Nearhood',
-                                  style: const TextStyle(
-                                      color: Colors.black38,
-                                      fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      Divider(color: Colors.grey.shade200, height: 1),
-                      const SizedBox(height: 16),
-
-                      // Event Description
-                      Text(
-                        post.content,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 14,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Footer (Author & Actions)
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 12,
-                            backgroundColor: const Color(0xFF8B5CF6),
-                            child: Text(
-                              post.authorHandle[0].toUpperCase(),
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '@${post.authorHandle}',
-                            style: const TextStyle(
-                                color: Colors.blue,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const Spacer(),
-                          Text(
-                            _timeAgo(post.createdAt),
-                            style: const TextStyle(
-                                color: Colors.black38, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Actions (Upvotes/Downvotes, Comments count)
-                      Row(
-                        children: [
-                          // Upvote/Downvote container
-                          Container(
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  icon: Icon(
-                                    Icons.keyboard_arrow_up_rounded,
-                                    size: 22,
-                                    color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.black54,
-                                  ),
-                                  onPressed: () => widget.repository.votePost(post.id, 1),
-                                ),
-                                Text(
-                                  '${post.score}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: post.userVote == 1
-                                        ? const Color(0xFF10B981)
-                                        : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black87),
-                                  ),
-                                ),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  icon: Icon(
-                                    Icons.keyboard_arrow_down_rounded,
-                                    size: 22,
-                                    color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54,
-                                  ),
-                                  onPressed: () => widget.repository.votePost(post.id, -1),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Comments Icon
-                          Row(
-                            children: [
-                              const Icon(Icons.mode_comment_outlined, size: 18, color: Colors.black54),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${post.commentCount}',
-                                style: const TextStyle(color: Colors.black54, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
 }
-

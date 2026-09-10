@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
 import '../../core/location/location_chip.dart';
@@ -9,7 +9,7 @@ import '../../services/post_repository.dart';
 import '../detail/post_detail_screen.dart';
 import 'food_post_screen.dart';
 
-/// Dedicated Food & Cafes screen.
+/// Dedicated Food & Nightlife screen (Zomato-inspired UI).
 class FoodScreen extends StatefulWidget {
   final PostRepository repository;
   final String currentUserHandle;
@@ -51,22 +51,22 @@ class _FoodScreenState extends State<FoodScreen> {
     final posts = _localRepo.allPosts;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.black54, size: 28),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Row(
           children: [
-            Text('🍲', style: TextStyle(fontSize: 20)),
+            Text('🍕', style: TextStyle(fontSize: 20)),
             SizedBox(width: 6),
             Text(
-              'Food & Cafes',
-              style: TextStyle(color: Colors.black87,
+              'Food & Drinks',
+              style: TextStyle(
+                  color: Colors.black87,
                   fontWeight: FontWeight.bold,
                   fontSize: 18),
             ),
@@ -77,18 +77,30 @@ class _FoodScreenState extends State<FoodScreen> {
           SizedBox(width: 12),
         ],
       ),
-      body: _localRepo.isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
-          : posts.isEmpty
-              ? _buildEmpty()
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(
-                      top: 16, bottom: 100, left: 14, right: 14),
-                  itemCount: posts.length,
-                  itemBuilder: (context, i) => _buildFoodCard(posts[i]),
-                ),
+      body: RefreshIndicator(
+        onRefresh: _localRepo.refresh,
+        color: const Color(0xFFF59E0B),
+        child: _localRepo.isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
+            : posts.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: _buildEmpty(),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(
+                        top: 16, bottom: 100, left: 14, right: 14),
+                    itemCount: posts.length,
+                    itemBuilder: (context, i) => _buildFoodCard(posts[i]),
+                  ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFFF59E0B),
         elevation: 4,
@@ -99,15 +111,18 @@ class _FoodScreenState extends State<FoodScreen> {
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2),
         ),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => FoodPostScreen(
-              repository: widget.repository,
-              authorHandle: widget.currentUserHandle,
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FoodPostScreen(
+                repository: _localRepo,
+                authorHandle: widget.currentUserHandle,
+              ),
             ),
-          ),
-        ),
+          );
+          _localRepo.refresh();
+        },
       ),
     );
   }
@@ -156,8 +171,8 @@ class _FoodScreenState extends State<FoodScreen> {
         border: Border.all(color: Colors.black12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -167,263 +182,127 @@ class _FoodScreenState extends State<FoodScreen> {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PostDetailScreen(
-                  post: post,
-                  repository: widget.repository,
-                  currentUserHandle: widget.currentUserHandle,
-                ),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(
+                post: post,
+                repository: _localRepo,
+                currentUserHandle: widget.currentUserHandle,
               ),
-            );
-          },
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Edge-to-edge Image ──────────────────────────────────
-            Stack(
-              children: [
-                if (hasImage)
-                  SafeImage(
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Image Banner ─────────────────────────────────────────
+              if (hasImage)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: SafeImage(
                     imageUrl: post.imageUrl!,
-                    height: 220,
-                    borderRadius: BorderRadius.zero,
-                  )
-                else
-                  Container(
                     height: 180,
-                    color: const Color(0xFFE2E8F0),
-                    child: const Center(
-                      child: Text('🍲', style: TextStyle(fontSize: 64)),
-                    ),
-                  ),
-                
-                // Favorite Button
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.bookmark_border,
-                        color: Colors.white, size: 22),
+                    width: double.infinity,
+                    borderRadius: BorderRadius.zero,
                   ),
                 ),
-              ],
-            ),
 
-            // ── Details Section ─────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title & Rating Row
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.black87,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Rating Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: rating >= 4.0 
-                              ? const Color(0xFF10B981) // Green for high rating
-                              : const Color(0xFFF59E0B), // Orange for medium
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              rating.toStringAsFixed(1),
-                              style: const TextStyle(color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold),
+                        if (rating > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: rating >= 4.0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            const SizedBox(width: 2),
-                            const Icon(Icons.star_rounded,
-                                color: Colors.white, size: 14),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Area and Price row
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, size: 14, color: Colors.black54),
-                      const SizedBox(width: 4),
-                      Text(
-                        post.areaName ?? 'Nearhood',
-                        style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.circle, size: 4, color: Colors.black26),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '₹ $price',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Divider(color: Colors.grey.shade200, height: 1),
-                  const SizedBox(height: 12),
-
-                  // User Review Content
-                  Text(
-                    post.content,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 14,
-                      height: 1.4,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                const Icon(Icons.star, color: Colors.white, size: 12),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Footer (Author & Time)
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 10,
-                        backgroundColor: const Color(0xFFF59E0B),
-                        child: Text(
-                          post.authorHandle[0].toUpperCase(),
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                        ),
+                    const SizedBox(height: 6),
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '@${post.authorHandle}',
-                        style: const TextStyle(
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      post.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 14, color: Colors.black45),
+                        const SizedBox(width: 4),
+                        Text(
+                          post.areaName ?? 'Nearhood',
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '@${post.authorHandle}',
+                          style: const TextStyle(
                             color: Colors.blue,
                             fontSize: 12,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _timeAgo(post.createdAt),
-                        style: const TextStyle(
-                            color: Colors.black38, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Actions (Upvotes/Downvotes, Comments count)
-                  Row(
-                    children: [
-                      // Upvote/Downvote container
-                      Container(
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.black12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              icon: Icon(
-                                Icons.arrow_upward_rounded,
-                                size: 18,
-                                color: post.userVote == 1 ? const Color(0xFF10B981) : Colors.black54,
-                              ),
-                              onPressed: () => widget.repository.votePost(post.id, 1),
-                            ),
-                            Text(
-                              '${post.score}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: post.userVote == 1
-                                    ? const Color(0xFF10B981)
-                                    : (post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black87),
-                              ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              icon: Icon(
-                                Icons.arrow_downward_rounded,
-                                size: 18,
-                                color: post.userVote == -1 ? const Color(0xFFEF4444) : Colors.black54,
-                              ),
-                              onPressed: () => widget.repository.votePost(post.id, -1),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-
-                      // Comments Icon
-                      Row(
-                        children: [
-                          const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.black54),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${post.commentCount}',
-                            style: const TextStyle(color: Colors.black54, fontSize: 13),
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
         ),
       ),
     );
   }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
 }
-

@@ -690,17 +690,30 @@ class _FeedScreenState extends State<FeedScreen> {
                     final feedPosts = repo.posts;
 
                     return Expanded(
-                      child: feedPosts.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              itemCount: feedPosts.length,
-                              itemBuilder: (context, index) {
-                                final post = feedPosts[index];
-                                return _buildPostCard(post);
-                              },
-                            ),
+                      child: RefreshIndicator(
+                        onRefresh: widget.repository.refresh,
+                        color: const Color(0xFF3B82F6),
+                        child: feedPosts.isEmpty
+                            ? SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: Container(
+                                  height: MediaQuery.of(context).size.height * 0.5,
+                                  alignment: Alignment.center,
+                                  child: _buildEmptyState(),
+                                ),
+                              )
+                            : ListView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(
+                                  parent: BouncingScrollPhysics(),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                itemCount: feedPosts.length,
+                                itemBuilder: (context, index) {
+                                  final post = feedPosts[index];
+                                  return _buildPostCard(post);
+                                },
+                              ),
+                      ),
                     );
                   },
                 ),
@@ -722,9 +735,18 @@ class _FeedScreenState extends State<FeedScreen> {
                     ListTile(
                       leading: const Icon(Icons.edit, color: Colors.white),
                       title: const Text('Create Global Post', style: TextStyle(color: Colors.black87)),
-                      onTap: () {
+                      onTap: () async {
                         Navigator.pop(ctx);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => CreatePostScreen(repository: widget.repository, authorHandle: widget.currentUserHandle)));
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CreatePostScreen(
+                              repository: widget.repository,
+                              authorHandle: widget.currentUserHandle,
+                            ),
+                          ),
+                        );
+                        widget.repository.refresh();
                       },
                     ),
                     ListTile(
