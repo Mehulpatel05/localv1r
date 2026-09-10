@@ -102,7 +102,7 @@ def seed():
                     "authorHandle": f"user_{random.randint(1000, 9999)}",
                     "content": f"{content} In {area['name']}.",
                     "category": cat,
-                    "createdAt": (now - datetime.timedelta(minutes=random.randint(1, 10000))).isoformat().replace('+00:00', 'Z'),
+                    "createdAt": now - datetime.timedelta(minutes=random.randint(1, 10000)),
                     "stateId": "GJ",
                     "cityId": "GJ-VAD",
                     "areaId": area["id"],
