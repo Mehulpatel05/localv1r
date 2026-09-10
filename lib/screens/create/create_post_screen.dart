@@ -104,7 +104,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           debugPrint('Error uploading image: $e');
         }
         if (telegramImageUrl == null || telegramImageUrl.isEmpty) {
-          throw Exception('Image upload failed. Please try again.');
+          // Upload failed — post without image, show warning
+          debugPrint('Image upload failed, posting without image');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: Color(0xFFF59E0B),
+                content: Text('⚠️ Image upload failed — post will be published without image'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
       final locService = widget.repository.locationService;
