@@ -21,7 +21,7 @@ class PostRepository extends ChangeNotifier {
   List<Post> _posts = [];
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
-  PostCategory? _selectedCategory;
+  PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
 
@@ -486,21 +486,8 @@ class PostRepository extends ChangeNotifier {
     }
   }
 
-  /// Returns all posts by [handle] — filters from the already-loaded in-memory
-  /// list first (fast & accurate). Falls back to a fresh backend fetch if the
-  /// in-memory list is empty (e.g. profile opened before feed loads).
+  /// Returns all posts by [handle] across all categories.
   Future<List<Post>> fetchPostsByUser(String handle) async {
-    // ── 1. Filter from already-loaded in-memory posts (most reliable) ──────
-    final fromMemory = _posts
-        .where((p) => p.authorHandle == handle)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    if (fromMemory.isNotEmpty) {
-      return fromMemory;
-    }
-
-    // ── 2. Fallback: fetch fresh from backend ────────
     try {
       final response = await http.get(
         Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle'),
@@ -509,7 +496,7 @@ class PostRepository extends ChangeNotifier {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> postsData = data['posts'] ?? [];
-        final allPosts = postsData.map((d) => Post(
+        return postsData.map((d) => Post(
           id: d['id'],
           authorHandle: d['authorHandle'] ?? '',
           content: d['content'] ?? '',
@@ -517,16 +504,39 @@ class PostRepository extends ChangeNotifier {
           imageUrl: d['imageUrl'],
           upvotes: d['upvotes'] ?? 0,
           downvotes: d['downvotes'] ?? 0,
+          commentCount: d['commentCount'] ?? 0,
           reportCount: d['reportCount'] ?? 0,
           reporters: List<String>.from(d['reporters'] ?? []),
           createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
+          stateId: d['stateId'],
+          cityId: d['cityId'],
+          areaId: d['areaId'],
+          areaName: d['areaName'],
+          roomTitle: d['roomTitle'],
+          roomArea: d['roomArea'],
+          roomRent: d['roomRent'],
+          mediaUrls: d['mediaUrls'] != null ? List<String>.from(d['mediaUrls']) : [],
+          shopTitle: d['shopTitle'],
+          shopPrice: d['shopPrice'],
+          foodTitle: d['foodTitle'],
+          foodRating: d['foodRating'] != null ? (d['foodRating'] as num).toDouble() : null,
+          foodPrice: d['foodPrice'],
+          eventTitle: d['eventTitle'],
+          eventDate: d['eventDate'],
+          eventLocationText: d['eventLocationText'],
+          eventPrice: d['eventPrice'],
+          jobTitle: d['jobTitle'],
+          jobCompany: d['jobCompany'],
+          jobLocation: d['jobLocation'],
+          jobType: d['jobType'],
+          serviceTitle: d['serviceTitle'],
+          serviceCategoryText: d['serviceCategoryText'],
+          servicePrice: d['servicePrice'],
         )).toList();
-
-        return allPosts;
       }
     } catch (e) {
       debugPrint('Error fetching posts for profile: $e');
     }
-    return [];
+    return _posts.where((p) => p.authorHandle == handle).toList();
   }
 }

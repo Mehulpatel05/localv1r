@@ -371,7 +371,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                       cat != PostCategory.shop && 
                                       cat != PostCategory.food &&
                                       cat != PostCategory.events &&
-                                      cat != PostCategory.jobs)
+                                      cat != PostCategory.jobs &&
+                                      cat != PostCategory.services)
                                   .map((cat) {
                                 return DropdownMenuItem(
                                   value: cat,
