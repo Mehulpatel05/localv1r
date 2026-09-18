@@ -109,6 +109,7 @@ class WakitService:
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in (200, 201):
+                data = response.json()
                 d_data = data.get("data") if isinstance(data.get("data"), dict) else {}
                 if d_data:
                     is_valid = (
