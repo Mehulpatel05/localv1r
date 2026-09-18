@@ -1,18 +1,19 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/post_model.dart';
-import '../core/constants/areas_and_categories.dart';
+import 'auth_service.dart';
 
 class PostApiClient {
   static const String backendBaseUrl = 'https://localv1r.onrender.com/api/v1';
 
   Future<Map<String, String>> getAuthHeaders() async {
+    final token = await AuthService.instance.getAccessToken();
     final user = FirebaseAuth.instance.currentUser;
-    final token = user != null ? await user.getIdToken() : '';
+    final fallbackToken = user != null ? await user.getIdToken() : '';
+    final finalToken = (token != null && token.isNotEmpty) ? token : fallbackToken;
     return {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $finalToken',
     };
   }
 

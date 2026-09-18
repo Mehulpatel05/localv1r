@@ -17,6 +17,14 @@ class Config:
     _FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode('utf-8'))
     crypto = Fernet(_FERNET_KEY.encode('utf-8'))
     
+    # Wakit OTP Gateway Configuration
+    WAKIT_API_KEY = os.getenv("WAKIT_API_KEY", "")
+    WAKIT_BASE_URL = os.getenv("WAKIT_BASE_URL", "https://api.wakit.app/v1")
+    
+    # JWT Expiration settings
+    JWT_ACCESS_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "30"))
+    JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "30"))
+
     # Path to Firebase Admin SDK service account key json
     FIREBASE_CREDENTIALS_PATH = os.getenv(
         "FIREBASE_CREDENTIALS_PATH",

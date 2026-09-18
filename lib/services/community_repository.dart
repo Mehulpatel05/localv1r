@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,7 +38,29 @@ class CommunityRepository {
     });
   }
 
-  // Bug #4 fixed: Returns only communities the user has NOT joined
+  // Stream all communities for Discover tab
+  Stream<List<CommunityModel>> getAllCommunities() {
+    return _db
+        .collection('communities')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => CommunityModel.fromMap(d.data(), d.id))
+            .toList());
+  }
+
+  // Stream IDs of communities the user has joined
+  Stream<Set<String>> getJoinedCommunityIds() {
+    return _db
+        .collection('community_members')
+        .where('userHandle', isEqualTo: currentUserHandle)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => d.data()['communityId'] as String)
+            .toSet());
+  }
+
+  // Bug #4 fixed: Returns only communities the user has NOT joined (fully streaming without artificial limits)
   Stream<List<CommunityModel>> getDiscoverCommunities() {
     return _db
         .collection('community_members')
@@ -96,17 +119,59 @@ class CommunityRepository {
     } catch (_) {}
   }
 
-  Stream<List<CommunityMessage>> getCommunityMessages(String communityId,
-      {int limit = 30}) {
-    return _db
-        .collection('community_messages')
-        .where('communityId', isEqualTo: communityId)
-        .orderBy('timestamp', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => CommunityMessage.fromMap(doc.data(), doc.id))
-            .toList());
+  Stream<List<CommunityMessage>> getCommunityMessages(String communityId) {
+    late StreamController<List<CommunityMessage>> controller;
+    StreamSubscription? primarySub;
+    StreamSubscription? fallbackSub;
+
+    void startFallback() {
+      fallbackSub = _db
+          .collection('community_messages')
+          .where('communityId', isEqualTo: communityId)
+          .snapshots()
+          .listen(
+        (snapshot) {
+          final list = snapshot.docs
+              .map((doc) => CommunityMessage.fromMap(doc.data(), doc.id))
+              .toList();
+          list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          if (!controller.isClosed) controller.add(list);
+        },
+        onError: (err) {
+          if (!controller.isClosed) controller.addError(err);
+        },
+      );
+    }
+
+    controller = StreamController<List<CommunityMessage>>.broadcast(
+      onListen: () {
+        primarySub = _db
+            .collection('community_messages')
+            .where('communityId', isEqualTo: communityId)
+            .orderBy('timestamp', descending: true)
+            .snapshots()
+            .listen(
+          (snapshot) {
+            final list = snapshot.docs
+                .map((doc) => CommunityMessage.fromMap(doc.data(), doc.id))
+                .toList();
+            if (!controller.isClosed) controller.add(list);
+          },
+          onError: (err) {
+            // Fallback: If composite index is missing or building, seamlessly recover with in-memory sort
+            primarySub?.cancel();
+            primarySub = null;
+            startFallback();
+          },
+        );
+      },
+      onCancel: () {
+        primarySub?.cancel();
+        fallbackSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   // Feature #7: Create community with optional avatar image
@@ -182,30 +247,38 @@ class CommunityRepository {
   }
 
   Future<void> joinCommunity(String communityId) async {
+    if (currentUserHandle.isEmpty) return;
     final memberId = '${communityId}_$currentUserHandle';
     final docRef = _db.collection('community_members').doc(memberId);
-    final doc = await docRef.get();
-    if (doc.exists) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     await docRef.set({
       'communityId': communityId,
       'userHandle': currentUserHandle,
-      'userUid': FirebaseAuth.instance.currentUser?.uid,
+      'userUid': uid,
+      'role': 'member',
       'joinedAt': FieldValue.serverTimestamp(),
       'lastReadAt': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
 
-    await _db.collection('communities').doc(communityId).update({
-      'memberCount': FieldValue.increment(1),
-    });
+    try {
+      await _db.collection('communities').doc(communityId).update({
+        'memberCount': FieldValue.increment(1),
+      });
+    } catch (_) {}
   }
 
   Future<void> leaveCommunity(String communityId) async {
+    if (currentUserHandle.isEmpty) return;
     final memberId = '${communityId}_$currentUserHandle';
-    await _db.collection('community_members').doc(memberId).delete();
-    await _db.collection('communities').doc(communityId).update({
-      'memberCount': FieldValue.increment(-1),
-    });
+    try {
+      await _db.collection('community_members').doc(memberId).delete();
+    } catch (_) {}
+    try {
+      await _db.collection('communities').doc(communityId).update({
+        'memberCount': FieldValue.increment(-1),
+      });
+    } catch (_) {}
   }
 
   // B2 fixed: chunked batch delete — Firestore limit is 500 ops per batch
@@ -255,10 +328,12 @@ class CommunityRepository {
   }
 
   Future<bool> isMember(String communityId) async {
+    if (currentUserHandle.isEmpty) return false;
     try {
+      final memberId = '${communityId}_$currentUserHandle';
       final doc = await _db
           .collection('community_members')
-          .doc('${communityId}_$currentUserHandle')
+          .doc(memberId)
           .get();
       if (doc.exists) return true;
 
@@ -266,12 +341,13 @@ class CommunityRepository {
       final commDoc = await _db.collection('communities').doc(communityId).get();
       if (commDoc.exists && commDoc.data()?['adminHandle'] == currentUserHandle) {
         // Auto-heal missing member doc
+        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
         await _db
             .collection('community_members')
-            .doc('${communityId}_$currentUserHandle')
+            .doc(memberId)
             .set({
           'userHandle': currentUserHandle,
-          'userUid': FirebaseAuth.instance.currentUser?.uid,
+          'userUid': uid,
           'communityId': communityId,
           'role': 'admin',
           'joinedAt': FieldValue.serverTimestamp(),
@@ -373,8 +449,50 @@ class CommunityRepository {
       'authorUid': FirebaseAuth.instance.currentUser?.uid,
       'content': caption,
       'imageUrl': imageUrl,
+      'type': 'image',
       'timestamp': FieldValue.serverTimestamp(),
     });
+  }
+
+  // Multi-image album grouping via parallel upload
+  Future<void> sendImageGroupMessage(
+    String communityId,
+    List<File> imageFiles, {
+    String caption = '',
+  }) async {
+    final isMem = await isMember(communityId);
+    if (!isMem) throw Exception('Must be a member to post.');
+    if (imageFiles.isEmpty) return;
+
+    final uploadFutures =
+        imageFiles.map((f) => TelegramStorageService.uploadImage(f));
+    final uploadedUrls = await Future.wait(uploadFutures);
+    final validUrls = uploadedUrls.whereType<String>().toList();
+
+    if (validUrls.isEmpty) throw Exception('Image upload failed.');
+
+    if (validUrls.length == 1) {
+      await _db.collection('community_messages').add({
+        'communityId': communityId,
+        'authorHandle': currentUserHandle,
+        'authorUid': FirebaseAuth.instance.currentUser?.uid,
+        'content': caption,
+        'imageUrl': validUrls.first,
+        'type': 'image',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await _db.collection('community_messages').add({
+        'communityId': communityId,
+        'authorHandle': currentUserHandle,
+        'authorUid': FirebaseAuth.instance.currentUser?.uid,
+        'content': caption,
+        'mediaUrls': validUrls,
+        'imageUrl': validUrls.first,
+        'type': 'image_group',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   // Feature #9: Toggle emoji reaction — uses Firestore transaction to fix race condition (B1)

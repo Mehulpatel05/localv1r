@@ -9,8 +9,10 @@ import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'screens/main/main_screen.dart';
-import 'screens/auth/google_login_screen.dart';
+import 'screens/auth/phone_login_screen.dart';
+import 'services/auth_service.dart';
 import 'core/location/location_service.dart';
+import 'services/presence_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -62,16 +64,18 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.dispose();
   }
 
-  // Check login status asynchronously using SharedPreferences (faster than SecureStorage) to route the user
+  // Check login status asynchronously using FlutterSecureStorage and SharedPreferences
   Future<Map<String, dynamic>> _checkAuthStatus() async {
     // Enforce a minimum delay so the Splash Screen is visible for branding
     await Future.delayed(const Duration(milliseconds: 1500));
     
+    final isSecureLoggedIn = await AuthService.instance.isLoggedIn();
     final prefs = await SharedPreferences.getInstance();
     final isLoggedInStr = prefs.getString('is_logged_in');
-    final handle = prefs.getString('user_handle') ?? 'Guest';
+    final handle = await AuthService.instance.getUserHandle() ?? prefs.getString('user_handle') ?? 'Guest';
+    
     return {
-      'isLoggedIn': isLoggedInStr == 'true',
+      'isLoggedIn': isSecureLoggedIn || isLoggedInStr == 'true',
       'userHandle': handle,
     };
   }
@@ -115,32 +119,18 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.location_city, size: 90, color: Color(0xFF3B82F6)),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'NEARHOOD',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        letterSpacing: 2,
-                      ),
+                    Image.asset(
+                      'assets/images/nearhood_logo.png',
+                      width: 220,
+                      height: 180,
+                      fit: BoxFit.contain,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Explore • Connect • Thrive',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black54,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 36),
                     const SizedBox(
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       child: CircularProgressIndicator(
-                        color: Color(0xFF3B82F6),
+                        color: Color(0xFF1A6B5F),
                         strokeWidth: 3,
                       ),
                     ),
@@ -154,14 +144,15 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
           if (data != null && data['isLoggedIn'] == true) {
             final handle = data['userHandle'] as String;
             postRepository.currentUserHandle = handle;
-            // Initialize push notifications after login
+            // Initialize push notifications and presence after login
             NotificationService().initialize();
+            PresenceService.instance.init(handle);
             return MainScreen(
               repository: postRepository,
               currentUserHandle: handle,
             );
           } else {
-            return GoogleLoginScreen(repository: postRepository);
+            return PhoneLoginScreen(repository: postRepository);
           }
         },
       ),

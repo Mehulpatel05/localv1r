@@ -1,14 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../core/location/location_selector_field.dart';
-import '../../core/location/location_models.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
+import '../../core/location/location_models.dart';
+import '../../core/location/location_selector_field.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
 import '../../services/telegram_storage_service.dart';
 
-/// Dedicated Jobs Post Screen.
 class JobsPostScreen extends StatefulWidget {
   final PostRepository repository;
   final String authorHandle;
@@ -24,79 +23,106 @@ class JobsPostScreen extends StatefulWidget {
 }
 
 class _JobsPostScreenState extends State<JobsPostScreen> {
-  GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
-
   final _titleController = TextEditingController();
   final _companyController = TextEditingController();
-  final _locationController = TextEditingController();
   final _descController = TextEditingController();
-  String _selectedJobType = 'Full-time';
+  
+  GeoCity? _selectedGeoCity;
+  GeoArea? _selectedGeoArea;
+  String _workMode = 'On-site'; // 'On-site', 'Remote', 'Hybrid'
+  String _selectedEmployment = 'Full-time';
   File? _bannerImage;
-  String? _errorMessage;
+  
+  bool _showTitleError = false;
+  bool _showDescError = false;
+  String? _contentFilterError;
   bool _isPublishing = false;
   double _uploadProgress = 0.0;
 
-  final List<String> _jobTypes = [
+  final List<String> _employmentTypes = [
     'Full-time',
     'Part-time',
-    'Contract / Freelance',
+    'Freelance',
     'Internship',
-    'Seeking Referral',
-    'Hiring / Requirement'
+    'Referral',
+    'Hiring',
   ];
 
   @override
   void initState() {
     super.initState();
-    _descController.addListener(_validateLive);
+    _descController.addListener(_onDescChanged);
+    _titleController.addListener(() {
+      if (_showTitleError && _titleController.text.trim().isNotEmpty) {
+        setState(() => _showTitleError = false);
+      }
+    });
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _companyController.dispose();
-    _locationController.dispose();
-    _descController.removeListener(_validateLive);
+    _descController.removeListener(_onDescChanged);
     _descController.dispose();
     super.dispose();
   }
 
-  void _validateLive() {
+  void _onDescChanged() {
     final text = _descController.text.trim();
-    if (text.isEmpty) {
-      if (mounted) setState(() => _errorMessage = null);
-      return;
+    if (_showDescError && text.isNotEmpty) {
+      setState(() => _showDescError = false);
     }
-    final err = ContentFilter.validateContent(text);
-    if (mounted) setState(() => _errorMessage = err);
+    if (text.isNotEmpty) {
+      final err = ContentFilter.validateContent(text);
+      if (err != _contentFilterError) {
+        setState(() => _contentFilterError = err);
+      }
+    } else {
+      if (_contentFilterError != null) {
+        setState(() => _contentFilterError = null);
+      }
+    }
   }
 
-  bool get _canPublish =>
-      !_isPublishing &&
-      _titleController.text.trim().isNotEmpty &&
-      _descController.text.trim().isNotEmpty &&
-      _errorMessage == null;
-
-  // ── Media pickers ───────────────────────────────────────────────────────
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
       if (picked != null) {
         setState(() => _bannerImage = File(picked.path));
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e'), backgroundColor: Colors.redAccent),
+      );
     }
   }
 
-  // ── Publishing ─────────────────────────────────────────────────────────
-  Future<void> _publishPost() async {
-    if (!_canPublish) return;
+  Future<void> _publishJob() async {
+    final title = _titleController.text.trim();
+    final desc = _descController.text.trim();
+
+    bool hasError = false;
+    if (title.isEmpty) {
+      setState(() => _showTitleError = true);
+      hasError = true;
+    }
+    if (desc.isEmpty || _contentFilterError != null) {
+      setState(() => _showDescError = true);
+      hasError = true;
+    }
+
+    if (hasError) return;
+
     setState(() {
       _isPublishing = true;
-      _errorMessage = null;
+      _uploadProgress = 0.2;
     });
 
     try {
@@ -106,18 +132,23 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         imageUrl = await TelegramStorageService.uploadImage(_bannerImage!);
       }
 
-      setState(() => _uploadProgress = 0.9);
+      setState(() => _uploadProgress = 0.85);
+
+      final city = _selectedGeoCity ?? widget.repository.locationService.city;
+      final area = _selectedGeoArea ?? widget.repository.locationService.area ?? city.areas.first;
+      final company = _companyController.text.trim().isEmpty ? 'Confidential Employer' : _companyController.text.trim();
+      final locationStr = '${area.name}, ${city.name} (${_workMode})';
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
-        content: _descController.text.trim(),
+        content: desc,
         category: PostCategory.jobs,
-        cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
-          areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
-        jobTitle: _titleController.text.trim(),
-        jobCompany: _companyController.text.trim().isEmpty ? 'Confidential' : _companyController.text.trim(),
-        jobLocation: _locationController.text.trim().isEmpty ? 'Remote / Undisclosed' : _locationController.text.trim(),
-        jobType: _selectedJobType,
+        cityId: city.id,
+        areaId: area.id,
+        jobTitle: title,
+        jobCompany: company,
+        jobLocation: locationStr,
+        jobType: _selectedEmployment,
         imageUrl: imageUrl,
       );
 
@@ -127,16 +158,23 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('💼 Job posted successfully!'),
-            backgroundColor: Color(0xFF0A66C2),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
           ),
         );
         Navigator.pop(context);
       }
     } catch (e) {
-      setState(() {
-        _isPublishing = false;
-        _errorMessage = 'Failed to publish: $e';
-      });
+      if (mounted) {
+        setState(() => _isPublishing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to publish: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -146,32 +184,21 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: const Text('Post a Job / Request',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
-        actions: [
-          if (_isPublishing)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
-            )
-          else
-            TextButton(
-              onPressed: _canPublish ? _publishPost : null,
-              child: Text(
-                'Post',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
-                ),
-              ),
-            )
-        ],
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Create a job post',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.3,
+          ),
+        ),
       ),
       body: _isPublishing
           ? _buildPublishingState()
@@ -179,172 +206,405 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
               onTap: () => FocusScope.of(context).unfocus(),
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_errorMessage != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline,
-                                color: Colors.red, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: Text(_errorMessage!,
-                                    style: const TextStyle(color: Colors.red))),
-                          ],
-                        ),
+                    // Step Progress Indicator (Image 3)
+                    _buildStepIndicator(),
+                    const SizedBox(height: 24),
+
+                    // 1. Opportunity Section
+                    const Text(
+                      'Opportunity',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
                       ),
-
-                    // Job Title
-                    const Text('Job Title / Role *',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildTextField(
-                      controller: _titleController,
-                      hint: 'e.g. Senior Flutter Developer',
-                      icon: Icons.work_outline_rounded,
                     ),
-                    const SizedBox(height: 20),
-
-                    // Company Name
-                    const Text('Company Name',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildTextField(
-                      controller: _companyController,
-                      hint: 'e.g. Google India (Leave blank if confidential)',
-                      icon: Icons.business_rounded,
-                    ),
-                    const SizedBox(height: 20),
-                    
-                    // Location
-                    const Text('Specific Location / Remote',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildTextField(
-                      controller: _locationController,
-                      hint: 'e.g. Alkapuri or Remote',
-                      icon: Icons.location_on_outlined,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Job Type
-                    const Text('Post Type',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      height: 44,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: _jobTypes.length,
-                        separatorBuilder: (context, index) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final type = _jobTypes[index];
-                          final isSelected = _selectedJobType == type;
-                          return ChoiceChip(
-                            label: Text(type),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              if (selected) {
-                                setState(() => _selectedJobType = type);
-                              }
-                            },
-                            backgroundColor: Colors.white,
-                            selectedColor: const Color(0xFFEFF6FF),
-                            labelStyle: TextStyle(
-                              color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: isSelected ? const Color(0xFF3B82F6) : Colors.black12,
-                                width: isSelected ? 1.5 : 1.0,
-                              ),
-                            ),
-                          );
-                        },
+
+                    // Job title *
+                    const Text(
+                      'Job title *',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
                       ),
                     ),
-                    const SizedBox(height: 20),
-
-                    // Location fields
-                    const Text('Location Details',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
-                    LocationSelectorField(
-                          onLocationSelected: (city, area) {
-                            setState(() {
-                              _selectedGeoCity = city;
-                              _selectedGeoArea = area;
-                            });
-                          },
-                        ),
-                    const SizedBox(height: 20),
-
-                    // Description
-                    const Text('Description / Details *',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     TextField(
-                      controller: _descController,
-                      maxLines: 5,
-                      maxLength: 500,
-                      style: const TextStyle(color: Colors.black87, fontSize: 15),
+                      controller: _titleController,
+                      style: const TextStyle(fontSize: 14.5, color: Color(0xFF0F172A)),
                       decoration: InputDecoration(
-                        hintText: 'Share the job requirements, how to apply, or what kind of referral you need...',
-                        hintStyle: const TextStyle(color: Colors.black38),
+                        hintText: 'e.g. Senior Flutter Developer',
+                        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.black12),
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.black12),
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _showTitleError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Use a clear role name so people can find this opportunity.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+
+                    // Title Inline Error Banner (Image 3 & 4)
+                    if (_showTitleError) ...[
+                      const SizedBox(height: 8),
+                      _buildErrorBanner('Please enter a job title.'),
+                    ],
+
+                    const SizedBox(height: 18),
+
+                    // Company name
+                    const Text(
+                      'Company',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _companyController,
+                      style: const TextStyle(fontSize: 14.5, color: Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        hintText: 'Company name',
+                        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Leave blank if the employer should remain confidential.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // 2. Work setup Section
+                    const Text(
+                      'Work setup',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Location Picker
+                    LocationSelectorField(
+                      onLocationSelected: (city, area) {
+                        setState(() {
+                          _selectedGeoCity = city;
+                          _selectedGeoArea = area;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // On-site / Remote / Hybrid Segment
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: ['On-site', 'Remote', 'Hybrid'].map((mode) {
+                          final isSelected = _workMode == mode;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _workMode = mode),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.04),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          )
+                                        ]
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  mode,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // 3. Employment Section (Image 3)
+                    const Text(
+                      'Employment',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Grid of 6 Employment types
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 3.2,
+                      children: _employmentTypes.map((type) {
+                        final isSelected = _selectedEmployment == type;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => setState(() => _selectedEmployment = type),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+                                width: isSelected ? 1.5 : 1.0,
+                              ),
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  type,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle_rounded, color: Color(0xFF2563EB), size: 18),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // 4. Description Section
+                    const Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _showDescError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          TextField(
+                            controller: _descController,
+                            maxLines: 5,
+                            maxLength: 500,
+                            style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
+                            decoration: const InputDecoration(
+                              hintText: 'Describe the role, responsibilities, requirements and how to apply...',
+                              hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
+                              border: InputBorder.none,
+                              counterText: '',
+                              contentPadding: EdgeInsets.all(16),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 14, bottom: 10),
+                            child: Text(
+                              '${_descController.text.length} / 500',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Description Inline Error Banner (Image 3 & 4)
+                    if (_showDescError || _contentFilterError != null) ...[
+                      const SizedBox(height: 8),
+                      _buildErrorBanner(_contentFilterError ?? 'Please review your description.'),
+                    ],
+
+                    const SizedBox(height: 24),
+
+                    // 5. Media Section (Image 3)
+                    const Text(
+                      'Media',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    if (_bannerImage != null) ...[
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.file(
+                              _bannerImage!,
+                              height: 140,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _bannerImage = null),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFFCBD5E1),
+                              width: 1.2,
+                              style: BorderStyle.solid,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFEFF6FF),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.add_rounded, color: Color(0xFF2563EB), size: 22),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Add company banner',
+                                style: TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'JPG / PNG • Optional',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 32),
+
+                    // 6. Publish Job Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0066FF),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: _publishJob,
+                        child: const Text(
+                          'Publish Job',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-
-                    // Media
-                    const Text('Company Logo or Banner (Optional)',
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
-                    const SizedBox(height: 8),
-                    _buildBannerUpload(),
-                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -352,95 +612,86 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType type = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: type,
-      style: const TextStyle(color: Colors.black87, fontSize: 16),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.black38),
-        prefixIcon: Icon(icon, color: Colors.black54, size: 20),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.black12),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.black12),
-        ),
-      ),
-      onChanged: (_) => setState(() {}),
+  Widget _buildStepIndicator() {
+    return Row(
+      children: [
+        _buildStepItem(1, 'Details', true),
+        _buildStepLine(),
+        _buildStepItem(2, 'Location', false),
+        _buildStepLine(),
+        _buildStepItem(3, 'Description', false),
+        _buildStepLine(),
+        _buildStepItem(4, 'Preview', false),
+      ],
     );
   }
 
-
-
-  Widget _buildBannerUpload() {
-    if (_bannerImage != null) {
-      return Stack(
-        children: [
-          Container(
-            height: 120,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.black12),
-              image: DecorationImage(
-                image: FileImage(_bannerImage!),
-                fit: BoxFit.cover,
-              ),
+  Widget _buildStepItem(int num, String label, bool isActive) {
+    return Column(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$num',
+            style: TextStyle(
+              color: isActive ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.black87,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.close,
-                    color: Colors.white, size: 18),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            color: isActive ? const Color(0xFF2563EB) : const Color(0xFF94A3B8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepLine() {
+    return Expanded(
+      child: Container(
+        height: 1.5,
+        color: const Color(0xFFE2E8F0),
+        margin: const EdgeInsets.only(bottom: 14),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFEE2E2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFFEF4444),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
               ),
-              onPressed: () => setState(() => _bannerImage = null),
             ),
           ),
         ],
-      );
-    }
-
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        _pickImage();
-      },
-      child: Container(
-        height: 100,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black12, width: 1),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_photo_alternate_outlined, color: Colors.black45, size: 30),
-            SizedBox(height: 8),
-            Text('Upload Image',
-                style: TextStyle(color: Colors.black54, fontSize: 13)),
-          ],
-        ),
       ),
     );
   }
@@ -450,20 +701,29 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: Color(0xFF3B82F6)),
+          const SizedBox(
+            width: 48,
+            height: 48,
+            child: CircularProgressIndicator(color: Color(0xFF2563EB), strokeWidth: 3),
+          ),
           const SizedBox(height: 24),
           Text(
-            _uploadProgress < 0.9
-                ? 'Uploading image... ${(_uploadProgress * 100).toInt()}%'
-                : 'Publishing post...',
+            _uploadProgress < 0.8
+                ? 'Uploading banner image...'
+                : 'Publishing job opportunity...',
             style: const TextStyle(
-                color: Colors.black87,
-                fontSize: 16,
-                fontWeight: FontWeight.bold),
+              color: Color(0xFF0F172A),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Making your post visible to Vadodara neighbors',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
           ),
         ],
       ),
     );
   }
 }
-

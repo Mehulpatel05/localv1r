@@ -66,6 +66,8 @@ class FirebaseService:
                 "createdAt": firestore.SERVER_TIMESTAMP,
                 "upvotes": 0,
                 "downvotes": 0,
+                "score": 0,
+                "totalScore": 0,
                 "commentCount": 0,
                 "isEmergency": category == "emergency",
                 "userVotes": {},
@@ -108,62 +110,193 @@ class FirebaseService:
             print(f"Error adding comment in Firestore: {e}")
             return False
 
+    NUM_SHARDS = 20
+
     @staticmethod
-    def vote_post(post_id: str, user_handle: str, direction: int) -> bool:
+    def vote_post(post_id: str, user_handle: str, direction: int) -> dict:
         if not FirebaseService._is_db_active():
-            return False
+            return {"success": False, "error": "Database inactive"}
         
         post_ref = db.collection("posts").document(post_id)
         vote_ref = post_ref.collection("votes").document(user_handle)
         
+        # Select shard via hash to evenly spread writes across shards
+        shard_id = str(int(hashlib.md5(user_handle.encode('utf-8')).hexdigest(), 16) % FirebaseService.NUM_SHARDS)
+        shard_ref = post_ref.collection("scoreShards").document(shard_id)
+        
         @firestore.transactional
-        def run_vote_transaction(transaction, p_ref, v_ref):
-            post_snapshot = p_ref.get(transaction=transaction)
-            if not post_snapshot.exists:
-                return False
-                
+        def run_vote_transaction(transaction, v_ref, s_ref):
             vote_snapshot = v_ref.get(transaction=transaction)
-            post_data = post_snapshot.to_dict()
-            upvotes = post_data.get("upvotes", 0)
-            downvotes = post_data.get("downvotes", 0)
             
             previous_vote = 0
             if vote_snapshot.exists:
-                previous_vote = vote_snapshot.to_dict().get("direction", 0)
-                
+                vote_data = vote_snapshot.to_dict() or {}
+                previous_vote = vote_data.get("value", vote_data.get("direction", 0))
+            
+            # Toggle matrix logic (Reddit/StackOverflow style)
             if previous_vote == direction:
-                # Cancel previous vote
+                # Cancel/toggle off existing vote
+                new_vote = 0
                 if direction == 1:
-                    upvotes = max(0, upvotes - 1)
+                    score_delta = -1
+                    upvote_delta = -1
+                    downvote_delta = 0
                 else:
-                    downvotes = max(0, downvotes - 1)
+                    score_delta = 1
+                    upvote_delta = 0
+                    downvote_delta = -1
                 transaction.delete(v_ref)
-            else:
-                # Change vote or cast new
-                if previous_vote == 1:
-                    upvotes = max(0, upvotes - 1)
-                elif previous_vote == -1:
-                    downvotes = max(0, downvotes - 1)
-                    
+            elif previous_vote == 0:
+                # Cast new vote
+                new_vote = direction
                 if direction == 1:
-                    upvotes += 1
-                elif direction == -1:
-                    downvotes += 1
-                
-                transaction.set(v_ref, {"direction": direction})
-                
-            transaction.update(p_ref, {
-                "upvotes": upvotes,
-                "downvotes": downvotes
-            })
-            return True
+                    score_delta = 1
+                    upvote_delta = 1
+                    downvote_delta = 0
+                else:
+                    score_delta = -1
+                    upvote_delta = 0
+                    downvote_delta = 1
+                transaction.set(v_ref, {
+                    "value": new_vote,
+                    "direction": new_vote,
+                    "userHandle": user_handle,
+                    "updatedAt": firestore.SERVER_TIMESTAMP
+                })
+            else:
+                # Switch vote direction (+1 to -1 or -1 to +1)
+                new_vote = direction
+                if direction == 1:
+                    score_delta = 2
+                    upvote_delta = 1
+                    downvote_delta = -1
+                else:
+                    score_delta = -2
+                    upvote_delta = -1
+                    downvote_delta = 1
+                transaction.set(v_ref, {
+                    "value": new_vote,
+                    "direction": new_vote,
+                    "userHandle": user_handle,
+                    "updatedAt": firestore.SERVER_TIMESTAMP
+                })
+            
+            # Atomically increment chosen shard counter without locking the main post doc
+            transaction.set(s_ref, {
+                "score": firestore.Increment(score_delta),
+                "upvotes": firestore.Increment(upvote_delta),
+                "downvotes": firestore.Increment(downvote_delta),
+                "updatedAt": firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            
+            return {
+                "success": True,
+                "newVote": new_vote,
+                "scoreDelta": score_delta,
+                "upvoteDelta": upvote_delta,
+                "downvoteDelta": downvote_delta
+            }
 
         try:
             transaction = db.transaction()
-            return run_vote_transaction(transaction, post_ref, vote_ref)
+            res = run_vote_transaction(transaction, vote_ref, shard_ref)
+            return res
         except Exception as e:
             print(f"Error casting vote in Firestore: {e}")
-            return False
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def aggregate_post_shards(post_id: str) -> dict:
+        """
+        Sums all shard counters for a post and writes the total back to the main post document.
+        Called asynchronously after votes to maintain cached totalScore without contention.
+        """
+        if not FirebaseService._is_db_active():
+            return {}
+        try:
+            post_ref = db.collection("posts").document(post_id)
+            shards = post_ref.collection("scoreShards").get()
+            
+            total_score = 0
+            total_upvotes = 0
+            total_downvotes = 0
+            has_shards = False
+            
+            for shard in shards:
+                has_shards = True
+                data = shard.to_dict() or {}
+                total_score += data.get("score", 0)
+                total_upvotes += data.get("upvotes", 0)
+                total_downvotes += data.get("downvotes", 0)
+                
+            if not has_shards:
+                post_doc = post_ref.get()
+                if post_doc.exists:
+                    pdata = post_doc.to_dict() or {}
+                    total_upvotes = pdata.get("upvotes", 0)
+                    total_downvotes = pdata.get("downvotes", 0)
+                    total_score = pdata.get("score", total_upvotes - total_downvotes)
+            
+            total_upvotes = max(0, total_upvotes)
+            total_downvotes = max(0, total_downvotes)
+            
+            post_ref.update({
+                "score": total_score,
+                "totalScore": total_score,
+                "upvotes": total_upvotes,
+                "downvotes": total_downvotes,
+            })
+            return {
+                "score": total_score,
+                "upvotes": total_upvotes,
+                "downvotes": total_downvotes
+            }
+        except Exception as e:
+            print(f"Error aggregating score shards for post {post_id}: {e}")
+            return {}
+
+    @staticmethod
+    def backfill_post_shards(post_id: Optional[str] = None) -> int:
+        """
+        Backfills legacy posts with shard 0 to prevent breaking existing posts.
+        """
+        if not FirebaseService._is_db_active():
+            return 0
+        try:
+            if post_id:
+                posts = [db.collection("posts").document(post_id).get()]
+            else:
+                posts = db.collection("posts").get()
+                
+            count = 0
+            for doc in posts:
+                if not doc.exists:
+                    continue
+                p_ref = db.collection("posts").document(doc.id)
+                shards = list(p_ref.collection("scoreShards").limit(1).get())
+                if not shards:
+                    data = doc.to_dict() or {}
+                    up = data.get("upvotes", 0)
+                    down = data.get("downvotes", 0)
+                    score = data.get("score", up - down)
+                    
+                    p_ref.collection("scoreShards").document("0").set({
+                        "score": score,
+                        "upvotes": up,
+                        "downvotes": down,
+                        "updatedAt": firestore.SERVER_TIMESTAMP
+                    })
+                    p_ref.update({
+                        "score": score,
+                        "totalScore": score,
+                        "upvotes": up,
+                        "downvotes": down
+                    })
+                    count += 1
+            return count
+        except Exception as e:
+            print(f"Error backfilling post shards: {e}")
+            return 0
 
     @staticmethod
     def report_post(post_id: str, reporter_handle: str, reason: str) -> bool:

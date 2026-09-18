@@ -1,10 +1,11 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'post_repository.dart';
+import 'auth_service.dart';
 
 class TelegramStorageService {
   static const String backendUploadUrl = '${PostRepository.backendBaseUrl}/storage/upload';
@@ -16,8 +17,9 @@ class TelegramStorageService {
         return null;
       }
 
+      final jwtToken = await AuthService.instance.getAccessToken();
       final user = FirebaseAuth.instance.currentUser;
-      final sessionToken = user != null ? await user.getIdToken() : null;
+      final sessionToken = (jwtToken != null && jwtToken.isNotEmpty) ? jwtToken : (user != null ? await user.getIdToken() : null);
 
       // Read bytes first — detect format from magic bytes (not file extension)
       final bytes = await file.readAsBytes();

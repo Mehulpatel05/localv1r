@@ -215,11 +215,12 @@ class FriendRepository {
   }
 
   // ── Get Incoming Pending Requests (Stream) ──
-  Stream<List<FriendRequest>> getPendingRequests() {
+  Stream<List<FriendRequest>> getPendingRequests({int limit = 100}) {
     return _db.collection('friend_requests')
         .where('receiverHandle', isEqualTo: _currentUserHandle)
         .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => FriendRequest.fromMap(doc.data(), doc.id))
@@ -227,11 +228,12 @@ class FriendRepository {
   }
 
   // ── Get Sent Pending Requests (Stream) ──
-  Stream<List<FriendRequest>> getSentRequests() {
+  Stream<List<FriendRequest>> getSentRequests({int limit = 100}) {
     return _db.collection('friend_requests')
         .where('senderHandle', isEqualTo: _currentUserHandle)
         .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => FriendRequest.fromMap(doc.data(), doc.id))
@@ -239,10 +241,11 @@ class FriendRepository {
   }
 
   // ── Get Friends List (Stream) ──
-  Stream<List<Friendship>> getFriendsList() {
+  Stream<List<Friendship>> getFriendsList({int limit = 200}) {
     return _db.collection('friendships')
         .where('users', arrayContains: _currentUserHandle)
         .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => Friendship.fromMap(doc.data(), doc.id))
@@ -250,9 +253,10 @@ class FriendRepository {
   }
 
   // ── Get Blocked Users List ──
-  Stream<List<BlockEntry>> getBlockedUsers() {
+  Stream<List<BlockEntry>> getBlockedUsers({int limit = 100}) {
     return _db.collection('blocks')
         .where('blockerHandle', isEqualTo: _currentUserHandle)
+        .limit(limit)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => BlockEntry.fromMap(doc.data(), doc.id))
@@ -264,6 +268,7 @@ class FriendRepository {
     return _db.collection('friend_requests')
         .where('receiverHandle', isEqualTo: _currentUserHandle)
         .where('status', isEqualTo: 'pending')
+        .limit(50)
         .snapshots()
         .map((snap) => snap.docs.length);
   }

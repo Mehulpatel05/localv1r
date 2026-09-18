@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
-import '../auth/google_login_screen.dart';
+import '../../services/auth_service.dart';
+import '../auth/phone_login_screen.dart';
+import '../detail/post_detail_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -27,7 +29,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Post> _userPosts = [];
   bool _isLoading = true;
   bool _isSavingBio = false;
-  bool _isEditingBio = false;
   late TextEditingController _bioController;
 
   @override
@@ -46,7 +47,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
     try {
-      // ── Load Firestore user doc ────────────────────────────────────────────
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final doc = await FirebaseFirestore.instance
@@ -57,23 +57,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _userData = {
           'handle': data['handle'] ?? widget.currentUserHandle,
           'email': data['email'] ?? user.email ?? '',
-          'bio': data['bio'] ?? '',
+          'bio': data['bio'] ??
+              'Coffee enthusiast, weekend explorer, and proud resident of Vadodara. Passionate about keeping our neighborhood connected — always down to help a neighbor or share a local tip.',
           'createdAt': data['createdAt'],
         };
         _bioController.text = _userData!['bio'] as String;
       }
 
-      // ── Wait for repository to finish its initial post load ───────────────
-      // If the feed hasn't loaded yet, wait up to 3 seconds so in-memory
-      // list is populated before we filter it.
       int waited = 0;
       while (widget.repository.isLoading && waited < 30) {
         await Future.delayed(const Duration(milliseconds: 100));
         waited++;
       }
 
-      // ── Fetch this user's posts (in-memory filter → backend fallback) ─────
-      _userPosts = await widget.repository.fetchPostsByUser(widget.currentUserHandle);
+      _userPosts =
+          await widget.repository.fetchPostsByUser(widget.currentUserHandle);
     } catch (e) {
       debugPrint('Error loading profile: $e');
     } finally {
@@ -86,18 +84,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
           'bio': _bioController.text.trim(),
         });
         setState(() {
           _userData!['bio'] = _bioController.text.trim();
-          _isEditingBio = false;
         });
         if (mounted) {
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Color(0xFF10B981),
-              content: Text('Bio saved!'),
+              behavior: SnackBarBehavior.floating,
+              content: Text('Bio saved successfully!'),
             ),
           );
         }
@@ -105,7 +107,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save bio: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Failed to save bio: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -113,25 +118,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _showEditBioDialog() {
+    _bioController.text = _userData?['bio'] ?? '';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Edit Bio',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+          ),
+        ),
+        content: TextField(
+          controller: _bioController,
+          maxLines: 4,
+          maxLength: 200,
+          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Tell neighbors about yourself...',
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: _isSavingBio ? null : _saveBio,
+            child: _isSavingBio
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        title: const Text('Sign Out?', style: TextStyle(color: Colors.black87)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Sign Out?',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: const Text(
           'You will be returned to the login screen.',
-          style: TextStyle(color: Colors.black54),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
@@ -140,393 +225,648 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirm != true) return;
 
     try {
-      await GoogleSignIn().signOut();
-      await FirebaseAuth.instance.signOut();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      await AuthService.instance.signOut();
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => GoogleLoginScreen(repository: widget.repository),
+          builder: (_) => PhoneLoginScreen(repository: widget.repository),
         ),
         (route) => false,
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign out failed: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Sign out failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
   }
 
-  int get _totalUpvotes => _userPosts.fold(0, (sum, p) => sum + p.upvotes);
+  String _getInitials(String handle) {
+    if (handle.isEmpty) return 'U';
+    final clean = handle.replaceAll('@', '').replaceAll('.', ' ').trim();
+    final parts = clean.split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return clean.substring(0, clean.length >= 2 ? 2 : 1).toUpperCase();
+  }
+
+  String _getJoinedYear() {
+    final raw = _userData?['createdAt'];
+    if (raw is Timestamp) {
+      return '${raw.toDate().year}';
+    }
+    return '${DateTime.now().year}';
+  }
+
+  int _getTotalUpvotes() {
+    int total = 0;
+    final repoPosts = widget.repository.allPosts
+        .where((p) => p.authorHandle == widget.currentUserHandle)
+        .toList();
+    final posts = repoPosts.isNotEmpty ? repoPosts : _userPosts;
+    for (final p in posts) {
+      total += (p.upvotes > 0 ? p.upvotes : 0);
+    }
+    return total;
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+        ),
+      );
+    }
+
+    final handle = _userData?['handle'] ?? widget.currentUserHandle;
+    final email = _userData?['email'] ?? '';
+    final bio = _userData?['bio'] ?? '';
+    final initials = _getInitials(handle);
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-          : RefreshIndicator(
-              onRefresh: _loadProfileData,
-              color: const Color(0xFF3B82F6),
-              backgroundColor: Colors.white,
-              child: CustomScrollView(
-                slivers: [
-                  SliverAppBar(
-                    backgroundColor: Colors.white,
-                    elevation: 0,
-                    pinned: true,
-                    title: const Text('Profile', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.share, color: Color(0xFF3B82F6)),
-                        onPressed: () {
-                          Share.share('Hey! Join me on Nearhood. My username is @${widget.currentUserHandle}. Download the app now to connect!');
-                        },
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: Color(0xFF0F172A),
+                ),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: -0.3,
+          ),
+        ),
+        actions: [
+          // User requested: Replace top Share with Sign Out
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEF2F2),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              tooltip: 'Sign Out',
+              padding: EdgeInsets.zero,
+              icon: const Icon(
+                Icons.logout_rounded,
+                color: Color(0xFFEF4444),
+                size: 20,
+              ),
+              onPressed: _signOut,
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadProfileData,
+        color: const Color(0xFF3B82F6),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. Profile Avatar with Glowing Ring (Image 1)
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF818CF8).withOpacity(0.6),
+                    width: 3.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.25),
+                      blurRadius: 18,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: (FirebaseAuth.instance.currentUser?.photoURL != null &&
+                          FirebaseAuth.instance.currentUser!.photoURL!.isNotEmpty)
+                      ? SafeImage(
+                          imageUrl: FirebaseAuth.instance.currentUser!.photoURL!,
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF1E3A8A),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 2. Handle & Email Subtitle
+              Text(
+                '@$handle',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Nearhood member',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (email.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+
+              // 3. Stats Card (Posts | Upvotes | Joined)
+              ListenableBuilder(
+                listenable: widget.repository,
+                builder: (context, _) => Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatItem('${_userPosts.length}', 'Posts'),
+                      Container(
+                        height: 30,
+                        width: 1,
+                        color: const Color(0xFFE2E8F0),
                       ),
+                      _buildStatItem('${_getTotalUpvotes()}', 'Upvotes'),
+                      Container(
+                        height: 30,
+                        width: 1,
+                        color: const Color(0xFFE2E8F0),
+                      ),
+                      _buildStatItem(_getJoinedYear(), 'Joined'),
                     ],
                   ),
-                  // ── Header / Hero ──────────────────────────────────────────
-                  SliverToBoxAdapter(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        border: Border(
-                          bottom: BorderSide(color: Colors.black12),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // 4. Action Buttons Row (Edit Bio | Share)
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3B82F6),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-                      child: Column(
-                        children: [
-                          // Avatar
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF3B82F6).withOpacity(0.4),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                widget.currentUserHandle.isNotEmpty
-                                    ? widget.currentUserHandle[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Handle
-                          Text(
-                            '@${widget.currentUserHandle}',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-
-                          // Email
-                          Text(
-                            _userData?['email'] as String? ?? '',
-                            style: const TextStyle(color: Colors.black54, fontSize: 13),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Stats Row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildStat('${_userPosts.length}', 'Posts'),
-                              Container(width: 1, height: 32, color: Colors.black12),
-                              _buildStat('$_totalUpvotes', 'Upvotes'),
-                              Container(width: 1, height: 32, color: Colors.black12),
-                              _buildStat(
-                                _userData?['createdAt'] != null
-                                    ? _formatDate((_userData!['createdAt'] as dynamic).toDate())
-                                    : '—',
-                                'Joined',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── Bio Section ──────────────────────────────────────────
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.info_outline, color: Color(0xFF60A5FA), size: 18),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Bio',
-                                style: TextStyle(
-                                  color: Colors.black54,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const Spacer(),
-                              if (!_isEditingBio)
-                                GestureDetector(
-                                  onTap: () => setState(() => _isEditingBio = true),
-                                  child: const Text(
-                                    'Edit',
-                                    style: TextStyle(color: Color(0xFF3B82F6), fontSize: 13),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          if (_isEditingBio) ...[
-                            TextField(
-                              controller: _bioController,
-                              style: const TextStyle(color: Colors.black87),
-                              maxLines: 3,
-                              maxLength: 160,
-                              decoration: InputDecoration(
-                                hintText: 'Tell the city something about yourself...',
-                                hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
-                                enabledBorder: OutlineInputBorder(
-                                  borderSide: const BorderSide(color: Colors.black12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderSide: const BorderSide(color: Color(0xFF3B82F6)),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                filled: true,
-                                fillColor: const Color(0xFFF1F5F9),
-                                counterStyle: const TextStyle(color: Colors.black38),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton(
-                                  onPressed: () => setState(() => _isEditingBio = false),
-                                  child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
-                                ),
-                                const SizedBox(width: 8),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF3B82F6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                  ),
-                                  onPressed: _isSavingBio ? null : _saveBio,
-                                  child: _isSavingBio
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
-                                        )
-                                      : const Text('Save', style: TextStyle(color: Colors.black87)),
-                                ),
-                              ],
-                            ),
-                          ] else
-                            Text(
-                              (_userData?['bio'] as String?)?.isNotEmpty == true
-                                  ? _userData!['bio'] as String
-                                  : 'No bio yet. Tap Edit to add one.',
-                              style: TextStyle(
-                                color: (_userData?['bio'] as String?)?.isNotEmpty == true
-                                    ? Colors.black54
-                                    : Colors.black38,
-                                fontSize: 14,
-                                height: 1.5,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── My Posts Header ──────────────────────────────────────
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.article_outlined, color: Color(0xFF60A5FA), size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'My Posts (${_userPosts.length})',
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── My Posts List ────────────────────────────────────────
-                  _userPosts.isEmpty
-                      ? SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.edit_note, size: 48, color: Colors.black26),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'No posts yet.',
-                                  style: TextStyle(color: Colors.black54, fontSize: 15),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildPostCard(_userPosts[index]),
-                            childCount: _userPosts.length,
-                          ),
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: const Text(
+                        'Edit Bio',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
                         ),
-
-                  // ── Sign Out ────────────────────────────────────────────
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: const Icon(Icons.logout_rounded),
-                        label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: _signOut,
                       ),
+                      onPressed: _showEditBioDialog,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0F172A),
+                        side: const BorderSide(
+                            color: Color(0xFFE2E8F0), width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.share_rounded, size: 16),
+                      label: const Text(
+                        'Share',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      onPressed: () {
+                        Share.share(
+                          'Connect with @$handle on Nearhood — the local community app for Vadodara!',
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
-            ),
+
+              const SizedBox(height: 24),
+
+              // 5. About Me Section Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'About Me',
+                          style: TextStyle(
+                            color: Color(0xFF0F172A),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _showEditBioDialog,
+                          child: const Text(
+                            'Edit',
+                            style: TextStyle(
+                              color: Color(0xFF3B82F6),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      bio.isEmpty
+                          ? 'No bio added yet. Tap edit to write something about yourself.'
+                          : bio,
+                      style: const TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 13.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 6. Nearhood Community Badge
+              Row(
+                children: const [
+                  Text(
+                    'NEARHOOD COMMUNITY',
+                    style: TextStyle(
+                      color: Color(0xFF8B5CF6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: const [
+                  Icon(Icons.location_on_rounded,
+                      size: 15, color: Color(0xFF64748B)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Local community member',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // 7. My Posts Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'My Posts',
+                    style: TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  if (_userPosts.isNotEmpty)
+                    Text(
+                      '${_userPosts.length} posts',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              if (_userPosts.isEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: const [
+                      Icon(Icons.post_add_rounded,
+                          size: 40, color: Color(0xFF94A3B8)),
+                      SizedBox(height: 10),
+                      Text(
+                        'No posts published yet',
+                        style: TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Your shared posts will appear here.',
+                        style:
+                            TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                ..._userPosts.map((post) => _buildUserPostCard(post)),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildStat(String value, String label) {
+  Widget _buildStatItem(String count, String label) {
     return Column(
       children: [
         Text(
-          value,
-          style: const TextStyle(color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+          count,
+          style: const TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: -0.4,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.black54, fontSize: 11),
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPostCard(Post post) {
+  Widget _buildUserPostCard(Post post) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.black12),
-                ),
-                child: Text(
-                  '${post.category.icon} ${post.category.label}',
-                  style: const TextStyle(color: Colors.black54, fontSize: 11),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                _formatDate(post.createdAt),
-                style: const TextStyle(color: Colors.black38, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            post.content,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.black, fontSize: 14, height: 1.45),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Icon(Icons.arrow_upward, size: 14, color: Color(0xFF10B981)),
-              const SizedBox(width: 3),
-              Text('${post.upvotes}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
-              const SizedBox(width: 12),
-              const Icon(Icons.arrow_downward, size: 14, color: Colors.black38),
-              const SizedBox(width: 3),
-              Text('${post.downvotes}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
-              const SizedBox(width: 12),
-              const Icon(Icons.location_on, size: 13, color: Color(0xFF60A5FA)),
-              const SizedBox(width: 3),
-              Text(post.areaName ?? 'Nearhood', style: const TextStyle(color: Colors.black54, fontSize: 11)),
-            ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PostDetailScreen(
+                  post: post,
+                  repository: widget.repository,
+                  currentUserHandle: widget.currentUserHandle,
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Category Pill & Date
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: post.isEmergency
+                            ? const Color(0xFFFEF2F2)
+                            : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        post.category.label,
+                        style: TextStyle(
+                          color: post.isEmergency
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF2563EB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${post.createdAt.day} ${_getMonthName(post.createdAt.month)}',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                // Content
+                Text(
+                  post.content,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF1E293B),
+                    fontSize: 13.5,
+                    height: 1.4,
+                  ),
+                ),
+
+                if (post.imageUrl != null && post.imageUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  SafeImage(
+                    imageUrl: post.imageUrl!,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+
+                // Footer (Upvotes & Location)
+                Row(
+                  children: [
+                    const Icon(Icons.arrow_upward_rounded,
+                        size: 14, color: Color(0xFF10B981)),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${post.upvotes}',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_downward_rounded,
+                        size: 14, color: Color(0xFFEF4444)),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${post.downvotes}',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.location_on_rounded,
+                        size: 13, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 3),
+                    Text(
+                      post.areaName ?? 'Vadodara',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  String _formatDate(DateTime dt) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${months[dt.month - 1]} ${dt.year}';
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return months[(month - 1) % 12];
   }
 }

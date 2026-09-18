@@ -17,7 +17,9 @@ service cloud.firestore {
     // Public, non-sensitive profile (handle, friendCount) — read by anyone signed in.
     match /profiles/{handle} {
       allow read: if signedIn();
-      allow write: if signedIn() && request.resource.data.ownerUid == myUid();
+      allow create: if signedIn() && request.resource.data.ownerUid == myUid();
+      allow update: if signedIn() && resource.data.ownerUid == myUid() && request.resource.data.ownerUid == myUid();
+      allow delete: if signedIn() && resource.data.ownerUid == myUid();
     }
 
     // Friend requests: only sender can create; only receiver can accept/reject.
@@ -35,31 +37,54 @@ service cloud.firestore {
       allow update, delete: if signedIn() && myUid() in resource.data.usersUids;
     }
 
-    // Chats: only participants can read/write.
+    // Chats: only participants can read/update; messages immutable with senderUid validation
     match /chats/{chatId} {
-      allow read, write: if signedIn() && myUid() in resource.data.participantsUids;
+      allow read, update: if signedIn() && myUid() in resource.data.participantsUids;
+      allow create: if signedIn() && myUid() in request.resource.data.participantsUids;
+      allow delete: if false;
       match /messages/{msgId} {
-        allow read: if signedIn() &&
-          myUid() in get(/databases/$(database)/documents/chats/$(chatId)).data.participantsUids;
+        allow read: if signedIn() && myUid() in get(/databases/$(database)/documents/chats/$(chatId)).data.participantsUids;
         allow create: if signedIn() && request.resource.data.senderUid == myUid();
         allow update, delete: if false; // messages are immutable
       }
     }
 
-    // Communities: members read; only admin edits community doc.
+    // Communities: all signed in users can read; only creator can create with their uid;
+    // only admin can update metadata; members can only increment/decrement memberCount.
     match /communities/{cid} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.adminUid == myUid();
-      allow update, delete: if signedIn() && resource.data.adminUid == myUid();
+      allow update: if signedIn() && (
+        resource.data.adminUid == myUid() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+      );
+      allow delete: if signedIn() && resource.data.adminUid == myUid();
     }
+
+    // Community Members: users manage their own membership; admin can manage members
     match /community_members/{id} {
       allow read: if signedIn();
-      allow create, delete: if signedIn() && request.resource.data.userUid == myUid();
+      allow create: if signedIn() && request.resource.data.userUid == myUid();
+      allow update: if signedIn() && (
+        resource.data.userUid == myUid() ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.adminUid == myUid()
+      );
+      allow delete: if signedIn() && (
+        resource.data.userUid == myUid() ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.adminUid == myUid()
+      );
     }
+
+    // Community Messages: author UID verification, immutable content (only reactions can update),
+    // and delete allowed only by author or community admin.
     match /community_messages/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.authorUid == myUid();
-      allow update, delete: if false;
+      allow update: if signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+      allow delete: if signedIn() && (
+        resource.data.authorUid == myUid() ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.adminUid == myUid()
+      );
     }
 
     // Blocks: only the blocker owns their block docs.
@@ -75,7 +100,7 @@ service cloud.firestore {
       allow write: if false; // Block client direct writes
     }
     match /posts/{postId}/comments/{commentId} {
-      allow read: if true;
+      allow read: if signedIn(); // 🛡️ Only authenticated users can read comments
       allow write: if false;
     }
 

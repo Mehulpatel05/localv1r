@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/safe_image.dart';
+import '../../core/widgets/vote_capsule.dart';
 import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
@@ -117,7 +119,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          'Discussion Thread — ${widget.post.areaName ?? 'Nearhood'}',
+          (widget.post.category == PostCategory.general || (widget.post.areaName?.contains('General') ?? true))
+              ? 'Discussion Thread — Vadodara'
+              : 'Discussion Thread — ${widget.post.areaName}',
           style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -177,28 +181,43 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         const SizedBox(height: 12),
                         SafeImage(
                           imageUrl: widget.post.imageUrl!,
-                          height: 220,
-                          borderRadius: BorderRadius.circular(8),
+                          height: 200,
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ],
                       const SizedBox(height: 12),
-                      const Divider(color: Color(0xFF243049)),
-                      Row(
-                        children: [
-                          const Icon(Icons.arrow_upward_rounded, size: 16, color: Colors.white30),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${widget.post.score} votes',
-                            style: const TextStyle(color: Colors.black54, fontSize: 12),
-                          ),
-                          const SizedBox(width: 16),
-                          const Icon(Icons.mode_comment_outlined, size: 15, color: Colors.white30),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${widget.post.commentCount} comments',
-                            style: const TextStyle(color: Colors.black54, fontSize: 12),
-                          ),
-                        ],
+                      const Divider(color: Color(0xFFF1F5F9)),
+                      ListenableBuilder(
+                        listenable: widget.repository,
+                        builder: (context, _) {
+                          final currentPost = widget.repository.allPosts.firstWhere(
+                            (p) => p.id == widget.post.id,
+                            orElse: () => widget.post,
+                          );
+                          return Row(
+                            children: [
+                              VoteCapsule(
+                                post: currentPost,
+                                repository: widget.repository,
+                              ),
+                              const SizedBox(width: 16),
+                              Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${currentPost.commentCount} comments',
+                                    style: const TextStyle(
+                                      color: Color(0xFF64748B),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

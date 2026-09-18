@@ -76,7 +76,11 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
   Future<void> _pickImages() async {
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickMultiImage(imageQuality: 80);
+      final picked = await picker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
       if (picked.isNotEmpty) {
         setState(() {
           for (final x in picked) {

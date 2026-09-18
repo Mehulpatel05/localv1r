@@ -76,7 +76,12 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
       if (picked != null) {
         setState(() => _bannerImage = File(picked.path));
       }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
+import '../chat/widgets/image_group_bubble.dart';
 import 'community_members_screen.dart';
 import 'edit_community_screen.dart';
 import 'full_screen_image_viewer.dart';
@@ -29,9 +30,6 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   bool _isMember = false;
   bool _isLoading = true;
   bool _isSendingImage = false;
-  int _messageLimit = 30;
-  // B1: debounce flag — prevents repeated setState when scrolled to bottom
-  bool _isLoadingMoreMessages = false;
   // B5: mutable local copy — updated after admin edits community
   late CommunityModel _community;
 
@@ -46,21 +44,6 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     _isMember = isAdmin;
     _isLoading = !isAdmin;
     _checkMembership();
-    _scrollController.addListener(_scrollListener);
-  }
-
-  // B1 fixed: guard with _isLoadingMoreMessages flag so setState only fires once per threshold cross
-  void _scrollListener() {
-    if (!_isLoadingMoreMessages &&
-        _scrollController.position.pixels >=
-            _scrollController.position.maxScrollExtent - 200) {
-      _isLoadingMoreMessages = true;
-      setState(() => _messageLimit += 30);
-      // Reset flag after a short delay so it can trigger again if user scrolls further
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) _isLoadingMoreMessages = false;
-      });
-    }
   }
 
   @override
@@ -81,19 +64,39 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       }
       return;
     }
-    final isMember = await widget.repository.isMember(widget.community.id);
-    if (mounted) {
-      setState(() {
-        _isMember = isMember;
-        _isLoading = false;
-      });
+    try {
+      final isMember = await widget.repository.isMember(widget.community.id);
+      if (mounted) {
+        setState(() {
+          _isMember = isMember;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking membership: $e');
+      if (mounted) {
+        setState(() {
+          _isMember = false;
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _joinCommunity() async {
-    setState(() => _isLoading = true);
-    await widget.repository.joinCommunity(widget.community.id);
-    await _checkMembership();
+    setState(() {
+      _isLoading = true;
+      _isMember = true; // Optimistically unlock chat immediately
+    });
+    try {
+      await widget.repository.joinCommunity(widget.community.id);
+    } catch (e) {
+      debugPrint('Error joining community: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   // Feature #15: Leave confirmation dialog
@@ -150,15 +153,37 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-    final text = _messageController.text;
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
     _messageController.clear();
-    await widget.repository.sendMessage(widget.community.id, text);
+    HapticFeedback.lightImpact();
+
+    // Smooth scroll down immediately
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    try {
+      await widget.repository.sendMessage(widget.community.id, text);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  // F1: Show bottom sheet to choose Camera or Gallery
+  // F1: Show bottom sheet to choose Camera or Gallery (Multi-select)
   Future<void> _pickAndSendImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final choice = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -178,48 +203,63 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             const SizedBox(height: 8),
             ListTile(
               leading: const CircleAvatar(
-                backgroundColor: Color(0xFF3B82F6),
-                child: Icon(Icons.camera_alt, color: Colors.white),
+                backgroundColor: Color(0xFF2563EB),
+                child: Icon(Icons.camera_alt_rounded, color: Colors.white),
               ),
               title: const Text('Camera', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Take a new photo'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
+              onTap: () => Navigator.pop(context, 'camera'),
             ),
             ListTile(
               leading: const CircleAvatar(
-                backgroundColor: Color(0xFF3B82F6),
-                child: Icon(Icons.photo_library, color: Colors.white),
+                backgroundColor: Color(0xFF2563EB),
+                child: Icon(Icons.photo_library_rounded, color: Colors.white),
               ),
-              title: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Choose from your photos'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
+              title: const Text('Gallery (Multi-select)', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Choose multiple photos as an album'),
+              onTap: () => Navigator.pop(context, 'gallery'),
             ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    if (source == null) return;
-    await _sendImage(source);
-  }
+    if (choice == null) return;
 
-  // Feature #11: Pick and send image using existing Telegram CDN
-  Future<void> _sendImage(ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: source,
-      imageQuality: 80,
-    );
-    if (picked == null) return;
+    List<File> filesToUpload = [];
 
-    setState(() => _isSendingImage = true);
-    try {
-      await widget.repository.sendImageMessage(
-        widget.community.id,
-        File(picked.path),
-        caption: _messageController.text.trim(),
+    if (choice == 'camera') {
+      final picked = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
       );
-      _messageController.clear();
+      if (picked != null) filesToUpload.add(File(picked.path));
+    } else {
+      final pickedList = await picker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
+      if (pickedList.isNotEmpty) {
+        filesToUpload = pickedList.map((x) => File(x.path)).toList();
+      }
+    }
+
+    if (filesToUpload.isEmpty) return;
+
+    final caption = _messageController.text.trim();
+    _messageController.clear();
+    setState(() => _isSendingImage = true);
+
+    try {
+      await widget.repository.sendImageGroupMessage(
+        widget.community.id,
+        filesToUpload,
+        caption: caption,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -377,14 +417,19 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         children: [
           Expanded(
             child: StreamBuilder<List<CommunityMessage>>(
-              stream: widget.repository.getCommunityMessages(
-                  widget.community.id, limit: _messageLimit),
+              stream: widget.repository.getCommunityMessages(widget.community.id),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF3B82F6),
+                      strokeWidth: 2.5,
+                    ),
+                  );
                 }
                 // F3: Error state — network/permission failure
                 if (snapshot.hasError) {
+                  debugPrint('Community chat error: ${snapshot.error}');
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -414,6 +459,10 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 return ListView.builder(
                   controller: _scrollController,
                   reverse: true,
+                  physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics()),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   // F1: each message + possible date separator = 2 potential items per message
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
@@ -496,39 +545,51 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     } else if (diff == 1) {
       label = 'Yesterday';
     } else {
-      label = DateFormat('d MMM y').format(date);
+      label = DateFormat('MMMM d, y').format(date);
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          const Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.black54,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
             ),
           ),
-          const Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildMessageBubble(CommunityMessage msg, bool isMe) {
     final hasReactions = msg.reactions.isNotEmpty;
+    final timeStr = DateFormat('hh:mm a').format(msg.timestamp);
+
+    final List<String> mediaUrls = [];
+    if (msg.mediaUrls.isNotEmpty) {
+      mediaUrls.addAll(msg.mediaUrls);
+    } else if (msg.imageUrl != null && msg.imageUrl!.isNotEmpty) {
+      mediaUrls.add(msg.imageUrl!);
+    }
+
+    final hasImages = mediaUrls.isNotEmpty;
+
+    final bubbleRadius = BorderRadius.only(
+      topLeft: const Radius.circular(18),
+      topRight: const Radius.circular(18),
+      bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
+      bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
+    );
 
     return GestureDetector(
       onLongPress: () => _showMessageOptions(context, msg), // Feature #9 + F2
@@ -537,120 +598,91 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         child: Column(
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3.5),
               constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.75),
+                maxWidth: MediaQuery.of(context).size.width * (hasImages ? 0.70 : 0.78),
+              ),
               decoration: BoxDecoration(
-                color: isMe ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(16).copyWith(
-                  bottomRight: isMe
-                      ? const Radius.circular(0)
-                      : const Radius.circular(16),
-                  bottomLeft: isMe
-                      ? const Radius.circular(16)
-                      : const Radius.circular(0),
-                ),
+                color: isMe ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                borderRadius: bubbleRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    offset: const Offset(0, 1),
+                    blurRadius: 3,
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!isMe && !widget.community.isChannel)
                     Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      padding: const EdgeInsets.fromLTRB(13, 8, 13, 2),
                       child: Text(
                         '@${msg.authorHandle}',
                         style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold),
+                          color: Color(0xFF2563EB),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
 
-                  // Feature #11 + F6: Show image, tap to open full-screen viewer
-                  if (msg.imageUrl != null)
-                    GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => FullScreenImageViewer(
-                            imageUrl: msg.imageUrl!,
-                            heroTag: msg.id,
-                          ),
-                        ),
-                      ),
-                      child: Hero(
-                        tag: msg.id,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Image.network(
-                            msg.imageUrl!,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (_, child, progress) {
-                              if (progress == null) return child;
-                              return Container(
-                                height: 180,
-                                color: Colors.black12,
-                                child: const Center(
-                                    child: CircularProgressIndicator()),
-                              );
-                            },
-                            errorBuilder: (_, _, _) => Container(
-                              height: 120,
-                              color: Colors.black12,
-                              child: const Icon(Icons.broken_image,
-                                  color: Colors.black38),
+                  if (hasImages)
+                    ImageGroupBubble(
+                      mediaUrls: mediaUrls,
+                      caption: msg.content.isNotEmpty ? msg.content : null,
+                      timeStr: timeStr,
+                      isMe: isMe,
+                      messageId: msg.id,
+                      bubbleRadius: (!isMe && !widget.community.isChannel)
+                          ? const BorderRadius.only(
+                              bottomLeft: Radius.circular(4),
+                              bottomRight: Radius.circular(18),
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                            )
+                          : bubbleRadius,
+                    )
+                  else
+                    // Pure Text Bubble
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 13, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: isMe
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            msg.content,
+                            style: TextStyle(
+                              color: isMe ? Colors.white : const Color(0xFF0F172A),
+                              fontSize: 14.5,
+                              height: 1.35,
                             ),
                           ),
-                        ),
+                          if (timeStr.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              timeStr,
+                              style: TextStyle(
+                                color: isMe
+                                    ? Colors.white.withValues(alpha: 0.75)
+                                    : const Color(0xFF94A3B8),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-
-                  if (msg.content.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
-                      child: Text(
-                        msg.content,
-                        // Bug #2 fixed: white text on blue bubble
-                        style: TextStyle(
-                          color: isMe ? Colors.white : Colors.black87,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-
-                  // F6: Tap timestamp to see full date + time
-                  GestureDetector(
-                    onTap: () {
-                      final full = DateFormat('EEE, d MMM · hh:mm a')
-                          .format(msg.timestamp);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(full,
-                              style: const TextStyle(fontSize: 13)),
-                          duration: const Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
-                          width: 220,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-                      child: Text(
-                        DateFormat('hh:mm a').format(msg.timestamp),
-                        style: TextStyle(
-                          color: isMe
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : Colors.black87.withValues(alpha: 0.5),
-                          fontSize: 9,
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -682,7 +714,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                           borderRadius: BorderRadius.circular(12),
                           border: iReacted
                               ? Border.all(
-                                  color: const Color(0xFF3B82F6),
+                                  color: const Color(0xFF2563EB),
                                   width: 1.5)
                               : null,
                         ),
@@ -703,25 +735,37 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   Widget _buildMessageInput() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8).copyWith(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            offset: const Offset(0, -2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8).copyWith(
           bottom: MediaQuery.of(context).padding.bottom + 8),
       child: Row(
         children: [
           // Feature #11: Image attach button
           IconButton(
-            icon: const Icon(Icons.image_outlined, color: Color(0xFF3B82F6)),
+            icon: const Icon(Icons.image_outlined, color: Color(0xFF3B82F6), size: 24),
             onPressed: _isSendingImage ? null : _pickAndSendImage,
             tooltip: 'Send Image',
           ),
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: const TextStyle(color: Colors.black87),
+              style: const TextStyle(color: Colors.black87, fontSize: 15),
               textCapitalization: TextCapitalization.sentences,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.send,
               decoration: InputDecoration(
                 hintText: 'Type a message...',
-                hintStyle: const TextStyle(color: Colors.black38),
+                hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
                 filled: true,
                 fillColor: const Color(0xFFF1F5F9),
                 border: OutlineInputBorder(
@@ -729,17 +773,24 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                   borderSide: BorderSide.none,
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
           const SizedBox(width: 8),
-          CircleAvatar(
-            backgroundColor: const Color(0xFF3B82F6),
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white, size: 20),
-              onPressed: _sendMessage,
+          Material(
+            color: const Color(0xFF3B82F6),
+            shape: const CircleBorder(),
+            elevation: 2,
+            shadowColor: const Color(0xFF3B82F6).withValues(alpha: 0.4),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _sendMessage,
+              child: const Padding(
+                padding: EdgeInsets.all(10),
+                child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              ),
             ),
           ),
         ],

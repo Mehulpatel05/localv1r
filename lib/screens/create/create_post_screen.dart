@@ -1,9 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../core/location/location_selector_field.dart';
 import '../../core/location/location_models.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
@@ -26,11 +23,9 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
 
   // Common
   final _contentController = TextEditingController();
-  PostCategory _selectedCategory = PostCategory.general;
   String? _errorMessage;
   File? _imageFile;
   bool _isPublishing = false;
@@ -62,7 +57,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
       if (picked != null) setState(() => _imageFile = File(picked.path));
     } catch (e) {
       setState(() => _errorMessage = 'Error selecting image: $e');
@@ -119,18 +119,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
       final locService = widget.repository.locationService;
       final effectiveCity = _selectedGeoCity ?? locService.city;
-      final effectiveArea = _selectedGeoArea ?? locService.area ?? (effectiveCity.areas.isNotEmpty ? effectiveCity.areas.first : null);
-
-      if (effectiveArea == null) {
-        throw Exception('Please select an area before publishing.');
-      }
+      // Auto-assign citywide general area for general chat
+      final effectiveArea = effectiveCity.areas.firstWhere(
+        (a) => a.id.contains('GENERAL'),
+        orElse: () => effectiveCity.areas.isNotEmpty ? effectiveCity.areas.first : throw Exception('City has no areas configured.'),
+      );
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
         cityId: effectiveCity.id,
         areaId: effectiveArea.id,
-        category: _selectedCategory,
+        category: PostCategory.general,
         imageUrl: telegramImageUrl,
       );
 
@@ -155,52 +155,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
     }
   }
-
-  Widget _buildLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: const TextStyle(
-                color: Colors.black54,
-                fontSize: 10,
-                fontWeight: FontWeight.bold)),
-      );
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    int maxLines = 1,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-    String? prefixText,
-  }) =>
-      TextField(
-        controller: controller,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        inputFormatters: inputFormatters,
-        style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.4),
-        decoration: InputDecoration(
-          hintText: hint,
-          prefixText: prefixText,
-          prefixStyle: const TextStyle(color: Colors.black87, fontSize: 14),
-          hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
-          filled: true,
-          fillColor: const Color(0xFFF8FAFC),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.black12),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF3B82F6)),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      );
-
-
-
-
   Widget _buildNormalForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,19 +279,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('LOCATION DETAILS',
+                        const Text('POST LOCATION',
                             style: TextStyle(
                                 color: Colors.black54,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
-                        LocationSelectorField(
-                          onLocationSelected: (city, area) {
-                            setState(() {
-                              _selectedGeoCity = city;
-                              _selectedGeoArea = area;
-                            });
-                          },
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.black12),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF3B82F6)),
+                              SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Vadodara (Citywide)',
+                                  style: TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -354,46 +324,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.black12),
                           ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<PostCategory>(
-                              dropdownColor: Colors.white,
-                              value: _selectedCategory,
-                              isExpanded: true,
-                              items: PostCategory.values
-                                  .where((cat) => 
-                                      cat != PostCategory.rooms && 
-                                      cat != PostCategory.shop && 
-                                      cat != PostCategory.food &&
-                                      cat != PostCategory.events &&
-                                      cat != PostCategory.jobs &&
-                                      cat != PostCategory.services)
-                                  .map((cat) {
-                                return DropdownMenuItem(
-                                  value: cat,
-                                  child: Row(
-                                    children: [
-                                      Text(cat.icon),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(cat.label,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                color: Colors.black87,
-                                                fontSize: 13)),
-                                      ),
-                                    ],
+                          child: Row(
+                            children: const [
+                              Text('💬', style: TextStyle(fontSize: 14)),
+                              SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'General Chat',
+                                  style: TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                );
-                              }).toList(),
-                              onChanged: (val) =>
-                                  setState(() => _selectedCategory = val!),
-                            ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

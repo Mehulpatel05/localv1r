@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CommunityModel {
   final String id;
@@ -74,7 +74,9 @@ class CommunityMessage {
   final String authorHandle;
   final String content;
   final DateTime timestamp;
-  final String? imageUrl;           // Feature #11: image messages
+  final String? imageUrl;           // Single image message
+  final List<String> mediaUrls;     // Multi-image album grouping
+  final String type;                // "text", "image", "image_group"
   final Map<String, List<String>> reactions; // Feature #9: emoji reactions
 
   CommunityMessage({
@@ -84,28 +86,64 @@ class CommunityMessage {
     required this.content,
     required this.timestamp,
     this.imageUrl,
+    this.mediaUrls = const [],
+    this.type = 'text',
     this.reactions = const {},
   });
 
   factory CommunityMessage.fromMap(Map<String, dynamic> map, String id) {
-    // Parse reactions: { "emoji": ["handle1","handle2"] }
-    final rawReactions = map['reactions'] as Map<String, dynamic>? ?? {};
-    final reactions = rawReactions.map(
-      (emoji, handles) => MapEntry(
-        emoji,
-        List<String>.from(handles as List),
-      ),
-    );
+    // Safely parse reactions: { "emoji": ["handle1","handle2"] }
+    final reactions = <String, List<String>>{};
+    final rawReactions = map['reactions'];
+    if (rawReactions is Map) {
+      rawReactions.forEach((emoji, handles) {
+        if (handles is List) {
+          reactions[emoji.toString()] = handles
+              .where((h) => h != null)
+              .map((h) => h.toString())
+              .toList();
+        }
+      });
+    }
+
+    // Safely parse mediaUrls
+    final mediaUrls = <String>[];
+    final rawMedia = map['mediaUrls'];
+    if (rawMedia is List) {
+      for (final item in rawMedia) {
+        if (item != null && item.toString().isNotEmpty) {
+          mediaUrls.add(item.toString());
+        }
+      }
+    } else if (map['imageUrl'] != null && map['imageUrl'].toString().isNotEmpty) {
+      mediaUrls.add(map['imageUrl'].toString());
+    }
+
+    DateTime parsedTimestamp = DateTime.now();
+    final rawTs = map['timestamp'];
+    if (rawTs is Timestamp) {
+      parsedTimestamp = rawTs.toDate();
+    } else if (rawTs is int) {
+      parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    } else if (rawTs is String) {
+      parsedTimestamp = DateTime.tryParse(rawTs) ?? DateTime.now();
+    }
+
+    final singleImage = map['imageUrl'] as String?;
+    final determinedType = map['type'] as String? ??
+        (mediaUrls.length > 1
+            ? 'image_group'
+            : (singleImage != null || mediaUrls.isNotEmpty ? 'image' : 'text'));
 
     return CommunityMessage(
       id: id,
-      communityId: map['communityId'] ?? '',
-      authorHandle: map['authorHandle'] ?? 'Unknown',
-      content: map['content'] ?? '',
-      timestamp: map['timestamp'] != null
-          ? (map['timestamp'] as Timestamp).toDate()
-          : DateTime.now(),
-      imageUrl: map['imageUrl'] as String?,
+      communityId: (map['communityId'] ?? '').toString(),
+      authorHandle: (map['authorHandle'] ?? 'Unknown').toString(),
+      content: (map['content'] ?? '').toString(),
+      timestamp: parsedTimestamp,
+      imageUrl: singleImage ?? (mediaUrls.isNotEmpty ? mediaUrls.first : null),
+      mediaUrls: mediaUrls,
+      type: determinedType,
       reactions: reactions,
     );
   }

@@ -12,7 +12,7 @@ import redis
 from typing import Optional, Dict, List, Tuple, Literal
 from collections import defaultdict
 import anyio
-from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request, Response
+from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request, Response, Query, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,23 +25,54 @@ from services.telegram_service import TelegramService
 from google.cloud import firestore
 from services.firebase_service import FirebaseService, db
 from utils.moderation import validate_text_content
+from routes.auth import auth_router
+
+is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
 
 app = FastAPI(
     title="Vadodara Local Secure API Gateway",
     description="Secure backend proxy for anonymous community posting, voting, and media uploads.",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
 )
+
+# 🛡️ RESTRICTED CORS
+ALLOWED_ORIGINS = [
+    "https://localv1r.onrender.com",
+    "http://localhost",
+    "http://localhost:8000",
+    "http://10.0.2.2:8000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
+# 🛡️ AUTHENTICATION ROUTERS
+app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api/v1")
+
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
 redis_client: Optional[redis.Redis] = None
+
+# 🛡️ IN-MEMORY SLIDING-WINDOW RATE LIMITER (Active fallback when Redis is absent)
+_in_memory_rl = defaultdict(list)
+
+def _enforce_in_memory_rate_limit(key: str, max_requests: int, window: float = 60.0):
+    now = time.time()
+    _in_memory_rl[key] = [t for t in _in_memory_rl[key] if now - t < window]
+    if len(_in_memory_rl[key]) >= max_requests:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Too many requests. Please slow down."
+        )
+    _in_memory_rl[key].append(now)
 
 async def get_cached_idempotent_response(key: str, route: str, context: str) -> Optional[dict]:
     """
@@ -68,6 +99,7 @@ async def enforce_ip_rate_limit(ip: str, max_requests: int, window: float = 60.0
     🛡️ Enforces per-IP rate limiting (mitigates registration spam and brute-force).
     """
     if not redis_client:
+        _enforce_in_memory_rate_limit(f"ip:{ip}", max_requests, window)
         return
 
     now = time.time()
@@ -89,7 +121,10 @@ async def enforce_route_rate_limit(route: str, key: str, max_requests: int, wind
     Mitigates: scripted vote-manipulation, spam comments, and CDN storage floods.
     """
     if not redis_client:
-        return # Degrade gracefully
+        _enforce_in_memory_rate_limit(f"route:{route}:{key}", max_requests, window)
+        if ip:
+            _enforce_in_memory_rate_limit(f"route:{route}:ip:{ip}", max_requests * 2, window)
+        return
         
     now = time.time()
     cache_key = f"rl:{route}:{key}"
@@ -174,6 +209,27 @@ def get_client_ip(request: Request) -> str:
     if xff: return xff.split(',')[0].strip()
     # 3. Fallback
     return request.client.host if request.client else '127.0.0.1'
+
+# 🛡️ SECURITY HEADERS & BURST RATE LIMITER MIDDLEWARE
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    # 1. Burst Rate Limiter check (skip /health, preflight OPTIONS)
+    if request.method != "OPTIONS" and request.url.path != "/health":
+        ip = get_client_ip(request)
+        try:
+            _enforce_in_memory_rate_limit(f"burst_ip:{ip}", max_requests=80, window=60.0)
+        except HTTPException as e:
+            return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+    response = await call_next(request)
+    
+    # 2. Hardened Security Headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 def evaluate_request_risk(
     client_ip: str, 
@@ -292,14 +348,43 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header.")
     
-    id_token = authorization.split("Bearer ")[1].strip()
+    raw_token = authorization.split("Bearer ")[1].strip()
     
+    # 1. Try decoding as Backend JWT Token
+    try:
+        payload = jwt.decode(
+            raw_token,
+            Config.JWT_SECRET,
+            algorithms=["HS256"],
+            issuer="nearhood-backend"
+        )
+        if payload.get("type") == "access":
+            uid = payload.get("sub", "")
+            handle = payload.get("handle", "")
+            if not handle and db is not None:
+                user_doc = db.collection("users").document(uid).get()
+                if user_doc.exists:
+                    handle = user_doc.to_dict().get("handle", f"Anon#{uid[:6]}")
+            if not handle:
+                handle = f"Anon#{uid[:6]}"
+                
+            if db is not None:
+                banned_ref = db.collection("banned_users").document(handle).get()
+                if banned_ref.exists:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
+            return uid, handle
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired. Please refresh token or log in again.")
+    except Exception:
+        # Fallback to Firebase token verification
+        pass
+
     if db is None:
         raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
         from firebase_admin import auth as firebase_auth
-        decoded_token = firebase_auth.verify_id_token(id_token)
+        decoded_token = firebase_auth.verify_id_token(raw_token)
         uid = decoded_token['uid']
         
         user_doc = db.collection("users").document(uid).get()
@@ -316,7 +401,7 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid Firebase token: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid session token: {e}")
 
 def verify_resource_owner(collection_name: str, resource_id: str, user_handle: str) -> dict:
     if db is None:
@@ -412,7 +497,7 @@ def generate_mod_session_token(email: str, role: str) -> str:
     jti = str(uuid.uuid4())
     iss = "vadodara-local-backend"
     aud = "vadodara-local-moderator-portal"
-    expires_at = int(time.time()) + 2592000  # 30 Days Access
+    expires_at = int(time.time()) + (8 * 3600)  # 🛡️ 8 hours — industry standard for admin sessions
     
     payload = {
         "jti": jti,
@@ -840,12 +925,12 @@ POSTS_CACHE = PostsQueryCache(ttl_seconds=3.0)
 # 3.1 Get Posts (Read Path over REST - Non-blocking & Cached for 1000+ concurrent users)
 @app.get("/api/v1/posts")
 async def get_posts(
-    limit: int = 20,
-    cursor: Optional[str] = None,
-    author: Optional[str] = None,
-    cityId: Optional[str] = None,
-    areaId: Optional[str] = None,
-    category: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None, max_length=150),
+    author: Optional[str] = Query(None, max_length=100),
+    cityId: Optional[str] = Query(None, max_length=100),
+    areaId: Optional[str] = Query(None, max_length=100),
+    category: Optional[str] = Query(None, max_length=50),
     authorization: Optional[str] = Header(None, description="Bearer token")
 ):
     if db is None:
@@ -1009,16 +1094,13 @@ async def vote_post(
     post_id: str,
     request: VoteRequest,
     server_request: Request,
+    background_tasks: BackgroundTasks,
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     device_id, user_handle = verify_session_token(authorization)
     client_ip = get_client_ip(server_request)
     await enforce_route_rate_limit("vote", device_id, max_requests=60, ip=client_ip)
-    if idempotency_key:
-        cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
-        if cached:
-            return cached
     
     if idempotency_key:
         cached = await get_cached_idempotent_response(idempotency_key, "vote_post", user_handle)
@@ -1034,13 +1116,23 @@ async def vote_post(
         if risk_level == "HIGH":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device attestation validation failed (High Risk).")
 
-    success = FirebaseService.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to register vote.")
+    result = FirebaseService.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to register vote."))
         
-    res = {"status": "success"}
+    # Asynchronously aggregate shards into main post document without blocking or causing lock contention
+    background_tasks.add_task(FirebaseService.aggregate_post_shards, post_id)
+    POSTS_CACHE.clear()
+
+    res = {
+        "status": "success",
+        "userVote": result.get("newVote", 0),
+        "scoreDelta": result.get("scoreDelta", 0),
+        "upvoteDelta": result.get("upvoteDelta", 0),
+        "downvoteDelta": result.get("downvoteDelta", 0)
+    }
     if idempotency_key:
-        await save_idempotent_response(idempotency_key, "vote_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
+        await save_idempotent_response(idempotency_key, "vote_post", user_handle, res)
     return res
 
 
@@ -1173,33 +1265,6 @@ async def delete_post(
         await save_idempotent_response(idempotency_key, "delete_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
-
-# 8b. Restore Post (Moderator)
-@app.post("/api/v1/posts/{post_id}/restore")
-async def restore_post(
-    post_id: str,
-    server_request: Request,
-    authorization: Optional[str] = Header(None),
-):
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-    try:
-        _, user_handle = verify_session_token(authorization)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Unauthorized.")
-
-    doc_ref = db.collection("posts").document(post_id)
-    doc = doc_ref.get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Post not found.")
-
-    doc_ref.update({
-        "hiddenByMod": False,
-        "deletedAt": None,
-        "restoredBy": user_handle,
-        "restoredAt": firestore.SERVER_TIMESTAMP,
-    })
-    return {"status": "success", "message": "Post restored to community feed."}
 
 
 # 9. Media Upload
@@ -1407,7 +1472,16 @@ async def mod_login(
         
         if not mod_doc.exists:
             all_mods = mods_ref.limit(1).get()
-            if not all_mods and request.email == "admin@vadodara.local" and request.password == "VadodaraLocalSecure2026!":
+            # 🛡️ Bootstrap admin: Credentials come ONLY from environment variables.
+            # Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD in Render/server env.
+            # This block runs ONCE when no moderators exist yet.
+            bootstrap_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "")
+            bootstrap_password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+            if (not all_mods
+                    and bootstrap_email
+                    and bootstrap_password
+                    and request.email == bootstrap_email
+                    and request.password == bootstrap_password):
                 new_hashed_pass = bcrypt.hashpw(password_with_pepper, bcrypt.gensalt()).decode('utf-8')
                 encrypted_mfa = Config.crypto.encrypt(b"BASE32SECRET3232").decode('utf-8')
                 mods_ref.document(request.email).set({
@@ -1910,6 +1984,5 @@ async def mod_logout(
 async def health_check():
     return {
         "status": "healthy",
-        "firebase_active": db is not None,
-        "api_version": "1.0.0"
+        "firebase_active": db is not None
     }

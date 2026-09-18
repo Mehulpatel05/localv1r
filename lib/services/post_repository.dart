@@ -1,15 +1,13 @@
-import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/constants/areas_and_categories.dart';
 import '../models/post_model.dart';
 import '../models/comment_model.dart';
-import '../services/device_service.dart';
 import '../core/location/location_service.dart';
+import 'auth_service.dart';
 
 enum FeedTab { latest, trending }
 
@@ -47,6 +45,11 @@ class PostRepository extends ChangeNotifier {
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final Map<String, dynamic> rawMap = jsonDecode(jsonStr);
         _localVotes = rawMap.map((key, value) => MapEntry(key, value as int));
+        for (final p in _posts) {
+          if (_localVotes.containsKey(p.id)) {
+            p.userVote = _localVotes[p.id]!;
+          }
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -148,6 +151,7 @@ class PostRepository extends ChangeNotifier {
           upvotes: d['upvotes'] ?? 0,
           downvotes: d['downvotes'] ?? 0,
           commentCount: d['commentCount'] ?? 0,
+          userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
           reportCount: d['reportCount'] ?? 0,
           reporters: List<String>.from(d['reporters'] ?? []),
           createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
@@ -161,6 +165,7 @@ class PostRepository extends ChangeNotifier {
           mediaUrls: d['mediaUrls'] != null ? List<String>.from(d['mediaUrls']) : [],
           shopTitle: d['shopTitle'],
           shopPrice: d['shopPrice'],
+          shopCategory: d['shopCategory'],
           foodTitle: d['foodTitle'],
           foodRating: d['foodRating'] != null ? (d['foodRating'] as num).toDouble() : null,
           foodPrice: d['foodPrice'],
@@ -346,12 +351,14 @@ class PostRepository extends ChangeNotifier {
   }
 
   Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await AuthService.instance.getAccessToken();
     final user = FirebaseAuth.instance.currentUser;
-    final token = user != null ? await user.getIdToken() : '';
+    final fallbackToken = user != null ? await user.getIdToken() : '';
+    final finalToken = (token != null && token.isNotEmpty) ? token : fallbackToken;
     
     return {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $finalToken',
     };
   }
 
@@ -359,6 +366,20 @@ class PostRepository extends ChangeNotifier {
     if (value == null) return PostCategory.general;
     final str = value.toString();
     return PostCategory.values.firstWhere((e) => e.name == str, orElse: () => PostCategory.general);
+  }
+
+  String _cleanInput(String input, {int maxLen = 2000}) {
+    final sanitized = input.replaceAll('\u0000', '').trim();
+    if (sanitized.length > maxLen) return sanitized.substring(0, maxLen);
+    return sanitized;
+  }
+
+  String? _cleanOptional(String? input, {int maxLen = 200}) {
+    if (input == null) return null;
+    final sanitized = input.replaceAll('\u0000', '').trim();
+    if (sanitized.isEmpty) return null;
+    if (sanitized.length > maxLen) return sanitized.substring(0, maxLen);
+    return sanitized;
   }
 
   Future<void> addPost({
@@ -376,6 +397,7 @@ class PostRepository extends ChangeNotifier {
     // 🛍️ Shop-specific optional fields
     String? shopTitle,
     String? shopPrice,
+    String? shopCategory,
     // 🍲 Food-specific optional fields
     String? foodTitle,
     double? foodRating,
@@ -397,36 +419,38 @@ class PostRepository extends ChangeNotifier {
   }) async {
     try {
       final headers = await _getAuthHeaders();
+      final sanitizedContent = _cleanInput(content);
       final response = await http.post(
         Uri.parse('$backendBaseUrl/posts/create'),
         headers: headers,
         body: jsonEncode({
           'authorHandle': authorHandle,
-          'content': content,
+          'content': sanitizedContent,
           'category': category.name,
           'imageUrl': imageUrl,
           'cityId': cityId,
           'areaId': areaId,
-          if (roomTitle != null) 'roomTitle': roomTitle,
-          if (roomArea != null) 'roomArea': roomArea,
-          if (roomRent != null) 'roomRent': roomRent,
+          if (roomTitle != null) 'roomTitle': _cleanOptional(roomTitle),
+          if (roomArea != null) 'roomArea': _cleanOptional(roomArea),
+          if (roomRent != null) 'roomRent': _cleanOptional(roomRent, maxLen: 30),
           if (mediaUrls.isNotEmpty) 'mediaUrls': mediaUrls,
-          if (shopTitle != null) 'shopTitle': shopTitle,
-          if (shopPrice != null) 'shopPrice': shopPrice,
-          if (foodTitle != null) 'foodTitle': foodTitle,
+          if (shopTitle != null) 'shopTitle': _cleanOptional(shopTitle),
+          if (shopPrice != null) 'shopPrice': _cleanOptional(shopPrice, maxLen: 30),
+          if (shopCategory != null) 'shopCategory': _cleanOptional(shopCategory, maxLen: 50),
+          if (foodTitle != null) 'foodTitle': _cleanOptional(foodTitle),
           if (foodRating != null) 'foodRating': foodRating,
-          if (foodPrice != null) 'foodPrice': foodPrice,
-          if (eventTitle != null) 'eventTitle': eventTitle,
-          if (eventDate != null) 'eventDate': eventDate,
-          if (eventLocationText != null) 'eventLocationText': eventLocationText,
-          if (eventPrice != null) 'eventPrice': eventPrice,
-          if (jobTitle != null) 'jobTitle': jobTitle,
-          if (jobCompany != null) 'jobCompany': jobCompany,
-          if (jobLocation != null) 'jobLocation': jobLocation,
-          if (jobType != null) 'jobType': jobType,
-          if (serviceTitle != null) 'serviceTitle': serviceTitle,
-          if (serviceCategoryText != null) 'serviceCategoryText': serviceCategoryText,
-          if (servicePrice != null) 'servicePrice': servicePrice,
+          if (foodPrice != null) 'foodPrice': _cleanOptional(foodPrice, maxLen: 30),
+          if (eventTitle != null) 'eventTitle': _cleanOptional(eventTitle),
+          if (eventDate != null) 'eventDate': _cleanOptional(eventDate, maxLen: 50),
+          if (eventLocationText != null) 'eventLocationText': _cleanOptional(eventLocationText),
+          if (eventPrice != null) 'eventPrice': _cleanOptional(eventPrice, maxLen: 30),
+          if (jobTitle != null) 'jobTitle': _cleanOptional(jobTitle),
+          if (jobCompany != null) 'jobCompany': _cleanOptional(jobCompany),
+          if (jobLocation != null) 'jobLocation': _cleanOptional(jobLocation),
+          if (jobType != null) 'jobType': _cleanOptional(jobType, maxLen: 50),
+          if (serviceTitle != null) 'serviceTitle': _cleanOptional(serviceTitle),
+          if (serviceCategoryText != null) 'serviceCategoryText': _cleanOptional(serviceCategoryText),
+          if (servicePrice != null) 'servicePrice': _cleanOptional(servicePrice, maxLen: 30),
         }),
       );
       if (response.statusCode == 201) {
@@ -440,49 +464,104 @@ class PostRepository extends ChangeNotifier {
     }
   }
 
+  int getUserVote(String postId) {
+    return _localVotes[postId] ?? 0;
+  }
+
+  /// Returns total upvotes accumulated across all posts by a specific user handle
+  int getTotalUpvotesForUser(String handle) {
+    int total = 0;
+    for (final p in _posts.where((post) => post.authorHandle == handle)) {
+      total += (p.upvotes > 0 ? p.upvotes : 0);
+    }
+    return total;
+  }
+
+  /// Concurrency-safe optimistic vote toggle method
   Future<void> votePost(String postId, int direction) async {
-    // Optimistic UI updates
     final int oldVote = _localVotes[postId] ?? 0;
-    if (oldVote == direction) return;
+    final int newVote = (oldVote == direction) ? 0 : direction;
 
-    final index = _posts.indexWhere((p) => p.id == postId);
-    if (index != -1) {
-      final p = _posts[index];
-      if (oldVote == 1) p.upvotes--;
-      if (oldVote == -1) p.downvotes--;
-      if (direction == 1) p.upvotes++;
-      if (direction == -1) p.downvotes++;
+    int upvoteDelta = 0;
+    int downvoteDelta = 0;
 
-      _localVotes[postId] = direction;
-      _saveLocalVotes();
-      notifyListeners();
+    if (oldVote == direction) {
+      // Toggle off existing vote
+      if (direction == 1) {
+        upvoteDelta = -1;
+      } else {
+        downvoteDelta = -1;
+      }
+    } else if (oldVote == 0) {
+      // Cast first vote
+      if (direction == 1) {
+        upvoteDelta = 1;
+      } else {
+        downvoteDelta = 1;
+      }
+    } else {
+      // Switch direction (+1 to -1 or -1 to +1)
+      if (direction == 1) {
+        upvoteDelta = 1;
+        downvoteDelta = -1;
+      } else {
+        upvoteDelta = -1;
+        downvoteDelta = 1;
+      }
     }
 
+    // 1. Optimistic memory update
+    _localVotes[postId] = newVote;
+    _saveLocalVotes();
+
+    final postIndex = _posts.indexWhere((p) => p.id == postId);
+    if (postIndex != -1) {
+      final p = _posts[postIndex];
+      p.userVote = newVote;
+      p.upvotes = (p.upvotes + upvoteDelta).clamp(0, 9999999);
+      p.downvotes = (p.downvotes + downvoteDelta).clamp(0, 9999999);
+    }
+    notifyListeners();
+
+    // 2. Dispatch vote transaction to backend proxy
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$backendBaseUrl/posts/$postId/vote'),
         headers: headers,
         body: jsonEncode({'direction': direction}),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode != 200) {
-        throw Exception('Vote failed');
+        final errorMsg = jsonDecode(response.body)['detail'] ?? 'Vote failed on server';
+        throw Exception(errorMsg);
       }
-    } catch (e) {
-      debugPrint('Error voting: $e');
-      // Revert optimistic UI
-      final revertIndex = _posts.indexWhere((p) => p.id == postId);
-      if (revertIndex != -1) {
-        final p = _posts[revertIndex];
-        if (direction == 1) p.upvotes--;
-        if (direction == -1) p.downvotes--;
-        if (oldVote == 1) p.upvotes++;
-        if (oldVote == -1) p.downvotes++;
-        
-        _localVotes[postId] = oldVote;
+
+      // Sync server-returned userVote if returned
+      final data = jsonDecode(response.body);
+      if (data['userVote'] != null) {
+        final serverVote = data['userVote'] as int;
+        _localVotes[postId] = serverVote;
+        if (postIndex != -1) {
+          _posts[postIndex].userVote = serverVote;
+        }
         _saveLocalVotes();
         notifyListeners();
       }
+    } catch (e) {
+      debugPrint('Error voting on post $postId: $e');
+      // 3. Rollback optimistic state on failure
+      _localVotes[postId] = oldVote;
+      _saveLocalVotes();
+
+      if (postIndex != -1) {
+        final p = _posts[postIndex];
+        p.userVote = oldVote;
+        p.upvotes = (p.upvotes - upvoteDelta).clamp(0, 9999999);
+        p.downvotes = (p.downvotes - downvoteDelta).clamp(0, 9999999);
+      }
+      notifyListeners();
+      rethrow;
     }
   }
 
@@ -505,6 +584,7 @@ class PostRepository extends ChangeNotifier {
           upvotes: d['upvotes'] ?? 0,
           downvotes: d['downvotes'] ?? 0,
           commentCount: d['commentCount'] ?? 0,
+          userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
           reportCount: d['reportCount'] ?? 0,
           reporters: List<String>.from(d['reporters'] ?? []),
           createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
