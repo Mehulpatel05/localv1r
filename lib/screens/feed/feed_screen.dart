@@ -35,8 +35,6 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  final Set<String> _expandedPostIds = {};
-
   @override
   void initState() {
     super.initState();
@@ -56,31 +54,16 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() {});
   }
 
-  String _formatTimeAgo(DateTime dateTime) {
-    final diff = DateTime.now().difference(dateTime);
-    if (diff.inSeconds < 60) {
-      return 'Just now';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays}d ago';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
-
   Color _getAvatarColor(String handle) {
-    final colors = [
-      const Color(0xFF3B82F6), // Blue
-      const Color(0xFFF97316), // Orange
-      const Color(0xFFEAB308), // Amber
-      const Color(0xFF1E40AF), // Deep Blue
-      const Color(0xFF8B5CF6), // Purple
-      const Color(0xFF10B981), // Emerald
-      const Color(0xFFEC4899), // Pink
-      const Color(0xFF0EA5E9), // Sky
+    const colors = [
+      Color(0xFF3B82F6),
+      Color(0xFFF97316),
+      Color(0xFFEAB308),
+      Color(0xFF1E40AF),
+      Color(0xFF8B5CF6),
+      Color(0xFF10B981),
+      Color(0xFFEC4899),
+      Color(0xFF0EA5E9),
     ];
     if (handle.isEmpty) return colors[0];
     final hash = handle.codeUnits.fold(0, (prev, elem) => prev + elem);
@@ -323,9 +306,12 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                           )
                         : ListView.builder(
-                            physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
                             ),
+                            cacheExtent: 800,
+                            addRepaintBoundaries: true,
+                            addAutomaticKeepAlives: true,
                             padding: const EdgeInsets.only(
                               top: 8,
                               bottom: 84,
@@ -335,7 +321,24 @@ class _FeedScreenState extends State<FeedScreen> {
                             itemCount: repo.posts.length,
                             itemBuilder: (context, index) {
                               final post = repo.posts[index];
-                              return _buildPostCard(post);
+                              return _PostCardItem(
+                                key: ValueKey('post_${post.id}'),
+                                post: post,
+                                repository: repo,
+                                currentUserHandle: widget.currentUserHandle,
+                                onDelete: () => _showDeleteConfirmation(context, post.id),
+                                onReport: () => _showReportContentSheet(post.id),
+                                onProfileTap: () {
+                                  if (post.authorHandle != widget.currentUserHandle) {
+                                    showOtherUserProfileSheet(
+                                      context,
+                                      partnerHandle: post.authorHandle,
+                                      currentUserHandle: widget.currentUserHandle,
+                                      repository: widget.repository,
+                                    );
+                                  }
+                                },
+                              );
                             },
                           ),
                   ),
@@ -720,364 +723,6 @@ class _FeedScreenState extends State<FeedScreen> {
               onPressed: _showCreateActionSheet,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPostCard(Post post) {
-    final repo = widget.repository;
-    final isExpanded = _expandedPostIds.contains(post.id);
-    final isEmergency = post.isEmergency;
-
-    // Check long text
-    final isLongText = post.content.length > 220;
-    final displayContent = (isLongText && !isExpanded)
-        ? '${post.content.substring(0, 220)}...'
-        : post.content;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: isEmergency ? const Color(0xFFFFF5F5) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isEmergency ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
-          width: isEmergency ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PostDetailScreen(
-                  post: post,
-                  repository: repo,
-                  currentUserHandle: widget.currentUserHandle,
-                ),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Emergency Banner if marked
-                if (isEmergency) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
-                        SizedBox(width: 4),
-                        Text(
-                          'EMERGENCY',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // Card Header (Avatar + Handle/Time + Category Pill + 3-dots Menu)
-                Row(
-                  children: [
-                    // Author Avatar with Initials
-                    GestureDetector(
-                      onTap: () {
-                        if (post.authorHandle != widget.currentUserHandle) {
-                          showOtherUserProfileSheet(
-                            context,
-                            partnerHandle: post.authorHandle,
-                            currentUserHandle: widget.currentUserHandle,
-                            repository: widget.repository,
-                          );
-                        }
-                      },
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: _getAvatarColor(post.authorHandle),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          _getInitials(post.authorHandle),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-
-                    // Author info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              if (post.authorHandle != widget.currentUserHandle) {
-                                showOtherUserProfileSheet(
-                                  context,
-                                  partnerHandle: post.authorHandle,
-                                  currentUserHandle: widget.currentUserHandle,
-                                  repository: widget.repository,
-                                );
-                              }
-                            },
-                            child: Text(
-                              '@${post.authorHandle}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Vadodara • ${_formatTimeAgo(post.createdAt)}',
-                            style: const TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Category Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        post.category.label,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ),
-                    ),
-
-                    // 3-dots Menu
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.only(left: 6),
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
-                        color: Color(0xFF94A3B8),
-                        size: 22,
-                      ),
-                      onPressed: () {
-                        if (post.authorHandle == widget.currentUserHandle) {
-                          _showDeleteConfirmation(context, post.id);
-                        } else {
-                          _showReportContentSheet(post.id);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                // Post Content Text
-                Text.rich(
-                  TextSpan(
-                    text: displayContent,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 15,
-                      height: 1.45,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: -0.15,
-                    ),
-                    children: [
-                      if (isLongText && !isExpanded)
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.baseline,
-                          baseline: TextBaseline.alphabetic,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _expandedPostIds.add(post.id);
-                              });
-                            },
-                            child: const Text(
-                              ' Read more',
-                              style: TextStyle(
-                                color: Color(0xFF2563EB),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // Post Image if present (Medium compact height)
-                if (post.imageUrl != null && post.imageUrl!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Stack(
-                      children: [
-                        SafeImage(
-                          imageUrl: post.imageUrl!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        // Optional Rating Pill on image top-right
-                        if (post.foodRating != null)
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${post.foodRating}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    color: Color(0xFFFBBF24),
-                                    size: 14,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 14),
-
-                // Card Footer Actions (Votes, Comments, Share/Options)
-                Row(
-                  children: [
-                    // Upvote / Downvote Capsule
-                    VoteCapsule(
-                      post: post,
-                      repository: repo,
-                    ),
-
-                    const SizedBox(width: 14),
-
-                    // Comments Button
-                    InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PostDetailScreen(
-                              post: post,
-                              repository: repo,
-                              currentUserHandle: widget.currentUserHandle,
-                            ),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(18),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              size: 18,
-                              color: Color(0xFF64748B),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${post.commentCount}',
-                              style: const TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // Action Icon
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
-                        size: 20,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      onPressed: () {
-                        if (post.authorHandle == widget.currentUserHandle) {
-                          _showDeleteConfirmation(context, post.id);
-                        } else {
-                          _showReportContentSheet(post.id);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -1579,6 +1224,408 @@ class _FeedScreenState extends State<FeedScreen> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PostCardItem extends StatefulWidget {
+  final Post post;
+  final PostRepository repository;
+  final String currentUserHandle;
+  final VoidCallback onDelete;
+  final VoidCallback onReport;
+  final VoidCallback onProfileTap;
+
+  const _PostCardItem({
+    super.key,
+    required this.post,
+    required this.repository,
+    required this.currentUserHandle,
+    required this.onDelete,
+    required this.onReport,
+    required this.onProfileTap,
+  });
+
+  @override
+  State<_PostCardItem> createState() => _PostCardItemState();
+}
+
+class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveClientMixin {
+  bool _isExpanded = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  static Color _getAvatarColor(String handle) {
+    const colors = [
+      Color(0xFF3B82F6),
+      Color(0xFFF97316),
+      Color(0xFFEAB308),
+      Color(0xFF1E40AF),
+      Color(0xFF8B5CF6),
+      Color(0xFF10B981),
+      Color(0xFFEC4899),
+      Color(0xFF0EA5E9),
+    ];
+    if (handle.isEmpty) return colors[0];
+    final hash = handle.codeUnits.fold(0, (prev, elem) => prev + elem);
+    return colors[hash % colors.length];
+  }
+
+  static String _getInitials(String handle) {
+    if (handle.isEmpty) return 'U';
+    final clean = handle.replaceAll('@', '').trim();
+    if (clean.length <= 2) return clean.toUpperCase();
+    return clean.substring(0, 2).toUpperCase();
+  }
+
+  static String _formatTimeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inSeconds < 60) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final post = widget.post;
+    final isEmergency = post.isEmergency;
+    final isLongText = post.content.length > 220;
+    final displayContent = (isLongText && !_isExpanded)
+        ? '${post.content.substring(0, 220)}...'
+        : post.content;
+
+    return RepaintBoundary(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: isEmergency ? const Color(0xFFFFF5F5) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isEmergency ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
+            width: isEmergency ? 1.5 : 1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PostDetailScreen(
+                    post: post,
+                    repository: widget.repository,
+                    currentUserHandle: widget.currentUserHandle,
+                  ),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Emergency Banner if marked
+                  if (isEmergency) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            'EMERGENCY',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Card Header
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: widget.onProfileTap,
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: _getAvatarColor(post.authorHandle),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _getInitials(post.authorHandle),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: widget.onProfileTap,
+                              child: Text(
+                                '@${post.authorHandle}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Vadodara • ${_formatTimeAgo(post.createdAt)}',
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Category Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          post.category.label,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ),
+
+                      // 3-dots Menu
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.only(left: 6),
+                        icon: const Icon(
+                          Icons.more_horiz_rounded,
+                          color: Color(0xFF94A3B8),
+                          size: 22,
+                        ),
+                        onPressed: () {
+                          if (post.authorHandle == widget.currentUserHandle) {
+                            widget.onDelete();
+                          } else {
+                            widget.onReport();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Post Content Text
+                  Text.rich(
+                    TextSpan(
+                      text: displayContent,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 15,
+                        height: 1.45,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: -0.15,
+                      ),
+                      children: [
+                        if (isLongText && !_isExpanded)
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.baseline,
+                            baseline: TextBaseline.alphabetic,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isExpanded = true;
+                                });
+                              },
+                              child: const Text(
+                                ' Read more',
+                                style: TextStyle(
+                                  color: Color(0xFF2563EB),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Post Image if present
+                  if (post.imageUrl != null && post.imageUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          SafeImage(
+                            imageUrl: post.imageUrl!,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          if (post.foodRating != null)
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${post.foodRating}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    const Icon(
+                                      Icons.star_rounded,
+                                      color: Color(0xFFFBBF24),
+                                      size: 14,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  // Card Footer Actions
+                  Row(
+                    children: [
+                      VoteCapsule(
+                        post: post,
+                        repository: widget.repository,
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PostDetailScreen(
+                                post: post,
+                                repository: widget.repository,
+                                currentUserHandle: widget.currentUserHandle,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(18),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                size: 18,
+                                color: Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${post.commentCount}',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.more_horiz_rounded,
+                          size: 20,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        onPressed: () {
+                          if (post.authorHandle == widget.currentUserHandle) {
+                            widget.onDelete();
+                          } else {
+                            widget.onReport();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

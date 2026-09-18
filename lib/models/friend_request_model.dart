@@ -20,20 +20,23 @@ class FriendRequest {
   });
 
   factory FriendRequest.fromMap(Map<String, dynamic> map, String id) {
+    DateTime parseDateTime(dynamic val) {
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      return DateTime.now();
+    }
+
     return FriendRequest(
       id: id,
-      senderHandle: map['senderHandle'] ?? '',
-      receiverHandle: map['receiverHandle'] ?? '',
+      senderHandle: (map['senderHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
+      receiverHandle: (map['receiverHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
       status: FriendRequestStatus.values.firstWhere(
         (e) => e.name == (map['status'] ?? 'pending'),
         orElse: () => FriendRequestStatus.pending,
       ),
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? (map['updatedAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      createdAt: parseDateTime(map['createdAt']),
+      updatedAt: parseDateTime(map['updatedAt']),
     );
   }
 

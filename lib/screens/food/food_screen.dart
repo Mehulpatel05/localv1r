@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
 import '../../core/location/location_chip.dart';
@@ -95,10 +95,16 @@ class _FoodScreenState extends State<FoodScreen> {
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
+                    cacheExtent: 1500,
+                    addRepaintBoundaries: true,
+                    addAutomaticKeepAlives: false,
                     padding: const EdgeInsets.only(
                         top: 16, bottom: 100, left: 14, right: 14),
                     itemCount: posts.length,
-                    itemBuilder: (context, i) => _buildFoodCard(posts[i]),
+                    itemBuilder: (context, i) => RepaintBoundary(
+                      key: ValueKey('food_${posts[i].id}'),
+                      child: _buildFoodCard(posts[i]),
+                    ),
                   ),
       ),
       floatingActionButton: FloatingActionButton.extended(

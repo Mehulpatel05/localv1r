@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/friend_request_model.dart';
@@ -18,59 +19,78 @@ class FriendRepository {
   String _currentUserHandle = '';
 
   String get currentUserHandle => _currentUserHandle;
-  set currentUserHandle(String handle) => _currentUserHandle = handle;
+  set currentUserHandle(String handle) =>
+      _currentUserHandle = handle.replaceAll('@', '').trim();
 
   // ── Helper: Deterministic friendship ID ──
   String _friendshipId(String a, String b) {
-    final sorted = [a, b]..sort();
+    final cleanA = a.replaceAll('@', '').trim();
+    final cleanB = b.replaceAll('@', '').trim();
+    final sorted = [cleanA, cleanB]..sort();
     return sorted.join('_');
   }
 
   // ── Check relationship status with another user ──
   Future<RelationshipStatus> getRelationshipStatus(String otherHandle) async {
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = otherHandle.replaceAll('@', '').trim();
+    if (me.isEmpty || them.isEmpty) return RelationshipStatus.none;
+
     // Check if blocked by me
-    final blockByMe = await _db.collection('blocks')
-        .doc('${_currentUserHandle}_$otherHandle').get();
-    if (blockByMe.exists) return RelationshipStatus.blockedByMe;
+    try {
+      final blockByMe = await _db.collection('blocks')
+          .doc('${me}_$them').get();
+      if (blockByMe.exists) return RelationshipStatus.blockedByMe;
+    } catch (_) {}
 
     // Check if blocked by them
-    final blockByThem = await _db.collection('blocks')
-        .doc('${otherHandle}_$_currentUserHandle').get();
-    if (blockByThem.exists) return RelationshipStatus.blockedByThem;
+    try {
+      final blockByThem = await _db.collection('blocks')
+          .doc('${them}_$me').get();
+      if (blockByThem.exists) return RelationshipStatus.blockedByThem;
+    } catch (_) {}
 
     // Check if friends
-    final friendshipDoc = await _db.collection('friendships')
-        .doc(_friendshipId(_currentUserHandle, otherHandle)).get();
-    if (friendshipDoc.exists) return RelationshipStatus.friends;
+    try {
+      final friendshipDoc = await _db.collection('friendships')
+          .doc(_friendshipId(me, them)).get();
+      if (friendshipDoc.exists) return RelationshipStatus.friends;
+    } catch (_) {}
 
     // Check if I sent a request
-    final sentRequest = await _db.collection('friend_requests')
-        .doc('${_currentUserHandle}_$otherHandle').get();
-    if (sentRequest.exists && sentRequest.data()?['status'] == 'pending') {
-      return RelationshipStatus.requestSentByMe;
-    }
+    try {
+      final sentRequest = await _db.collection('friend_requests')
+          .doc('${me}_$them').get();
+      if (sentRequest.exists && sentRequest.data()?['status'] == 'pending') {
+        return RelationshipStatus.requestSentByMe;
+      }
+    } catch (_) {}
 
     // Check if they sent me a request
-    final receivedRequest = await _db.collection('friend_requests')
-        .doc('${otherHandle}_$_currentUserHandle').get();
-    if (receivedRequest.exists && receivedRequest.data()?['status'] == 'pending') {
-      return RelationshipStatus.requestReceivedByMe;
-    }
+    try {
+      final receivedRequest = await _db.collection('friend_requests')
+          .doc('${them}_$me').get();
+      if (receivedRequest.exists && receivedRequest.data()?['status'] == 'pending') {
+        return RelationshipStatus.requestReceivedByMe;
+      }
+    } catch (_) {}
 
     return RelationshipStatus.none;
   }
 
   // ── Send Friend Request ──
   Future<void> sendFriendRequest(String receiverHandle) async {
-    if (receiverHandle == _currentUserHandle) throw Exception('Cannot friend yourself');
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = receiverHandle.replaceAll('@', '').trim();
+    if (them == me) throw Exception('Cannot friend yourself');
 
-    final status = await getRelationshipStatus(receiverHandle);
+    final status = await getRelationshipStatus(them);
     if (status != RelationshipStatus.none) {
       throw Exception('Cannot send request: relationship already exists');
     }
 
     // Fetch receiverUid from profiles
-    final profileDoc = await _db.collection('profiles').doc(receiverHandle).get();
+    final profileDoc = await _db.collection('profiles').doc(them).get();
     if (!profileDoc.exists) {
       throw Exception('User not found.');
     }
@@ -82,11 +102,11 @@ class FriendRepository {
     final senderUid = FirebaseAuth.instance.currentUser?.uid;
     if (senderUid == null) throw Exception('Not authenticated.');
 
-    final docId = '${_currentUserHandle}_$receiverHandle';
+    final docId = '${me}_$them';
     await _db.collection('friend_requests').doc(docId).set({
-      'senderHandle': _currentUserHandle,
+      'senderHandle': me,
       'senderUid': senderUid,
-      'receiverHandle': receiverHandle,
+      'receiverHandle': them,
       'receiverUid': receiverUid,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
@@ -96,8 +116,10 @@ class FriendRepository {
 
   // ── Accept Friend Request ──
   Future<void> acceptFriendRequest(String senderHandle) async {
-    final requestDocId = '${senderHandle}_$_currentUserHandle';
-    final friendshipDocId = _friendshipId(senderHandle, _currentUserHandle);
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = senderHandle.replaceAll('@', '').trim();
+    final requestDocId = '${them}_$me';
+    final friendshipDocId = _friendshipId(them, me);
 
     try {
       await _db.runTransaction((transaction) async {
@@ -120,14 +142,14 @@ class FriendRepository {
         // Create friendship
         final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
         transaction.set(friendshipRef, {
-          'users': [senderHandle, _currentUserHandle],
+          'users': [them, me],
           'usersUids': [doc.data()?['senderUid'], FirebaseAuth.instance.currentUser?.uid],
           'createdAt': FieldValue.serverTimestamp(),
         });
 
         // Update friend counts atomically
-        final senderProfileRef = _db.collection('profiles').doc(senderHandle);
-        final currentProfileRef = _db.collection('profiles').doc(_currentUserHandle);
+        final senderProfileRef = _db.collection('profiles').doc(them);
+        final currentProfileRef = _db.collection('profiles').doc(me);
         
         transaction.update(senderProfileRef, {'friendCount': FieldValue.increment(1)});
         transaction.update(currentProfileRef, {'friendCount': FieldValue.increment(1)});
@@ -139,7 +161,9 @@ class FriendRepository {
 
   // ── Reject Friend Request ──
   Future<void> rejectFriendRequest(String senderHandle) async {
-    final requestDocId = '${senderHandle}_$_currentUserHandle';
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = senderHandle.replaceAll('@', '').trim();
+    final requestDocId = '${them}_$me';
     final requestRef = _db.collection('friend_requests').doc(requestDocId);
     
     final doc = await requestRef.get();
@@ -153,13 +177,17 @@ class FriendRepository {
 
   // ── Cancel Sent Request ──
   Future<void> cancelFriendRequest(String receiverHandle) async {
-    final requestDocId = '${_currentUserHandle}_$receiverHandle';
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = receiverHandle.replaceAll('@', '').trim();
+    final requestDocId = '${me}_$them';
     await _db.collection('friend_requests').doc(requestDocId).delete();
   }
 
   // ── Unfriend ──
   Future<void> unfriend(String otherHandle) async {
-    final friendshipDocId = _friendshipId(_currentUserHandle, otherHandle);
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = otherHandle.replaceAll('@', '').trim();
+    final friendshipDocId = _friendshipId(me, them);
 
     await _db.runTransaction((transaction) async {
       final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
@@ -168,109 +196,195 @@ class FriendRepository {
 
     // Cleanup any old requests
     try {
-      await _db.collection('friend_requests').doc('${_currentUserHandle}_$otherHandle').delete();
+      await _db.collection('friend_requests').doc('${me}_$them').delete();
     } catch (_) {}
     try {
-      await _db.collection('friend_requests').doc('${otherHandle}_$_currentUserHandle').delete();
+      await _db.collection('friend_requests').doc('${them}_$me').delete();
     } catch (_) {}
 
     // Decrement counts
-    await _incrementFriendCount(_currentUserHandle, -1);
-    await _incrementFriendCount(otherHandle, -1);
+    await _incrementFriendCount(me, -1);
+    await _incrementFriendCount(them, -1);
   }
 
   // ── Block User ──
   Future<void> blockUser(String otherHandle) async {
-    final blockDocId = '${_currentUserHandle}_$otherHandle';
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = otherHandle.replaceAll('@', '').trim();
+    final blockDocId = '${me}_$them';
 
     // Create block
     await _db.collection('blocks').doc(blockDocId).set({
-      'blockerHandle': _currentUserHandle,
-        'blockerUid': FirebaseAuth.instance.currentUser?.uid,
-      'blockedHandle': otherHandle,
+      'blockerHandle': me,
+      'blockerUid': FirebaseAuth.instance.currentUser?.uid,
+      'blockedHandle': them,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
     // Remove friendship if exists
-    final friendshipDocId = _friendshipId(_currentUserHandle, otherHandle);
+    final friendshipDocId = _friendshipId(me, them);
     final friendshipDoc = await _db.collection('friendships').doc(friendshipDocId).get();
     if (friendshipDoc.exists) {
       await _db.collection('friendships').doc(friendshipDocId).delete();
-      await _incrementFriendCount(_currentUserHandle, -1);
-      await _incrementFriendCount(otherHandle, -1);
+      await _incrementFriendCount(me, -1);
+      await _incrementFriendCount(them, -1);
     }
 
     // Remove any pending requests
     try {
-      await _db.collection('friend_requests').doc('${_currentUserHandle}_$otherHandle').delete();
+      await _db.collection('friend_requests').doc('${me}_$them').delete();
     } catch (_) {}
     try {
-      await _db.collection('friend_requests').doc('${otherHandle}_$_currentUserHandle').delete();
+      await _db.collection('friend_requests').doc('${them}_$me').delete();
     } catch (_) {}
   }
 
   // ── Unblock User ──
   Future<void> unblockUser(String otherHandle) async {
-    await _db.collection('blocks').doc('${_currentUserHandle}_$otherHandle').delete();
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final them = otherHandle.replaceAll('@', '').trim();
+    await _db.collection('blocks').doc('${me}_$them').delete();
   }
 
   // ── Get Incoming Pending Requests (Stream) ──
   Stream<List<FriendRequest>> getPendingRequests({int limit = 100}) {
-    return _db.collection('friend_requests')
-        .where('receiverHandle', isEqualTo: _currentUserHandle)
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (me.isEmpty && (uid == null || uid.isEmpty)) return Stream.value([]);
+
+    Query query = _db.collection('friend_requests');
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('receiverUid', isEqualTo: uid);
+    } else {
+      query = query.where('receiverHandle', whereIn: [me, '@$me']);
+    }
+
+    return query
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => FriendRequest.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => FriendRequest.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        })
+        .handleError((error) {
+          debugPrint('Error loading pending requests: $error');
+          return <FriendRequest>[];
+        });
   }
 
   // ── Get Sent Pending Requests (Stream) ──
   Stream<List<FriendRequest>> getSentRequests({int limit = 100}) {
-    return _db.collection('friend_requests')
-        .where('senderHandle', isEqualTo: _currentUserHandle)
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (me.isEmpty && (uid == null || uid.isEmpty)) return Stream.value([]);
+
+    Query query = _db.collection('friend_requests');
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('senderUid', isEqualTo: uid);
+    } else {
+      query = query.where('senderHandle', whereIn: [me, '@$me']);
+    }
+
+    return query
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => FriendRequest.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => FriendRequest.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        })
+        .handleError((error) {
+          debugPrint('Error loading sent requests: $error');
+          return <FriendRequest>[];
+        });
   }
 
   // ── Get Friends List (Stream) ──
   Stream<List<Friendship>> getFriendsList({int limit = 200}) {
-    return _db.collection('friendships')
-        .where('users', arrayContains: _currentUserHandle)
-        .orderBy('createdAt', descending: true)
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (me.isEmpty && (uid == null || uid.isEmpty)) return Stream.value([]);
+
+    Query query = _db.collection('friendships');
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('usersUids', arrayContains: uid);
+    } else {
+      query = query.where('users', arrayContainsAny: [me, '@$me']);
+    }
+
+    return query
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => Friendship.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => Friendship.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        })
+        .handleError((error) {
+          debugPrint('Error loading friends list: $error');
+          return <Friendship>[];
+        });
   }
 
   // ── Get Blocked Users List ──
   Stream<List<BlockEntry>> getBlockedUsers({int limit = 100}) {
-    return _db.collection('blocks')
-        .where('blockerHandle', isEqualTo: _currentUserHandle)
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (me.isEmpty && (uid == null || uid.isEmpty)) return Stream.value([]);
+
+    Query query = _db.collection('blocks');
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('blockerUid', isEqualTo: uid);
+    } else {
+      query = query.where('blockerHandle', whereIn: [me, '@$me']);
+    }
+
+    return query
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => BlockEntry.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => BlockEntry.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        })
+        .handleError((error) {
+          debugPrint('Error loading blocked users: $error');
+          return <BlockEntry>[];
+        });
   }
 
   // ── Get Pending Request Count (for badge) ──
   Stream<int> getPendingRequestCount() {
-    return _db.collection('friend_requests')
-        .where('receiverHandle', isEqualTo: _currentUserHandle)
+    final me = _currentUserHandle.replaceAll('@', '').trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (me.isEmpty && (uid == null || uid.isEmpty)) return Stream.value(0);
+
+    Query query = _db.collection('friend_requests');
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('receiverUid', isEqualTo: uid);
+    } else {
+      query = query.where('receiverHandle', whereIn: [me, '@$me']);
+    }
+
+    return query
         .where('status', isEqualTo: 'pending')
         .limit(50)
         .snapshots()
-        .map((snap) => snap.docs.length);
+        .map((snap) => snap.docs.length)
+        .handleError((error) {
+          return 0;
+        });
   }
 
   // ── Check if two users are friends ──

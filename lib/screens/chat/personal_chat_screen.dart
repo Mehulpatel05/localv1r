@@ -53,29 +53,38 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         .collection('chats')
         .doc(_chatId)
         .collection('messages')
-        .where('senderHandle', isNotEqualTo: cleanMe)
         .where('isRead', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.docs.isNotEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
-        for (final doc in snapshot.docs) {
-          batch.update(doc.reference, {
-            'isRead': true,
-            'status': 'read',
-            'readAt': FieldValue.serverTimestamp(),
-          });
-        }
-        batch.commit();
+        final unreadFromPartner = snapshot.docs.where((doc) {
+          final data = doc.data();
+          final sender = (data['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
+          return sender != cleanMe;
+        }).toList();
 
-        // Also reset chat unreadCounts for me
-        FirebaseFirestore.instance
-            .collection('chats')
-            .doc(_chatId)
-            .update({
-          'unreadCounts.$cleanMe': 0,
-        }).catchError((_) {});
+        if (unreadFromPartner.isNotEmpty) {
+          final batch = FirebaseFirestore.instance.batch();
+          for (final doc in unreadFromPartner) {
+            batch.update(doc.reference, {
+              'isRead': true,
+              'status': 'read',
+              'readAt': FieldValue.serverTimestamp(),
+            });
+          }
+          batch.commit().catchError((_) {});
+
+          // Also reset chat unreadCounts for me
+          FirebaseFirestore.instance
+              .collection('chats')
+              .doc(_chatId)
+              .update({
+            'unreadCounts.$cleanMe': 0,
+          }).catchError((_) {});
+        }
       }
+    }, onError: (e) {
+      debugPrint('Error listening for unread messages: $e');
     });
   }
 
@@ -128,20 +137,25 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         await chatRef.update({
           'unreadCounts.$cleanMe': 0,
           'unreadCounts.${widget.currentUserHandle}': 0,
-        });
+        }).catchError((_) {});
       }
 
       // Mark unread messages sent by partner as read
       final unreadSnapshot = await chatRef
           .collection('messages')
-          .where('senderHandle', isNotEqualTo: cleanMe)
           .where('isRead', isEqualTo: false)
           .limit(100)
           .get();
 
-      if (unreadSnapshot.docs.isNotEmpty) {
+      final partnerDocs = unreadSnapshot.docs.where((d) {
+        final data = d.data();
+        final sender = (data['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
+        return sender != cleanMe;
+      }).toList();
+
+      if (partnerDocs.isNotEmpty) {
         final batch = FirebaseFirestore.instance.batch();
-        for (final d in unreadSnapshot.docs) {
+        for (final d in partnerDocs) {
           batch.update(d.reference, {
             'isRead': true,
             'status': 'read',
@@ -586,6 +600,84 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
+  Widget _buildEmptyChatPlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Color(0xFF2563EB),
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Say hi to @${widget.partnerHandle.replaceAll('@', '')}!',
+              style: const TextStyle(
+                color: Color(0xFF0F172A),
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Send a message to start connecting with your neighbor.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessagesList(List<QueryDocumentSnapshot> messages) {
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final doc = messages[index];
+        final msg = doc.data() as Map<String, dynamic>;
+        final isMe = msg['senderHandle'] == widget.currentUserHandle;
+        final bubble = _buildMessageBubble(msg, doc.id, isMe);
+
+        final currentTimestamp = _parseTimestamp(msg['timestamp']);
+        final showDateSeparator = index == messages.length - 1 ||
+            !_isSameDay(
+              currentTimestamp,
+              _parseTimestamp(
+                (messages[index + 1].data() as Map<String, dynamic>)['timestamp'],
+              ),
+            );
+
+        if (showDateSeparator) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              bubble,
+              _buildDateSeparator(currentTimestamp),
+            ],
+          );
+        }
+        return bubble;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final initial = widget.partnerHandle.isNotEmpty
@@ -712,86 +804,49 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEFF6FF),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              color: Color(0xFF2563EB),
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'Say hi to @${widget.partnerHandle.replaceAll('@', '')}!',
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Send a message to start connecting with your neighbor.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
+                if (snapshot.hasError) {
+                  debugPrint('Personal chat messages stream error: ${snapshot.error}');
+                  // Fallback without server orderBy in case of indexing delay
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(_chatId)
+                        .collection('messages')
+                        .limit(_messageLimit)
+                        .snapshots(),
+                    builder: (ctx, fbSnap) {
+                      if (fbSnap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)));
+                      }
+                      final rawDocs = fbSnap.data?.docs ?? [];
+                      if (rawDocs.isEmpty) {
+                        return _buildEmptyChatPlaceholder();
+                      }
+                      final sortedDocs = List<QueryDocumentSnapshot>.from(rawDocs);
+                      sortedDocs.sort((a, b) {
+                        final aData = a.data() as Map<String, dynamic>? ?? {};
+                        final bData = b.data() as Map<String, dynamic>? ?? {};
+                        final aTs = aData['timestamp'];
+                        final bTs = bData['timestamp'];
+                        DateTime aTime = DateTime.fromMillisecondsSinceEpoch(0);
+                        DateTime bTime = DateTime.fromMillisecondsSinceEpoch(0);
+                        if (aTs is Timestamp) aTime = aTs.toDate();
+                        if (bTs is Timestamp) bTime = bTs.toDate();
+                        return bTime.compareTo(aTime);
+                      });
+                      _hasMoreMessages = sortedDocs.length >= _messageLimit;
+                      return _buildMessagesList(sortedDocs);
+                    },
                   );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildEmptyChatPlaceholder();
                 }
 
                 final messages = snapshot.data!.docs;
                 _hasMoreMessages = messages.length >= _messageLimit;
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics()),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final doc = messages[index];
-                    final msg = doc.data() as Map<String, dynamic>;
-                    final isMe = msg['senderHandle'] == widget.currentUserHandle;
-                    final bubble = _buildMessageBubble(msg, doc.id, isMe);
-
-                    final currentTimestamp = _parseTimestamp(msg['timestamp']);
-                    final showDateSeparator = index == messages.length - 1 ||
-                        !_isSameDay(
-                          currentTimestamp,
-                          _parseTimestamp(
-                            (messages[index + 1].data() as Map<String, dynamic>)['timestamp'],
-                          ),
-                        );
-
-                    if (showDateSeparator) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          bubble,
-                          _buildDateSeparator(currentTimestamp),
-                        ],
-                      );
-                    }
-                    return bubble;
-                  },
-                );
+                return _buildMessagesList(messages);
               },
             ),
           ),

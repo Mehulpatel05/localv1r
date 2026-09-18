@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_model.dart';
@@ -131,14 +132,20 @@ class CommunityRepository {
           .snapshots()
           .listen(
         (snapshot) {
-          final list = snapshot.docs
-              .map((doc) => CommunityMessage.fromMap(doc.data(), doc.id))
-              .toList();
+          final list = <CommunityMessage>[];
+          for (final doc in snapshot.docs) {
+            try {
+              list.add(CommunityMessage.fromMap(doc.data(), doc.id));
+            } catch (e) {
+              debugPrint('Error parsing community message: $e');
+            }
+          }
           list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           if (!controller.isClosed) controller.add(list);
         },
         onError: (err) {
-          if (!controller.isClosed) controller.addError(err);
+          debugPrint('Community fallback stream error: $err');
+          if (!controller.isClosed) controller.add([]);
         },
       );
     }
@@ -152,12 +159,18 @@ class CommunityRepository {
             .snapshots()
             .listen(
           (snapshot) {
-            final list = snapshot.docs
-                .map((doc) => CommunityMessage.fromMap(doc.data(), doc.id))
-                .toList();
+            final list = <CommunityMessage>[];
+            for (final doc in snapshot.docs) {
+              try {
+                list.add(CommunityMessage.fromMap(doc.data(), doc.id));
+              } catch (e) {
+                debugPrint('Error parsing community message: $e');
+              }
+            }
             if (!controller.isClosed) controller.add(list);
           },
           onError: (err) {
+            debugPrint('Community primary stream error, switching to fallback: $err');
             // Fallback: If composite index is missing or building, seamlessly recover with in-memory sort
             primarySub?.cancel();
             primarySub = null;

@@ -104,7 +104,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           for (final p in posts) {
             totalUpvotes += (p.upvotes > 0 ? p.upvotes : 0);
           }
-          _upvoteCount = totalUpvotes > 0 ? totalUpvotes : (_postCount * 5);
+          _upvoteCount = totalUpvotes;
         } else {
           // Direct Firestore query fallback for posts by user
           final postDocs = await FirebaseFirestore.instance
@@ -118,7 +118,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
             final up = doc.data()['upvotes'];
             if (up is int && up > 0) totalUpvotes += up;
           }
-          _upvoteCount = totalUpvotes > 0 ? totalUpvotes : (_postCount * 5);
+          _upvoteCount = totalUpvotes;
         }
       } catch (_) {}
 
@@ -463,8 +463,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final initials = _getInitials(_targetHandle);
-    final bio = (_userData?['bio'] as String?) ??
-        'Always down to help with local recommendations or neighborhood events. Let\'s make Vadodara better together!';
+    final bio = ((_userData?['bio'] as String?) ?? '').trim();
 
     return Container(
       decoration: const BoxDecoration(
@@ -567,32 +566,34 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
-                // Bio Text
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    bio,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF475569),
-                      fontSize: 13,
-                      height: 1.45,
+                if (bio.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  // Bio Text
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      bio,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
                     ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 16),
 
                 // Stats Row (Posts & Upvotes)
-                Builder(
-                  builder: (context) {
+                ListenableBuilder(
+                  listenable: widget.repository is! _DummyRepo ? widget.repository : ValueNotifier(0),
+                  builder: (context, _) {
                     int displayUpvotes = _upvoteCount;
                     if (widget.repository is! _DummyRepo) {
                       try {
                         final live = widget.repository.getTotalUpvotesForUser(_targetHandle);
-                        if (live > 0) displayUpvotes = live;
+                        displayUpvotes = live;
                       } catch (_) {}
                     }
                     return Container(
@@ -740,11 +741,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ),
             icon: const Icon(Icons.person_add_rounded, size: 18),
-            label: const Text(
-              'Add Friend',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14.5,
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Add Friend',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                ),
               ),
             ),
             onPressed: _sendFriendRequest,
@@ -765,12 +769,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ),
             icon: const Icon(Icons.check_rounded, size: 18, color: Color(0xFF64748B)),
-            label: const Text(
-              'Request Sent (Tap to Cancel)',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: Color(0xFF475569),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Request Sent (Tap to Cancel)',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFF475569),
+                ),
               ),
             ),
             onPressed: _cancelFriendRequest,
@@ -792,11 +799,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ),
             icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text(
-              'Accept Friend Request',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14.5,
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Accept Friend Request',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                ),
               ),
             ),
             onPressed: _acceptFriendRequest,
@@ -818,12 +828,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ),
             icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
-            label: const Text(
-              'Friends (Tap to Manage)',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: Color(0xFF059669),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Friends (Tap to Manage)',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFF059669),
+                ),
               ),
             ),
             onPressed: _unfriendUser,
@@ -845,12 +858,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ),
             icon: const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 18),
-            label: const Text(
-              'Blocked (Tap to Unblock)',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: Color(0xFFDC2626),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Blocked (Tap to Unblock)',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFFDC2626),
+                ),
               ),
             ),
             onPressed: _unblockUser,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/post_model.dart';
@@ -30,6 +29,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isSavingBio = false;
   late TextEditingController _bioController;
+  // Keep at state level so it's never disposed while dialog animation is running
+  final TextEditingController _confirmController = TextEditingController();
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _bioController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
@@ -57,8 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _userData = {
           'handle': data['handle'] ?? widget.currentUserHandle,
           'email': data['email'] ?? user.email ?? '',
-          'bio': data['bio'] ??
-              'Coffee enthusiast, weekend explorer, and proud resident of Vadodara. Passionate about keeping our neighborhood connected — always down to help a neighbor or share a local tip.',
+          'bio': (data['bio'] as String?)?.trim() ?? '',
           'createdAt': data['createdAt'],
         };
         _bioController.text = _userData!['bio'] as String;
@@ -246,6 +247,249 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _deleteAccount() async {
+    // Step 1: First warning dialog
+    final step1 = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Delete Account?',
+              style: TextStyle(
+                color: Color(0xFF0F172A),
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This will permanently delete your account, all your posts, friendships, and profile data.\n\nThis action cannot be undone.',
+          style: TextStyle(color: Color(0xFF475569), fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (step1 != true || !mounted) return;
+
+    // Step 2: Type "DELETE" confirmation
+    // Use state-level controller so it's never disposed while the dialog exit-animates
+    _confirmController.clear();
+    final step2 = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Final Confirmation',
+            style: TextStyle(
+              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Type DELETE below to permanently remove your account:',
+                  style: TextStyle(color: Color(0xFF475569), fontSize: 13.5, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _confirmController,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'DELETE',
+                    hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),
+                    filled: true,
+                    fillColor: const Color(0xFFFEF2F2),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFFECACA)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                    ),
+                  ),
+                  onChanged: (_) => setS(() {}),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _confirmController.text.trim() == 'DELETE'
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFFCBD5E1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _confirmController.text.trim() == 'DELETE'
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
+              child: const Text('Delete Forever'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (step2 != true || !mounted) return;
+
+    // Show loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+      ),
+    );
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid;
+      final handle = _userData?['handle'] ?? widget.currentUserHandle;
+      final db = FirebaseFirestore.instance;
+
+      // 1. Primary: Call Backend Admin Endpoint (deletes all Firestore data & Firebase Auth user without client limitations)
+      final serverResult = await AuthService.instance.deleteAccount();
+
+      // 2. Best-effort client cleanup (in case of offline/direct writes)
+      if (handle.isNotEmpty) {
+        try {
+          final postsSnap = await db
+              .collection('posts')
+              .where('authorHandle', isEqualTo: handle)
+              .get();
+          for (final doc in postsSnap.docs) {
+            await doc.reference.delete();
+          }
+        } catch (_) {}
+
+        try {
+          await db.collection('profiles').doc(handle).delete();
+        } catch (_) {}
+      }
+
+      if (uid != null && uid.isNotEmpty) {
+        try {
+          final sentReqs = await db
+              .collection('friend_requests')
+              .where('senderUid', isEqualTo: uid)
+              .get();
+          for (final doc in sentReqs.docs) {
+            await doc.reference.delete();
+          }
+        } catch (_) {}
+
+        try {
+          final recvReqs = await db
+              .collection('friend_requests')
+              .where('receiverUid', isEqualTo: uid)
+              .get();
+          for (final doc in recvReqs.docs) {
+            await doc.reference.delete();
+          }
+        } catch (_) {}
+
+        try {
+          final friendships = await db
+              .collection('friendships')
+              .where('usersUids', arrayContains: uid)
+              .get();
+          for (final doc in friendships.docs) {
+            await doc.reference.delete();
+          }
+        } catch (_) {}
+
+        try {
+          final blocks = await db
+              .collection('blocks')
+              .where('blockerUid', isEqualTo: uid)
+              .get();
+          for (final doc in blocks.docs) {
+            await doc.reference.delete();
+          }
+        } catch (_) {}
+
+        try {
+          await db.collection('users').doc(uid).delete();
+        } catch (_) {}
+      }
+
+      // 3. Try client user delete (ignore if already deleted by server admin SDK)
+      try {
+        await user?.delete();
+      } catch (_) {}
+
+      // 4. Clear all local storage & sign out
+      await AuthService.instance.signOut();
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+
+      // If server reported failure and user was not signed out properly, show note
+      if (serverResult['success'] != true && serverResult['error'] != null) {
+        debugPrint('[DeleteAccount] Server deletion note: ${serverResult['error']}');
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => PhoneLoginScreen(repository: widget.repository),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop(); // close loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete account: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   String _getInitials(String handle) {
     if (handle.isEmpty) return 'U';
     final clean = handle.replaceAll('@', '').replaceAll('.', ' ').trim();
@@ -266,12 +510,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _getTotalUpvotes() {
     int total = 0;
+    final Set<String> seenIds = {};
+    for (final p in _userPosts) {
+      final live = widget.repository.getPostById(p.id) ?? p;
+      seenIds.add(p.id);
+      total += (live.upvotes > 0 ? live.upvotes : 0);
+    }
     final repoPosts = widget.repository.allPosts
-        .where((p) => p.authorHandle == widget.currentUserHandle)
-        .toList();
-    final posts = repoPosts.isNotEmpty ? repoPosts : _userPosts;
-    for (final p in posts) {
-      total += (p.upvotes > 0 ? p.upvotes : 0);
+        .where((p) => p.authorHandle == widget.currentUserHandle);
+    for (final p in repoPosts) {
+      if (!seenIds.contains(p.id)) {
+        seenIds.add(p.id);
+        total += (p.upvotes > 0 ? p.upvotes : 0);
+      }
     }
     return total;
   }
@@ -342,14 +593,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: RefreshIndicator(
         onRefresh: _loadProfileData,
         color: const Color(0xFF3B82F6),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
+        child: ListenableBuilder(
+          listenable: widget.repository,
+          builder: (context, _) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
               // 1. Profile Avatar with Glowing Ring (Image 1)
               Container(
                 width: 96,
@@ -430,34 +683,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 24),
 
               // 3. Stats Card (Posts | Upvotes | Joined)
-              ListenableBuilder(
-                listenable: widget.repository,
-                builder: (context, _) => Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatItem('${_userPosts.length}', 'Posts'),
-                      Container(
-                        height: 30,
-                        width: 1,
-                        color: const Color(0xFFE2E8F0),
-                      ),
-                      _buildStatItem('${_getTotalUpvotes()}', 'Upvotes'),
-                      Container(
-                        height: 30,
-                        width: 1,
-                        color: const Color(0xFFE2E8F0),
-                      ),
-                      _buildStatItem(_getJoinedYear(), 'Joined'),
-                    ],
-                  ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatItem('${_userPosts.length}', 'Posts'),
+                    Container(
+                      height: 30,
+                      width: 1,
+                      color: const Color(0xFFE2E8F0),
+                    ),
+                    _buildStatItem('${_getTotalUpvotes()}', 'Upvotes'),
+                    Container(
+                      height: 30,
+                      width: 1,
+                      color: const Color(0xFFE2E8F0),
+                    ),
+                    _buildStatItem(_getJoinedYear(), 'Joined'),
+                  ],
                 ),
               ),
 
@@ -565,7 +815,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      bio.isEmpty
+                      bio.trim().isEmpty
                           ? 'No bio added yet. Tap edit to write something about yourself.'
                           : bio,
                       style: const TextStyle(
@@ -675,12 +925,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ] else ...[
                 ..._userPosts.map((post) => _buildUserPostCard(post)),
               ],
+
+              const SizedBox(height: 32),
+
+              // Danger Zone Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF5F5),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFFECACA), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.warning_amber_rounded,
+                            size: 18, color: Color(0xFFEF4444)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Danger Zone',
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Permanently delete your account and all associated data. This cannot be undone.',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFEF4444),
+                          side: const BorderSide(
+                              color: Color(0xFFEF4444), width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          backgroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                        label: const Text(
+                          'Delete My Account',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        onPressed: _deleteAccount,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStatItem(String count, String label) {
     return Column(
@@ -707,7 +1028,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildUserPostCard(Post post) {
+  Widget _buildUserPostCard(Post rawPost) {
+    final post = widget.repository.getPostById(rawPost.id) ?? rawPost;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

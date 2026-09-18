@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -143,10 +142,14 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
           final data = snapshot.data;
           if (data != null && data['isLoggedIn'] == true) {
             final handle = data['userHandle'] as String;
-            postRepository.currentUserHandle = handle;
-            // Initialize push notifications and presence after login
-            NotificationService().initialize();
-            PresenceService.instance.init(handle);
+            // Defer to post-frame so notifyListeners() doesn't fire during build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (postRepository.currentUserHandle != handle) {
+                postRepository.currentUserHandle = handle;
+              }
+              NotificationService().initialize();
+              PresenceService.instance.init(handle);
+            });
             return MainScreen(
               repository: postRepository,
               currentUserHandle: handle,

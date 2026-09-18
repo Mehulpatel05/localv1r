@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../models/chat_conversation_model.dart';
 import '../../models/friendship_model.dart';
@@ -40,9 +41,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Stream<QuerySnapshot> _getChatsStream() {
     final rawHandle = widget.currentUserHandle.trim();
     final cleanHandle = rawHandle.replaceAll('@', '');
-    final handles = <String>{rawHandle, cleanHandle, '@$cleanHandle'}
-        .where((h) => h.isNotEmpty)
-        .toList();
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+
+    final handles = <String>{
+      rawHandle,
+      cleanHandle,
+      '@$cleanHandle',
+      rawHandle.toLowerCase(),
+      cleanHandle.toLowerCase(),
+      '@${cleanHandle.toLowerCase()}',
+      if (myUid != null && myUid.isNotEmpty) myUid,
+    }.where((h) => h.isNotEmpty).toList();
+
+    if (handles.isEmpty) {
+      if (myUid != null && myUid.isNotEmpty) {
+        return FirebaseFirestore.instance
+            .collection('chats')
+            .where('participantsUids', arrayContains: myUid)
+            .snapshots();
+      }
+      return const Stream.empty();
+    }
 
     return FirebaseFirestore.instance
         .collection('chats')
@@ -245,13 +264,67 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 // 2. Error / Offline State
                 if (snapshot.hasError) {
                   debugPrint('Chat stream error: ${snapshot.error}');
+                  final myUid = FirebaseAuth.instance.currentUser?.uid;
+                  if (myUid != null && myUid.isNotEmpty) {
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('chats')
+                          .where('participantsUids', arrayContains: myUid)
+                          .snapshots(),
+                      builder: (ctx, uidSnap) {
+                        if (uidSnap.connectionState == ConnectionState.waiting) {
+                          return _buildSkeletonLoading();
+                        }
+                        if (uidSnap.hasData && uidSnap.data!.docs.isNotEmpty) {
+                          final convs = <ChatConversation>[];
+                          for (final doc in uidSnap.data!.docs) {
+                            try {
+                              convs.add(ChatConversation.fromFirestore(doc));
+                            } catch (_) {}
+                          }
+                          convs.sort((a, b) {
+                            final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                            final bTime = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                            return bTime.compareTo(aTime);
+                          });
+                          final filtered = convs.where((conv) {
+                            if (_searchQuery.isEmpty) return true;
+                            final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
+                            final snippet = conv.lastMessage.toLowerCase();
+                            return partner.contains(_searchQuery) || snippet.contains(_searchQuery);
+                          }).toList();
+                          if (filtered.isEmpty && _searchQuery.isNotEmpty) {
+                            return _buildSearchEmptyState();
+                          }
+                          return ListView.separated(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.only(bottom: 80),
+                            itemCount: filtered.length,
+                            separatorBuilder: (context, index) => const Divider(
+                              height: 1,
+                              indent: 76,
+                              endIndent: 16,
+                              color: Color(0xFFF1F5F9),
+                            ),
+                            itemBuilder: (context, index) => _buildConversationTile(filtered[index]),
+                          );
+                        }
+                        return _buildEmptyState();
+                      },
+                    );
+                  }
                   return _buildErrorState(snapshot.error.toString());
                 }
 
                 final rawDocs = snapshot.data?.docs ?? [];
-                final conversations = rawDocs
-                    .map((doc) => ChatConversation.fromFirestore(doc))
-                    .toList();
+                final conversations = <ChatConversation>[];
+                for (final doc in rawDocs) {
+                  try {
+                    conversations.add(ChatConversation.fromFirestore(doc));
+                  } catch (e) {
+                    debugPrint('Error parsing chat conversation: $e');
+                  }
+                }
 
                 // Sort by updatedAt descending in memory (zero composite index required)
                 conversations.sort((a, b) {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,11 +18,35 @@ class PostRepository extends ChangeNotifier {
   static const String backendBaseUrl = 'https://localv1r.onrender.com/api/v1';
 
   List<Post> _posts = [];
+  final Map<String, Post> _postsRegistry = {};
   String _currentUserHandle = '';
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
   PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
   bool _isLoading = true;
+
+  Post? getPostById(String postId) => _postsRegistry[postId];
+
+  void registerPost(Post post) {
+    if (_localVotes.containsKey(post.id)) {
+      post.userVote = _localVotes[post.id]!;
+    }
+    if (_postsRegistry.containsKey(post.id)) {
+      final existing = _postsRegistry[post.id]!;
+      existing.upvotes = post.upvotes;
+      existing.downvotes = post.downvotes;
+      existing.commentCount = post.commentCount;
+      existing.userVote = post.userVote;
+    } else {
+      _postsRegistry[post.id] = post;
+    }
+  }
+
+  void registerPosts(Iterable<Post> posts) {
+    for (final p in posts) {
+      registerPost(p);
+    }
+  }
 
   bool _isLoadingMore = false;
   bool _hasMore = true;
@@ -50,6 +75,11 @@ class PostRepository extends ChangeNotifier {
             p.userVote = _localVotes[p.id]!;
           }
         }
+        for (final p in _postsRegistry.values) {
+          if (_localVotes.containsKey(p.id)) {
+            p.userVote = _localVotes[p.id]!;
+          }
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -74,6 +104,8 @@ class PostRepository extends ChangeNotifier {
     _currentUserHandle = handle;
     _listenToPosts();
   }
+
+  String get currentUserHandle => _currentUserHandle;
 
   List<Post> get allPosts {
     var list = _posts.where((p) {
@@ -187,6 +219,7 @@ class PostRepository extends ChangeNotifier {
         } else {
           _posts.addAll(newPosts);
         }
+        registerPosts(newPosts);
 
         // Demo posts removed for production
 
@@ -471,7 +504,12 @@ class PostRepository extends ChangeNotifier {
   /// Returns total upvotes accumulated across all posts by a specific user handle
   int getTotalUpvotesForUser(String handle) {
     int total = 0;
-    for (final p in _posts.where((post) => post.authorHandle == handle)) {
+    final Set<String> countedPostIds = {};
+    for (final p in _postsRegistry.values.where((post) => post.authorHandle == handle)) {
+      countedPostIds.add(p.id);
+      total += (p.upvotes > 0 ? p.upvotes : 0);
+    }
+    for (final p in _posts.where((post) => post.authorHandle == handle && !countedPostIds.contains(post.id))) {
       total += (p.upvotes > 0 ? p.upvotes : 0);
     }
     return total;
@@ -521,19 +559,49 @@ class PostRepository extends ChangeNotifier {
       p.upvotes = (p.upvotes + upvoteDelta).clamp(0, 9999999);
       p.downvotes = (p.downvotes + downvoteDelta).clamp(0, 9999999);
     }
+    final regPost = _postsRegistry[postId];
+    if (regPost != null && (postIndex == -1 || _posts[postIndex] != regPost)) {
+      regPost.userVote = newVote;
+      regPost.upvotes = (regPost.upvotes + upvoteDelta).clamp(0, 9999999);
+      regPost.downvotes = (regPost.downvotes + downvoteDelta).clamp(0, 9999999);
+    }
     notifyListeners();
 
     // 2. Dispatch vote transaction to backend proxy
     try {
-      final headers = await _getAuthHeaders();
-      final response = await http.post(
+      Map<String, String> headers = await _getAuthHeaders();
+      http.Response response = await http.post(
         Uri.parse('$backendBaseUrl/posts/$postId/vote'),
         headers: headers,
         body: jsonEncode({'direction': direction}),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 12));
+
+      // If unauthorized (401), attempt token refresh & retry once
+      if (response.statusCode == 401) {
+        final refreshedToken = await AuthService.instance.refreshToken();
+        final freshFirebaseToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        final retryToken = refreshedToken ?? freshFirebaseToken;
+        if (retryToken != null && retryToken.isNotEmpty) {
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $retryToken',
+          };
+          response = await http.post(
+            Uri.parse('$backendBaseUrl/posts/$postId/vote'),
+            headers: headers,
+            body: jsonEncode({'direction': direction}),
+          ).timeout(const Duration(seconds: 12));
+        }
+      }
 
       if (response.statusCode != 200) {
-        final errorMsg = jsonDecode(response.body)['detail'] ?? 'Vote failed on server';
+        String errorMsg = 'Vote failed on server (${response.statusCode})';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['detail'] != null) {
+            errorMsg = decoded['detail'].toString();
+          }
+        } catch (_) {}
         throw Exception(errorMsg);
       }
 
@@ -544,6 +612,9 @@ class PostRepository extends ChangeNotifier {
         _localVotes[postId] = serverVote;
         if (postIndex != -1) {
           _posts[postIndex].userVote = serverVote;
+        }
+        if (regPost != null) {
+          regPost.userVote = serverVote;
         }
         _saveLocalVotes();
         notifyListeners();
@@ -560,6 +631,11 @@ class PostRepository extends ChangeNotifier {
         p.upvotes = (p.upvotes - upvoteDelta).clamp(0, 9999999);
         p.downvotes = (p.downvotes - downvoteDelta).clamp(0, 9999999);
       }
+      if (regPost != null && (postIndex == -1 || _posts[postIndex] != regPost)) {
+        regPost.userVote = oldVote;
+        regPost.upvotes = (regPost.upvotes - upvoteDelta).clamp(0, 9999999);
+        regPost.downvotes = (regPost.downvotes - downvoteDelta).clamp(0, 9999999);
+      }
       notifyListeners();
       rethrow;
     }
@@ -567,15 +643,16 @@ class PostRepository extends ChangeNotifier {
 
   /// Returns all posts by [handle] across all categories.
   Future<List<Post>> fetchPostsByUser(String handle) async {
+    List<Post> results = [];
     try {
       final response = await http.get(
-        Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle'),
+        Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle&authorHandle=$handle'),
         headers: await _getHeaders(),
-      );
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> postsData = data['posts'] ?? [];
-        return postsData.map((d) => Post(
+        results = postsData.map((d) => Post(
           id: d['id'],
           authorHandle: d['authorHandle'] ?? '',
           content: d['content'] ?? '',
@@ -617,6 +694,36 @@ class PostRepository extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching posts for profile: $e');
     }
-    return _posts.where((p) => p.authorHandle == handle).toList();
+
+    if (results.isEmpty) {
+      try {
+        final query = await FirebaseFirestore.instance
+            .collection('posts')
+            .where('authorHandle', isEqualTo: handle)
+            .limit(50)
+            .get();
+        if (query.docs.isNotEmpty) {
+          results = query.docs.map((doc) {
+            final d = doc.data();
+            d['id'] = doc.id;
+            return Post.fromJson(d);
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('Firestore fallback error for fetchPostsByUser: $e');
+      }
+    }
+
+    if (results.isEmpty) {
+      results = _posts.where((p) => p.authorHandle == handle).toList();
+    }
+
+    for (final p in results) {
+      if (_localVotes.containsKey(p.id)) {
+        p.userVote = _localVotes[p.id]!;
+      }
+    }
+    registerPosts(results);
+    return results;
   }
 }

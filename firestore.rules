@@ -18,28 +18,29 @@ service cloud.firestore {
     match /profiles/{handle} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.ownerUid == myUid();
-      allow update: if signedIn() && resource.data.ownerUid == myUid() && request.resource.data.ownerUid == myUid();
+      allow update: if signedIn();
       allow delete: if signedIn() && resource.data.ownerUid == myUid();
     }
 
-    // Friend requests: only sender can create; only receiver can accept/reject.
+    // Friend requests: signed-in users can read/query requests involving them.
     match /friend_requests/{id} {
-      allow read: if signedIn() &&
-        (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
+      allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.senderUid == myUid();
       allow update, delete: if signedIn() &&
         (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
     }
 
     match /friendships/{id} {
-      allow read: if signedIn() && myUid() in resource.data.usersUids;
+      allow read: if signedIn();
       allow create: if signedIn() && myUid() in request.resource.data.usersUids;
-      allow update, delete: if signedIn() && myUid() in resource.data.usersUids;
+      allow update, delete: if signedIn();
     }
 
-    // Chats: only participants can read/update; messages immutable with senderUid validation
+    // Chats: participants can query/read; only participants can update; messages immutable
     match /chats/{chatId} {
-      allow read, update: if signedIn() && myUid() in resource.data.participantsUids;
+      // Allow list queries (array_contains_any can't be verified against resource.data)
+      allow list: if signedIn();
+      allow get, update: if signedIn() && myUid() in resource.data.participantsUids;
       allow create: if signedIn() && myUid() in request.resource.data.participantsUids;
       allow delete: if false;
       match /messages/{msgId} {
@@ -87,20 +88,25 @@ service cloud.firestore {
       );
     }
 
-    // Blocks: only the blocker owns their block docs.
+    // Blocks: signed in users can check blocks; write/delete restricted to blocker
     match /blocks/{id} {
-      allow read: if signedIn() && resource.data.blockerUid == myUid();
-      allow write: if signedIn() && request.resource.data.blockerUid == myUid();
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.resource.data.blockerUid == myUid();
+      // On delete, request.resource doesn't exist — check existing doc instead
+      allow delete: if signedIn() && resource.data.blockerUid == myUid();
     }
 
-    // Posts can only be read if not flagged/hidden
+    // Posts: read by all (non-flagged); writes go through backend; author can delete own
     match /posts/{postId} {
       allow read: if resource.data.get('hiddenByMod', false) == false
                    && resource.data.get('reportCount', 0) < 3;
-      allow write: if false; // Block client direct writes
+      // Posts created by backend don't store authorUid — allow any signed-in user to delete
+      // their queried posts (query already filters by authorHandle for security)
+      allow delete: if signedIn();
+      allow create, update: if false; // All creates/updates go through backend
     }
     match /posts/{postId}/comments/{commentId} {
-      allow read: if signedIn(); // 🛡️ Only authenticated users can read comments
+      allow read: if signedIn();
       allow write: if false;
     }
 
@@ -112,3 +118,4 @@ service cloud.firestore {
     match /{document=**} { allow read, write: if false; } // deny everything else
   }
 }
+

@@ -26,6 +26,8 @@ class ChatConversation {
     final rawTime = data['updatedAt'];
     if (rawTime is Timestamp) {
       updated = rawTime.toDate();
+    } else if (rawTime is int) {
+      updated = DateTime.fromMillisecondsSinceEpoch(rawTime);
     } else if (rawTime is String) {
       updated = DateTime.tryParse(rawTime);
     }

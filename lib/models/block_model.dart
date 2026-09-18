@@ -14,13 +14,18 @@ class BlockEntry {
   });
 
   factory BlockEntry.fromMap(Map<String, dynamic> map, String id) {
+    DateTime parseDateTime(dynamic val) {
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      return DateTime.now();
+    }
+
     return BlockEntry(
       id: id,
-      blockerHandle: map['blockerHandle'] ?? '',
-      blockedHandle: map['blockedHandle'] ?? '',
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      blockerHandle: (map['blockerHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
+      blockedHandle: (map['blockedHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
+      createdAt: parseDateTime(map['createdAt']),
     );
   }
 

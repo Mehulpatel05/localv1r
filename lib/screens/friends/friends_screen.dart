@@ -33,6 +33,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    if (cleanHandle.isNotEmpty) {
+      widget.repository.currentUserHandle = cleanHandle;
+    }
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim().toLowerCase();
@@ -638,36 +642,42 @@ class _FriendsScreenState extends State<FriendsScreen> {
               : null,
         ),
         child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF64748B),
-                  fontSize: 13.5,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                ),
-              ),
-              if (badgeCount > 0) ...[
-                const SizedBox(width: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFEF4444) : const Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$badgeCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFF64748B),
+                      fontSize: 13.5,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-            ],
+                  if (badgeCount > 0) ...[
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -691,6 +701,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       stream: widget.repository.getPendingRequests(limit: 100),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
+          debugPrint('Error loading incoming friend requests: ${snapshot.error}');
           return _buildErrorState();
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -840,17 +851,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     backgroundColor: const Color(0xFF3B82F6), // Blue solid
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   onPressed: () => _acceptRequest(handle),
-                  child: const Text(
-                    'Accept',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Accept',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -859,19 +873,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                     side: const BorderSide(color: Color(0xFFE2E8F0)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   onPressed: () => _declineRequest(handle),
-                  child: const Text(
-                    'Decline',
-                    style: TextStyle(
-                      color: Color(0xFF475569),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Decline',
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -889,6 +906,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       stream: widget.repository.getFriendsList(limit: 200),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
+          debugPrint('Error loading friends list: ${snapshot.error}');
           return _buildErrorState();
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1015,6 +1033,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
 
           // Message Button (Image 2 Left)
           ElevatedButton.icon(
@@ -1022,7 +1041,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
               backgroundColor: const Color(0xFF3B82F6),
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -1047,10 +1068,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
               );
             },
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
 
           // 3-Dots Action Button
           IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
             onPressed: () => _showFriendMoreMenu(handle),
           ),
@@ -1065,6 +1088,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       stream: widget.repository.getSentRequests(limit: 100),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
+          debugPrint('Error loading sent friend requests: ${snapshot.error}');
           return _buildErrorState();
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1172,11 +1196,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 8),
 
           // Cancel Outlined Button (Image 2 Right)
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: const Size(0, 34),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               side: const BorderSide(color: Color(0xFFE2E8F0)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),

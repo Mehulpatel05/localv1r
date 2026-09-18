@@ -196,6 +196,53 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
+  /// Delete Account permanently via Backend Admin SDK
+  Future<Map<String, dynamic>> deleteAccount() async {
+    String? token = await getAccessToken();
+    token ??= await refreshToken();
+    if (token == null) {
+      try {
+        token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      } catch (_) {}
+    }
+
+    final uri = Uri.parse('$baseUrl/auth/account');
+    try {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      var response = await http.delete(uri, headers: headers);
+
+      // If 401, try refreshing token once
+      if (response.statusCode == 401) {
+        final newToken = await refreshToken();
+        if (newToken != null) {
+          headers['Authorization'] = 'Bearer $newToken';
+          response = await http.delete(uri, headers: headers);
+        }
+      }
+
+      if (response.statusCode == 200) {
+        return {'success': true};
+      } else {
+        try {
+          final body = jsonDecode(response.body);
+          final errorMsg = body['detail'] ?? body['message'] ?? 'Failed to delete account from server.';
+          return {'success': false, 'error': errorMsg};
+        } catch (_) {
+          return {'success': false, 'error': 'Server returned status ${response.statusCode}'};
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Delete account network error: $e');
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
   /// Complete Sign Out
   Future<void> signOut() async {
     try {

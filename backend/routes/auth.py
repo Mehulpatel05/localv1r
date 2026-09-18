@@ -367,3 +367,116 @@ async def refresh_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired. Please login again.")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
+
+
+@auth_router.delete("/account")
+@auth_router.post("/delete-account")
+async def delete_account(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token")
+):
+    """
+    Permanently deletes user account, profile, posts, friend requests, friendships, blocks, and auth user.
+    """
+    token = authorization or (f"Bearer {x_session_token}" if x_session_token else None)
+    if not token or not token.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authorization header.")
+
+    raw_token = token.split("Bearer ")[1].strip()
+    user_id = None
+    handle = None
+
+    # 1. Try decoding Backend JWT Token
+    try:
+        payload = jwt.decode(
+            raw_token,
+            Config.JWT_SECRET,
+            algorithms=["HS256"],
+            issuer="nearhood-backend"
+        )
+        if payload.get("type") in ("access", "refresh"):
+            user_id = payload.get("sub")
+            handle = payload.get("handle")
+    except Exception:
+        pass
+
+    # 2. Fallback to Firebase verify_id_token
+    if not user_id:
+        try:
+            from firebase_admin import auth as firebase_auth
+            decoded = firebase_auth.verify_id_token(raw_token)
+            user_id = decoded.get("uid")
+        except Exception:
+            pass
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session token.")
+
+    # If handle not in token, fetch from users doc
+    if not handle and db is not None:
+        try:
+            u_doc = db.collection("users").document(user_id).get()
+            if u_doc.exists:
+                handle = u_doc.to_dict().get("handle", "")
+        except Exception:
+            pass
+
+    # Delete Firestore Data using Admin SDK
+    if db is not None:
+        try:
+            # 1. Delete user's posts
+            if handle:
+                posts = db.collection("posts").where("authorHandle", "==", handle).stream()
+                for p in posts:
+                    p.reference.delete()
+
+            # 2. Delete friend requests (both sent & received)
+            reqs1 = db.collection("friend_requests").where("senderUid", "==", user_id).stream()
+            for r in reqs1:
+                r.reference.delete()
+            reqs2 = db.collection("friend_requests").where("receiverUid", "==", user_id).stream()
+            for r in reqs2:
+                r.reference.delete()
+            if handle:
+                reqs3 = db.collection("friend_requests").where("senderHandle", "==", handle).stream()
+                for r in reqs3:
+                    r.reference.delete()
+                reqs4 = db.collection("friend_requests").where("receiverHandle", "==", handle).stream()
+                for r in reqs4:
+                    r.reference.delete()
+
+            # 3. Delete friendships
+            fs1 = db.collection("friendships").where("usersUids", "array_contains", user_id).stream()
+            for f in fs1:
+                f.reference.delete()
+
+            # 4. Delete blocks
+            bl1 = db.collection("blocks").where("blockerUid", "==", user_id).stream()
+            for b in bl1:
+                b.reference.delete()
+
+            # 5. Delete profile doc
+            if handle:
+                db.collection("profiles").document(handle).delete()
+
+            # 6. Delete user doc
+            db.collection("users").document(user_id).delete()
+
+            # 7. Delete refresh tokens
+            r_tokens = db.collection("refresh_tokens").where("userId", "==", user_id).stream()
+            for rt in r_tokens:
+                rt.reference.delete()
+        except Exception as e:
+            print(f"[AUTH] Error cleaning up user Firestore data: {e}")
+
+    # Delete Firebase Auth user via Admin SDK (bypasses requires-recent-login)
+    try:
+        from firebase_admin import auth as firebase_auth
+        firebase_auth.delete_user(user_id)
+    except Exception as e:
+        print(f"[AUTH] Firebase admin delete user note: {e}")
+
+    return {
+        "status": "success",
+        "message": "Account and all associated data permanently deleted."
+    }

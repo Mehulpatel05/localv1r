@@ -15,8 +15,50 @@ class MainActivity : FlutterActivity() {
     private var standardIntegrityManager: StandardIntegrityManager? = null
     private var tokenProvider: StandardIntegrityManager.StandardIntegrityTokenProvider? = null
 
+    override fun onPostResume() {
+        super.onPostResume()
+        enableHighRefreshRate()
+    }
+
+    private fun enableHighRefreshRate() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                val currentDisplay = display
+                if (currentDisplay != null) {
+                    val modes = currentDisplay.supportedModes
+                    var maxMode = currentDisplay.mode
+                    for (m in modes) {
+                        if (m.refreshRate > maxMode.refreshRate) {
+                            maxMode = m
+                        }
+                    }
+                    val params = window.attributes
+                    params.preferredDisplayModeId = maxMode.modeId
+                    window.attributes = params
+                }
+            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val windowManager = getSystemService(WINDOW_SERVICE) as? android.view.WindowManager
+                @Suppress("DEPRECATION")
+                val currentDisplay = windowManager?.defaultDisplay
+                if (currentDisplay != null) {
+                    val modes = currentDisplay.supportedModes
+                    var maxMode = currentDisplay.mode
+                    for (m in modes) {
+                        if (m.refreshRate > maxMode.refreshRate) {
+                            maxMode = m
+                        }
+                    }
+                    val params = window.attributes
+                    params.preferredDisplayModeId = maxMode.modeId
+                    window.attributes = params
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        enableHighRefreshRate()
         
         standardIntegrityManager = IntegrityManagerFactory.createStandard(applicationContext)
         

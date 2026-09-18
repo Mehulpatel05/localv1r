@@ -61,9 +61,15 @@ class _SafeImageState extends State<SafeImage> {
       if (bytes != null && bytes.isNotEmpty) {
         content = Image.memory(
           bytes,
+          cacheWidth: 720,
+          cacheHeight: (widget.height != null && widget.height!.isFinite)
+              ? (widget.height! * 2).round().clamp(100, 600)
+              : null,
           height: widget.height,
           width: widget.width,
           fit: widget.fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
           errorBuilder: (_, _, _) => _buildErrorFallback(canRetry: false),
         );
       } else {
@@ -76,9 +82,15 @@ class _SafeImageState extends State<SafeImage> {
         content = Image.network(
           trimmedUrl,
           key: ValueKey('$trimmedUrl-$_retryCounter'),
+          cacheWidth: 720,
+          cacheHeight: (widget.height != null && widget.height!.isFinite)
+              ? (widget.height! * 2).round().clamp(100, 600)
+              : null,
           height: widget.height,
           width: widget.width,
           fit: widget.fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
           headers: const {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
