@@ -35,8 +35,11 @@ class WakitService:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        # Wakit API expects 'to' with E.164 phone and optional 'code_length'
         payload = {
+            "to": phone_number,
             "phone_number": phone_number,
+            "code_length": 6,
             "expiry_seconds": 300,
         }
 
@@ -44,20 +47,32 @@ class WakitService:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in (200, 201):
                 data = response.json()
-                request_id = data.get("request_id") or data.get("id") or str(uuid.uuid4())
-                expires_in = data.get("expires_in") or data.get("expiry_seconds") or 300
+                req_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+                request_id = (
+                    data.get("request_id")
+                    or data.get("id")
+                    or req_data.get("request_id")
+                    or req_data.get("id")
+                    or str(uuid.uuid4())
+                )
+                expires_in = (
+                    data.get("expires_in")
+                    or data.get("expiry_seconds")
+                    or req_data.get("expires_in")
+                    or 300
+                )
                 return {
-                    "request_id": request_id,
+                    "request_id": str(request_id),
                     "expires_in": int(expires_in),
                     "status": "success",
                 }
             else:
-                # Do NOT log sensitive payloads
-                print(f"[WakitService] Error sending OTP: HTTP {response.status_code}")
-                raise Exception(f"Wakit OTP provider returned status {response.status_code}")
+                resp_text = response.text[:200] if response.text else ""
+                print(f"[WakitService] Error sending OTP: HTTP {response.status_code}, response: {resp_text}")
+                raise Exception(f"Wakit API ({url}) returned HTTP {response.status_code}: {resp_text}")
         except requests.RequestException as e:
-            print("[WakitService] Network error during OTP send request.")
-            raise Exception("Unable to contact OTP delivery provider. Please try again.")
+            print(f"[WakitService] Network error during OTP send request: {e}")
+            raise Exception(f"Unable to contact OTP delivery provider at {url}: {e}")
 
     @classmethod
     def verify_otp(cls, request_id: str, otp: str) -> bool:
@@ -83,15 +98,22 @@ class WakitService:
         }
         payload = {
             "request_id": request_id,
+            "id": request_id,
             "code": otp,
+            "otp": otp,
         }
 
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
-            if response.status_code == 200:
+            if response.status_code in (200, 201):
                 data = response.json()
-                # Wakit verification returns valid: true or status: "verified" / "success"
-                is_valid = data.get("valid", False) or data.get("status") in ("verified", "success")
+                # Wakit verification returns valid: true or status: "verified" / "success" or success: true
+                is_valid = (
+                    data.get("valid") is True
+                    or data.get("success") is True
+                    or data.get("status") in ("verified", "success", "approved")
+                    or (isinstance(data.get("data"), dict) and data["data"].get("valid") is True)
+                )
                 return bool(is_valid)
             elif response.status_code in (400, 401, 404, 422):
                 return False

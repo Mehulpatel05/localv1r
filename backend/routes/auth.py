@@ -153,7 +153,7 @@ async def send_otp(req: OtpSendRequest, request: Request):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to send OTP via SMS/WhatsApp provider. Please try again."
+            detail=f"Failed to send OTP via SMS/WhatsApp provider: {str(e)}"
         )
 
     request_id = result.get("request_id")

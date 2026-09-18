@@ -8,9 +8,14 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def clean_state():
+    from config import Config
+    original_key = Config.WAKIT_API_KEY
+    Config.WAKIT_API_KEY = ""
     _otp_requests.clear()
     _phone_send_rl.clear()
     _ip_send_rl.clear()
+    yield
+    Config.WAKIT_API_KEY = original_key
 
 def _get_err_message(res) -> str:
     body = res.json()
