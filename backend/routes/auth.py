@@ -192,129 +192,139 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
     Verifies user-submitted OTP with rate-limiting, lockout on 5 failed attempts, and single-use enforcement.
     On success, looks up or creates user in database and issues JWT session tokens.
     """
-    request_id = req.request_id.strip()
-    otp_code = req.otp.strip()
+    try:
+        request_id = req.request_id.strip()
+        otp_code = req.otp.strip()
 
-    context = _otp_requests.get(request_id)
-    now = time.time()
+        context = _otp_requests.get(request_id)
+        now = time.time()
 
-    if not context:
-        if req.phone_number and E164_REGEX.match(req.phone_number.strip()):
-            context = {
-                "phone": req.phone_number.strip(),
-                "attempts": 0,
-                "locked_until": 0,
-                "expires_at": now + 600,
-                "verified": False,
-                "created_at": now,
-            }
-            _otp_requests[request_id] = context
-        else:
+        if not context:
+            if req.phone_number and E164_REGEX.match(req.phone_number.strip()):
+                context = {
+                    "phone": req.phone_number.strip(),
+                    "attempts": 0,
+                    "locked_until": 0,
+                    "expires_at": now + 600,
+                    "verified": False,
+                    "created_at": now,
+                }
+                _otp_requests[request_id] = context
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid or expired OTP session. Please request a new OTP."
+                )
+
+        # Check expiration
+        if now > context["expires_at"]:
+            _otp_requests.pop(request_id, None)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired OTP session. Please request a new OTP."
+                detail="OTP has expired. Please request a new code."
             )
 
-    # Check expiration
-    if now > context["expires_at"]:
-        _otp_requests.pop(request_id, None)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP has expired. Please request a new code."
-        )
+        # Check single-use
+        if context["verified"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This OTP has already been verified. Please request a new code."
+            )
 
-    # Check single-use
-    if context["verified"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This OTP has already been verified. Please request a new code."
-        )
-
-    # Check lockout
-    if now < context["locked_until"]:
-        remaining_lock = int(context["locked_until"] - now)
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many failed attempts. Verification locked for {remaining_lock} seconds."
-        )
-
-    # Increment attempts
-    context["attempts"] += 1
-
-    if context["attempts"] > 5:
-        context["locked_until"] = now + 900 # 15 minutes lockout
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Maximum verification attempts exceeded. Verification temporarily locked for 15 minutes."
-        )
-
-    # Verify code via Wakit
-    phone_number = context["phone"]
-    is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
-
-    if not is_valid:
-        remaining_attempts = max(0, 5 - context["attempts"])
-        if remaining_attempts == 0:
-            context["locked_until"] = now + 900
+        # Check lockout
+        if now < context["locked_until"]:
+            remaining_lock = int(context["locked_until"] - now)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Incorrect OTP code. Maximum attempts reached. Locked for 15 minutes."
+                detail=f"Too many failed attempts. Verification locked for {remaining_lock} seconds."
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Incorrect OTP code. {remaining_attempts} attempt(s) remaining."
-        )
 
-    # Mark as verified immediately to prevent replay attacks
-    context["verified"] = True
+        # Increment attempts
+        context["attempts"] += 1
 
-    # User Resolution / Provisioning
-    phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
-    user_id = phone_hash
-    handle = ""
-    is_new_user = True
+        if context["attempts"] > 5:
+            context["locked_until"] = now + 900 # 15 minutes lockout
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Maximum verification attempts exceeded. Verification temporarily locked for 15 minutes."
+            )
 
-    if db is not None:
-        try:
-            from google.cloud import firestore
-            user_ref = db.collection("users").document(phone_hash)
-            user_doc = user_ref.get()
+        # Verify code via Wakit
+        phone_number = context["phone"]
+        is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
 
-            if user_doc.exists:
-                data = user_doc.to_dict() or {}
-                handle = data.get("handle", "")
-                is_new_user = (handle == "")
-                user_ref.update({
-                    "lastLoginAt": firestore.SERVER_TIMESTAMP,
-                    "phoneNumber": phone_number,
-                })
-            else:
-                # First time registration
-                user_ref.set({
-                    "userId": user_id,
-                    "phoneNumber": phone_number,
-                    "phoneNumberHash": phone_hash,
-                    "handle": "",
-                    "createdAt": firestore.SERVER_TIMESTAMP,
-                    "updatedAt": firestore.SERVER_TIMESTAMP,
-                    "lastLoginAt": firestore.SERVER_TIMESTAMP,
-                })
-        except Exception as e:
-            print(f"[AUTH] Error during user record creation/lookup: {e}")
+        if not is_valid:
+            remaining_attempts = max(0, 5 - context["attempts"])
+            if remaining_attempts == 0:
+                context["locked_until"] = now + 900
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Incorrect OTP code. Maximum attempts reached. Locked for 15 minutes."
+                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Incorrect OTP code. {remaining_attempts} attempt(s) remaining."
+            )
 
-    tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
+        # Mark as verified immediately to prevent replay attacks
+        context["verified"] = True
 
-    return {
-        "status": "success",
-        "message": "Phone number verified successfully.",
-        **tokens,
-        "user": {
-            "userId": user_id,
-            "phoneNumber": phone_number,
-            "handle": handle,
-            "isNewUser": is_new_user,
+        # User Resolution / Provisioning
+        phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
+        user_id = phone_hash
+        handle = ""
+        is_new_user = True
+
+        if db is not None:
+            try:
+                from firebase_admin import firestore as fb_firestore
+                user_ref = db.collection("users").document(phone_hash)
+                user_doc = user_ref.get()
+
+                if user_doc.exists:
+                    data = user_doc.to_dict() or {}
+                    handle = data.get("handle", "")
+                    is_new_user = (handle == "")
+                    user_ref.update({
+                        "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
+                        "phoneNumber": phone_number,
+                    })
+                else:
+                    # First time registration
+                    user_ref.set({
+                        "userId": user_id,
+                        "phoneNumber": phone_number,
+                        "phoneNumberHash": phone_hash,
+                        "handle": "",
+                        "createdAt": fb_firestore.SERVER_TIMESTAMP,
+                        "updatedAt": fb_firestore.SERVER_TIMESTAMP,
+                        "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
+                    })
+            except Exception as e:
+                print(f"[AUTH] Error during user record creation/lookup: {e}")
+
+        tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
+
+        return {
+            "status": "success",
+            "message": "Phone number verified successfully.",
+            **tokens,
+            "user": {
+                "userId": user_id,
+                "phoneNumber": phone_number,
+                "handle": handle,
+                "isNewUser": is_new_user,
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Verification error: {str(e)}"
+        )
 
 
 @auth_router.post("/refresh")
