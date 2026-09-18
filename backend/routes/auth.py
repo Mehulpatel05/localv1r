@@ -37,23 +37,23 @@ def _get_client_ip(request: Request) -> str:
 
 def _check_send_rate_limits(phone_number: str, client_ip: str):
     now = time.time()
-    phone_window = 600.0  # 10 minutes
-    ip_window = 600.0     # 10 minutes
+    phone_window = 120.0  # 2 minutes sliding window
+    ip_window = 300.0     # 5 minutes sliding window
 
-    # Phone rate limit: max 3 requests per 10 minutes
+    # Phone rate limit: max 5 requests per 2 minutes
     _phone_send_rl[phone_number] = [t for t in _phone_send_rl[phone_number] if now - t < phone_window]
-    if len(_phone_send_rl[phone_number]) >= 3:
+    if len(_phone_send_rl[phone_number]) >= 5:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many OTP requests for this phone number. Please wait 10 minutes before trying again."
+            detail="Too many OTP requests for this phone number. Please wait a moment before trying again."
         )
 
-    # IP rate limit: max 10 requests per 10 minutes
+    # IP rate limit: max 20 requests per 5 minutes
     _ip_send_rl[client_ip] = [t for t in _ip_send_rl[client_ip] if now - t < ip_window]
-    if len(_ip_send_rl[client_ip]) >= 10:
+    if len(_ip_send_rl[client_ip]) >= 20:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many OTP requests from your network. Please wait 10 minutes before trying again."
+            detail="Too many OTP requests from your network. Please wait a moment before trying again."
         )
 
     _phone_send_rl[phone_number].append(now)
