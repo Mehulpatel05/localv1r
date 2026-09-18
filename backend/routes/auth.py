@@ -231,7 +231,7 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
 
     # Verify code via Wakit
     phone_number = context["phone"]
-    is_valid = WakitService.verify_otp(request_id, otp_code)
+    is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
 
     if not is_valid:
         remaining_attempts = max(0, 5 - context["attempts"])

@@ -75,9 +75,9 @@ class WakitService:
             raise Exception(f"Unable to contact OTP delivery provider at {url}: {e}")
 
     @classmethod
-    def verify_otp(cls, request_id: str, otp: str) -> bool:
+    def verify_otp(cls, request_id: str, otp: str, phone_number: Optional[str] = None) -> bool:
         """
-        Verifies the user-submitted OTP for a given request_id.
+        Verifies the user-submitted OTP for a given request_id and phone number.
         Returns True if valid, False otherwise.
         """
         api_key = Config.WAKIT_API_KEY
@@ -102,6 +102,9 @@ class WakitService:
             "code": otp,
             "otp": otp,
         }
+        if phone_number:
+            payload["to"] = phone_number
+            payload["phone_number"] = phone_number
 
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
