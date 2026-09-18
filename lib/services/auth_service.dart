@@ -63,16 +63,22 @@ class AuthService {
   Future<Map<String, dynamic>> verifyOtp({
     required String requestId,
     required String otp,
+    String? phoneNumber,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/otp/verify');
     try {
+      final payload = <String, dynamic>{
+        'request_id': requestId,
+        'otp': otp,
+      };
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        payload['phone_number'] = phoneNumber;
+      }
+
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'request_id': requestId,
-          'otp': otp,
-        }),
+        body: jsonEncode(payload),
       );
 
       final body = jsonDecode(response.body);

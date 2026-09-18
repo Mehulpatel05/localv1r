@@ -67,6 +67,7 @@ class OtpSendRequest(BaseModel):
 class OtpVerifyRequest(BaseModel):
     request_id: str = Field(..., min_length=5, description="Unique OTP request ID returned by send endpoint")
     otp: str = Field(..., min_length=4, max_length=10, description="User submitted OTP code")
+    phone_number: Optional[str] = Field(None, description="Optional phone number for session fallback")
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: Optional[str] = Field(None, description="Active refresh token")
@@ -191,10 +192,21 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
     now = time.time()
 
     if not context:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OTP session. Please request a new OTP."
-        )
+        if req.phone_number and E164_REGEX.match(req.phone_number.strip()):
+            context = {
+                "phone": req.phone_number.strip(),
+                "attempts": 0,
+                "locked_until": 0,
+                "expires_at": now + 600,
+                "verified": False,
+                "created_at": now,
+            }
+            _otp_requests[request_id] = context
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired OTP session. Please request a new OTP."
+            )
 
     # Check expiration
     if now > context["expires_at"]:

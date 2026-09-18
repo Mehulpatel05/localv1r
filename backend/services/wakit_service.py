@@ -109,16 +109,22 @@ class WakitService:
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in (200, 201):
-                data = response.json()
-                # Wakit verification returns valid: true or status: "verified" / "success" or success: true
-                is_valid = (
-                    data.get("valid") is True
-                    or data.get("success") is True
-                    or data.get("status") in ("verified", "success", "approved")
-                    or (isinstance(data.get("data"), dict) and data["data"].get("valid") is True)
-                )
+                d_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+                if d_data:
+                    is_valid = (
+                        d_data.get("verified") is True
+                        or d_data.get("valid") is True
+                        or d_data.get("status") in ("verified", "success", "approved")
+                    )
+                else:
+                    is_valid = (
+                        data.get("verified") is True
+                        or data.get("valid") is True
+                        or data.get("status") in ("verified", "success", "approved")
+                        or (data.get("success") is True and not data.get("error"))
+                    )
                 return bool(is_valid)
-            elif response.status_code in (400, 401, 404, 422):
+            elif response.status_code in (400, 401, 403, 404, 422):
                 return False
             else:
                 print(f"[WakitService] Error verifying OTP: HTTP {response.status_code}")

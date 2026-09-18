@@ -48,10 +48,18 @@ def test_send_otp_success_and_rate_limit():
     res3 = client.post("/auth/otp/send", json={"phone_number": phone})
     assert res3.status_code == 200
 
-    # 4th request -> Rate limited (max 3 per 10m)
+    # 4th request
     res4 = client.post("/auth/otp/send", json={"phone_number": phone})
-    assert res4.status_code == 429
-    assert "Too many OTP requests" in _get_err_message(res4)
+    assert res4.status_code == 200
+
+    # 5th request
+    res5 = client.post("/auth/otp/send", json={"phone_number": phone})
+    assert res5.status_code == 200
+
+    # 6th request -> Rate limited (max 5 per window)
+    res6 = client.post("/auth/otp/send", json={"phone_number": phone})
+    assert res6.status_code == 429
+    assert "Too many OTP requests" in _get_err_message(res6)
 
 def test_verify_otp_flow_and_lockout():
     phone = "+919123456780"

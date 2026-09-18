@@ -90,6 +90,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
     final result = await AuthService.instance.verifyOtp(
       requestId: _currentRequestId,
       otp: otp,
+      phoneNumber: widget.phoneNumber,
     );
 
     if (!mounted) return;
