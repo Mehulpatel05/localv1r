@@ -87,7 +87,8 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
         "iat": now,
         "exp": access_exp,
     }
-    access_token = jwt.encode(access_payload, Config.JWT_SECRET, algorithm="HS256")
+    raw_access = jwt.encode(access_payload, Config.JWT_SECRET, algorithm="HS256")
+    access_token = raw_access.decode("utf-8") if isinstance(raw_access, bytes) else str(raw_access)
 
     refresh_jti = uuid.uuid4().hex
     refresh_payload = {
@@ -100,7 +101,8 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
         "iat": now,
         "exp": refresh_exp,
     }
-    refresh_token = jwt.encode(refresh_payload, Config.JWT_SECRET, algorithm="HS256")
+    raw_refresh = jwt.encode(refresh_payload, Config.JWT_SECRET, algorithm="HS256")
+    refresh_token = raw_refresh.decode("utf-8") if isinstance(raw_refresh, bytes) else str(raw_refresh)
 
     # Persist refresh token in Firestore if db is active
     if db is not None:
@@ -120,8 +122,13 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
     firebase_token = None
     try:
         from firebase_admin import auth as firebase_auth
-        firebase_token = firebase_auth.create_custom_token(user_id).decode("utf-8") if isinstance(firebase_auth.create_custom_token(user_id), bytes) else str(firebase_auth.create_custom_token(user_id))
-    except Exception:
+        raw_fb_token = firebase_auth.create_custom_token(user_id)
+        if isinstance(raw_fb_token, bytes):
+            firebase_token = raw_fb_token.decode("utf-8")
+        elif raw_fb_token is not None:
+            firebase_token = str(raw_fb_token)
+    except Exception as e:
+        print(f"[AUTH] Firebase custom token note: {e}")
         firebase_token = None
 
     return {
