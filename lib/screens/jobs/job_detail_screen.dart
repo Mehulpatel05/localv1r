@@ -134,6 +134,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final title = widget.post.jobTitle ?? 'Job Opportunity';
     final company = widget.post.jobCompany ?? 'Verified Employer';
     final location = widget.post.jobLocation ?? (widget.post.areaName ?? 'Vadodara');
@@ -149,21 +150,21 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Job details',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
@@ -553,13 +554,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0066FF),
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                        foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: const StadiumBorder(),
                       ),
                       onPressed: _applyOrContact,
                       child: const Text(

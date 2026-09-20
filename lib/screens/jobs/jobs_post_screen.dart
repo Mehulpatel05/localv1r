@@ -180,22 +180,23 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Create a job post',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
@@ -587,13 +588,11 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0066FF),
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                          foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                          shape: const StadiumBorder(),
                         ),
                         onPressed: _publishJob,
                         child: const Text(

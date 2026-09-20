@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/widgets/safe_image.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../chat/personal_chat_screen.dart';
@@ -180,7 +182,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                                   children: List.generate(
                                     images.length,
                                     (index) => AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
+                                      duration: AppMotion.durationMicro,
+                                      curve: AppMotion.interactiveCurve,
                                       margin: const EdgeInsets.symmetric(horizontal: 3),
                                       width: _currentImageIndex == index ? 16 : 6,
                                       height: 6,
@@ -393,17 +396,18 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                           ),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                radius: 22,
-                                backgroundColor: const Color(0xFF00B074).withValues(alpha: 0.15),
-                                child: Text(
-                                  post.authorHandle.isNotEmpty ? post.authorHandle[0].toUpperCase() : 'U',
-                                  style: const TextStyle(
-                                    color: Color(0xFF00B074),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
+                              UserAvatar(
+                                handle: post.authorHandle,
+                                size: 44,
+                                fontSize: 16,
+                                onTap: () {
+                                  showOtherUserProfileSheet(
+                                    context,
+                                    partnerHandle: post.authorHandle,
+                                    currentUserHandle: widget.currentUserHandle,
+                                    repository: widget.repository,
+                                  );
+                                },
                               ),
                               const SizedBox(width: 12),
                               Expanded(

@@ -580,13 +580,11 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0066FF),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                    foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: const StadiumBorder(),
                   ),
                   icon: const Icon(Icons.chat_bubble_rounded, size: 18),
                   label: const Text(

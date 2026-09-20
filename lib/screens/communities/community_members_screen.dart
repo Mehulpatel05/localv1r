@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
+import '../../core/widgets/user_avatar.dart';
 
 /// Feature #10: Shows all members of a community
 /// Feature #14: Admin can remove members
@@ -25,23 +26,32 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
+        elevation: 0,
         title: Text(
           '${widget.community.name} — Members',
-          style: const TextStyle(
-              color: Colors.black87,
-              fontWeight: FontWeight.bold,
-              fontSize: 16),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.repository.getCommunityMembers(widget.community.id),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            );
           }
           // F3: Error state
           if (snapshot.hasError) {
@@ -76,16 +86,10 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
               final isThisAdmin = role == 'admin';
 
               return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: isThisAdmin
-                      ? const Color(0xFFEF4444)
-                      : const Color(0xFF3B82F6),
-                  child: Text(
-                    handle.isNotEmpty ? handle[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
-                  ),
+                leading: UserAvatar(
+                  handle: handle,
+                  size: 40,
+                  fontSize: 14,
                 ),
                 title: Text(
                   '@$handle',
@@ -117,14 +121,17 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
                           }
                         },
                         itemBuilder: (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'make_admin',
                             child: Row(
                               children: [
-                                Icon(Icons.admin_panel_settings,
-                                    color: Color(0xFF3B82F6), size: 20),
-                                SizedBox(width: 12),
-                                Text('Make Admin'),
+                                Icon(
+                                  Icons.admin_panel_settings,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                const Text('Make Admin'),
                               ],
                             ),
                           ),
@@ -153,8 +160,11 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
 
   // F5: Show bottom sheet with admin options
   void _showMemberOptions(BuildContext context, String handle) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -164,9 +174,9 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
           children: [
             const SizedBox(height: 12),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF3B82F6),
-                child: Icon(Icons.admin_panel_settings, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                child: Icon(Icons.admin_panel_settings, color: isDark ? Colors.black : Colors.white),
               ),
               title: const Text('Make Admin',
                   style: TextStyle(fontWeight: FontWeight.w600)),
@@ -199,21 +209,24 @@ class _CommunityMembersScreenState extends State<CommunityMembersScreen> {
 
   // F5: Confirm admin transfer dialog
   Future<void> _confirmTransferAdmin(BuildContext context, String handle) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
         title: const Text('Transfer Admin?'),
         content: Text(
             'Make @$handle the new admin?\n\nYou will become a regular member.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: isDark ? Colors.white60 : Colors.black54)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFF3B82F6)),
-            child: const Text('Transfer'),
+            style: TextButton.styleFrom(foregroundColor: isDark ? Colors.white : Colors.black),
+            child: const Text('Transfer', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

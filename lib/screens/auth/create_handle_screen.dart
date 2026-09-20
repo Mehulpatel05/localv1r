@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +11,9 @@ import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
 import '../../services/presence_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/telegram_storage_service.dart';
+import '../../core/widgets/user_avatar.dart';
+import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
 import 'phone_login_screen.dart';
@@ -48,6 +54,116 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   Timer? _debounceTimer;
   bool _isSubmitting = false;
   String? _customErrorMessage;
+  File? _pickedProfileImage;
+
+  Future<void> _showPhotoPickerSheet() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                'Add Profile Picture',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(color: Color(0xFFEFF6FF), shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF3B82F6), size: 22),
+                ),
+                title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(color: Color(0xFFF5F3FF), shape: BoxShape.circle),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF8B5CF6), size: 22),
+                ),
+                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              if (_pickedProfileImage != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: const BoxDecoration(color: Color(0xFFFEF2F2), shape: BoxShape.circle),
+                    child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
+                  ),
+                  title: const Text('Remove Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFFEF4444))),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _pickedProfileImage = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        final rawFile = File(picked.path);
+
+        if (!mounted) return;
+
+        // Open Instagram Move and Scale interactive cropper
+        final croppedFile = await InstagramAvatarCropper.cropImage(
+          context,
+          imageFile: rawFile,
+        );
+
+        if (croppedFile != null && mounted) {
+          setState(() => _pickedProfileImage = croppedFile);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking profile image: $e');
+    }
+  }
 
   // Cache previously checked handles to prevent unnecessary Firestore query abuse
   final Map<String, bool> _availabilityCache = {};
@@ -348,6 +464,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       // Save locally in SecureStorage and SharedPreferences
       await AuthService.instance.saveUserHandle(handle);
 
+      // If user selected a profile image, upload and sync
+      if (_pickedProfileImage != null) {
+        try {
+          final uploadedUrl = await TelegramStorageService.uploadImage(_pickedProfileImage!);
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+            await AuthService.instance.updateUserProfileImage(uploadedUrl);
+          }
+        } catch (e) {
+          debugPrint('Profile photo upload warning during onboarding: $e');
+        }
+      }
+
       widget.repository.currentUserHandle = handle;
       PresenceService.instance.init(handle);
 
@@ -542,56 +670,108 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 92,
-      height: 92,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFF8FAFC),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+    return GestureDetector(
+      onTap: _showPhotoPickerSheet,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            padding: EdgeInsets.all(_pickedProfileImage != null ? 3.0 : 0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: _pickedProfileImage != null ? UserAvatar.instagramGradient : null,
+              color: _pickedProfileImage == null ? const Color(0xFFF8FAFC) : null,
+              border: _pickedProfileImage == null
+                  ? Border.all(color: const Color(0xFFE2E8F0), width: 2)
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF64748B).withValues(alpha: 0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Container(
+              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : EdgeInsets.zero,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: _pickedProfileImage != null
+                    ? Image.file(
+                        _pickedProfileImage!,
+                        width: 86,
+                        height: 86,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                      )
+                    : Center(
+                        child: SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned(
+                                top: 2,
+                                left: 6,
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(0xFF3B82F6),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 2,
+                                right: 6,
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 15,
+              ),
+            ),
           ),
         ],
-      ),
-      child: Center(
-        child: SizedBox(
-          width: 56,
-          height: 56,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Top-left Blue Circle
-              Positioned(
-                top: 2,
-                left: 6,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0xFF3B82F6),
-                  ),
-                ),
-              ),
-              // Bottom-right Dark Slate Circle (Overlapping)
-              Positioned(
-                bottom: 2,
-                right: 6,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0xFF334155),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -652,7 +832,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     }
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: AppMotion.durationMicro,
+      curve: AppMotion.interactiveCurve,
       height: 60,
       decoration: BoxDecoration(
         color: fillColor,

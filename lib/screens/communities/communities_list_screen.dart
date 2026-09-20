@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
 import 'community_chat_screen.dart';
@@ -63,16 +64,17 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
+        title: Text(
           'Communities',
           style: TextStyle(
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
             fontSize: 22,
             letterSpacing: -0.4,
@@ -84,15 +86,15 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
             margin: const EdgeInsets.only(right: 8),
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF1F5F9),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
               shape: BoxShape.circle,
             ),
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: const Icon(
+              icon: Icon(
                 Icons.search_rounded,
-                color: Color(0xFF1E293B),
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
                 size: 20,
               ),
               onPressed: () {
@@ -107,15 +109,15 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
             margin: const EdgeInsets.only(right: 16),
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF1F5F9),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
               shape: BoxShape.circle,
             ),
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: const Icon(
+              icon: Icon(
                 Icons.add_rounded,
-                color: Color(0xFF1E293B),
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
                 size: 22,
               ),
               onPressed: () => _showCreateOptions(context),
@@ -127,13 +129,13 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         children: [
           // Segmented Capsule Tabs (My Communities / Discover)
           Container(
-            color: Colors.white,
+            color: isDark ? Colors.black : Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Container(
               height: 44,
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
@@ -162,6 +164,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   }
 
   Widget _buildSegmentButton(int index, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = _selectedTab == index;
     return GestureDetector(
       onTap: () {
@@ -170,15 +173,16 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: AppMotion.durationMicro,
+        curve: AppMotion.interactiveCurve,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : Colors.transparent,
+          color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF3B82F6).withOpacity(0.25),
+                    color: Colors.black.withOpacity(0.15),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -188,7 +192,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
+            color: isSelected ? (isDark ? Colors.black : Colors.white) : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B)),
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
             fontSize: 13.5,
           ),
@@ -632,6 +636,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   }
 
   Widget _buildDiscoverFilterPill(int index, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = _discoverFilterIndex == index;
     return GestureDetector(
       onTap: () {
@@ -642,13 +647,22 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected
+              ? (isDark ? Colors.white : Colors.black)
+              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected
+                ? (isDark ? Colors.white : Colors.black)
+                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF334155),
+            color: isSelected
+                ? (isDark ? Colors.black : Colors.white)
+                : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF334155)),
             fontSize: 12.5,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
@@ -658,6 +672,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   }
 
   Widget _buildDiscoverCard(CommunityModel community, bool isJoined) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final avatarColor = _getCommunityColor(community.isChannel, community.id);
     final initials = _getInitials(community.name);
     final typeLabel = community.isChannel ? 'CHANNEL' : 'GROUP';
@@ -666,9 +681,11 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -715,8 +732,8 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                           community.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF0F172A),
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
@@ -783,14 +800,12 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                 child: isJoined
                     ? OutlinedButton(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF3B82F6),
-                          side: const BorderSide(
-                            color: Color(0xFF3B82F6),
+                          foregroundColor: isDark ? Colors.white : Colors.black,
+                          side: BorderSide(
+                            color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
                             width: 1.5,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: const StadiumBorder(),
                         ),
                         onPressed: () {
                           Navigator.push(
@@ -820,12 +835,10 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                       )
                     : ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          foregroundColor: Colors.white,
+                          backgroundColor: isDark ? Colors.white : Colors.black,
+                          foregroundColor: isDark ? Colors.black : Colors.white,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: const StadiumBorder(),
                         ),
                         onPressed: isJoining
                             ? null
@@ -1012,12 +1025,10 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: () {
                   setState(() {
@@ -1113,12 +1124,10 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
               height: 46,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text(
@@ -1216,13 +1225,13 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                           Container(
                             width: 48,
                             height: 48,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF3B82F6),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.people_alt_rounded,
-                              color: Colors.white,
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                               size: 24,
                             ),
                           ),

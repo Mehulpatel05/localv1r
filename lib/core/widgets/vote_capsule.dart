@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../motion.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 
@@ -85,27 +85,30 @@ class _VoteCapsuleState extends State<VoteCapsule> {
     final int userVote = post.userVote;
     final int score = post.score;
 
-    final Color upColor = userVote == 1 ? const Color(0xFF2563EB) : const Color(0xFF64748B);
-    final Color downColor = userVote == -1 ? const Color(0xFFEF4444) : const Color(0xFF64748B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color inkColor = isDark ? Colors.white : Colors.black;
+    final Color upColor = userVote == 1 ? inkColor : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E));
+    final Color downColor = userVote == -1 ? const Color(0xFFEF4444) : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E));
     final Color scoreColor = userVote == 1
-        ? const Color(0xFF2563EB)
-        : (userVote == -1 ? const Color(0xFFEF4444) : const Color(0xFF1E293B));
+        ? inkColor
+        : (userVote == -1 ? const Color(0xFFEF4444) : (isDark ? Colors.white : Colors.black));
 
     final double height = widget.isCompact ? 32 : 36;
     final double iconSize = widget.isCompact ? 18 : 22;
     final double fontSize = widget.isCompact ? 12 : 13;
 
+    final Color capsuleBg = isDark
+        ? (userVote == 1 ? Colors.white12 : const Color(0xFF1A1A1A))
+        : (userVote == 1 ? const Color(0xFFEAEAEA) : const Color(0xFFF4F4F4));
+    final Color capsuleBorder = isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6);
+
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: userVote == 1
-            ? const Color(0xFFEFF6FF)
-            : (userVote == -1 ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9)),
+        color: capsuleBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: userVote == 1
-              ? const Color(0xFFBFDBFE)
-              : (userVote == -1 ? const Color(0xFFFECACA) : Colors.transparent),
+          color: capsuleBorder,
           width: 1,
         ),
       ),
@@ -127,7 +130,7 @@ class _VoteCapsuleState extends State<VoteCapsule> {
 
           // Score Value
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
+            duration: AppMotion.durationMicro,
             transitionBuilder: (child, animation) {
               return ScaleTransition(scale: animation, child: child);
             },

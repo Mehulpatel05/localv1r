@@ -194,23 +194,25 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
     if (_publishSuccess) {
       return _buildSuccessState();
     }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.close_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'List Your Room',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
@@ -219,11 +221,11 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEFF6FF),
-                foregroundColor: const Color(0xFF2563EB),
+                backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: const StadiumBorder(),
               ),
               onPressed: _isPublishing ? null : _submitListing,
               child: const Text(
@@ -323,7 +325,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                        borderSide: BorderSide(color: isDark ? Colors.white : Colors.black, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
@@ -366,7 +368,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                        borderSide: BorderSide(color: isDark ? Colors.white : Colors.black, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
@@ -392,10 +394,10 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                   const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDark ? const Color(0xFF141414) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: _showDescError ? const Color(0xFFEF4444) : const Color(0xFF2563EB),
+                        color: _showDescError ? const Color(0xFFEF4444) : (isDark ? Colors.white : Colors.black),
                         width: 1.5,
                       ),
                     ),
@@ -464,11 +466,11 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                           Container(
                             width: 38,
                             height: 38,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF2563EB),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white : Colors.black,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                            child: Icon(Icons.add_rounded, color: isDark ? Colors.black : Colors.white, size: 24),
                           ),
                           const SizedBox(height: 10),
                           const Text(
@@ -520,13 +522,13 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2563EB),
+                                    color: isDark ? Colors.white : Colors.black,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Text(
+                                  child: Text(
                                     'COVER PHOTO',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: isDark ? Colors.black : Colors.white,
                                       fontSize: 9,
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -575,7 +577,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                             shape: BoxShape.circle,
                           ),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.lock_rounded, color: Color(0xFF2563EB), size: 16),
+                          child: Icon(Icons.lock_rounded, color: isDark ? Colors.white : Colors.black, size: 16),
                         ),
                         const SizedBox(width: 12),
                         const Expanded(
@@ -637,20 +639,22 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   }
 
   Widget _buildStepItem(int num, String label, bool isActive) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         Container(
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+            color: isActive ? (isDark ? Colors.white : Colors.black) : (isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9)),
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
           child: Text(
             '$num',
             style: TextStyle(
-              color: isActive ? Colors.white : const Color(0xFF94A3B8),
+              color: isActive ? (isDark ? Colors.black : Colors.white) : const Color(0xFF94A3B8),
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -662,7 +666,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
           style: TextStyle(
             fontSize: 10.5,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? const Color(0xFF2563EB) : const Color(0xFF94A3B8),
+            color: isActive ? (isDark ? Colors.white : Colors.black) : const Color(0xFF94A3B8),
           ),
         ),
       ],
@@ -682,15 +686,18 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   // State 3: Upload Progress Modal (Image 4)
   Widget _buildUploadingModal() {
     final pct = (_uploadProgress * 100).toInt().clamp(0, 100);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      color: Colors.black45,
+      color: Colors.black54,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF141414) : Colors.white,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
           boxShadow: const [
             BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 8)),
           ],
@@ -701,19 +708,19 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
             Container(
               width: 54,
               height: 54,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF262626) : const Color(0xFFF4F4F4),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.cloud_upload_rounded, color: Color(0xFF2563EB), size: 28),
+              child: Icon(Icons.cloud_upload_rounded, color: isDark ? Colors.white : Colors.black, size: 28),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Uploading your listing',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
               ),
             ),
             const SizedBox(height: 4),
@@ -721,7 +728,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
               _mediaFiles.isNotEmpty
                   ? 'Photos $_uploadCurrentIndex of ${_mediaFiles.length}'
                   : 'Publishing details...',
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              style: TextStyle(color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B), fontSize: 13),
             ),
             const SizedBox(height: 16),
             ClipRRect(
@@ -729,8 +736,8 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
               child: LinearProgressIndicator(
                 value: _uploadProgress > 0 ? _uploadProgress : null,
                 minHeight: 8,
-                backgroundColor: const Color(0xFFF1F5F9),
-                color: const Color(0xFF2563EB),
+                backgroundColor: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9),
+                color: isDark ? Colors.white : Colors.black,
               ),
             ),
             const SizedBox(height: 8),
@@ -738,10 +745,10 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
               alignment: Alignment.centerRight,
               child: Text(
                 '$pct%',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF2563EB),
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ),
@@ -795,10 +802,10 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0066FF),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: _submitListing,
                 child: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -812,8 +819,9 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
 
   // State 5: Success Screen (Image 4)
   Widget _buildSuccessState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -854,10 +862,10 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0066FF),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                    foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: const StadiumBorder(),
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('View Listing', style: TextStyle(fontWeight: FontWeight.w700)),

@@ -19,7 +19,7 @@ class TelegramStorageService {
 
       final jwtToken = await AuthService.instance.getAccessToken();
       final user = FirebaseAuth.instance.currentUser;
-      final sessionToken = (jwtToken != null && jwtToken.isNotEmpty) ? jwtToken : (user != null ? await user.getIdToken() : null);
+      String? sessionToken = (jwtToken != null && jwtToken.isNotEmpty) ? jwtToken : (user != null ? await user.getIdToken() : null);
 
       // Read bytes first — detect format from magic bytes (not file extension)
       final bytes = await file.readAsBytes();
@@ -54,25 +54,40 @@ class TelegramStorageService {
 
       if (onProgress != null) onProgress(0.3);
 
-      final uri = Uri.parse(backendUploadUrl);
-      final request = http.MultipartRequest('POST', uri);
-      if (sessionToken != null && sessionToken.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $sessionToken';
-      }
+      Future<http.Response> sendUpload(String? token) async {
+        final uri = Uri.parse(backendUploadUrl);
+        final request = http.MultipartRequest('POST', uri);
+        if (token != null && token.isNotEmpty) {
+          request.headers['Authorization'] = 'Bearer $token';
+        }
 
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: filename,
-          contentType: contentType,
-        ),
-      );
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: filename,
+            contentType: contentType,
+          ),
+        );
+        final streamedResponse = await request.send();
+        return await http.Response.fromStream(streamedResponse);
+      }
 
       if (onProgress != null) onProgress(0.6);
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      var response = await sendUpload(sessionToken);
+
+      // Handle 401 Session Expired -> Refresh token & retry once
+      if (response.statusCode == 401) {
+        debugPrint('[TelegramStorageService] 401 received. Refreshing auth token...');
+        final refreshedJwt = await AuthService.instance.refreshToken();
+        if (refreshedJwt != null && refreshedJwt.isNotEmpty) {
+          sessionToken = refreshedJwt;
+        } else if (FirebaseAuth.instance.currentUser != null) {
+          sessionToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        }
+        response = await sendUpload(sessionToken);
+      }
 
       if (onProgress != null) onProgress(1.0);
 

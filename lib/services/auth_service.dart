@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'avatar_cache_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -185,10 +187,94 @@ class AuthService {
     return await _secureStorage.read(key: _kHandleKey);
   }
 
-  Future<void> saveUserHandle(String handle) async {
+  Future<void> saveUserHandle(String handle, {String? userId, String? phone}) async {
     await _secureStorage.write(key: _kHandleKey, value: handle);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_handle', handle);
+    await prefs.setString('is_logged_in', 'true');
+
+    // Sync to Firestore users and profiles collections for multi-device cross-login
+    try {
+      final effectiveUid = userId ?? await getUserId() ?? FirebaseAuth.instance.currentUser?.uid;
+      final effectivePhone = phone ?? await getPhoneNumber();
+
+      if (effectiveUid != null && effectiveUid.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('users').doc(effectiveUid).set({
+          'handle': handle,
+          'userId': effectiveUid,
+          if (effectivePhone != null && effectivePhone.isNotEmpty) 'phoneNumber': effectivePhone,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      final clean = handle.replaceAll('@', '').trim();
+      if (clean.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
+          'handle': clean,
+          if (effectiveUid != null && effectiveUid.isNotEmpty) 'ownerUid': effectiveUid,
+          if (effectivePhone != null && effectivePhone.isNotEmpty) 'phoneNumber': effectivePhone,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Firestore handle sync note: $e');
+    }
+  }
+
+  /// Restores user profile, handle, and avatar from cloud for seamless multi-device login
+  Future<Map<String, dynamic>?> syncCloudProfile() async {
+    try {
+      final userId = await getUserId() ?? FirebaseAuth.instance.currentUser?.uid;
+      final phone = await getPhoneNumber();
+
+      String? resolvedHandle;
+      String? resolvedPhoto;
+
+      if (userId != null && userId.isNotEmpty) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null) {
+            final h = data['handle'] ?? data['userHandle'];
+            if (h != null && h.toString().trim().isNotEmpty) {
+              resolvedHandle = h.toString().trim();
+            }
+            resolvedPhoto = data['photoUrl']?.toString();
+          }
+        }
+      }
+
+      if ((resolvedHandle == null || resolvedHandle.isEmpty) && phone != null && phone.isNotEmpty) {
+        final q = await FirebaseFirestore.instance
+            .collection('users')
+            .where('phoneNumber', isEqualTo: phone)
+            .limit(1)
+            .get();
+        if (q.docs.isNotEmpty) {
+          final data = q.docs.first.data();
+          final h = data['handle'] ?? data['userHandle'];
+          if (h != null && h.toString().trim().isNotEmpty) {
+            resolvedHandle = h.toString().trim();
+          }
+          resolvedPhoto = data['photoUrl']?.toString();
+        }
+      }
+
+      if (resolvedHandle != null && resolvedHandle.isNotEmpty) {
+        await saveUserHandle(resolvedHandle, userId: userId, phone: phone);
+        if (resolvedPhoto != null && resolvedPhoto.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('profile_photo_url', resolvedPhoto);
+        }
+        return {
+          'handle': resolvedHandle,
+          'photoUrl': resolvedPhoto,
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] syncCloudProfile warning: $e');
+    }
+    return null;
   }
 
   Future<bool> isLoggedIn() async {
@@ -241,6 +327,93 @@ class AuthService {
       debugPrint('[AuthService] Delete account network error: $e');
       return {'success': false, 'error': 'Network error: $e'};
     }
+  }
+
+  Future<void> updateUserProfileImage(String photoUrl) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final handle = await getUserHandle();
+    final uid = user?.uid ?? await getUserId();
+
+    // 1. Firebase Auth photoURL
+    if (user != null) {
+      try {
+        await user.updatePhotoURL(photoUrl);
+      } catch (e) {
+        debugPrint('[AuthService] Update Firebase photoURL warning: $e');
+      }
+    }
+
+    // 2. Firestore users/{uid}
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'photoUrl': photoUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[AuthService] Update users photoUrl warning: $e');
+      }
+    }
+
+    // 3. Firestore profiles/{handle}
+    if (handle != null && handle.isNotEmpty) {
+      final clean = handle.replaceAll('@', '').trim().toLowerCase();
+      try {
+        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
+          'photoUrl': photoUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[AuthService] Update profiles photoUrl warning: $e');
+      }
+      AvatarCacheService.instance.setCachedUrl(clean, photoUrl);
+    }
+
+    // 4. Local storage
+    await AvatarCacheService.instance.saveMyPhotoUrlLocally(photoUrl);
+  }
+
+  Future<void> removeUserProfileImage() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final handle = await getUserHandle();
+    final uid = user?.uid ?? await getUserId();
+
+    // 1. Firebase Auth
+    if (user != null) {
+      try {
+        await user.updatePhotoURL(null);
+      } catch (e) {
+        debugPrint('[AuthService] Clear Firebase photoURL warning: $e');
+      }
+    }
+
+    // 2. Firestore users/{uid}
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'photoUrl': FieldValue.delete(),
+        });
+      } catch (e) {
+        debugPrint('[AuthService] Delete users photoUrl warning: $e');
+      }
+    }
+
+    // 3. Firestore profiles/{handle}
+    if (handle != null && handle.isNotEmpty) {
+      final clean = handle.replaceAll('@', '').trim().toLowerCase();
+      try {
+        await FirebaseFirestore.instance.collection('profiles').doc(clean).update({
+          'photoUrl': FieldValue.delete(),
+        });
+      } catch (e) {
+        debugPrint('[AuthService] Delete profiles photoUrl warning: $e');
+      }
+      AvatarCacheService.instance.setCachedUrl(clean, null);
+    }
+
+    // 4. Local storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_photo_url');
   }
 
   /// Complete Sign Out

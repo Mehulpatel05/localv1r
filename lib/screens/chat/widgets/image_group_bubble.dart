@@ -64,6 +64,8 @@ class ImageGroupBubble extends StatelessWidget {
                   tag: '${messageId}_$index',
                   child: Image.network(
                     url,
+                    cacheWidth: 400,
+                    cacheHeight: 400,
                     fit: BoxFit.cover,
                     loadingBuilder: (_, child, progress) {
                       if (progress == null) return child;
@@ -131,6 +133,7 @@ class ImageGroupBubble extends StatelessWidget {
               tag: '${messageId}_0',
               child: Image.network(
                 mediaUrls[0],
+                cacheWidth: 500,
                 fit: BoxFit.cover,
                 loadingBuilder: (_, child, progress) {
                   if (progress == null) return child;
@@ -184,6 +187,8 @@ class ImageGroupBubble extends StatelessWidget {
                       tag: '${messageId}_0',
                       child: Image.network(
                         mediaUrls[0],
+                        cacheWidth: 500,
+                        cacheHeight: 400,
                         fit: BoxFit.cover,
                       ),
                     ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/friend_repository.dart';
@@ -509,39 +510,17 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
                 ),
               ] else ...[
-                // Glowing Avatar
-                Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF818CF8).withValues(alpha: 0.5),
-                      width: 3,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF1E3A8A),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
+                // Instagram-style Profile Avatar with Story Gradient Ring
+                UserAvatar(
+                  handle: _targetHandle,
+                  photoUrl: _userData?['photoUrl'] as String?,
+                  size: 88,
+                  showRing: true,
+                  ringGradient: UserAvatar.instagramGradient,
+                  ringWidth: 2.8,
+                  ringGap: 2.8,
+                  fontSize: 28,
+                  enableFullViewOnTap: true,
                 ),
 
                 const SizedBox(height: 14),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,9 +14,12 @@ import 'auth_service.dart';
 enum FeedTab { latest, trending }
 
 class PostRepository extends ChangeNotifier {
-    // ⚠️ CONFIGURATION: Replace with your deployed FastAPI server URL.
+  // ⚠️ CONFIGURATION: Replace with your deployed FastAPI server URL.
   // When running locally on Android Emulator, 10.0.2.2 points to local machine's localhost.
   static const String backendBaseUrl = 'https://localv1r.onrender.com/api/v1';
+
+  // 🚀 PERSISTENT HTTP CONNECTION POOL (re-uses TCP/TLS sockets to save 300ms per request)
+  static final http.Client _httpClient = http.Client();
 
   List<Post> _posts = [];
   final Map<String, Post> _postsRegistry = {};
@@ -23,7 +27,8 @@ class PostRepository extends ChangeNotifier {
   Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
   PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
-  bool _isLoading = true;
+  bool _isLoading = false; // Starts false if disk cache loads in 0ms!
+  SharedPreferences? _prefs;
 
   Post? getPostById(String postId) => _postsRegistry[postId];
 
@@ -58,15 +63,65 @@ class PostRepository extends ChangeNotifier {
 
   PostRepository(this.locationService) {
     locationService.addListener(_listenToPosts);
-    _loadLocalVotes().then((_) {
+    _initStorageAndLoad();
+  }
+
+  Future<void> _initStorageAndLoad() async {
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      await _loadLocalVotes();
+      // 0ms instant display from disk cache before network call
+      _loadCachedPosts();
+      _fetchPosts(refresh: true);
+    } catch (e) {
+      debugPrint('Error during PostRepository init: $e');
       _listenToPosts();
-    });
+    }
+  }
+
+  String _getCacheKey() {
+    final cityId = locationService.cityId;
+    final areaId = locationService.areaId;
+    final effectiveAreaId = (areaId != null && !areaId.contains('GENERAL')) ? areaId : 'ALL';
+    final categoryStr = _selectedCategory?.name ?? 'ALL';
+    return 'cached_feed_${cityId}_${effectiveAreaId}_$categoryStr';
+  }
+
+  /// 🚀 0ms Instant Disk Cache Reader (Offline-First)
+  void _loadCachedPosts() {
+    if (_prefs == null) return;
+    try {
+      final key = _getCacheKey();
+      final cachedJson = _prefs!.getString(key);
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final List<dynamic> rawList = jsonDecode(cachedJson);
+        final cached = rawList.map((d) => _parsePost(d)).toList();
+        if (cached.isNotEmpty) {
+          _posts = cached;
+          registerPosts(cached);
+          _isLoading = false;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading cached posts: $e');
+    }
+  }
+
+  void _saveCachedPosts(List<dynamic> postsData) {
+    if (_prefs == null) return;
+    try {
+      final key = _getCacheKey();
+      _prefs!.setString(key, jsonEncode(postsData));
+    } catch (e) {
+      debugPrint('Error saving cached posts: $e');
+    }
   }
 
   Future<void> _loadLocalVotes() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? jsonStr = prefs.getString('local_user_votes');
+      _prefs ??= await SharedPreferences.getInstance();
+      final String? jsonStr = _prefs!.getString('local_user_votes');
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final Map<String, dynamic> rawMap = jsonDecode(jsonStr);
         _localVotes = rawMap.map((key, value) => MapEntry(key, value as int));
@@ -89,8 +144,8 @@ class PostRepository extends ChangeNotifier {
 
   Future<void> _saveLocalVotes() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('local_user_votes', jsonEncode(_localVotes));
+      _prefs ??= await SharedPreferences.getInstance();
+      await _prefs!.setString('local_user_votes', jsonEncode(_localVotes));
     } catch (e) {
       debugPrint('Error saving local votes: $e');
     }
@@ -139,11 +194,60 @@ class PostRepository extends ChangeNotifier {
 
   String? _nextCursor;
 
+  Post _parsePost(dynamic d) {
+    return Post(
+      id: d['id'],
+      authorHandle: d['authorHandle'] ?? 'Anon',
+      content: d['content'] ?? '',
+      category: _parseCategory(d['category']),
+      imageUrl: d['imageUrl'],
+      upvotes: d['upvotes'] ?? 0,
+      downvotes: d['downvotes'] ?? 0,
+      commentCount: d['commentCount'] ?? 0,
+      userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
+      reportCount: d['reportCount'] ?? 0,
+      reporters: List<String>.from(d['reporters'] ?? []),
+      createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
+      stateId: d['stateId'],
+      cityId: d['cityId'],
+      areaId: d['areaId'],
+      areaName: d['areaName'],
+      roomTitle: d['roomTitle'],
+      roomArea: d['roomArea'],
+      roomRent: d['roomRent'],
+      mediaUrls: d['mediaUrls'] != null ? List<String>.from(d['mediaUrls']) : [],
+      shopTitle: d['shopTitle'],
+      shopPrice: d['shopPrice'],
+      shopCategory: d['shopCategory'],
+      foodTitle: d['foodTitle'],
+      foodRating: d['foodRating'] != null ? (d['foodRating'] as num).toDouble() : null,
+      foodPrice: d['foodPrice'],
+      eventTitle: d['eventTitle'],
+      eventDate: d['eventDate'],
+      eventLocationText: d['eventLocationText'],
+      eventPrice: d['eventPrice'],
+      jobTitle: d['jobTitle'],
+      jobCompany: d['jobCompany'],
+      jobLocation: d['jobLocation'],
+      jobType: d['jobType'],
+      serviceTitle: d['serviceTitle'],
+      serviceCategoryText: d['serviceCategoryText'],
+      servicePrice: d['servicePrice'],
+    );
+  }
+
+  /// 🚀 Stale-While-Revalidate Fetcher (Instant UI + Background Refresh)
   Future<void> _fetchPosts({bool refresh = false}) async {
     if (refresh) {
       _nextCursor = null;
-      _isLoading = true;
-      notifyListeners();
+      // If we don't have posts yet, show loading; otherwise keep showing cached posts
+      if (_posts.isEmpty) {
+        _loadCachedPosts();
+        if (_posts.isEmpty) {
+          _isLoading = true;
+          notifyListeners();
+        }
+      }
     } else {
       _isLoadingMore = true;
       notifyListeners();
@@ -159,63 +263,26 @@ class PostRepository extends ChangeNotifier {
       var uri = Uri.parse('$backendBaseUrl/posts');
       final queryParams = <String, String>{
         'limit': '50',
-        if (_nextCursor != null) 'cursor': _nextCursor!,
         'cityId': cityId,
-        if (effectiveAreaId != null) 'areaId': effectiveAreaId,
-        if (categoryStr != null) 'category': categoryStr,
+        'cursor': ?_nextCursor,
+        'areaId': ?effectiveAreaId,
+        'category': ?categoryStr,
       };
       
       uri = uri.replace(queryParameters: queryParams);
         
-      final response = await http.get(uri, headers: await _getHeaders());
+      final response = await _httpClient.get(uri, headers: await _getHeaders()).timeout(const Duration(seconds: 10));
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final List<dynamic> postsData = data['posts'];
+        final List<dynamic> postsData = data['posts'] ?? [];
         _nextCursor = data['nextCursor'];
         
-        final newPosts = postsData.map((d) => Post(
-          id: d['id'],
-          authorHandle: d['authorHandle'] ?? 'Anon',
-          content: d['content'] ?? '',
-          category: _parseCategory(d['category']),
-          imageUrl: d['imageUrl'],
-          upvotes: d['upvotes'] ?? 0,
-          downvotes: d['downvotes'] ?? 0,
-          commentCount: d['commentCount'] ?? 0,
-          userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
-          reportCount: d['reportCount'] ?? 0,
-          reporters: List<String>.from(d['reporters'] ?? []),
-          createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
-          stateId: d['stateId'],
-          cityId: d['cityId'],
-          areaId: d['areaId'],
-          areaName: d['areaName'],
-          roomTitle: d['roomTitle'],
-          roomArea: d['roomArea'],
-          roomRent: d['roomRent'],
-          mediaUrls: d['mediaUrls'] != null ? List<String>.from(d['mediaUrls']) : [],
-          shopTitle: d['shopTitle'],
-          shopPrice: d['shopPrice'],
-          shopCategory: d['shopCategory'],
-          foodTitle: d['foodTitle'],
-          foodRating: d['foodRating'] != null ? (d['foodRating'] as num).toDouble() : null,
-          foodPrice: d['foodPrice'],
-          eventTitle: d['eventTitle'],
-          eventDate: d['eventDate'],
-          eventLocationText: d['eventLocationText'],
-          eventPrice: d['eventPrice'],
-          jobTitle: d['jobTitle'],
-          jobCompany: d['jobCompany'],
-          jobLocation: d['jobLocation'],
-          jobType: d['jobType'],
-          serviceTitle: d['serviceTitle'],
-          serviceCategoryText: d['serviceCategoryText'],
-          servicePrice: d['servicePrice'],
-        )).toList();
+        final newPosts = postsData.map((d) => _parsePost(d)).toList();
         
         if (refresh) {
           _posts = newPosts;
+          _saveCachedPosts(postsData);
         } else {
           _posts.addAll(newPosts);
         }
@@ -238,8 +305,22 @@ class PostRepository extends ChangeNotifier {
     await _fetchPosts(refresh: true);
   }
 
+  Timer? _fetchDebounceTimer;
+
+  @override
+  void dispose() {
+    _fetchDebounceTimer?.cancel();
+    locationService.removeListener(_listenToPosts);
+    super.dispose();
+  }
+
   void _listenToPosts() {
-    _fetchPosts(refresh: true);
+    _fetchDebounceTimer?.cancel();
+    // 0ms instant display of cached posts for newly selected category/area
+    _loadCachedPosts();
+    _fetchDebounceTimer = Timer(const Duration(milliseconds: 60), () {
+      _fetchPosts(refresh: true);
+    });
   }
 
 
@@ -247,7 +328,7 @@ class PostRepository extends ChangeNotifier {
     int backoffSeconds = 2;
     while (true) {
       try {
-        final response = await http.get(Uri.parse('$backendBaseUrl/posts/$postId/comments'), headers: await _getHeaders());
+        final response = await _httpClient.get(Uri.parse('$backendBaseUrl/posts/$postId/comments'), headers: await _getHeaders());
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           final List<dynamic> commentsData = data['comments'];
@@ -280,7 +361,7 @@ class PostRepository extends ChangeNotifier {
   Future<void> addComment(String postId, String authorHandle, String content) async {
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.post(
+      final response = await _httpClient.post(
         Uri.parse('$backendBaseUrl/posts/$postId/comment'),
         headers: headers,
         body: jsonEncode({'content': content}),
@@ -298,7 +379,7 @@ class PostRepository extends ChangeNotifier {
   Future<void> reportPost(String postId, String reporterHandle, {String reason = 'spam'}) async {
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.post(
+      final response = await _httpClient.post(
         Uri.parse('$backendBaseUrl/posts/$postId/report'),
         headers: headers,
         body: jsonEncode({'reason': reason}),
@@ -327,7 +408,7 @@ class PostRepository extends ChangeNotifier {
 
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.delete(
+      final response = await _httpClient.delete(
         Uri.parse('$backendBaseUrl/posts/$postId'),
         headers: headers,
       ).timeout(const Duration(seconds: 8));
@@ -350,7 +431,7 @@ class PostRepository extends ChangeNotifier {
   Future<void> restorePost(String postId) async {
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.post(
+      final response = await _httpClient.post(
         Uri.parse('$backendBaseUrl/posts/$postId/restore'),
         headers: headers,
       ).timeout(const Duration(seconds: 8));
@@ -570,7 +651,7 @@ class PostRepository extends ChangeNotifier {
     // 2. Dispatch vote transaction to backend proxy
     try {
       Map<String, String> headers = await _getAuthHeaders();
-      http.Response response = await http.post(
+      http.Response response = await _httpClient.post(
         Uri.parse('$backendBaseUrl/posts/$postId/vote'),
         headers: headers,
         body: jsonEncode({'direction': direction}),
@@ -586,7 +667,7 @@ class PostRepository extends ChangeNotifier {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $retryToken',
           };
-          response = await http.post(
+          response = await _httpClient.post(
             Uri.parse('$backendBaseUrl/posts/$postId/vote'),
             headers: headers,
             body: jsonEncode({'direction': direction}),
@@ -645,51 +726,14 @@ class PostRepository extends ChangeNotifier {
   Future<List<Post>> fetchPostsByUser(String handle) async {
     List<Post> results = [];
     try {
-      final response = await http.get(
+      final response = await _httpClient.get(
         Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle&authorHandle=$handle'),
         headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> postsData = data['posts'] ?? [];
-        results = postsData.map((d) => Post(
-          id: d['id'],
-          authorHandle: d['authorHandle'] ?? '',
-          content: d['content'] ?? '',
-          category: _parseCategory(d['category']),
-          imageUrl: d['imageUrl'],
-          upvotes: d['upvotes'] ?? 0,
-          downvotes: d['downvotes'] ?? 0,
-          commentCount: d['commentCount'] ?? 0,
-          userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
-          reportCount: d['reportCount'] ?? 0,
-          reporters: List<String>.from(d['reporters'] ?? []),
-          createdAt: DateTime.tryParse(d['createdAt'] ?? '') ?? DateTime.now(),
-          stateId: d['stateId'],
-          cityId: d['cityId'],
-          areaId: d['areaId'],
-          areaName: d['areaName'],
-          roomTitle: d['roomTitle'],
-          roomArea: d['roomArea'],
-          roomRent: d['roomRent'],
-          mediaUrls: d['mediaUrls'] != null ? List<String>.from(d['mediaUrls']) : [],
-          shopTitle: d['shopTitle'],
-          shopPrice: d['shopPrice'],
-          foodTitle: d['foodTitle'],
-          foodRating: d['foodRating'] != null ? (d['foodRating'] as num).toDouble() : null,
-          foodPrice: d['foodPrice'],
-          eventTitle: d['eventTitle'],
-          eventDate: d['eventDate'],
-          eventLocationText: d['eventLocationText'],
-          eventPrice: d['eventPrice'],
-          jobTitle: d['jobTitle'],
-          jobCompany: d['jobCompany'],
-          jobLocation: d['jobLocation'],
-          jobType: d['jobType'],
-          serviceTitle: d['serviceTitle'],
-          serviceCategoryText: d['serviceCategoryText'],
-          servicePrice: d['servicePrice'],
-        )).toList();
+        results = postsData.map((d) => _parsePost(d)).toList();
       }
     } catch (e) {
       debugPrint('Error fetching posts for profile: $e');

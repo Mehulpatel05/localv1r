@@ -38,6 +38,7 @@ class JobCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final title = post.jobTitle ?? 'Job Opportunity';
     final company = post.jobCompany ?? 'Verified Employer';
     final location = post.jobLocation ?? (post.areaName ?? 'Vadodara');
@@ -55,12 +56,12 @@ class JobCardWidget extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -170,10 +171,10 @@ class JobCardWidget extends StatelessWidget {
                         children: [
                           Text(
                             title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                               letterSpacing: -0.2,
                             ),
                           ),

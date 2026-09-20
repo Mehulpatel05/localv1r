@@ -139,11 +139,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141414) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -307,8 +308,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0066FF),
-                        foregroundColor: Colors.white,
+                        backgroundColor: isDark ? Colors.white : Colors.black,
+                        foregroundColor: isDark ? Colors.black : Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
@@ -327,25 +328,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final allPosts = _localRepo.allPosts;
     final filteredPosts = _getFilteredPosts(allPosts);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Services',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
@@ -354,16 +356,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
           SizedBox(width: 14),
         ],
       ),
-      // User specifically requested: "+ Offer a Service is floating button"
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0066FF),
-          foregroundColor: Colors.white,
+          backgroundColor: isDark ? Colors.white : Colors.black,
+          foregroundColor: isDark ? Colors.black : Colors.white,
           elevation: 4,
-          shadowColor: const Color(0xFF0066FF).withOpacity(0.4),
+          shadowColor: Colors.black.withOpacity(0.25),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shape: const StadiumBorder(),
         ),
         icon: const Icon(Icons.add_rounded, size: 20),
         label: const Text(
@@ -378,7 +379,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _localRepo.refresh,
-        color: const Color(0xFF0066FF),
+        color: isDark ? Colors.white : Colors.black,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.only(bottom: 90),
@@ -390,22 +391,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'Find local help',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                         letterSpacing: -0.5,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       'Trusted services from people around your community',
                       style: TextStyle(
                         fontSize: 13.5,
-                        color: Color(0xFF64748B),
+                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -420,19 +421,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(fontSize: 14.5, color: Color(0xFF0F172A)),
+                    style: TextStyle(fontSize: 14.5, color: isDark ? Colors.white : const Color(0xFF0F172A)),
                     decoration: InputDecoration(
                       hintText: 'Search for a service...',
-                      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                      hintStyle: TextStyle(color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), fontSize: 14),
+                      prefixIcon: Icon(Icons.search_rounded, color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 18),
+                              icon: Icon(Icons.close_rounded, color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), size: 18),
                               onPressed: () => _searchController.clear(),
                             )
                           : null,
@@ -445,9 +447,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
               const SizedBox(height: 14),
 
-              // Category Selector Chips Row 1 (Image 1)
+              // Category Selector Chips Row 1
               SizedBox(
-                height: 40,
+                height: 38,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -468,23 +470,34 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
+                          color: isSelected
+                              ? (isDark ? Colors.white : Colors.black)
+                              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
+                          borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
-                            width: isSelected ? 1.5 : 1.0,
+                            color: isSelected
+                                ? (isDark ? Colors.white : Colors.black)
+                                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                           ),
                         ),
                         child: Row(
                           children: [
-                            Icon(icon, size: 14, color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B)),
+                            Icon(
+                              icon,
+                              size: 14,
+                              color: isSelected
+                                  ? (isDark ? Colors.black : Colors.white)
+                                  : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF4B5563)),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               name,
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                                color: isSelected
+                                    ? (isDark ? Colors.black : Colors.white)
+                                    : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF4B5563)),
                               ),
                             ),
                           ],
@@ -497,9 +510,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
               const SizedBox(height: 8),
 
-              // Category Selector Chips Row 2 (Image 1)
+              // Category Selector Chips Row 2
               SizedBox(
-                height: 40,
+                height: 38,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -520,23 +533,34 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
+                          color: isSelected
+                              ? (isDark ? Colors.white : Colors.black)
+                              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
+                          borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
-                            width: isSelected ? 1.5 : 1.0,
+                            color: isSelected
+                                ? (isDark ? Colors.white : Colors.black)
+                                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                           ),
                         ),
                         child: Row(
                           children: [
-                            Icon(icon, size: 14, color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B)),
+                            Icon(
+                              icon,
+                              size: 14,
+                              color: isSelected
+                                  ? (isDark ? Colors.black : Colors.white)
+                                  : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF4B5563)),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               name,
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                                color: isSelected
+                                    ? (isDark ? Colors.black : Colors.white)
+                                    : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF4B5563)),
                               ),
                             ),
                           ],
@@ -600,7 +624,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 14,
-                      childAspectRatio: 0.72,
+                      childAspectRatio: 0.67,
                     ),
                     itemBuilder: (context, index) {
                       final post = filteredPosts[index];
@@ -642,7 +666,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 14,
-          childAspectRatio: 0.72,
+          childAspectRatio: 0.67,
         ),
         itemBuilder: (context, index) {
           return Container(
@@ -655,7 +679,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 11,
+                  flex: 10,
                   child: Container(
                     decoration: const BoxDecoration(
                       color: Color(0xFFF1F5F9),
@@ -664,7 +688,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   ),
                 ),
                 Expanded(
-                  flex: 9,
+                  flex: 10,
                   child: Padding(
                     padding: const EdgeInsets.all(10),
                     child: Column(
@@ -709,6 +733,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   // 2. Empty State (Image 4 Group 5)
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(32, 40, 32, 20),
@@ -718,46 +743,45 @@ class _ServicesScreenState extends State<ServicesScreen> {
             Container(
               width: 80,
               height: 80,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                 shape: BoxShape.circle,
+                border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.handyman_outlined,
-                size: 38,
-                color: Color(0xFF0066FF),
+                size: 36,
+                color: isDark ? Colors.white : Colors.black,
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'No local services yet',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Be the first person in your area to offer a service.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 height: 1.45,
               ),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0066FF),
-                foregroundColor: Colors.white,
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: const StadiumBorder(),
               ),
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text(

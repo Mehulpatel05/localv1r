@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_service.dart';
 import '../../models/post_model.dart';
@@ -199,27 +200,28 @@ class _ShopScreenState extends State<ShopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final locService = context.watch<LocationService>();
     final areaLabel = locService.area?.name ?? locService.city.name;
     final posts = _filteredPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF1E293B)),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Buy & Sell',
               style: TextStyle(
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.3,
@@ -228,7 +230,7 @@ class _ShopScreenState extends State<ShopScreen> {
             Text(
               'Things people are selling near you',
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
               ),
@@ -245,31 +247,31 @@ class _ShopScreenState extends State<ShopScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFDBEAFE)),
+                  border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.location_on_rounded,
-                      color: Color(0xFF2563EB),
+                      color: isDark ? Colors.white : Colors.black,
                       size: 14,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       areaLabel,
-                      style: const TextStyle(
-                        color: Color(0xFF1E40AF),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(width: 2),
-                    const Icon(
+                    Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: Color(0xFF2563EB),
+                      color: isDark ? Colors.white : Colors.black,
                       size: 16,
                     ),
                   ],
@@ -281,7 +283,7 @@ class _ShopScreenState extends State<ShopScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _localRepo.refresh,
-        color: const Color(0xFF00B074),
+        color: isDark ? Colors.white : Colors.black,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
@@ -354,7 +356,8 @@ class _ShopScreenState extends State<ShopScreen> {
                             },
                             borderRadius: BorderRadius.circular(18),
                             child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
+                              duration: AppMotion.durationMicro,
+                              curve: AppMotion.interactiveCurve,
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                               decoration: BoxDecoration(
                                 color: isSelected ? const Color(0xFF1E293B) : Colors.white,
@@ -401,7 +404,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.73,
+                    childAspectRatio: 0.68,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, i) => _buildShimmerCard(),
@@ -422,7 +425,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.73,
+                    childAspectRatio: 0.68,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, i) {
@@ -455,14 +458,12 @@ class _ShopScreenState extends State<ShopScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF00B074), // Emerald green
-          foregroundColor: Colors.white,
+          backgroundColor: isDark ? Colors.white : Colors.black,
+          foregroundColor: isDark ? Colors.black : Colors.white,
           elevation: 4,
-          shadowColor: const Color(0xFF00B074).withValues(alpha: 0.45),
+          shadowColor: Colors.black.withOpacity(0.25),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
+          shape: const StadiumBorder(),
         ),
         icon: const Icon(Icons.shopping_bag_rounded, size: 18),
         label: const Text(
@@ -501,72 +502,82 @@ class _ShopScreenState extends State<ShopScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Shimmer Image Box
-          Container(
-            height: 140,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+          Expanded(
+            flex: 11,
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Price Line (Soft green tint)
-                Container(
-                  width: 65,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1FAE5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Title Line 1
-                Container(
-                  width: double.infinity,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                // Title Line 2
-                Container(
-                  width: 90,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Location Dot & Line
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE2E8F0),
-                        shape: BoxShape.circle,
+          Expanded(
+            flex: 9,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Price Line (Soft green tint)
+                      Container(
+                        width: 65,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD1FAE5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 50,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(3),
+                      const SizedBox(height: 8),
+                      // Title Line 1
+                      Container(
+                        width: double.infinity,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(height: 5),
+                      // Title Line 2
+                      Container(
+                        width: 90,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Location Dot & Line
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE2E8F0),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 50,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -576,6 +587,8 @@ class _ShopScreenState extends State<ShopScreen> {
 
   // ── Empty State (Image 2 State 2) ─────────────────────────────────────────
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -586,14 +599,15 @@ class _ShopScreenState extends State<ShopScreen> {
             Container(
               width: 80,
               height: 80,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                 shape: BoxShape.circle,
+                border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
               ),
-              child: const Center(
+              child: Center(
                 child: Icon(
                   Icons.storefront_rounded,
-                  color: Color(0xFF1E293B),
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
                   size: 38,
                 ),
               ),
@@ -601,10 +615,10 @@ class _ShopScreenState extends State<ShopScreen> {
             const SizedBox(height: 20),
 
             // Headline
-            const Text(
+            Text(
               'Nothing for sale nearby',
               style: TextStyle(
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
@@ -612,26 +626,24 @@ class _ShopScreenState extends State<ShopScreen> {
             const SizedBox(height: 6),
 
             // Subtitle
-            const Text(
+            Text(
               'Be the first person in your area to list something.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 fontSize: 13.5,
               ),
             ),
             const SizedBox(height: 24),
 
-            // Green Sell a Product Button
+            // Sell a Product Button
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00B074), // Emerald green
-                foregroundColor: Colors.white,
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
+                shape: const StadiumBorder(),
               ),
               icon: const Icon(Icons.shopping_bag_rounded, size: 18),
               label: const Text(
@@ -659,11 +671,11 @@ class _ShopScreenState extends State<ShopScreen> {
             // Refresh Link Button
             TextButton.icon(
               onPressed: _localRepo.refresh,
-              icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF3B82F6)),
-              label: const Text(
+              icon: Icon(Icons.refresh_rounded, size: 16, color: isDark ? Colors.white : Colors.black),
+              label: Text(
                 'Refresh',
                 style: TextStyle(
-                  color: Color(0xFF3B82F6),
+                  color: isDark ? Colors.white : Colors.black,
                   fontWeight: FontWeight.w600,
                   fontSize: 13.5,
                 ),

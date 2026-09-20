@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/widgets/safe_image.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../chat/personal_chat_screen.dart';
@@ -90,6 +91,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final post = widget.post;
     final rentStr = _formatRent(post.roomRent);
     final title = post.roomTitle?.isNotEmpty == true ? post.roomTitle! : post.content;
@@ -100,7 +102,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         : 'U';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       body: Column(
         children: [
           Expanded(
@@ -533,22 +535,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF1E293B),
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                authorInitial,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
+                            UserAvatar(
+                              handle: post.authorHandle,
+                              size: 48,
+                              fontSize: 17,
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -614,13 +604,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0066FF),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                    foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: const StadiumBorder(),
                   ),
                   icon: const Icon(Icons.chat_bubble_rounded, size: 18),
                   label: const Text(

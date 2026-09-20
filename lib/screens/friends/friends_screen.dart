@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/motion.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../services/friend_repository.dart';
 import '../../services/post_repository.dart';
 import '../../models/friend_request_model.dart';
@@ -454,23 +456,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
   // ── Header & Main Build ───────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF1E293B)),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Friends',
               style: TextStyle(
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
@@ -479,7 +484,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             Text(
               'Your Nearhood connections',
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -491,7 +496,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           IconButton(
             icon: Icon(
               _isSearchOpen ? Icons.close_rounded : Icons.search_rounded,
-              color: const Color(0xFF1E293B),
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
             ),
             onPressed: () {
               setState(() {
@@ -505,9 +510,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           // 3-Dots More Options
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF1E293B)),
-            color: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            icon: Icon(Icons.more_horiz_rounded, color: isDark ? Colors.white : const Color(0xFF1E293B)),
+            color: isDark ? const Color(0xFF141414) : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+            ),
             onSelected: (val) {
               if (val == 'discover') {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -516,13 +524,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'discover',
                 child: Row(
                   children: [
-                    Icon(Icons.explore_outlined, color: Color(0xFF3B82F6), size: 18),
-                    SizedBox(width: 10),
-                    Text('Discover People', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Icon(Icons.explore_outlined, color: isDark ? Colors.white : Colors.black, size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Discover People',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -536,23 +550,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
           // Expandable Search Bar
           if (_isSearchOpen)
             Container(
-              color: Colors.white,
+              color: isDark ? Colors.black : Colors.white,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
                 ),
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,
-                  style: const TextStyle(fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                  decoration: InputDecoration(
                     hintText: 'Filter by handle...',
-                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: Color(0xFF94A3B8)),
+                    hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
+                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: isDark ? Colors.white60 : const Color(0xFF94A3B8)),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
@@ -560,14 +575,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
           // ── Segmented Navigation Capsule (Image 1 Header) ────────
           Container(
-            color: Colors.white,
+            color: isDark ? Colors.black : Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
             child: Container(
               height: 44,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
               ),
               child: Row(
                 children: [
@@ -624,17 +640,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
     int badgeCount = 0,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: AppMotion.durationMicro,
+        curve: AppMotion.interactiveCurve,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : Colors.transparent, // Solid blue
+          color: isSelected
+              ? (isDark ? Colors.white : Colors.black)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -652,7 +673,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   Text(
                     title,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : const Color(0xFF64748B),
+                      color: isSelected
+                          ? (isDark ? Colors.black : Colors.white)
+                          : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B)),
                       fontSize: 13.5,
                       fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                     ),
@@ -743,18 +766,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   Widget _buildRequestCard(FriendRequest req) {
     final handle = req.senderHandle;
-    final initials = handle.isNotEmpty ? handle.substring(0, handle.length >= 2 ? 2 : 1).toUpperCase() : '?';
-    final gradient = _getAvatarGradient(handle);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -776,25 +798,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
             borderRadius: BorderRadius.circular(10),
             child: Row(
               children: [
-                // Circular Avatar with Gradient
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: gradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      initials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
+                // Circular Avatar with Photo/Gradient
+                UserAvatar(
+                  handle: handle,
+                  size: 52,
+                  fontSize: 18,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -803,32 +811,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     children: [
                       Text(
                         '@$handle',
-                        style: const TextStyle(
-                          color: Color(0xFF0F172A),
+                        style: TextStyle(
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                           fontSize: 15.5,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'Wants to connect with you',
                         style: TextStyle(
-                          color: Color(0xFF64748B),
+                          color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                           fontSize: 12.5,
                         ),
                       ),
                       const SizedBox(height: 5),
-                      // Soft Blue Pill Badge (Image 1)
+                      // Monochrome Pill Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
+                          color: isDark ? const Color(0xFF262626) : const Color(0xFFF4F4F4),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
+                        child: Text(
                           'New connection',
                           style: TextStyle(
-                            color: Color(0xFF3B82F6),
+                            color: isDark ? Colors.white70 : Colors.black87,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -842,19 +850,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Action Buttons: Accept & Decline (Image 1)
+          // Action Buttons: Accept & Decline
           Row(
             children: [
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6), // Blue solid
-                    foregroundColor: Colors.white,
+                    backgroundColor: isDark ? Colors.white : Colors.black,
+                    foregroundColor: isDark ? Colors.black : Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: const StadiumBorder(),
                   ),
                   onPressed: () => _acceptRequest(handle),
                   child: const FittedBox(
@@ -874,18 +880,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 11),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+                    shape: const StadiumBorder(),
                   ),
                   onPressed: () => _declineRequest(handle),
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'Decline',
                       style: TextStyle(
-                        color: Color(0xFF475569),
+                        color: isDark ? Colors.white70 : const Color(0xFF475569),
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
@@ -947,18 +951,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildFriendCard(String handle) {
-    final initials = handle.isNotEmpty ? handle.substring(0, handle.length >= 2 ? 2 : 1).toUpperCase() : '?';
-    final gradient = _getAvatarGradient(handle);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -967,7 +970,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
       child: Row(
         children: [
           // Avatar
-          GestureDetector(
+          UserAvatar(
+            handle: handle,
+            size: 48,
+            fontSize: 16.5,
             onTap: () {
               showOtherUserProfileSheet(
                 context,
@@ -976,24 +982,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 repository: context.read<PostRepository>(),
               );
             },
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: gradient,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
           ),
           const SizedBox(width: 12),
 
@@ -1013,8 +1001,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 children: [
                   Text(
                     '@$handle',
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                       fontSize: 14.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1022,10 +1010,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'Your friend',
                     style: TextStyle(
-                      color: Color(0xFF64748B),
+                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                       fontSize: 12,
                     ),
                   ),
@@ -1035,18 +1023,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(width: 8),
 
-          // Message Button (Image 2 Left)
+          // Message Button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: Colors.white,
+              backgroundColor: isDark ? Colors.white : Colors.black,
+              foregroundColor: isDark ? Colors.black : Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: const Size(0, 36),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
+              shape: const StadiumBorder(),
             ),
             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
             label: const Text(
@@ -1125,18 +1111,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildSentCard(String handle) {
-    final initials = handle.isNotEmpty ? handle.substring(0, handle.length >= 2 ? 2 : 1).toUpperCase() : '?';
-    final gradient = _getAvatarGradient(handle);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -1145,23 +1130,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
       child: Row(
         children: [
           // Avatar
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: gradient,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+          UserAvatar(
+            handle: handle,
+            size: 48,
+            fontSize: 16.5,
+            onTap: () {
+              showOtherUserProfileSheet(
+                context,
+                partnerHandle: handle,
+                currentUserHandle: widget.currentUserHandle,
+                repository: context.read<PostRepository>(),
+              );
+            },
           ),
           const SizedBox(width: 12),
 
@@ -1172,21 +1152,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
               children: [
                 Text(
                   '@$handle',
-                  style: const TextStyle(
-                    color: Color(0xFF0F172A),
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                     fontSize: 14.5,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Row(
-                  children: const [
-                    Icon(Icons.circle, size: 7, color: Color(0xFFF59E0B)),
-                    SizedBox(width: 4),
+                  children: [
+                    const Icon(Icons.circle, size: 7, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 4),
                     Text(
                       'Request pending',
                       style: TextStyle(
-                        color: Color(0xFF64748B),
+                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1198,24 +1178,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(width: 8),
 
-          // Cancel Outlined Button (Image 2 Right)
+          // Cancel Outlined Button
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: const Size(0, 34),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              side: const BorderSide(color: Color(0xFFE2E8F0)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+              shape: const StadiumBorder(),
             ),
             onPressed: () => _cancelSentRequest(handle),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
+                color: isDark ? Colors.white70 : const Color(0xFF475569),
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
               ),
             ),
           ),
@@ -1232,24 +1210,29 @@ class _FriendsScreenState extends State<FriendsScreen> {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Circular Blue Icon Badge
+            // Circular Icon Badge
             Container(
               width: 76,
               height: 76,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                ),
               ),
               child: Center(
                 child: Icon(
                   icon,
-                  color: const Color(0xFF3B82F6),
+                  color: isDark ? Colors.white : Colors.black,
                   size: 34,
                 ),
               ),
@@ -1257,8 +1240,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             const SizedBox(height: 18),
             Text(
               title,
-              style: const TextStyle(
-                color: Color(0xFF0F172A),
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
@@ -1267,8 +1250,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 fontSize: 13.5,
                 height: 1.4,
               ),
@@ -1277,13 +1260,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
+                  backgroundColor: isDark ? Colors.white : Colors.black,
+                  foregroundColor: isDark ? Colors.black : Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: onAction,
                 child: Text(
@@ -1302,6 +1283,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildLoadingSkeleton() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: 5,
@@ -1310,17 +1293,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF141414) : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
           ),
           child: Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE2E8F0),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1333,7 +1316,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       width: 110,
                       height: 13,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
+                        color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -1342,7 +1325,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       width: 160,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -1353,7 +1336,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 width: 70,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
@@ -1365,6 +1348,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildErrorState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1387,32 +1372,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
+            Text(
               "Couldn't load connections",
               style: TextStyle(
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Check your connection and try again.',
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 fontSize: 13.5,
               ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: const StadiumBorder(),
               ),
               onPressed: () => setState(() {}),
               child: const Text(

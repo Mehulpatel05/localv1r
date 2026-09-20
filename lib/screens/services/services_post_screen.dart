@@ -193,26 +193,27 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_publishSuccess) {
       return _buildSuccessState();
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Offer a Service',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
@@ -221,11 +222,11 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEFF6FF),
-                foregroundColor: const Color(0xFF2563EB),
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: const StadiumBorder(),
               ),
               onPressed: _isPublishing ? null : _submitService,
               child: const Text(
@@ -659,13 +660,11 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0066FF),
-                        foregroundColor: Colors.white,
+                        backgroundColor: isDark ? Colors.white : Colors.black,
+                        foregroundColor: isDark ? Colors.black : Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: const StadiumBorder(),
                       ),
                       onPressed: _isPublishing ? null : _submitService,
                       child: const Text(
@@ -868,10 +867,10 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0066FF),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: _submitService,
                 child: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -927,10 +926,10 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0066FF),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                    foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: const StadiumBorder(),
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('View Service', style: TextStyle(fontWeight: FontWeight.w700)),

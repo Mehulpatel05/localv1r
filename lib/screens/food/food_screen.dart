@@ -47,30 +47,29 @@ class _FoodScreenState extends State<FoodScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final posts = _localRepo.allPosts;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Row(
-          children: [
-            Text('🍕', style: TextStyle(fontSize: 20)),
-            SizedBox(width: 6),
-            Text(
-              'Food & Drinks',
-              style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18),
-            ),
-          ],
+        title: Text(
+          'Restaurants',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            letterSpacing: -0.3,
+          ),
         ),
         actions: const [
           Center(child: LocationChip()),
@@ -79,10 +78,10 @@ class _FoodScreenState extends State<FoodScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _localRepo.refresh,
-        color: const Color(0xFFF59E0B),
+        color: isDark ? Colors.white : Colors.black,
         child: _localRepo.isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
+            ? Center(
+                child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.black))
             : posts.isEmpty
                 ? SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -99,7 +98,7 @@ class _FoodScreenState extends State<FoodScreen> {
                     addRepaintBoundaries: true,
                     addAutomaticKeepAlives: false,
                     padding: const EdgeInsets.only(
-                        top: 16, bottom: 100, left: 14, right: 14),
+                        top: 16, bottom: 100, left: 16, right: 16),
                     itemCount: posts.length,
                     itemBuilder: (context, i) => RepaintBoundary(
                       key: ValueKey('food_${posts[i].id}'),
@@ -108,14 +107,17 @@ class _FoodScreenState extends State<FoodScreen> {
                   ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFF59E0B),
-        elevation: 4,
-        icon: const Icon(Icons.rate_review_rounded, color: Colors.black87),
+        backgroundColor: isDark ? Colors.white : Colors.black,
+        foregroundColor: isDark ? Colors.black : Colors.white,
+        elevation: 3,
+        shape: const StadiumBorder(),
+        icon: const Icon(Icons.add_rounded, size: 18),
         label: const Text(
-          'Post a Review',
-          style: TextStyle(color: Colors.black87,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.2),
+          'Post',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.1,
+          ),
         ),
         onPressed: () async {
           await Navigator.push(
@@ -144,7 +146,7 @@ class _FoodScreenState extends State<FoodScreen> {
             const Text('🍕', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             const Text(
-              'No food spots listed yet',
+              'No restaurants listed yet',
               style: TextStyle(
                   color: Colors.black54,
                   fontSize: 18,
@@ -152,7 +154,7 @@ class _FoodScreenState extends State<FoodScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Share your favorite cafe or restaurant review!',
+              'Share your favorite restaurant review!',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black38, fontSize: 13),
             ),

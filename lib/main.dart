@@ -1,40 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'services/post_repository.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'screens/main/main_screen.dart';
-import 'screens/auth/phone_login_screen.dart';
 import 'services/auth_service.dart';
 import 'core/location/location_service.dart';
 import 'services/presence_service.dart';
+import 'core/theme.dart';
+import 'core/auth_repository.dart';
+import 'features/auth/login_flow_page.dart';
+import 'features/auth/widgets/animated_splash_screen.dart';
+
+import 'screens/auth/create_handle_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // Fast parallel startup: orientation lock + Firebase core initialization
+  await Future.wait([
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]),
+    Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+  ]);
   
-  // Initialize Firebase App Check
-  try {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: const bool.fromEnvironment('dart.vm.product') 
-          ? AndroidProvider.playIntegrity 
-          : AndroidProvider.debug,
-    );
-  } catch (e) {
+  // Non-blocking asynchronous service setup (does not delay runApp)
+  _initNonCriticalServices();
+
+  runApp(const VadodaraLocalApp());
+}
+
+void _initNonCriticalServices() {
+  FirebaseAppCheck.instance.activate(
+    // ignore: deprecated_member_use
+    androidProvider: kReleaseMode 
+        ? AndroidProvider.playIntegrity 
+        : AndroidProvider.debug,
+    // ignore: deprecated_member_use
+    appleProvider: kReleaseMode 
+        ? AppleProvider.deviceCheck 
+        : AppleProvider.debug,
+  ).catchError((e) {
     debugPrint('AppCheck initialization failed: $e');
-  }
+  });
   
   // Register background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  runApp(const VadodaraLocalApp());
 }
 
 class VadodaraLocalApp extends StatefulWidget {
@@ -48,12 +73,19 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   late final LocationService locationService;
   late final PostRepository postRepository;
 
+  bool _isReady = false;
+  bool _isSplashFinished = false;
+  bool _isLoggedIn = false;
+  String _userHandle = 'Guest';
+
+  bool get _canShowMainFlow => _isReady && _isSplashFinished;
+
   @override
   void initState() {
     super.initState();
     locationService = LocationService();
     postRepository = PostRepository(locationService);
-    locationService.load();
+    _bootstrapApp();
   }
 
   @override
@@ -63,103 +95,145 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.dispose();
   }
 
+  /// High-performance parallel warmup:
+  /// Pre-warms Auth, Location, and PostRepository concurrently in the background while Splash plays.
+  Future<void> _bootstrapApp() async {
+    try {
+      // 1. Start parallel async initialization tasks
+      final authFuture = _checkAuthStatus();
+      final locationFuture = locationService.load();
+      final results = await Future.wait([
+        authFuture,
+        locationFuture,
+      ]);
+
+      final authData = results[0] as Map<String, dynamic>;
+      final isLoggedIn = authData['isLoggedIn'] == true;
+      final handle = (authData['userHandle'] as String?) ?? 'Guest';
+
+      if (isLoggedIn && handle.isNotEmpty) {
+        postRepository.currentUserHandle = handle;
+        _isLoggedIn = true;
+        _userHandle = handle;
+
+        // Background non-critical service setup
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          NotificationService().initialize();
+          PresenceService.instance.init(handle);
+        });
+      }
+
+      _isReady = true;
+      if (mounted && _isSplashFinished) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('[Bootstrap] Error during app startup: $e');
+      _isReady = true;
+      if (mounted && _isSplashFinished) {
+        setState(() {});
+      }
+    }
+  }
+
   // Check login status asynchronously using FlutterSecureStorage and SharedPreferences
   Future<Map<String, dynamic>> _checkAuthStatus() async {
-    // Enforce a minimum delay so the Splash Screen is visible for branding
-    await Future.delayed(const Duration(milliseconds: 1500));
-    
-    final isSecureLoggedIn = await AuthService.instance.isLoggedIn();
-    final prefs = await SharedPreferences.getInstance();
-    final isLoggedInStr = prefs.getString('is_logged_in');
-    final handle = await AuthService.instance.getUserHandle() ?? prefs.getString('user_handle') ?? 'Guest';
-    
-    return {
-      'isLoggedIn': isSecureLoggedIn || isLoggedInStr == 'true',
-      'userHandle': handle,
-    };
+    try {
+      final isSecureLoggedIn = await AuthService.instance.isLoggedIn();
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedInStr = prefs.getString('is_logged_in');
+      var handle = await AuthService.instance.getUserHandle() ?? prefs.getString('user_handle');
+
+      if ((handle == null || handle.isEmpty || handle == 'Guest') && (isSecureLoggedIn || isLoggedInStr == 'true')) {
+        final cloudProfile = await AuthService.instance.syncCloudProfile();
+        handle = cloudProfile?['handle'] ?? handle;
+      }
+
+      return {
+        'isLoggedIn': isSecureLoggedIn || isLoggedInStr == 'true',
+        'userHandle': handle ?? 'Guest',
+      };
+    } catch (_) {
+      return {'isLoggedIn': false, 'userHandle': 'Guest'};
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: locationService),
       ],
       child: MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'Nearhood',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Colors.white,
-        primaryColor: const Color(0xFF3B82F6),
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF3B82F6),
-          secondary: Color(0xFF60A5FA),
-          surface: Colors.white,
-          error: Colors.red,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 1,
-          iconTheme: IconThemeData(color: Colors.black87),
-          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        useMaterial3: true,
-      ),
-      home: FutureBuilder<Map<String, dynamic>>(
-        future: _checkAuthStatus(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(
-              backgroundColor: Colors.white,
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/images/nearhood_logo.png',
-                      width: 220,
-                      height: 180,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(height: 36),
-                    const SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF1A6B5F),
-                        strokeWidth: 3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        navigatorKey: navigatorKey,
+        title: 'Nearhood',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.system,
+        theme: NearhoodTheme.lightTheme,
+        darkTheme: NearhoodTheme.darkTheme,
+        home: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
             );
-          }
+          },
+          child: !_canShowMainFlow
+              ? AnimatedSplashScreen(
+                  key: const ValueKey('splash_view'),
+                  onAnimationComplete: () {
+                    if (mounted) {
+                      setState(() {
+                        _isSplashFinished = true;
+                      });
+                    }
+                  },
+                )
+              : _isLoggedIn
+                  ? MainScreen(
+                      key: const ValueKey('main_view'),
+                      repository: postRepository,
+                      currentUserHandle: _userHandle,
+                    )
+                  : LoginFlowPage(
+                      key: const ValueKey('login_flow_view'),
+                      authRepository: BackendAuthRepository(),
+                      onLoggedIn: () async {
+                        final cloudProfile = await AuthService.instance.syncCloudProfile();
+                        final handle = cloudProfile?['handle'] ?? await AuthService.instance.getUserHandle() ?? '';
+                        final userId = await AuthService.instance.getUserId() ?? '';
+                        final phone = await AuthService.instance.getPhoneNumber() ?? '';
 
-          final data = snapshot.data;
-          if (data != null && data['isLoggedIn'] == true) {
-            final handle = data['userHandle'] as String;
-            // Defer to post-frame so notifyListeners() doesn't fire during build
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (postRepository.currentUserHandle != handle) {
-                postRepository.currentUserHandle = handle;
-              }
-              NotificationService().initialize();
-              PresenceService.instance.init(handle);
-            });
-            return MainScreen(
-              repository: postRepository,
-              currentUserHandle: handle,
-            );
-          } else {
-            return PhoneLoginScreen(repository: postRepository);
-          }
-        },
+                        if (handle.isEmpty || handle == 'Guest') {
+                          if (mounted) {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) => CreateHandleScreen(
+                                  repository: postRepository,
+                                  userId: userId,
+                                  phoneNumber: phone,
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          postRepository.currentUserHandle = handle;
+                          NotificationService().initialize();
+                          PresenceService.instance.init(handle);
+                          if (mounted) {
+                            setState(() {
+                              _isLoggedIn = true;
+                              _userHandle = handle;
+                            });
+                          }
+                        }
+                      },
+                    ),
+        ),
       ),
-    ),
     );
   }
 }

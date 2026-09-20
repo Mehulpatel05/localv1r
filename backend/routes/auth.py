@@ -273,33 +273,60 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
         phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
         user_id = phone_hash
         handle = ""
+        photo_url = ""
         is_new_user = True
 
         if db is not None:
             try:
                 from firebase_admin import firestore as fb_firestore
+                # 1. Direct document lookup by phone_hash
                 user_ref = db.collection("users").document(phone_hash)
                 user_doc = user_ref.get()
 
                 if user_doc.exists:
                     data = user_doc.to_dict() or {}
-                    handle = data.get("handle", "")
+                    handle = data.get("handle", "") or data.get("userHandle", "")
+                    photo_url = data.get("photoUrl", "")
                     is_new_user = (handle == "")
                     user_ref.update({
                         "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
                         "phoneNumber": phone_number,
+                        "phoneNumberHash": phone_hash,
                     })
                 else:
-                    # First time registration
-                    user_ref.set({
-                        "userId": user_id,
-                        "phoneNumber": phone_number,
-                        "phoneNumberHash": phone_hash,
-                        "handle": "",
-                        "createdAt": fb_firestore.SERVER_TIMESTAMP,
-                        "updatedAt": fb_firestore.SERVER_TIMESTAMP,
-                        "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
-                    })
+                    # 2. Check if user document exists with query by phoneNumber
+                    q = db.collection("users").where("phoneNumber", "==", phone_number).limit(1).get()
+                    if q and len(q) > 0:
+                        doc = q[0]
+                        data = doc.to_dict() or {}
+                        handle = data.get("handle", "") or data.get("userHandle", "")
+                        photo_url = data.get("photoUrl", "")
+                        is_new_user = (handle == "")
+                        user_id = doc.id
+                        doc.reference.update({
+                            "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
+                            "phoneNumberHash": phone_hash,
+                        })
+                    else:
+                        # 3. Check profiles collection as fallback
+                        prof_q = db.collection("profiles").where("phoneNumber", "==", phone_number).limit(1).get()
+                        if prof_q and len(prof_q) > 0:
+                            pdata = prof_q[0].to_dict() or {}
+                            handle = pdata.get("handle", "")
+                            photo_url = pdata.get("photoUrl", "")
+                            is_new_user = (handle == "")
+
+                        # Initialize canonical record for this device
+                        user_ref.set({
+                            "userId": user_id,
+                            "phoneNumber": phone_number,
+                            "phoneNumberHash": phone_hash,
+                            "handle": handle,
+                            "photoUrl": photo_url,
+                            "createdAt": fb_firestore.SERVER_TIMESTAMP,
+                            "updatedAt": fb_firestore.SERVER_TIMESTAMP,
+                            "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
+                        }, merge=True)
             except Exception as e:
                 print(f"[AUTH] Error during user record creation/lookup: {e}")
 
@@ -313,6 +340,7 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
                 "userId": user_id,
                 "phoneNumber": phone_number,
                 "handle": handle,
+                "photoUrl": photo_url,
                 "isNewUser": is_new_user,
             }
         }

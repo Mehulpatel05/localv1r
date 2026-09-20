@@ -1,0 +1,17 @@
+flutter_native_splash:
+  color: "#FFFFFF"
+  color_dark: "#000000"
+  image: assets/images/nearhood_logo.png
+  image_dark: assets/images/nearhood_logo.png
+  
+  android_12:
+    image: assets/images/nearhood_logo.png
+    image_dark: assets/images/nearhood_logo.png
+    color: "#FFFFFF"
+    color_dark: "#000000"
+    icon_background_color: "#FFFFFF"
+    icon_background_color_dark: "#000000"
+
+  android: true
+  ios: true
+  web: false

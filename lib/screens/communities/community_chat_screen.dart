@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/community_repository.dart';
@@ -162,8 +163,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0.0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.durationStandard,
+        curve: AppMotion.enterCurve,
       );
     }
 
@@ -347,6 +348,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isAdmin =
         _community.adminHandle == widget.repository.currentUserHandle;
     final canPost = !_isLoading &&
@@ -354,24 +356,28 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         (!_community.isChannel || isAdmin);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_community.name,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
+                )),
             Text(
               '${_community.isChannel ? 'Channel' : 'Group'} · ${widget.community.memberCount} members',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
             ),
           ],
         ),
         actions: [
           if (_isMember)
             IconButton(
-              icon: const Icon(Icons.people_outline, color: Colors.black54),
+              icon: Icon(Icons.people_outline, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
               tooltip: 'Members',
               onPressed: () => Navigator.push(
                 context,
@@ -385,7 +391,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             ),
           if (isAdmin)
             IconButton(
-              icon: const Icon(Icons.edit_outlined, color: Colors.black54),
+              icon: Icon(Icons.edit_outlined, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
               tooltip: 'Edit Community',
               onPressed: () async {
                 await Navigator.push(
@@ -500,13 +506,18 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: Colors.white,
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
               child: ElevatedButton(
                 onPressed: _joinCommunity,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6)),
+                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
                 child: Text(
-                    'Join ${_community.isChannel ? 'Channel' : 'Group'}'),
+                    'Join ${_community.isChannel ? 'Channel' : 'Group'}',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             )
           else if (canPost)
@@ -572,6 +583,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Widget _buildMessageBubble(CommunityMessage msg, bool isMe) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasReactions = msg.reactions.isNotEmpty;
     final timeStr = DateFormat('hh:mm a').format(msg.timestamp);
 
@@ -606,8 +618,15 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 maxWidth: MediaQuery.of(context).size.width * (hasImages ? 0.70 : 0.78),
               ),
               decoration: BoxDecoration(
-                color: isMe ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                color: isMe
+                    ? (isDark ? Colors.white : Colors.black)
+                    : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF4F4F4)),
                 borderRadius: bubbleRadius,
+                border: Border.all(
+                  color: isMe
+                      ? (isDark ? Colors.white : Colors.black)
+                      : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.03),
@@ -625,8 +644,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                       padding: const EdgeInsets.fromLTRB(13, 8, 13, 2),
                       child: Text(
                         '@${msg.authorHandle}',
-                        style: const TextStyle(
-                          color: Color(0xFF2563EB),
+                        style: TextStyle(
+                          color: isDark ? Colors.white70 : const Color(0xFF0F172A),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -662,7 +681,9 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                           Text(
                             msg.content,
                             style: TextStyle(
-                              color: isMe ? Colors.white : const Color(0xFF0F172A),
+                              color: isMe
+                                  ? (isDark ? Colors.black : Colors.white)
+                                  : (isDark ? Colors.white : const Color(0xFF0F172A)),
                               fontSize: 14.5,
                               height: 1.35,
                             ),
@@ -673,8 +694,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                               timeStr,
                               style: TextStyle(
                                 color: isMe
-                                    ? Colors.white.withValues(alpha: 0.75)
-                                    : const Color(0xFF94A3B8),
+                                    ? (isDark ? Colors.black54 : Colors.white70)
+                                    : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -734,9 +755,11 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Widget _buildMessageInput() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? Colors.black : Colors.white,
+        border: Border(top: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6))),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -751,23 +774,23 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
         children: [
           // Feature #11: Image attach button
           IconButton(
-            icon: const Icon(Icons.image_outlined, color: Color(0xFF3B82F6), size: 24),
+            icon: Icon(Icons.image_outlined, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E), size: 24),
             onPressed: _isSendingImage ? null : _pickAndSendImage,
             tooltip: 'Send Image',
           ),
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: const TextStyle(color: Colors.black87, fontSize: 15),
+              style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 15),
               textCapitalization: TextCapitalization.sentences,
               maxLines: null,
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.send,
               decoration: InputDecoration(
                 hintText: 'Type a message...',
-                hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+                hintStyle: TextStyle(color: isDark ? const Color(0xFF6E6E6E) : Colors.black38, fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFFF1F5F9),
+                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -780,16 +803,16 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
           ),
           const SizedBox(width: 8),
           Material(
-            color: const Color(0xFF3B82F6),
+            color: isDark ? Colors.white : Colors.black,
             shape: const CircleBorder(),
             elevation: 2,
-            shadowColor: const Color(0xFF3B82F6).withValues(alpha: 0.4),
+            shadowColor: Colors.black.withOpacity(0.2),
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: _sendMessage,
-              child: const Padding(
-                padding: EdgeInsets.all(10),
-                child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Icon(Icons.send_rounded, color: isDark ? Colors.black : Colors.white, size: 20),
               ),
             ),
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/app_permission_service.dart';
 
@@ -218,7 +219,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
   Widget _buildPermissionCard(_PermItem item) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: AppMotion.durationStandard,
+      curve: AppMotion.interactiveCurve,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: item.granted

@@ -48,41 +48,41 @@ class _EventsScreenState extends State<EventsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final posts = _localRepo.allPosts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Row(
-          children: [
-            Text('🎪', style: TextStyle(fontSize: 20)),
-            SizedBox(width: 6),
-            Text(
-              'Events & Meetups',
-              style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18),
-            ),
-          ],
+        title: Text(
+          'Events & Meetups',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+          ),
         ),
         actions: const [
           Center(child: LocationChip()),
-          SizedBox(width: 12),
+          SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _localRepo.refresh,
-        color: const Color(0xFF8B5CF6),
+        color: isDark ? Colors.white : Colors.black,
         child: _localRepo.isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
+            ? Center(
+                child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.black))
             : posts.isEmpty
                 ? SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -107,15 +107,24 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF8B5CF6),
-        elevation: 6,
-        icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.black87),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isDark ? Colors.white : Colors.black,
+          foregroundColor: isDark ? Colors.black : Colors.white,
+          elevation: 4,
+          shadowColor: Colors.black.withOpacity(0.25),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+          shape: const StadiumBorder(),
+        ),
+        icon: const Icon(Icons.add_rounded, size: 20),
         label: const Text(
           'Host an Event',
-          style: TextStyle(color: Colors.black87,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.2),
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
         ),
         onPressed: () async {
           await Navigator.push(
@@ -178,15 +187,19 @@ class _EventsScreenState extends State<EventsScreen> {
       badgeBottom = parts.length > 1 ? parts[1].replaceAll(',', '') : '';
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -226,13 +239,16 @@ class _EventsScreenState extends State<EventsScreen> {
                   else
                     Container(
                       height: 120,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                          colors: [
+                            isDark ? const Color(0xFF262626) : const Color(0xFF333333),
+                            isDark ? const Color(0xFF141414) : const Color(0xFF1F1F1F),
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                       ),
                       child: const Center(
                         child: Icon(Icons.celebration, color: Colors.white54, size: 48),
@@ -246,8 +262,11 @@ class _EventsScreenState extends State<EventsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFF141414) : Colors.white,
                         borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.1),
@@ -260,16 +279,16 @@ class _EventsScreenState extends State<EventsScreen> {
                         children: [
                           Text(
                             badgeTop,
-                            style: const TextStyle(
-                              color: Color(0xFF8B5CF6),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                           Text(
                             badgeBottom,
-                            style: const TextStyle(
-                              color: Colors.black87,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
                             ),
@@ -286,13 +305,13 @@ class _EventsScreenState extends State<EventsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
+                        color: isDark ? Colors.white : Colors.black,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         price,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: isDark ? Colors.black : Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -310,8 +329,8 @@ class _EventsScreenState extends State<EventsScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.black87,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.3,
@@ -322,15 +341,19 @@ class _EventsScreenState extends State<EventsScreen> {
                     // Location & Venue
                     Row(
                       children: [
-                        const Icon(Icons.place_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                        Icon(
+                          Icons.place_outlined,
+                          size: 16,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             location,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.black54,
+                            style: TextStyle(
+                              color: isDark ? const Color(0xFF9A9A9A) : Colors.black54,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                             ),
@@ -344,8 +367,8 @@ class _EventsScreenState extends State<EventsScreen> {
                       post.content,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.black87,
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFFE5E5E5) : Colors.black87,
                         fontSize: 13,
                         height: 1.4,
                       ),
@@ -354,12 +377,16 @@ class _EventsScreenState extends State<EventsScreen> {
                     
                     Row(
                       children: [
-                        const Icon(Icons.location_on, size: 14, color: Colors.black38),
+                        Icon(
+                          Icons.location_on,
+                          size: 14,
+                          color: isDark ? Colors.white38 : Colors.black38,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           post.areaName ?? 'Nearhood',
-                          style: const TextStyle(
-                            color: Colors.black54,
+                          style: TextStyle(
+                            color: isDark ? const Color(0xFF9A9A9A) : Colors.black54,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -367,8 +394,8 @@ class _EventsScreenState extends State<EventsScreen> {
                         const Spacer(),
                         Text(
                           '@${post.authorHandle}',
-                          style: const TextStyle(
-                            color: Colors.blue,
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black87,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),

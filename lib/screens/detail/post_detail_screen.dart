@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
-import '../../core/widgets/safe_image.dart';
+import '../../core/widgets/post_image_view.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/vote_capsule.dart';
 import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
 import '../../core/utils/content_filter.dart';
+import '../profile/other_user_profile_sheet.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -61,12 +64,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     FocusScope.of(context).unfocus();
 
     // Scroll to the bottom to see new comment
-    Future.delayed(const Duration(milliseconds: 200), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+          duration: AppMotion.durationStandard,
+          curve: AppMotion.enterCurve,
         );
       }
     });
@@ -112,17 +115,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final repo = widget.repository;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
         title: Text(
           (widget.post.category == PostCategory.general || (widget.post.areaName?.contains('General') ?? true))
               ? 'Discussion Thread — Vadodara'
               : 'Discussion Thread — ${widget.post.areaName}',
-          style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           if (widget.post.authorHandle == widget.currentUserHandle)
@@ -145,10 +154,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: widget.post.isEmergency ? const Color(0xFFFEE2E2) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    color: widget.post.isEmergency
+                        ? (isDark ? const Color(0xFF450A0A) : const Color(0xFFFEE2E2))
+                        : (isDark ? const Color(0xFF141414) : Colors.white),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: widget.post.isEmergency ? const Color(0xFFEF4444).withOpacity(0.5) : const Color(0xFFE2E8F0),
+                      color: widget.post.isEmergency
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                          : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                     ),
                   ),
                   child: Column(
@@ -156,37 +169,85 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            '@${widget.post.authorHandle}',
-                            style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
+                          UserAvatar(
+                            handle: widget.post.authorHandle,
+                            size: 38,
+                            fontSize: 14,
+                            onTap: () {
+                              if (widget.post.authorHandle != widget.currentUserHandle) {
+                                showOtherUserProfileSheet(
+                                  context,
+                                  partnerHandle: widget.post.authorHandle,
+                                  currentUserHandle: widget.currentUserHandle,
+                                  repository: widget.repository,
+                                );
+                              }
+                            },
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${widget.post.category.icon} ${widget.post.category.label}',
-                            style: const TextStyle(color: Colors.black54, fontSize: 11),
-                          ),
-                          const Spacer(),
-                          Text(
-                            _formatTime(widget.post.createdAt),
-                            style: const TextStyle(color: Colors.black54, fontSize: 11),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    if (widget.post.authorHandle != widget.currentUserHandle) {
+                                      showOtherUserProfileSheet(
+                                        context,
+                                        partnerHandle: widget.post.authorHandle,
+                                        currentUserHandle: widget.currentUserHandle,
+                                        repository: widget.repository,
+                                      );
+                                    }
+                                  },
+                                  child: Text(
+                                    '@${widget.post.authorHandle}',
+                                    style: TextStyle(
+                                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${widget.post.category.icon} ${widget.post.category.label} • ${_formatTime(widget.post.createdAt)}',
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
                         widget.post.content,
-                        style: const TextStyle(color: Colors.black, fontSize: 16, height: 1.45),
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                          fontSize: 16,
+                          height: 1.45,
+                        ),
                       ),
-                      if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) ...[
+                      if ((widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) || widget.post.mediaUrls.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        SafeImage(
-                          imageUrl: widget.post.imageUrl!,
-                          height: 200,
-                          borderRadius: BorderRadius.circular(12),
+                        PostImageView(
+                          imageUrl: (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty)
+                              ? widget.post.imageUrl!
+                              : widget.post.mediaUrls.first,
+                          allImages: widget.post.mediaUrls.isNotEmpty
+                              ? widget.post.mediaUrls
+                              : [widget.post.imageUrl!],
+                          height: 280,
+                          borderRadius: BorderRadius.circular(14),
+                          heroTagPrefix: 'detail_post_${widget.post.id}',
+                          caption: widget.post.content,
                         ),
                       ],
                       const SizedBox(height: 12),
-                      const Divider(color: Color(0xFFF1F5F9)),
+                      Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9)),
                       ListenableBuilder(
                         listenable: widget.repository,
                         builder: (context, _) {
@@ -203,12 +264,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(width: 16),
                               Row(
                                 children: [
-                                  const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                                  Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 16,
+                                    color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                                  ),
                                   const SizedBox(width: 6),
                                   Text(
                                     '${currentPost.commentCount} comments',
-                                    style: const TextStyle(
-                                      color: Color(0xFF64748B),
+                                    style: TextStyle(
+                                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -225,10 +290,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 20),
 
                 // Section title
-                const Text(
+                Text(
                   'NEIGHBOR COMMENTS',
                   style: TextStyle(
-                    color: Colors.black38,
+                    color: isDark ? Colors.white38 : Colors.black38,
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                     letterSpacing: 1.0,
@@ -241,9 +306,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   stream: repo.listenToComments(widget.post.id),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                      return Center(child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: CircularProgressIndicator(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
                       ));
                     }
                     final comments = snapshot.data ?? [];
@@ -253,16 +320,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         child: Center(
                           child: Column(
                             children: [
-                              const Icon(Icons.question_answer_outlined, size: 40, color: Colors.white12),
+                              Icon(
+                                Icons.question_answer_outlined,
+                                size: 40,
+                                color: isDark ? Colors.white24 : Colors.black26,
+                              ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'No replies yet',
-                                style: TextStyle(color: Colors.black38, fontSize: 13),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                  fontSize: 13,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Ask for details or reply as "${widget.currentUserHandle}"',
-                                style: const TextStyle(color: Colors.black26, fontSize: 11),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white38 : Colors.black38,
+                                  fontSize: 11,
+                                ),
                               ),
                             ],
                           ),
@@ -274,40 +351,84 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: comments.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, idx) {
                         final comment = comments[idx];
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.black12),
+                            color: isDark ? const Color(0xFF141414) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                            ),
                           ),
-                          child: Column(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    '@${comment.authorHandle}',
-                                    style: const TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    _formatTime(comment.createdAt),
-                                    style: const TextStyle(color: Colors.black26, fontSize: 11),
-                                  ),
-                                ],
+                              UserAvatar(
+                                handle: comment.authorHandle,
+                                size: 30,
+                                fontSize: 11.5,
+                                onTap: () {
+                                  if (comment.authorHandle != widget.currentUserHandle) {
+                                    showOtherUserProfileSheet(
+                                      context,
+                                      partnerHandle: comment.authorHandle,
+                                      currentUserHandle: widget.currentUserHandle,
+                                      repository: widget.repository,
+                                    );
+                                  }
+                                },
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                comment.content,
-                                style: const TextStyle(color: Colors.black, fontSize: 14, height: 1.4),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () {
+                                            if (comment.authorHandle != widget.currentUserHandle) {
+                                              showOtherUserProfileSheet(
+                                                context,
+                                                partnerHandle: comment.authorHandle,
+                                                currentUserHandle: widget.currentUserHandle,
+                                                repository: widget.repository,
+                                              );
+                                            }
+                                          },
+                                          child: Text(
+                                            '@${comment.authorHandle}',
+                                            style: TextStyle(
+                                              color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          _formatTime(comment.createdAt),
+                                          style: TextStyle(
+                                            color: isDark ? const Color(0xFF737373) : const Color(0xFF94A3B8),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      comment.content,
+                                      style: TextStyle(
+                                        color: isDark ? const Color(0xFFE5E5E5) : const Color(0xFF1E293B),
+                                        fontSize: 13.5,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -328,17 +449,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.black54, size: 16),
+                  const Icon(Icons.error_outline, color: Colors.white70, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _commentError!,
-                      style: const TextStyle(color: Colors.black87, fontSize: 12),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, color: Colors.black54, size: 14),
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 14),
                     onPressed: () => setState(() => _commentError = null),
                   ),
                 ],
@@ -353,27 +474,44 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               top: 10,
               bottom: MediaQuery.of(context).padding.bottom + 10,
             ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black : Colors.white,
               border: Border(
-                top: BorderSide(color: Color(0xFF243049), width: 1),
+                top: BorderSide(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                  width: 1,
+                ),
               ),
             ),
             child: Row(
               children: [
+                UserAvatar(
+                  handle: widget.currentUserHandle,
+                  size: 34,
+                  fontSize: 12,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.black12),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                      ),
                     ),
                     child: TextField(
                       controller: _commentController,
-                      style: const TextStyle(color: Colors.black87, fontSize: 14),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 14,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Reply anonymously as ${widget.currentUserHandle}...',
-                        hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.black38,
+                          fontSize: 13,
+                        ),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -389,11 +527,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF3B82F6),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white : Colors.black,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                    child: Icon(
+                      Icons.send_rounded,
+                      color: isDark ? Colors.black : Colors.white,
+                      size: 18,
+                    ),
                   ),
                 ),
               ],

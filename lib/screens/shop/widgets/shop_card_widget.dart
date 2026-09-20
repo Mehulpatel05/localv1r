@@ -72,144 +72,156 @@ class _ShopCardWidgetState extends State<ShopCardWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Image Section (Top half) ──────────────────────────
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                    child: Container(
-                      height: 140,
-                      width: double.infinity,
-                      color: const Color(0xFFF1F5F9),
-                      child: hasImage
-                          ? SafeImage(
-                              imageUrl: post.imageUrl!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: 140,
-                            )
-                          : _buildFallbackIllustration(title, post.shopCategory),
+              Expanded(
+                flex: 11,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                      child: Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: const Color(0xFFF1F5F9),
+                        child: hasImage
+                            ? SafeImage(
+                                imageUrl: post.imageUrl!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              )
+                            : _buildFallbackIllustration(title, post.shopCategory),
+                      ),
                     ),
-                  ),
 
-                  // Photo Count Badge (Top-Right)
-                  if (photoCount > 1)
+                    // Photo Count Badge (Top-Right)
+                    if (photoCount > 1)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.camera_alt_rounded,
+                                color: Colors.white,
+                                size: 11,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '1/$photoCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Optional Heart favorite button (Top-Left)
                     Positioned(
                       top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.white,
-                              size: 11,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '1/$photoCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ],
+                      left: 8,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isFavorite = !_isFavorite;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            color: _isFavorite ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                            size: 15,
+                          ),
                         ),
                       ),
                     ),
-
-                  // Optional Heart favorite button (Top-Left)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isFavorite = !_isFavorite;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: _isFavorite ? const Color(0xFFEF4444) : const Color(0xFF64748B),
-                          size: 15,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
               // ── Details Section (Bottom half) ──────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Price in Emerald Green
-                    Text(
-                      formattedPrice,
-                      style: const TextStyle(
-                        color: Color(0xFF00B074), // Emerald green
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-
-                    // Product Title
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Color(0xFF0F172A),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        height: 1.25,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Location Line
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on_rounded,
-                          size: 12.5,
-                          color: Color(0xFF94A3B8),
-                        ),
-                        const SizedBox(width: 2.5),
-                        Expanded(
-                          child: Text(
-                            locationText,
+              Expanded(
+                flex: 9,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Price in Emerald Green
+                          Text(
+                            formattedPrice,
                             style: const TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF00B074), // Emerald green
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(height: 2),
+
+                          // Product Title
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              height: 1.25,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+
+                      // Location Line
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_rounded,
+                            size: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 2.5),
+                          Expanded(
+                            child: Text(
+                              locationText,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

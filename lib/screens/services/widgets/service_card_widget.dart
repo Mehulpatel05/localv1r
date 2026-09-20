@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../../../models/post_model.dart';
 
 class ServiceCardWidget extends StatelessWidget {
@@ -36,23 +37,23 @@ class ServiceCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
     final title = post.serviceTitle?.isNotEmpty == true ? post.serviceTitle! : post.content;
     final price = post.servicePrice?.isNotEmpty == true ? post.servicePrice! : 'Starting at ₹299';
     final category = post.serviceCategoryText ?? 'Service';
     final location = post.areaName ?? 'Vadodara';
     final authorHandle = post.authorHandle.replaceAll('@', '');
-    final authorInitial = authorHandle.isNotEmpty ? authorHandle[0].toUpperCase() : 'A';
     final style = _getCategoryStyle(category);
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -69,7 +70,7 @@ class ServiceCardWidget extends StatelessWidget {
             children: [
               // 1. Top Image / Category Vector Banner (Image 1 & 4)
               Expanded(
-                flex: 11,
+                flex: 10,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -134,9 +135,9 @@ class ServiceCardWidget extends StatelessWidget {
 
               // 2. Card Content Details (Image 1 & 4)
               Expanded(
-                flex: 9,
+                flex: 10,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -147,10 +148,10 @@ class ServiceCardWidget extends StatelessWidget {
                         children: [
                           Text(
                             price,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F172A),
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                               letterSpacing: -0.3,
                             ),
                             maxLines: 1,
@@ -161,10 +162,10 @@ class ServiceCardWidget extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1E293B),
+                              color: isDark ? const Color(0xFFEDEDED) : const Color(0xFF1E293B),
                               height: 1.25,
                             ),
                           ),
@@ -196,22 +197,10 @@ class ServiceCardWidget extends StatelessWidget {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: style['bg'] as Color,
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  authorInitial,
-                                  style: TextStyle(
-                                    color: style['color'] as Color,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
+                              UserAvatar(
+                                handle: authorHandle,
+                                size: 16,
+                                fontSize: 8,
                               ),
                               const SizedBox(width: 4),
                               Expanded(

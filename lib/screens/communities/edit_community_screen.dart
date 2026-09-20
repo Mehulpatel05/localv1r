@@ -40,8 +40,10 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
   }
 
   Future<void> _pickImage() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
+      backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -56,17 +58,17 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
             ),
             const SizedBox(height: 8),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF3B82F6),
-                child: Icon(Icons.camera_alt, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                child: Icon(Icons.camera_alt, color: isDark ? Colors.black : Colors.white),
               ),
               title: const Text('Camera', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF3B82F6),
-                child: Icon(Icons.photo_library, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                child: Icon(Icons.photo_library, color: isDark ? Colors.black : Colors.white),
               ),
               title: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
@@ -142,9 +144,8 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = widget.community.isChannel
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF3B82F6);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = isDark ? Colors.white : Colors.black;
 
     // Avatar: new file > existing URL > icon fallback
     ImageProvider? avatarImage;
@@ -156,31 +157,48 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text(
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
+        elevation: 0,
+        title: Text(
           'Edit Community',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _save,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6)),
-                  )
-                : const Text(
-                    'Save',
-                    style: TextStyle(
-                      color: Color(0xFF3B82F6),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
+                elevation: 0,
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: _isLoading
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isDark ? Colors.black : Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Save',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
+            ),
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
@@ -195,7 +213,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                 children: [
                   CircleAvatar(
                     radius: 52,
-                    backgroundColor: accentColor.withValues(alpha: 0.12),
+                    backgroundColor: isDark ? const Color(0xFF262626) : const Color(0xFFF4F4F4),
                     backgroundImage: avatarImage,
                     child: avatarImage == null
                         ? Icon(
@@ -212,28 +230,35 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                     decoration: BoxDecoration(
                       color: accentColor,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: isDark ? Colors.black : Colors.white, width: 2),
                     ),
-                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                    child: Icon(Icons.camera_alt, color: isDark ? Colors.black : Colors.white, size: 16),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Tap to change photo', style: TextStyle(color: Colors.black45, fontSize: 12)),
+            Text('Tap to change photo', style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12)),
             const SizedBox(height: 28),
 
             // Name field
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: 'Community Name *',
-                labelStyle: const TextStyle(color: Colors.black54),
+                labelStyle: TextStyle(color: isDark ? Colors.white60 : Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: accentColor, width: 2),
@@ -245,15 +270,22 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
             // Description field
             TextField(
               controller: _descController,
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: 'Description',
-                labelStyle: const TextStyle(color: Colors.black54),
+                labelStyle: TextStyle(color: isDark ? Colors.white60 : Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: accentColor, width: 2),

@@ -39,7 +39,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
   Widget build(BuildContext context) {
     final post = widget.post;
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
-    final mediaCount = (post.mediaUrls?.isNotEmpty == true) ? post.mediaUrls!.length : (hasImage ? 1 : 0);
+    final mediaCount = post.mediaUrls.isNotEmpty ? post.mediaUrls.length : (hasImage ? 1 : 0);
     final rentStr = _formatRent(post.roomRent);
     final title = post.roomTitle?.isNotEmpty == true ? post.roomTitle! : post.content;
     final location = post.areaName ?? (post.roomArea ?? 'Vadodara');
@@ -69,7 +69,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
             children: [
               // 1. Top Image Stack (Matching Image 3)
               Expanded(
-                flex: 11,
+                flex: 10,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -210,9 +210,9 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
 
               // 2. Card Details Section (Image 3)
               Expanded(
-                flex: 9,
+                flex: 10,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -95,13 +95,28 @@ class NotificationService {
   }
 
   Future<void> _saveTokenToFirestore(String token) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'fcmToken': token,
-        'tokenUpdatedAt': FieldValue.serverTimestamp(),
-      });
-      debugPrint('FCM token saved: ${token.substring(0, 20)}...');
+    try {
+      final storedUserId = await AuthService.instance.getUserId();
+      final uid = storedUserId ?? FirebaseAuth.instance.currentUser?.uid;
+      final handle = await AuthService.instance.getUserHandle();
+
+      if (uid != null && uid.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'fcmToken': token,
+          'tokenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('FCM token saved for user $uid');
+      }
+
+      if (handle != null && handle.isNotEmpty) {
+        final clean = handle.replaceAll('@', '').trim();
+        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
+          'fcmToken': token,
+          'tokenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('FCM token save error: $e');
     }
   }
 

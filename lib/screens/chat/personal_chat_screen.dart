@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../services/telegram_storage_service.dart';
 import '../../services/presence_service.dart';
 import '../communities/full_screen_image_viewer.dart';
@@ -178,8 +180,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.durationStandard,
+        curve: AppMotion.enterCurve,
       );
     }
 
@@ -486,6 +488,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   Widget _buildMessageBubble(Map<String, dynamic> msg, String msgId, bool isMe) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final content = (msg['content'] ?? '') as String;
     final imageUrl = msg['imageUrl'] as String?;
     final rawMediaUrls = msg['mediaUrls'];
@@ -525,8 +528,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             maxWidth: MediaQuery.of(context).size.width * (hasImages ? 0.70 : 0.78),
           ),
           decoration: BoxDecoration(
-            color: isMe ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+            color: isMe
+                ? (isDark ? Colors.white : Colors.black)
+                : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF4F4F4)),
             borderRadius: bubbleRadius,
+            border: Border.all(
+              color: isMe
+                  ? (isDark ? Colors.white : Colors.black)
+                  : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
@@ -555,7 +565,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                       Text(
                         content,
                         style: TextStyle(
-                          color: isMe ? Colors.white : const Color(0xFF0F172A),
+                          color: isMe
+                              ? (isDark ? Colors.black : Colors.white)
+                              : (isDark ? Colors.white : const Color(0xFF0F172A)),
                           fontSize: 14.5,
                           height: 1.35,
                         ),
@@ -569,8 +581,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               timeStr,
                               style: TextStyle(
                                 color: isMe
-                                    ? Colors.white.withValues(alpha: 0.75)
-                                    : const Color(0xFF94A3B8),
+                                    ? (isDark ? Colors.black54 : Colors.white70)
+                                    : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -680,19 +692,20 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final initial = widget.partnerHandle.isNotEmpty
         ? widget.partnerHandle.replaceAll('@', '')[0].toUpperCase()
         : '?';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
         title: InkWell(
@@ -708,22 +721,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
             child: Row(
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFDBEAFE),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                UserAvatar(
+                  handle: widget.partnerHandle,
+                  size: 38,
+                  fontSize: 15,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -851,15 +852,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             ),
           ),
           if (_isSendingImage)
-            const LinearProgressIndicator(
-              backgroundColor: Color(0xFFE2E8F0),
-              color: Color(0xFF2563EB),
+            LinearProgressIndicator(
+              backgroundColor: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+              color: isDark ? Colors.white : Colors.black,
             ),
           Container(
             padding: const EdgeInsets.fromLTRB(10, 8, 12, 12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+              color: isDark ? Colors.black : Colors.white,
+              border: Border(top: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9), width: 1)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.02),
@@ -873,7 +874,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.photo_library_outlined, color: Color(0xFF2563EB), size: 24),
+                    icon: Icon(Icons.photo_library_outlined, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E), size: 24),
                     onPressed: _isSendingImage ? null : _pickAndSendImages,
                     tooltip: 'Send Photos',
                   ),
@@ -882,16 +883,16 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                       controller: _messageController,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendMessage(),
-                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14.5),
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 14.5),
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                        hintStyle: TextStyle(color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), fontSize: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF8FAFC),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       ),
                     ),
@@ -900,12 +901,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   Container(
                     width: 42,
                     height: 42,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2563EB),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white : Colors.black,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 19),
+                      icon: Icon(Icons.send_rounded, color: isDark ? Colors.black : Colors.white, size: 19),
                       onPressed: _sendMessage,
                     ),
                   ),

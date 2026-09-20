@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/motion.dart';
 import 'package:share_plus/share_plus.dart';
 
 class MultiImageGalleryViewer extends StatefulWidget {
@@ -111,7 +112,8 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
 
           // Top Header Bar
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
+            duration: AppMotion.durationStandard,
+            curve: AppMotion.interactiveCurve,
             top: _showUi ? 0 : -100,
             left: 0,
             right: 0,
@@ -161,7 +163,8 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
           // Bottom Caption Bar
           if (widget.caption != null && widget.caption!.isNotEmpty)
             AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
+              duration: AppMotion.durationStandard,
+              curve: AppMotion.interactiveCurve,
               bottom: _showUi ? 0 : -120,
               left: 0,
               right: 0,

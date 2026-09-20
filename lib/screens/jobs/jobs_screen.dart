@@ -116,47 +116,47 @@ class _JobsScreenState extends State<JobsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final allPosts = _localRepo.allPosts;
     final filteredPosts = _getFilteredPosts(allPosts);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Jobs & Hiring',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
             letterSpacing: -0.3,
           ),
         ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            icon: const Icon(Icons.sync_rounded, color: Color(0xFF64748B), size: 22),
+            icon: Icon(Icons.sync_rounded, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B), size: 22),
             onPressed: () => _localRepo.refresh(),
           ),
-          // Blue circle + button (Image 1)
           Container(
             margin: const EdgeInsets.only(right: 16),
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0066FF),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white : Colors.black,
               shape: BoxShape.circle,
             ),
             child: IconButton(
               tooltip: 'Post a Job',
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+              icon: Icon(Icons.add_rounded, color: isDark ? Colors.black : Colors.white, size: 22),
               onPressed: _openPostJob,
             ),
           ),
@@ -164,7 +164,7 @@ class _JobsScreenState extends State<JobsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _localRepo.refresh,
-        color: const Color(0xFF0066FF),
+        color: isDark ? Colors.white : Colors.black,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.only(bottom: 40),
@@ -184,23 +184,23 @@ class _JobsScreenState extends State<JobsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'Find your next\nopportunity.',
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                         height: 1.15,
                         letterSpacing: -0.5,
                       ),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
                       'Discover jobs, internships, referrals and local hiring opportunities around you.',
                       style: TextStyle(
                         fontSize: 13.5,
-                        color: Color(0xFF64748B),
+                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                         height: 1.4,
                       ),
                     ),
@@ -215,19 +215,20 @@ class _JobsScreenState extends State<JobsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(fontSize: 14.5, color: Color(0xFF0F172A)),
+                    style: TextStyle(fontSize: 14.5, color: isDark ? Colors.white : const Color(0xFF0F172A)),
                     decoration: InputDecoration(
                       hintText: 'Search jobs, skills or companies',
-                      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                      hintStyle: TextStyle(color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), fontSize: 14),
+                      prefixIcon: Icon(Icons.search_rounded, color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 18),
+                              icon: Icon(Icons.close_rounded, color: isDark ? const Color(0xFF6E6E6E) : const Color(0xFF94A3B8), size: 18),
                               onPressed: () => _searchController.clear(),
                             )
                           : null,
@@ -261,8 +262,15 @@ class _JobsScreenState extends State<JobsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF0066FF) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(20),
+                          color: isSelected
+                              ? (isDark ? Colors.white : Colors.black)
+                              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: isSelected
+                                ? (isDark ? Colors.white : Colors.black)
+                                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                          ),
                         ),
                         alignment: Alignment.center,
                         child: Text(
@@ -270,7 +278,9 @@ class _JobsScreenState extends State<JobsScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                            color: isSelected
+                                ? (isDark ? Colors.black : Colors.white)
+                                : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF475569)),
                           ),
                         ),
                       ),
@@ -298,10 +308,14 @@ class _JobsScreenState extends State<JobsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF0066FF) : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                          color: isSelected
+                              ? (isDark ? Colors.white : Colors.black)
+                              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
+                          borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF0066FF) : const Color(0xFFE2E8F0),
+                            color: isSelected
+                                ? (isDark ? Colors.white : Colors.black)
+                                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
                           ),
                         ),
                         alignment: Alignment.center,
@@ -310,7 +324,9 @@ class _JobsScreenState extends State<JobsScreen> {
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                            color: isSelected
+                                ? (isDark ? Colors.black : Colors.white)
+                                : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF475569)),
                           ),
                         ),
                       ),
@@ -461,6 +477,7 @@ class _JobsScreenState extends State<JobsScreen> {
 
   // 2. Empty State (Image 4 Group 5)
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(32, 40, 32, 20),
@@ -470,46 +487,45 @@ class _JobsScreenState extends State<JobsScreen> {
             Container(
               width: 80,
               height: 80,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
                 shape: BoxShape.circle,
+                border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.work_outline_rounded,
-                size: 38,
-                color: Color(0xFF0066FF),
+                size: 36,
+                color: isDark ? Colors.white : Colors.black,
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'No opportunities here yet',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Be the first to share a job, internship, hiring requirement or referral.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
-                color: Color(0xFF64748B),
+                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
                 height: 1.45,
               ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0066FF),
-                foregroundColor: Colors.white,
+                backgroundColor: isDark ? Colors.white : Colors.black,
+                foregroundColor: isDark ? Colors.black : Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: const StadiumBorder(),
               ),
               onPressed: _openPostJob,
               child: const Text(

@@ -144,35 +144,46 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: const Text('Host an Event',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+        title: Text('Host an Event',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: isDark ? Colors.white : const Color(0xFF0F172A))),
         actions: [
           if (_isPublishing)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
               child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: isDark ? Colors.white : Colors.black)),
             )
           else
-            TextButton(
-              onPressed: _canPublish ? _publishPost : null,
-              child: Text(
-                'Publish',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: _canPublish ? const Color(0xFF3B82F6) : Colors.black26,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? Colors.white : Colors.black,
+                  foregroundColor: isDark ? Colors.black : Colors.white,
+                  shape: const StadiumBorder(),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                onPressed: _canPublish ? _publishPost : null,
+                child: const Text(
+                  'Publish',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
                 ),
               ),
-            )
+            ),
         ],
       ),
       body: _isPublishing
@@ -444,11 +455,12 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
   }
 
   Widget _buildPublishingState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: Color(0xFF3B82F6)),
+          CircularProgressIndicator(color: isDark ? Colors.white : Colors.black),
           const SizedBox(height: 24),
           Text(
             _uploadProgress < 0.9

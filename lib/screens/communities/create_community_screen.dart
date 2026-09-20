@@ -98,18 +98,21 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
   @override
   Widget build(BuildContext context) {
     final type = widget.isChannel ? 'Channel' : 'Group';
-    final accentColor = widget.isChannel
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF3B82F6);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = isDark ? Colors.white : Colors.black;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
+        elevation: 0,
         title: Text(
           'Create New $type',
-          style: const TextStyle(
-              color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -124,7 +127,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                 children: [
                   CircleAvatar(
                     radius: 52,
-                    backgroundColor: accentColor.withValues(alpha: 0.12),
+                    backgroundColor: isDark ? const Color(0xFF262626) : const Color(0xFFF4F4F4),
                     backgroundImage: _selectedImage != null
                         ? FileImage(_selectedImage!)
                         : null,
@@ -141,10 +144,13 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                     decoration: BoxDecoration(
                       color: accentColor,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: isDark ? Colors.black : Colors.white, width: 2),
                     ),
-                    child: const Icon(Icons.camera_alt,
-                        color: Colors.white, size: 16),
+                    child: Icon(
+                      Icons.camera_alt,
+                      color: isDark ? Colors.black : Colors.white,
+                      size: 16,
+                    ),
                   ),
                 ],
               ),
@@ -152,21 +158,27 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
             const SizedBox(height: 8),
             Text(
               'Tap to add photo',
-              style: TextStyle(color: Colors.black45, fontSize: 12),
+              style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12),
             ),
             const SizedBox(height: 24),
 
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: '$type Name *',
-                labelStyle: const TextStyle(color: Colors.black54),
+                labelStyle: TextStyle(color: isDark ? Colors.white60 : Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: accentColor, width: 2),
@@ -174,18 +186,25 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
             TextField(
               controller: _descController,
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: 'Description (What is this $type about?)',
-                labelStyle: const TextStyle(color: Colors.black54),
+                labelStyle: TextStyle(color: isDark ? Colors.white60 : Colors.black54),
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: accentColor, width: 2),
@@ -199,24 +218,27 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _create,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  disabledBackgroundColor: accentColor.withValues(alpha: 0.5),
+                  backgroundColor: isDark ? Colors.white : Colors.black,
+                  foregroundColor: isDark ? Colors.black : Colors.white,
+                  shape: const StadiumBorder(),
+                  disabledBackgroundColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.3),
                 ),
                 child: _isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 22,
                         width: 22,
-                        child:
-                            CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        child: CircularProgressIndicator(
+                          color: isDark ? Colors.black : Colors.white,
+                          strokeWidth: 2.5,
+                        ),
                       )
                     : Text(
                         'Create $type',
-                        style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.black : Colors.white,
+                        ),
                       ),
               ),
             ),
