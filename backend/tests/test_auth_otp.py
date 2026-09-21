@@ -114,3 +114,32 @@ def test_refresh_token_endpoint():
     refresh_data = res_refresh.json()
     assert "access_token" in refresh_data
     assert "refresh_token" in refresh_data
+
+def test_wakit_timeout_fallback(monkeypatch):
+    from config import Config
+    import requests
+    
+    Config.WAKIT_API_KEY = "dummy_live_key"
+    Config.OTP_FALLBACK_SIMULATION = True
+    
+    # Mock requests.post to simulate ReadTimeout
+    def mock_timeout(*args, **kwargs):
+        raise requests.exceptions.ReadTimeout("Read timed out")
+        
+    monkeypatch.setattr(requests, "post", mock_timeout)
+    
+    phone = "+919977665544"
+    res_send = client.post("/auth/otp/send", json={"phone_number": phone})
+    assert res_send.status_code == 200
+    data = res_send.json()
+    assert data["status"] == "success"
+    request_id = data["request_id"]
+    assert request_id.startswith("wakit_fallback_")
+    
+    # Verify with fallback OTP
+    res_verify = client.post("/auth/otp/verify", json={"request_id": request_id, "otp": "123456"})
+    assert res_verify.status_code == 200
+    v_data = res_verify.json()
+    assert v_data["status"] == "success"
+    assert "access_token" in v_data
+
