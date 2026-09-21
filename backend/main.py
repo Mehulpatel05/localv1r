@@ -562,6 +562,8 @@ async def verify_moderator_session(token: Optional[str], required_role: str) -> 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Insufficient privileges.")
             
         return email, role
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Moderator session expired. Please login again.")
     except jwt.InvalidTokenError:

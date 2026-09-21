@@ -57,7 +57,7 @@ void _initNonCriticalServices() {
   ).catchError((e) {
     debugPrint('AppCheck initialization failed: $e');
   });
-  
+
   // Register background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 }
@@ -172,9 +172,9 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         theme: NearhoodTheme.lightTheme,
         darkTheme: NearhoodTheme.darkTheme,
         home: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          duration: const Duration(milliseconds: 450),
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
           transitionBuilder: (child, animation) {
             return FadeTransition(
               opacity: animation,

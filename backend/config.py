@@ -20,6 +20,8 @@ class Config:
     # Wakit OTP Gateway Configuration
     WAKIT_API_KEY = os.getenv("WAKIT_API_KEY", "")
     WAKIT_BASE_URL = os.getenv("WAKIT_BASE_URL", "https://wakit.in/api/v1")
+    WAKIT_TIMEOUT_SECONDS = int(os.getenv("WAKIT_TIMEOUT_SECONDS", "30"))
+    WAKIT_MAX_RETRIES = int(os.getenv("WAKIT_MAX_RETRIES", "2"))
     
     # JWT Expiration settings
     JWT_ACCESS_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "30"))

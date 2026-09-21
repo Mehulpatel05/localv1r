@@ -646,4 +646,6 @@ class _SplashPinPainter extends CustomPainter {
         oldDelegate.node1Scale != node1Scale ||
         oldDelegate.node2Scale != node2Scale ||
         oldDelegate.node3Scale != node3Scale ||
-        oldDelegate.triangleProgress != triangleP
+        oldDelegate.triangleProgress != triangleProgress;
+  }
+}

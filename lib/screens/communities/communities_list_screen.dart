@@ -30,14 +30,14 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   Color _getCommunityColor(bool isChannel, String id) {
     if (isChannel) {
-      return const Color(0xFFEF4444); // Red for channels
+      return const Color(0xFF0F172A); // Sleek Charcoal Black for channels
     }
     final colors = [
-      const Color(0xFF2563EB), // Blue
-      const Color(0xFF1D4ED8), // Deep Blue
-      const Color(0xFF3B82F6), // Sky Blue
-      const Color(0xFF1E40AF), // Dark Blue
-      const Color(0xFF0284C7), // Ocean
+      const Color(0xFF0F172A), // Charcoal Black
+      const Color(0xFF1E293B), // Deep Slate
+      const Color(0xFF334155), // Graphite
+      const Color(0xFF18181B), // Zinc Black
+      const Color(0xFF27272A), // Carbon
     ];
     final hash = id.codeUnits.fold(0, (prev, elem) => prev + elem);
     return colors[hash % colors.length];
@@ -203,6 +203,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   // ── MY COMMUNITIES TAB ──
   Widget _buildMyCommunitiesTab() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<List<CommunityModel>>(
       stream: widget.repository.getUserCommunities(),
       builder: (context, snapshot) {
@@ -226,7 +227,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         // 4. Loaded List (Image 1)
         return RefreshIndicator(
           onRefresh: () async => setState(() {}),
-          color: const Color(0xFF3B82F6),
+          color: isDark ? Colors.white : Colors.black,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
@@ -243,6 +244,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   }
 
   Widget _buildMyCommunityCard(CommunityModel community) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final avatarColor = _getCommunityColor(community.isChannel, community.id);
     final initials = _getInitials(community.name);
     final typeLabel = community.isChannel ? 'CHANNEL' : 'GROUP';
@@ -263,9 +265,11 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF141414) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -331,8 +335,8 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                               community.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
                               ),
@@ -343,9 +347,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: community.isChannel
-                                  ? const Color(0xFFEF4444)
-                                  : const Color(0xFF3B82F6),
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFF0F172A),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -747,9 +749,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: community.isChannel
-                                    ? const Color(0xFFEF4444)
-                                    : const Color(0xFF3B82F6),
+                                color: isDark ? const Color(0xFF334155) : const Color(0xFF0F172A),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -955,41 +955,42 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   // Panel 1: Empty State (My Communities)
   Widget _buildEmptyMyCommunitiesState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Soft blue circular illustration
+            // Sleek monochrome circular illustration
             Container(
               width: 140,
               height: 140,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFF0F7FF),
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.chat_bubble_rounded,
                     size: 52,
-                    color: Color(0xFF3B82F6),
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                   ),
                   Positioned(
                     right: 36,
                     top: 36,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.people_alt_rounded,
                         size: 18,
-                        color: Color(0xFF60A5FA),
+                        color: isDark ? Colors.white70 : const Color(0xFF475569),
                       ),
                     ),
                   ),

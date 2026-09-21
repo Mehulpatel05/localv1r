@@ -9,6 +9,7 @@ import '../main.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../services/friend_repository.dart';
+import '../services/auth_service.dart';
 
 /// Top-level background message handler (must be top-level function)
 @pragma('vm:entry-point')

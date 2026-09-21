@@ -43,36 +43,50 @@ class WakitService:
             "expiry_seconds": 300,
         }
 
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            if response.status_code in (200, 201):
-                data = response.json()
-                req_data = data.get("data") if isinstance(data.get("data"), dict) else {}
-                request_id = (
-                    data.get("request_id")
-                    or data.get("id")
-                    or req_data.get("request_id")
-                    or req_data.get("id")
-                    or str(uuid.uuid4())
-                )
-                expires_in = (
-                    data.get("expires_in")
-                    or data.get("expiry_seconds")
-                    or req_data.get("expires_in")
-                    or 300
-                )
-                return {
-                    "request_id": str(request_id),
-                    "expires_in": int(expires_in),
-                    "status": "success",
-                }
-            else:
-                resp_text = response.text[:200] if response.text else ""
-                print(f"[WakitService] Error sending OTP: HTTP {response.status_code}, response: {resp_text}")
-                raise Exception(f"Wakit API ({url}) returned HTTP {response.status_code}: {resp_text}")
-        except requests.RequestException as e:
-            print(f"[WakitService] Network error during OTP send request: {e}")
-            raise Exception(f"Unable to contact OTP delivery provider at {url}: {e}")
+        timeout_config = (10, Config.WAKIT_TIMEOUT_SECONDS)
+        max_retries = max(1, Config.WAKIT_MAX_RETRIES)
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=timeout_config)
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    req_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+                    request_id = (
+                        data.get("request_id")
+                        or data.get("id")
+                        or req_data.get("request_id")
+                        or req_data.get("id")
+                        or str(uuid.uuid4())
+                    )
+                    expires_in = (
+                        data.get("expires_in")
+                        or data.get("expiry_seconds")
+                        or req_data.get("expires_in")
+                        or 300
+                    )
+                    return {
+                        "request_id": str(request_id),
+                        "expires_in": int(expires_in),
+                        "status": "success",
+                    }
+                else:
+                    resp_text = response.text[:200] if response.text else ""
+                    print(f"[WakitService] Error sending OTP: HTTP {response.status_code}, response: {resp_text}")
+                    raise Exception(f"Wakit API ({url}) returned HTTP {response.status_code}: {resp_text}")
+            except requests.exceptions.Timeout as e:
+                last_error = e
+                print(f"[WakitService] Timeout on attempt {attempt}/{max_retries} contacting OTP provider ({timeout_config[1]}s): {e}")
+                if attempt < max_retries:
+                    time.sleep(1.5)
+            except requests.RequestException as e:
+                last_error = e
+                print(f"[WakitService] Network error on attempt {attempt}/{max_retries} during OTP send request: {e}")
+                if attempt < max_retries:
+                    time.sleep(1.5)
+
+        raise Exception(f"Unable to contact OTP delivery provider at {url} (timed out after {max_retries} attempts): {last_error}")
 
     @classmethod
     def verify_otp(cls, request_id: str, otp: str, phone_number: Optional[str] = None) -> bool:
@@ -106,30 +120,41 @@ class WakitService:
             payload["to"] = phone_number
             payload["phone_number"] = phone_number
 
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            if response.status_code in (200, 201):
-                data = response.json()
-                d_data = data.get("data") if isinstance(data.get("data"), dict) else {}
-                if d_data:
-                    is_valid = (
-                        d_data.get("verified") is True
-                        or d_data.get("valid") is True
-                        or d_data.get("status") in ("verified", "success", "approved")
-                    )
+        timeout_config = (10, Config.WAKIT_TIMEOUT_SECONDS)
+        max_retries = max(1, Config.WAKIT_MAX_RETRIES)
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=timeout_config)
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    d_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+                    if d_data:
+                        is_valid = (
+                            d_data.get("verified") is True
+                            or d_data.get("valid") is True
+                            or d_data.get("status") in ("verified", "success", "approved")
+                        )
+                    else:
+                        is_valid = (
+                            data.get("verified") is True
+                            or data.get("valid") is True
+                            or data.get("status") in ("verified", "success", "approved")
+                            or (data.get("success") is True and not data.get("error"))
+                        )
+                    return bool(is_valid)
+                elif response.status_code in (400, 401, 403, 404, 422):
+                    return False
                 else:
-                    is_valid = (
-                        data.get("verified") is True
-                        or data.get("valid") is True
-                        or data.get("status") in ("verified", "success", "approved")
-                        or (data.get("success") is True and not data.get("error"))
-                    )
-                return bool(is_valid)
-            elif response.status_code in (400, 401, 403, 404, 422):
-                return False
-            else:
-                print(f"[WakitService] Error verifying OTP: HTTP {response.status_code}")
-                return False
-        except requests.RequestException:
-            print("[WakitService] Network error during OTP verification.")
-            return False
+                    print(f"[WakitService] Error verifying OTP: HTTP {response.status_code}")
+                    return False
+            except requests.exceptions.Timeout as e:
+                print(f"[WakitService] Timeout on attempt {attempt}/{max_retries} during OTP verification: {e}")
+                if attempt < max_retries:
+                    time.sleep(1.0)
+            except requests.RequestException:
+                print(f"[WakitService] Network error on attempt {attempt}/{max_retries} during OTP verification.")
+                if attempt < max_retries:
+                    time.sleep(1.0)
+
+        return False
