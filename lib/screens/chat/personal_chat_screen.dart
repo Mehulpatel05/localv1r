@@ -10,7 +10,10 @@ import 'package:intl/intl.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/telegram_storage_service.dart';
 import '../../services/presence_service.dart';
-import '../communities/full_screen_image_viewer.dart';
+import '../../services/notification_service.dart';
+import '../../models/call_model.dart';
+import '../../services/webrtc_call_service.dart';
+import 'call_screen.dart';
 import '../profile/other_user_profile_sheet.dart';
 import 'widgets/image_group_bubble.dart';
 
@@ -43,6 +46,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   void initState() {
     super.initState();
     _chatId = _getChatId(widget.currentUserHandle, widget.partnerHandle);
+    NotificationService().activeChatPartnerHandle = widget.partnerHandle.replaceAll('@', '').trim();
     _scrollController.addListener(_scrollListener);
     _markChatAsRead();
     _listenForUnreadMessages();
@@ -116,6 +120,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
   @override
   void dispose() {
+    final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
+    if (NotificationService().activeChatPartnerHandle == cleanPartner) {
+      NotificationService().activeChatPartnerHandle = null;
+    }
     _messagesSubscription?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
@@ -169,6 +177,45 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     } catch (_) {}
   }
 
+  Future<void> _startCall(CallType type) async {
+    final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
+    if (cleanPartner.isEmpty) return;
+
+    HapticFeedback.lightImpact();
+
+    try {
+      final call = await WebRtcCallService.instance.makeCall(
+        callerHandle: widget.currentUserHandle,
+        receiverHandle: cleanPartner,
+        callType: type,
+      );
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            call: call,
+            currentUserHandle: widget.currentUserHandle,
+            isCaller: true,
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not start call: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -215,8 +262,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         transaction.set(chatRef, {
           'participants': [cleanMe, cleanPartner],
           'participantsUids': [
-            if (myUid != null) myUid,
-            if (partnerUid != null) partnerUid,
+            ?myUid,
+            ?partnerUid,
           ],
           'lastMessage': text,
           'lastSenderHandle': cleanMe,
@@ -227,6 +274,20 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           },
         }, SetOptions(merge: true));
       });
+
+      // Dispatch notification to partner
+      NotificationService().sendNotification(
+        targetHandle: cleanPartner,
+        targetUid: partnerUid as String?,
+        title: '@$cleanMe',
+        body: text,
+        data: {
+          'type': 'chat',
+          'senderHandle': cleanMe,
+          'partnerHandle': cleanMe,
+          'chatId': _chatId,
+        },
+      );
     } catch (e) {
       debugPrint('Error sending message: $e');
       if (mounted) {
@@ -359,8 +420,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         transaction.set(chatRef, {
           'participants': [cleanMe, cleanPartner],
           'participantsUids': [
-            if (myUid != null) myUid,
-            if (partnerUid != null) partnerUid,
+            ?myUid,
+            ?partnerUid,
           ],
           'lastMessage': summaryText,
           'lastSenderHandle': cleanMe,
@@ -487,7 +548,128 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
+  Widget _buildCallLogBubble(Map<String, dynamic> msg, bool isMe) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final callType = (msg['callType'] ?? 'audio').toString().toLowerCase();
+    final callStatus = (msg['callStatus'] ?? 'ended').toString().toLowerCase();
+    final durationSeconds = (msg['durationSeconds'] as num?)?.toInt() ?? 0;
+    final isVideo = callType == 'video';
+    final timeStr = _formatMsgTime(msg['timestamp']);
+
+    final isMissed = callStatus == 'missed' || callStatus == 'declined';
+    final isOutgoing = isMe;
+
+    String title;
+    if (callStatus == 'missed') {
+      title = isOutgoing
+          ? 'Cancelled ${isVideo ? 'video' : 'voice'} call'
+          : 'Missed ${isVideo ? 'video' : 'voice'} call';
+    } else if (callStatus == 'declined') {
+      title = 'Declined ${isVideo ? 'video' : 'voice'} call';
+    } else {
+      title = isVideo ? 'Video call' : 'Voice call';
+    }
+
+    String subtitle = timeStr;
+    if (durationSeconds > 0) {
+      final m = durationSeconds ~/ 60;
+      final s = durationSeconds % 60;
+      final durStr = m > 0 ? '${m}m ${s}s' : '${s}s';
+      subtitle = '$timeStr • $durStr';
+    }
+
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isMissed
+                ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isMissed
+                    ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                    : const Color(0xFF22C55E).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isVideo
+                    ? (isMissed ? Icons.videocam_off_rounded : Icons.videocam_rounded)
+                    : (isMissed
+                        ? Icons.phone_missed_rounded
+                        : (isOutgoing
+                            ? Icons.phone_forwarded_rounded
+                            : Icons.phone_callback_rounded)),
+                color: isMissed ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 14),
+            InkWell(
+              onTap: () => _startCall(isVideo ? CallType.video : CallType.audio),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white : Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Call back',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.black : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Map<String, dynamic> msg, String msgId, bool isMe) {
+    if (msg['type'] == 'call_log') {
+      return _buildCallLogBubble(msg, isMe);
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final content = (msg['content'] ?? '') as String;
     final imageUrl = msg['imageUrl'] as String?;
@@ -506,7 +688,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
 
     final hasImages = mediaUrls.isNotEmpty;
-    final isImageGroup = mediaUrls.length > 1 || msg['type'] == 'image_group';
 
     final bubbleRadius = BorderRadius.only(
       topLeft: const Radius.circular(18),
@@ -693,9 +874,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final initial = widget.partnerHandle.isNotEmpty
-        ? widget.partnerHandle.replaceAll('@', '')[0].toUpperCase()
-        : '?';
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -785,6 +963,27 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.call_outlined,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 22,
+            ),
+            tooltip: 'Voice Call',
+            onPressed: () => _startCall(CallType.audio),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.videocam_outlined,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 24,
+            ),
+            tooltip: 'Video Call',
+            onPressed: () => _startCall(CallType.video),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Column(
         children: [

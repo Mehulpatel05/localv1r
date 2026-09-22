@@ -11,6 +11,8 @@ import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../friends/friends_screen.dart';
 import '../../services/friend_repository.dart';
+import '../notifications/notifications_screen.dart';
+import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../events/events_screen.dart';
 import '../food/food_screen.dart';
@@ -105,6 +107,68 @@ class _FeedScreenState extends State<FeedScreen> {
           ],
         ),
         actions: [
+          // Notification bell icon & unread count
+          StreamBuilder<int>(
+            stream: NotificationService().getUnreadNotificationCount(widget.currentUserHandle),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return IconButton(
+                tooltip: 'Notifications',
+                icon: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                      width: 1,
+                    ),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        Icons.notifications_outlined,
+                        color: isDark ? Colors.white : Colors.black,
+                        size: 20,
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              count > 99 ? '99+' : '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(
+                        currentUserHandle: widget.currentUserHandle,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           // Friends stream count & icon
           Padding(
             padding: const EdgeInsets.only(right: 14.0),

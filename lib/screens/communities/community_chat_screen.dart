@@ -8,8 +8,8 @@ import '../../models/community_model.dart';
 import '../chat/widgets/image_group_bubble.dart';
 import 'community_members_screen.dart';
 import 'edit_community_screen.dart';
-import 'full_screen_image_viewer.dart';
 import 'package:intl/intl.dart';
+import '../../services/notification_service.dart';
 
 class CommunityChatScreen extends StatefulWidget {
   final CommunityRepository repository;
@@ -41,6 +41,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   void initState() {
     super.initState();
     _community = widget.community; // B5: init from widget
+    NotificationService().activeCommunityId = widget.community.id;
     final isAdmin = widget.community.adminHandle == widget.repository.currentUserHandle;
     _isMember = isAdmin;
     _isLoading = !isAdmin;
@@ -49,6 +50,9 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   @override
   void dispose() {
+    if (NotificationService().activeCommunityId == widget.community.id) {
+      NotificationService().activeCommunityId = null;
+    }
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();

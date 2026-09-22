@@ -10,12 +10,25 @@ abstract class AuthRepository {
 
   /// Verifies whether the supplied 6-digit [code] is valid for [phone].
   Future<bool> verifyOtp(String phone, String code);
+
+  /// Signs the current user out and clears all local session data.
+  Future<void> logout();
+
+  /// Permanently deletes the current user's account and all associated data.
+  ///
+  /// Throws an [Exception] on failure so callers can display an error message.
+  Future<void> deleteAccount();
 }
+
+// ---------------------------------------------------------------------------
+// Fake implementation (local testing / design preview)
+// ---------------------------------------------------------------------------
 
 /// A fake auth repository implementation for local testing and design preview.
 ///
 /// Simulates real-world network latency (800ms).
 /// Only the OTP code `"123456"` succeeds verification; any other code returns false.
+/// [logout] and [deleteAccount] succeed silently after the simulated delay.
 class FakeAuthRepository implements AuthRepository {
   final Duration simulatedDelay;
   final String validOtp;
@@ -35,7 +48,21 @@ class FakeAuthRepository implements AuthRepository {
     await Future<void>.delayed(simulatedDelay);
     return code == validOtp;
   }
+
+  @override
+  Future<void> logout() async {
+    await Future<void>.delayed(simulatedDelay);
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    await Future<void>.delayed(simulatedDelay);
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Production implementation
+// ---------------------------------------------------------------------------
 
 /// Production auth repository connecting to Nearhood backend API.
 ///
@@ -66,7 +93,8 @@ class BackendAuthRepository implements AuthRepository {
   Future<bool> verifyOtp(String phone, String code) async {
     final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
     final e164 = cleanDigits.length == 10 ? '+91$cleanDigits' : '+$cleanDigits';
-    final requestId = _lastRequestId ?? 'req_${DateTime.now().millisecondsSinceEpoch}';
+    final requestId =
+        _lastRequestId ?? 'req_${DateTime.now().millisecondsSinceEpoch}';
     final res = await _authService.verifyOtp(
       requestId: requestId,
       otp: code,
@@ -78,5 +106,24 @@ class BackendAuthRepository implements AuthRepository {
       return true;
     }
     return false;
+  }
+
+  @override
+  Future<void> logout() async {
+    await _authService.signOut();
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final result = await _authService.deleteAccount();
+    if (result['success'] != true) {
+      throw Exception(
+        (result['error'] as String?)?.isNotEmpty == true
+            ? result['error'] as String
+            : 'Failed to delete account. Please try again.',
+      );
+    }
+    // Clear local session after successful server deletion.
+    await _authService.signOut();
   }
 }

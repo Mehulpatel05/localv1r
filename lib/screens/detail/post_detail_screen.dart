@@ -8,6 +8,7 @@ import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
 import '../../core/utils/content_filter.dart';
+import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -59,6 +60,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       widget.currentUserHandle,
       text,
     );
+
+    final author = widget.post.authorHandle.replaceAll('@', '').trim();
+    final me = widget.currentUserHandle.replaceAll('@', '').trim();
+    if (author.isNotEmpty && author != me) {
+      NotificationService().sendNotification(
+        targetHandle: author,
+        title: '@$me commented on your post',
+        body: text,
+        data: {
+          'type': 'post',
+          'postId': widget.post.id,
+        },
+      );
+    }
 
     _commentController.clear();
     FocusScope.of(context).unfocus();

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/constants/areas_and_categories.dart';
 
 class Post {
@@ -154,6 +155,72 @@ class Post {
       isEmergency: json['isEmergency'] as bool? ?? false,
       reportCount: json['reportCount'] as int? ?? 0,
       reporters: List<String>.from(json['reporters'] ?? []),
+      roomTitle: json['roomTitle'] as String?,
+      roomArea: json['roomArea'] as String?,
+      roomRent: json['roomRent'] as String?,
+      mediaUrls: List<String>.from(json['mediaUrls'] ?? []),
+      shopTitle: json['shopTitle'] as String?,
+      shopPrice: json['shopPrice'] as String?,
+      shopCategory: json['shopCategory'] as String?,
+      foodTitle: json['foodTitle'] as String?,
+      foodRating: (json['foodRating'] as num?)?.toDouble(),
+      foodPrice: json['foodPrice'] as String?,
+      eventTitle: json['eventTitle'] as String?,
+      eventDate: json['eventDate'] as String?,
+      eventLocationText: json['eventLocationText'] as String?,
+      eventPrice: json['eventPrice'] as String?,
+      jobTitle: json['jobTitle'] as String?,
+      jobCompany: json['jobCompany'] as String?,
+      jobLocation: json['jobLocation'] as String?,
+      jobType: json['jobType'] as String?,
+      serviceTitle: json['serviceTitle'] as String?,
+      serviceCategoryText: json['serviceCategoryText'] as String?,
+      servicePrice: json['servicePrice'] as String?,
+    );
+  }
+
+  factory Post.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return Post.fromMap(data, doc.id);
+  }
+
+  factory Post.fromMap(Map<String, dynamic> json, String id) {
+    DateTime parsedDate = DateTime.now();
+    if (json['createdAt'] != null) {
+      if (json['createdAt'] is Timestamp) {
+        parsedDate = (json['createdAt'] as Timestamp).toDate();
+      } else if (json['createdAt'] is String) {
+        parsedDate = DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now();
+      }
+    }
+
+    PostCategory cat = PostCategory.general;
+    if (json['category'] != null) {
+      try {
+        cat = PostCategory.values.byName(json['category'].toString().toLowerCase());
+      } catch (_) {
+        cat = PostCategory.general;
+      }
+    }
+
+    return Post(
+      id: id,
+      authorHandle: (json['authorHandle'] as String?) ?? 'Anon',
+      content: (json['content'] as String?) ?? '',
+      imageUrl: json['imageUrl'] as String?,
+      category: cat,
+      createdAt: parsedDate,
+      upvotes: json['upvotes'] as int? ?? 0,
+      downvotes: json['downvotes'] as int? ?? 0,
+      commentCount: json['commentCount'] as int? ?? 0,
+      userVote: json['userVote'] as int? ?? 0,
+      isEmergency: json['isEmergency'] as bool? ?? false,
+      reportCount: json['reportCount'] as int? ?? 0,
+      reporters: List<String>.from(json['reporters'] ?? []),
+      stateId: json['stateId'] as String?,
+      cityId: json['cityId'] as String?,
+      areaId: json['areaId'] as String?,
+      areaName: json['areaName'] as String?,
       roomTitle: json['roomTitle'] as String?,
       roomArea: json['roomArea'] as String?,
       roomRent: json['roomRent'] as String?,

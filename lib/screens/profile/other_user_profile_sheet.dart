@@ -451,19 +451,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     );
   }
 
-  String _getInitials(String handle) {
-    if (handle.isEmpty) return 'U';
-    final clean = handle.replaceAll('@', '').replaceAll('.', ' ').trim();
-    final parts = clean.split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return clean.substring(0, clean.length >= 2 ? 2 : 1).toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final initials = _getInitials(_targetHandle);
     final bio = ((_userData?['bio'] as String?) ?? '').trim();
 
     return Container(

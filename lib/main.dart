@@ -18,6 +18,7 @@ import 'core/theme.dart';
 import 'core/auth_repository.dart';
 import 'features/auth/login_flow_page.dart';
 import 'features/auth/widgets/animated_splash_screen.dart';
+import 'services/call_listener_service.dart';
 
 import 'screens/auth/create_handle_screen.dart';
 
@@ -120,6 +121,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           NotificationService().initialize();
           PresenceService.instance.init(handle);
+          CallListenerService.instance.startListening(handle);
         });
       }
 
@@ -208,21 +210,20 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                         final phone = await AuthService.instance.getPhoneNumber() ?? '';
 
                         if (handle.isEmpty || handle == 'Guest') {
-                          if (mounted) {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) => CreateHandleScreen(
-                                  repository: postRepository,
-                                  userId: userId,
-                                  phoneNumber: phone,
-                                ),
+                          navigatorKey.currentState?.pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => CreateHandleScreen(
+                                repository: postRepository,
+                                userId: userId,
+                                phoneNumber: phone,
                               ),
-                            );
-                          }
+                            ),
+                          );
                         } else {
                           postRepository.currentUserHandle = handle;
                           NotificationService().initialize();
                           PresenceService.instance.init(handle);
+                          CallListenerService.instance.startListening(handle);
                           if (mounted) {
                             setState(() {
                               _isLoggedIn = true;

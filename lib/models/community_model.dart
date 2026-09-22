@@ -21,6 +21,11 @@ class CommunityModel {
     this.imageUrl,
   });
 
+  factory CommunityModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return CommunityModel.fromMap(data, doc.id);
+  }
+
   factory CommunityModel.fromMap(Map<String, dynamic> map, String id) {
     return CommunityModel(
       id: id,

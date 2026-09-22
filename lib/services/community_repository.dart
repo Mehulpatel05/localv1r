@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_model.dart';
 import 'telegram_storage_service.dart';
+import 'notification_service.dart';
 
 class CommunityRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -445,6 +446,8 @@ class CommunityRepository {
       'content': content.trim(),
       'timestamp': FieldValue.serverTimestamp(),
     });
+
+    _dispatchCommunityNotification(communityId, content.trim());
   }
 
   // Feature #11: Send an image message via existing Telegram CDN
@@ -465,6 +468,11 @@ class CommunityRepository {
       'type': 'image',
       'timestamp': FieldValue.serverTimestamp(),
     });
+
+    _dispatchCommunityNotification(
+      communityId,
+      caption.isNotEmpty ? '📷 $caption' : '📷 Sent an image',
+    );
   }
 
   // Multi-image album grouping via parallel upload
@@ -505,6 +513,46 @@ class CommunityRepository {
         'type': 'image_group',
         'timestamp': FieldValue.serverTimestamp(),
       });
+    }
+
+    _dispatchCommunityNotification(
+      communityId,
+      caption.isNotEmpty ? '📷 $caption' : '📷 Sent ${validUrls.length} photos',
+    );
+  }
+
+  Future<void> _dispatchCommunityNotification(String communityId, String content) async {
+    try {
+      final cleanMe = currentUserHandle.replaceAll('@', '').trim();
+      final commDoc = await _db.collection('communities').doc(communityId).get();
+      final commName = commDoc.data()?['name'] ?? 'Community';
+
+      final membersSnap = await _db
+          .collection('community_members')
+          .where('communityId', isEqualTo: communityId)
+          .limit(100)
+          .get();
+
+      for (final doc in membersSnap.docs) {
+        final memberHandle = (doc.data()['userHandle'] as String?)?.replaceAll('@', '').trim();
+        final memberUid = doc.data()['userUid'] as String?;
+        if (memberHandle != null && memberHandle.isNotEmpty && memberHandle != cleanMe) {
+          NotificationService().sendNotification(
+            targetHandle: memberHandle,
+            targetUid: memberUid,
+            title: '[$commName] @$cleanMe',
+            body: content,
+            data: {
+              'type': 'community_message',
+              'communityId': communityId,
+              'communityName': commName,
+              'senderHandle': cleanMe,
+            },
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error dispatching community notification: $e');
     }
   }
 

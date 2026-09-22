@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/friend_request_model.dart';
 import '../models/friendship_model.dart';
 import '../models/block_model.dart';
+import 'notification_service.dart';
 
 enum RelationshipStatus {
   none,
@@ -112,6 +113,18 @@ class FriendRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    // Dispatch notification
+    NotificationService().sendNotification(
+      targetHandle: them,
+      targetUid: receiverUid as String?,
+      title: 'New Friend Request',
+      body: '@$me sent you a friend request',
+      data: {
+        'type': 'friend_request',
+        'senderHandle': me,
+      },
+    );
   }
 
   // ── Accept Friend Request ──
@@ -154,6 +167,18 @@ class FriendRepository {
         transaction.update(senderProfileRef, {'friendCount': FieldValue.increment(1)});
         transaction.update(currentProfileRef, {'friendCount': FieldValue.increment(1)});
       });
+
+      // Dispatch acceptance notification
+      NotificationService().sendNotification(
+        targetHandle: them,
+        title: 'Friend Request Accepted',
+        body: '@$me accepted your friend request! Tap to start chatting.',
+        data: {
+          'type': 'chat',
+          'partnerHandle': me,
+          'senderHandle': me,
+        },
+      );
     } catch (e) {
       rethrow;
     }

@@ -365,7 +365,7 @@ class _UserAvatarState extends State<UserAvatar> {
     final effectiveFontSize = widget.fontSize ?? (widget.size * 0.40).clamp(11.0, 32.0);
     final effectiveBadgeSize = widget.badgeSize ?? (widget.size * 0.28).clamp(9.0, 18.0);
 
-    Widget avatarCore = ListenableBuilder(
+    final Widget baseAvatar = ListenableBuilder(
       listenable: AvatarCacheService.instance,
       builder: (context, _) {
         String? resolvedUrl = widget.photoUrl;
@@ -440,13 +440,15 @@ class _UserAvatarState extends State<UserAvatar> {
       },
     );
 
+    Widget avatarCore;
+
     // Online Status Badge
     if (widget.showOnlineBadge && cleanHandle.isNotEmpty) {
       if (widget.isOnline != null) {
         avatarCore = Stack(
           clipBehavior: Clip.none,
           children: [
-            avatarCore,
+            baseAvatar,
             if (widget.isOnline == true)
               Positioned(
                 bottom: 0,
@@ -475,7 +477,7 @@ class _UserAvatarState extends State<UserAvatar> {
             return Stack(
               clipBehavior: Clip.none,
               children: [
-                avatarCore,
+                baseAvatar,
                 if (isOnline)
                   Positioned(
                     bottom: 0,
@@ -498,6 +500,8 @@ class _UserAvatarState extends State<UserAvatar> {
           },
         );
       }
+    } else {
+      avatarCore = baseAvatar;
     }
 
     // Edit Badge (e.g. Camera / Plus badge on profile screen)

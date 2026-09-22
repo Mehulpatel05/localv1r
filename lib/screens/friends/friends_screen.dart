@@ -1411,18 +1411,4 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
     );
   }
-
-  // ── Helper: Avatar Gradient from Handle ───────────────────────────────────
-  LinearGradient _getAvatarGradient(String handle) {
-    final gradients = [
-      const LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1E40AF)]), // Blue
-      const LinearGradient(colors: [Color(0xFF991B1B), Color(0xFF7F1D1D)]), // Crimson maroon
-      const LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF172554)]), // Navy
-      const LinearGradient(colors: [Color(0xFF0D9488), Color(0xFF0F766E)]), // Teal
-      const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)]), // Purple
-      const LinearGradient(colors: [Color(0xFFC026D3), Color(0xFFA21CAF)]), // Fuchsia
-    ];
-    final hash = handle.hashCode.abs();
-    return gradients[hash % gradients.length];
-  }
 }
