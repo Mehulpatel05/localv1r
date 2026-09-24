@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 /// Dedicated Events Post Screen.
 class EventsPostScreen extends StatefulWidget {
@@ -156,7 +156,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
       String? imageUrl;
       if (_bannerImage != null) {
         setState(() => _uploadProgress = 0.5);
-        imageUrl = await TelegramStorageService.uploadMedia(_bannerImage!);
+        imageUrl = await R2StorageService.uploadMedia(_bannerImage!);
         if (imageUrl == null || imageUrl.isEmpty) {
           throw Exception('Media upload failed. Please try again.');
         }
@@ -449,7 +449,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
 
   Widget _buildBannerUpload() {
     if (_bannerImage != null) {
-      final isVideo = TelegramStorageService.isVideoFile(_bannerImage!.path);
+      final isVideo = R2StorageService.isVideoFile(_bannerImage!.path);
       return Stack(
         children: [
           Container(

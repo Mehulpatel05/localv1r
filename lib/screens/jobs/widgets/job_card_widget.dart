@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../core/widgets/universal_media_view.dart';
 import '../../../models/post_model.dart';
-import '../../../services/telegram_storage_service.dart';
+import '../../../services/r2_storage_service.dart';
 
 class JobCardWidget extends StatelessWidget {
   final Post post;
@@ -84,7 +84,7 @@ class JobCardWidget extends StatelessWidget {
                 if (hasImage) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: TelegramStorageService.isVideoFile(post.imageUrl!)
+                    child: R2StorageService.isVideoFile(post.imageUrl!)
                         ? UniversalMediaView(
                             url: post.imageUrl!,
                             height: 150,

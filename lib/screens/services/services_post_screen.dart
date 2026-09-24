@@ -6,7 +6,7 @@ import '../../core/location/location_models.dart';
 import '../../core/location/location_selector_field.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class ServicesPostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -201,7 +201,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
       String? imageUrl;
       if (_serviceImage != null) {
         setState(() => _uploadProgress = 0.4);
-        imageUrl = await TelegramStorageService.uploadMedia(
+        imageUrl = await R2StorageService.uploadMedia(
           _serviceImage!,
           onProgress: (p) {
             if (mounted) {
@@ -345,7 +345,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: TelegramStorageService.isVideoFile(_serviceImage!.path)
+                          child: R2StorageService.isVideoFile(_serviceImage!.path)
                               ? Container(
                                   height: 150,
                                   width: double.infinity,

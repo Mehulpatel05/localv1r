@@ -8,7 +8,7 @@ import '../../core/location/location_models.dart';
 import '../../core/location/location_service.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 /// Dedicated Buy & Sell "Sell a Product" Post Screen matching Image 1 & Image 4
 class ShopPostScreen extends StatefulWidget {
@@ -311,7 +311,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
 
         String? url;
         try {
-          url = await TelegramStorageService.uploadImage(
+          url = await R2StorageService.uploadImage(
             file,
             onProgress: (p) {
               if (mounted) {

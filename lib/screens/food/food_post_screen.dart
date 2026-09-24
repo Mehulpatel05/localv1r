@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 /// Dedicated Food & Cafes Post Screen.
 class FoodPostScreen extends StatefulWidget {
@@ -182,7 +182,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       for (int i = 0; i < _mediaFiles.length; i++) {
         setState(() => _uploadProgress = (i / _mediaFiles.length) * 0.8);
         final file = _mediaFiles[i];
-        final url = await TelegramStorageService.uploadMedia(file);
+        final url = await R2StorageService.uploadMedia(file);
         if (url != null) {
           uploadedUrls.add(url);
         }
@@ -570,7 +570,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                       width: 80,
                       height: 80,
                       color: isDark ? Colors.white10 : Colors.black12,
-                      child: TelegramStorageService.isVideoFile(_mediaFiles[i].path)
+                      child: R2StorageService.isVideoFile(_mediaFiles[i].path)
                           ? Stack(
                               fit: StackFit.expand,
                               children: [

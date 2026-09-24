@@ -24,9 +24,6 @@ import requests
 from config import Config
 from services.r2_service import R2Service
 from services.d1_service import D1Service
-from services.telegram_service import TelegramService
-from google.cloud import firestore
-from services.firebase_service import FirebaseService, db
 from utils.moderation import validate_text_content
 from routes.auth import auth_router
 
@@ -880,7 +877,7 @@ async def create_post(
     if error_msg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         
-    success = FirebaseService.create_post(
+    post_id = D1Service.create_post(
         author_handle=user_handle,
         content=request.content,
         cityId=request.cityId,
@@ -908,11 +905,11 @@ async def create_post(
         serviceCategoryText=request.serviceCategoryText,
         servicePrice=request.servicePrice
     )
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to publish post.")
+    if not post_id:
+        raise HTTPException(status_code=500, detail="Failed to publish post to Cloudflare D1.")
         
     POSTS_CACHE.clear() # Invalidate feed cache so new post shows instantly
-    res = {"status": "success", "authorHandle": user_handle}
+    res = {"status": "success", "postId": post_id, "authorHandle": user_handle}
     if idempotency_key:
         await save_idempotent_response(idempotency_key, "create_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
@@ -945,7 +942,7 @@ class PostsQueryCache:
 POSTS_CACHE = PostsQueryCache(ttl_seconds=3.0)
 
 
-# 3.1 Get Posts (Read Path over REST - Non-blocking & Cached for 1000+ concurrent users)
+# 3.1 Get Posts (Read Path over Cloudflare D1 - Non-blocking & Cached for 1000+ concurrent users)
 @app.get("/api/v1/posts")
 async def get_posts(
     limit: int = Query(20, ge=1, le=100),
@@ -956,9 +953,6 @@ async def get_posts(
     category: Optional[str] = Query(None, max_length=50),
     authorization: Optional[str] = Header(None, description="Bearer token")
 ):
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-    
     # 1. High-concurrency RAM cache check (< 0.5ms response for concurrent readers)
     cache_key = f"{cityId}:{areaId}:{category}:{author}:{cursor}:{limit}"
     cached_res = POSTS_CACHE.get(cache_key)
@@ -973,102 +967,31 @@ async def get_posts(
         except:
             pass
 
-    # 2. Non-blocking Firestore worker
-    def _sync_fetch_posts():
-        query = db.collection("posts")
-        if author:
-            query = query.where("authorHandle", "==", author)
-        if cityId:
-            query = query.where("cityId", "==", cityId)
-        if areaId:
-            query = query.where("areaId", "==", areaId)
-        if category:
-            query = query.where("category", "==", category)
-            
-        query = query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(min(limit, 50))
-        
-        if cursor:
-            cursor_doc = db.collection("posts").document(cursor).get()
-            if cursor_doc.exists:
-                query = query.start_after(cursor_doc)
-                
-        try:
-            docs = query.get()
-        except Exception as e:
-            if "index" in str(e).lower() or "precondition" in str(e).lower():
-                print(f"[WARN] Missing index in get_posts. Fallback to manual filter. Error: {e}")
-                fallback_base = db.collection("posts")
-                if cityId:
-                    fallback_base = fallback_base.where("cityId", "==", cityId)
-                raw_docs = fallback_base.get()
-                
-                filtered = []
-                for doc in raw_docs:
-                    data = doc.to_dict()
-                    if author and data.get("authorHandle") != author: continue
-                    if areaId and data.get("areaId") != areaId: continue
-                    if category and data.get("category") != category: continue
-                    filtered.append(doc)
-                
-                def _get_ts(d):
-                    ca = d.to_dict().get("createdAt")
-                    try:
-                        return ca.timestamp() if hasattr(ca, "timestamp") else 0
-                    except:
-                        return 0
-                filtered.sort(key=_get_ts, reverse=True)
-                
-                start_index = 0
-                if cursor:
-                    for i, d in enumerate(filtered):
-                        if d.id == cursor:
-                            start_index = i + 1
-                            break
-                docs = filtered[start_index : start_index + min(limit, 50)]
-            else:
-                raise e
-                
-        posts = []
-        for doc in docs:
-            data = doc.to_dict()
-            if data.get("deletedAt") is not None or data.get("hiddenByMod") == True:
-                continue
-            
-            data['id'] = doc.id
-            if data.get('createdAt'):
-                ca = data['createdAt']
-                data['createdAt'] = ca.isoformat() if hasattr(ca, 'isoformat') else str(ca)
-            posts.append(data)
-            
-        last_id = docs[-1].id if docs else None
-        return {"status": "success", "posts": posts, "nextCursor": last_id}
-
     try:
-        res = await anyio.to_thread.run_sync(_sync_fetch_posts)
+        posts = D1Service.get_posts(
+            city_id=cityId,
+            area_id=areaId,
+            category=category,
+            author=author,
+            cursor=cursor,
+            limit=limit
+        )
+        last_id = posts[-1]["id"] if posts else None
+        res = {"status": "success", "posts": posts, "nextCursor": last_id}
         POSTS_CACHE.put(cache_key, res)
         return res
     except Exception as e:
-        print(f"Error fetching posts: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch posts")
+        print(f"Error fetching posts from D1: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch posts from database.")
 
 # 4.1 Get Comments
 @app.get("/api/v1/posts/{post_id}/comments")
 async def get_comments(post_id: str):
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-        
     try:
-        docs = db.collection("posts").document(post_id).collection("comments").order_by("createdAt").limit(100).get()
-        comments = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['id'] = doc.id
-            if data.get('createdAt'):
-                ca = data['createdAt']
-                data['createdAt'] = ca.isoformat() if hasattr(ca, 'isoformat') else str(ca)
-            comments.append(data)
+        comments = D1Service.get_comments(post_id)
         return {"status": "success", "comments": comments}
     except Exception as e:
+        print(f"Error fetching comments: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch comments")
 
 # 4. Secure Comment Addition
@@ -1097,12 +1020,12 @@ async def add_comment(
     if error_msg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         
-    success = FirebaseService.add_comment(
+    comment_id = D1Service.add_comment(
         post_id=post_id,
         author_handle=user_handle,
         content=request.content
     )
-    if not success:
+    if not comment_id:
         raise HTTPException(status_code=500, detail="Failed to write comment.")
         
     res = {"status": "success"}
@@ -1139,12 +1062,10 @@ async def vote_post(
         if risk_level == "HIGH":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device attestation validation failed (High Risk).")
 
-    result = FirebaseService.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
+    result = D1Service.vote_post(post_id=post_id, user_handle=user_handle, direction=request.direction)
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed to register vote."))
         
-    # Asynchronously aggregate shards into main post document without blocking or causing lock contention
-    background_tasks.add_task(FirebaseService.aggregate_post_shards, post_id)
     POSTS_CACHE.clear()
 
     res = {
@@ -1181,7 +1102,7 @@ async def report_post(
         if cached:
             return cached
 
-    success = FirebaseService.report_post(post_id=post_id, reporter_handle=user_handle, reason=request.reason)
+    success = D1Service.report_post(post_id=post_id, reporter_handle=user_handle, reason=request.reason)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to submit report.")
         
@@ -1202,14 +1123,14 @@ async def restore_post(
 
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="moderator")
 
-    success = FirebaseService.restore_post(post_id)
+    success = D1Service.restore_post(post_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to restore post.")
         
     # Chained Audit Log
     request_id = str(uuid.uuid4())
     ip_addr = get_client_ip(server_request)
-    FirebaseService.log_moderator_action(
+    D1Service.log_moderator_action(
         moderator_id=mod_email,
         role=mod_role,
         action="restore",
@@ -1246,16 +1167,10 @@ async def delete_post(
         if cached:
             return cached
 
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database connection offline.")
-        
-    post_ref = db.collection("posts").document(post_id)
-    post_snapshot = post_ref.get()
-    
-    if not post_snapshot.exists:
+    post_data = D1Service.get_post_by_id(post_id)
+    if not post_data:
         raise HTTPException(status_code=404, detail="Post not found.")
         
-    post_data = post_snapshot.to_dict()
     if post_data.get("deletedAt") is not None:
         raise HTTPException(status_code=400, detail="Post is already deleted.")
         
@@ -1266,23 +1181,17 @@ async def delete_post(
     image_url = post_data.get("imageUrl")
     if image_url and "/api/v1/media/" in image_url:
         media_id = image_url.split("/api/v1/media/")[-1]
-        
-        # Check if ANY OTHER active, non-hidden post references this mediaId
-        other_posts = db.collection("posts").where("imageUrl", "==", image_url).limit(2).get()
-        active_count = sum(1 for p in other_posts if p.id != post_id and p.to_dict().get("deletedAt") is None and not p.to_dict().get("hiddenByMod"))
-        
-        if active_count == 0:
-            FirebaseService.delete_media(media_id)
-            
-            if media_id in MEDIA_CACHE:
-                del MEDIA_CACHE[media_id]
-            if media_id in MEDIA_TYPE_CACHE:
-                del MEDIA_TYPE_CACHE[media_id]
+        D1Service.delete_media(media_id)
+        if media_id in MEDIA_CACHE:
+            del MEDIA_CACHE[media_id]
+        if media_id in MEDIA_TYPE_CACHE:
+            del MEDIA_TYPE_CACHE[media_id]
 
-    success = FirebaseService.delete_post(post_id)
+    success = D1Service.delete_post(post_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete post.")
         
+    POSTS_CACHE.clear()
     res = {"status": "success"}
     if idempotency_key:
         await save_idempotent_response(idempotency_key, "delete_post", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
@@ -1355,7 +1264,7 @@ async def upload_media(
     base_url = os.environ.get("PRODUCTION_URL", "https://localv1r.onrender.com").rstrip("/")
 
     content_hash = hashlib.sha256(sanitized_content).hexdigest()
-    existing_media = FirebaseService.get_media_by_hash(content_hash)
+    existing_media = D1Service.get_media_by_hash(content_hash)
     if existing_media:
         public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
         res = {
@@ -1386,7 +1295,7 @@ async def upload_media(
         raise HTTPException(status_code=500, detail="Failed to upload media to Cloudflare R2 storage.")
         
     size = len(sanitized_content)
-    FirebaseService.register_media(
+    D1Service.register_media(
         media_id=media_id,
         object_key=uploaded_key,
         size=size,
@@ -1469,47 +1378,22 @@ async def serve_media(media_id: str, request: Request):
         except Exception as read_err:
             print(f"[WARN] Error reading disk cache: {read_err}")
 
-    # 3. If not in cache, fetch from Cloudflare R2 (or fallback to Telegram for legacy)
+    # 3. If not in cache, fetch from Cloudflare R2
     if not cached_bytes:
-        if db is None:
-            raise HTTPException(status_code=500, detail="Database connection offline.")
-            
         def _fetch_media_sync():
-            media_record = FirebaseService.get_media_by_id(media_id)
+            media_record = D1Service.get_media_by_id(media_id)
             if not media_record or media_record.get("deletedAt") is not None:
                 return None, None
-            provider = media_record.get("storageProvider", "r2")
-            file_bytes = None
+            
+            object_key = media_record.get("objectKey") or f"media/{media_id}.{media_record.get('mimeType', 'image/jpeg').split('/')[-1]}"
+            file_bytes = R2Service.get_media_bytes(object_key)
             m_type = media_record.get("mimeType", "image/jpeg")
-            
-            # Primary: Cloudflare R2
-            if provider == "r2" or "objectKey" in media_record:
-                object_key = media_record.get("objectKey") or f"media/{media_id}.{m_type.split('/')[-1]}"
-                file_bytes = R2Service.get_media_bytes(object_key)
-            
-            # Legacy Fallback: Telegram
-            elif provider == "telegram":
-                file_id = media_record.get("telegramFileId")
-                if file_id and Config.TELEGRAM_BOT_TOKEN:
-                    url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
-                    try:
-                        res = requests.get(url, timeout=15)
-                        if res.status_code == 200:
-                            data = res.json()
-                            if data.get("ok"):
-                                file_path = data["result"]["file_path"]
-                                telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
-                                img_res = requests.get(telegram_file_url, timeout=30)
-                                if img_res.status_code == 200:
-                                    file_bytes = img_res.content
-                    except Exception as tg_err:
-                        print(f"[WARN] Telegram fetch failed: {tg_err}")
             return file_bytes, m_type
 
         cached_bytes, mime_type = await anyio.to_thread.run_sync(_fetch_media_sync)
         
         if cached_bytes is None:
-            raise HTTPException(status_code=404, detail="Media not found or Storage is offline.")
+            raise HTTPException(status_code=404, detail="Media not found in Cloudflare R2.")
                 
         # Save to RAM and Disk caches
         try:
@@ -1809,21 +1693,16 @@ async def ban_user(
 
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
     
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-        
     try:
-        db.collection("banned_users").document(request.targetHandle).set({
-            "handle": request.targetHandle,
-            "bannedBy": "admin",
-            "reason": request.reason,
-            "createdAt": firestore.SERVER_TIMESTAMP
-        })
+        D1Service.execute(
+            "INSERT OR REPLACE INTO banned_users (handle, banned_by, reason, created_at) VALUES (?, 'admin', ?, (strftime('%s', 'now')));",
+            [request.targetHandle, request.reason]
+        )
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
         ip_addr = get_client_ip(server_request)
-        FirebaseService.log_moderator_action(
+        D1Service.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
             action="ban",
@@ -1847,19 +1726,16 @@ async def get_all_users(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
 ):
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
     
     try:
-        users_ref = db.collection("profiles").order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        users = D1Service.query("SELECT * FROM users ORDER BY created_at DESC LIMIT ?;", [limit]) or []
         users_list = []
-        for doc in users_ref:
-            d = doc.to_dict()
+        for d in users:
             users_list.append({
-                "handle": d.get("handle", doc.id),
-                "ownerUid": d.get("ownerUid"),
-                "friendCount": d.get("friendCount", 0),
-                "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
+                "id": d.get("id"),
+                "handle": d.get("handle"),
+                "phone": d.get("phone"),
+                "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(d["created_at"])) if d.get("created_at") else None
             })
         return {"status": "success", "users": users_list}
     except Exception as e:
@@ -1873,50 +1749,10 @@ async def get_all_posts(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
 ):
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        base_query = db.collection("posts")
-        if category:
-            base_query = base_query.where("category", "==", category)
-            
-        posts_list = []
-        try:
-            # Attempt to order chronologically (requires composite index if category is present)
-            ordered_query = base_query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit)
-            posts_ref = ordered_query.stream()
-            for doc in posts_ref:
-                d = doc.to_dict()
-                posts_list.append({
-                    "id": doc.id,
-                    "content": d.get("content", ""),
-                    "category": d.get("category", ""),
-                    "authorHandle": d.get("authorHandle", "Unknown"),
-                    "reportCount": d.get("reportCount", 0),
-                    "upvotes": d.get("upvotes", 0),
-                    "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
-                })
-        except Exception as e:
-            # If it fails due to a missing index, fallback to unordered query
-            if "index" in str(e).lower() or "precondition" in str(e).lower():
-                print(f"[WARN] Missing index for category + createdAt. Falling back to unordered query. Error: {e}")
-                posts_list = []
-                fallback_query = base_query.limit(limit)
-                for doc in fallback_query.stream():
-                    d = doc.to_dict()
-                    posts_list.append({
-                        "id": doc.id,
-                        "content": d.get("content", ""),
-                        "category": d.get("category", ""),
-                        "authorHandle": d.get("authorHandle", "Unknown"),
-                        "reportCount": d.get("reportCount", 0),
-                        "upvotes": d.get("upvotes", 0),
-                        "createdAt": d.get("createdAt").isoformat() if hasattr(d.get("createdAt"), "isoformat") else str(d.get("createdAt"))
-                    })
-            else:
-                raise e
-
+        cat_val = category.value if category else None
+        posts_list = D1Service.get_posts(category=cat_val, limit=limit)
         return {"status": "success", "posts": posts_list}
     except Exception as e:
         print(f"Error fetching moderation posts: {e}")
@@ -1929,24 +1765,15 @@ async def delete_user(
     x_moderator_token: Optional[str] = Header(None, description="Short-lived moderator token")
 ):
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="admin")
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        # Delete profile
-        db.collection("profiles").document(handle).delete()
+        D1Service.execute("DELETE FROM users WHERE handle = ?;", [handle])
+        D1Service.execute(
+            "INSERT OR REPLACE INTO banned_users (handle, banned_by, reason, created_at) VALUES (?, 'admin_delete', 'User deleted by admin', (strftime('%s', 'now')));",
+            [handle]
+        )
         
-        # We can't delete from auth easily without admin sdk, but deleting profile prevents login since handle is lost
-        # Let's also ban them to be safe
-        db.collection("banned_users").document(handle).set({
-            "handle": handle,
-            "bannedBy": "admin_delete",
-            "reason": "User deleted by admin",
-            "createdAt": firestore.SERVER_TIMESTAMP
-        })
-        
-        # Log action
-        FirebaseService.log_moderator_action(
+        D1Service.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
             action="delete_user",
@@ -1969,28 +1796,21 @@ async def add_moderator(
 ):
 
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="superadmin")
-    
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
         password_with_pepper = (request.password + Config.SERVER_SALT).encode('utf-8')
         new_hashed_pass = bcrypt.hashpw(password_with_pepper, bcrypt.gensalt()).decode('utf-8')
         encrypted_mfa = Config.crypto.encrypt(b"GENERATED_BASE32_MFA_SECRET").decode('utf-8')
-        db.collection("moderators").document(request.email).set({
-            "modId": request.email,
-            "email": request.email,
-            "hashedPassword": new_hashed_pass,
-            "role": request.role,
-            "mfaSecret": encrypted_mfa,
-            "createdAt": firestore.SERVER_TIMESTAMP,
-            "status": "active"
-        })
+        now_ts = int(time.time())
+        D1Service.execute(
+            "INSERT OR REPLACE INTO moderators (mod_id, email, hashed_password, role, mfa_secret, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?);",
+            [request.email, request.email, new_hashed_pass, request.role, encrypted_mfa, now_ts]
+        )
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
         ip_addr = get_client_ip(server_request)
-        FirebaseService.log_moderator_action(
+        D1Service.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
             action="add_mod",
@@ -2017,17 +1837,14 @@ async def remove_moderator(
 ):
 
     mod_email, mod_role = await verify_moderator_session(x_moderator_token, required_role="superadmin")
-    
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
         
     try:
-        db.collection("moderators").document(email).delete()
+        D1Service.execute("DELETE FROM moderators WHERE email = ?;", [email])
         
         # Chained Audit Log
         request_id = str(uuid.uuid4())
         ip_addr = get_client_ip(server_request)
-        FirebaseService.log_moderator_action(
+        D1Service.log_moderator_action(
             moderator_id=mod_email,
             role=mod_role,
             action="remove_mod",
@@ -2067,34 +1884,36 @@ async def mod_logout(
         if not jti:
             raise ValueError("No JTI found")
             
-        # Revoke the token using Redis and Firestore
         if redis_client:
             is_revoked = await redis_client.sismember("revoked_tokens", jti)
             if is_revoked:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
             await redis_client.sadd("revoked_tokens", jti)
         
-        # Persistent blacklist in database
-        if db is not None:
-            db.collection("revoked_tokens").document(jti).set({
-                "jti": jti,
-                "revokedAt": firestore.SERVER_TIMESTAMP
-            })
-            
         res = {"status": "success", "message": "Successfully logged out."}
         if idempotency_key:
             await save_idempotent_response(idempotency_key, "mod_logout", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
     except jwt.ExpiredSignatureError:
-        # Already expired
         return {"status": "success", "message": "Token was already expired."}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token for logout.")
+
+
+@app.on_event("startup")
+async def on_startup():
+    print("[STARTUP] Ensuring Cloudflare D1 Database schema & tables...")
+    try:
+        D1Service.init_schema()
+        print("[STARTUP] Cloudflare D1 Database initialized.")
+    except Exception as e:
+        print(f"[STARTUP WARN] Cloudflare D1 schema init error: {e}")
 
 
 @app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
-        "firebase_active": db is not None
+        "d1_database": "connected",
+        "r2_storage": "connected"
     }

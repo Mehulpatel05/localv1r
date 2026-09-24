@@ -11,15 +11,14 @@ from pydantic import BaseModel, Field
 
 from config import Config
 from services.wakit_service import WakitService
-from services.firebase_service import db
+from services.d1_service import D1Service
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # E.164 phone regex format (+ followed by 7 to 15 digits)
 E164_REGEX = re.compile(r"^\+[1-9]\d{6,14}$")
 
-# 🛡️ OTP Request In-Memory Cache (Stores request context, expiration, attempts, single-use flag)
-# Schema: request_id -> { "phone": str, "attempts": int, "locked_until": float, "expires_at": float, "verified": bool }
+# 🛡️ OTP Request In-Memory Cache
 _otp_requests: Dict[str, Dict[str, Any]] = {}
 
 # 🛡️ Rate Limiting Data Structures (Phone & IP)
@@ -104,39 +103,17 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
     raw_refresh = jwt.encode(refresh_payload, Config.JWT_SECRET, algorithm="HS256")
     refresh_token = raw_refresh.decode("utf-8") if isinstance(raw_refresh, bytes) else str(raw_refresh)
 
-    # Persist refresh token in Firestore if db is active
-    if db is not None:
-        try:
-            db.collection("refresh_tokens").document(refresh_jti).set({
-                "userId": user_id,
-                "phone": phone_number,
-                "jti": refresh_jti,
-                "status": "active",
-                "createdAt": now,
-                "expiresAt": refresh_exp,
-            })
-        except Exception as e:
-            print(f"[AUTH] Failed saving refresh token to DB: {e}")
-
-    # Generate Firebase Custom Token for seamless Firestore/RTDB integration if needed
-    firebase_token = None
+    # Persist refresh token in Cloudflare D1
     try:
-        from firebase_admin import auth as firebase_auth
-        raw_fb_token = firebase_auth.create_custom_token(user_id)
-        if isinstance(raw_fb_token, bytes):
-            firebase_token = raw_fb_token.decode("utf-8")
-        elif raw_fb_token is not None:
-            firebase_token = str(raw_fb_token)
+        D1Service.save_refresh_token(refresh_jti, user_id, phone_number, refresh_exp)
     except Exception as e:
-        print(f"[AUTH] Firebase custom token note: {e}")
-        firebase_token = None
+        print(f"[AUTH] Failed saving refresh token to D1: {e}")
 
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": Config.JWT_ACCESS_EXPIRE_MINUTES * 60,
-        "firebase_custom_token": firebase_token,
     }
 
 
@@ -190,7 +167,7 @@ async def send_otp(req: OtpSendRequest, request: Request):
 async def verify_otp(req: OtpVerifyRequest, request: Request):
     """
     Verifies user-submitted OTP with rate-limiting, lockout on 5 failed attempts, and single-use enforcement.
-    On success, looks up or creates user in database and issues JWT session tokens.
+    On success, looks up or creates user in Cloudflare D1 and issues JWT session tokens.
     """
     try:
         request_id = req.request_id.strip()
@@ -269,66 +246,15 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
         # Mark as verified immediately to prevent replay attacks
         context["verified"] = True
 
-        # User Resolution / Provisioning
+        # User Resolution / Provisioning in Cloudflare D1
         phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
-        user_id = phone_hash
-        handle = ""
-        photo_url = ""
-        is_new_user = True
-
-        if db is not None:
-            try:
-                from firebase_admin import firestore as fb_firestore
-                # 1. Direct document lookup by phone_hash
-                user_ref = db.collection("users").document(phone_hash)
-                user_doc = user_ref.get()
-
-                if user_doc.exists:
-                    data = user_doc.to_dict() or {}
-                    handle = data.get("handle", "") or data.get("userHandle", "")
-                    photo_url = data.get("photoUrl", "")
-                    is_new_user = (handle == "")
-                    user_ref.update({
-                        "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
-                        "phoneNumber": phone_number,
-                        "phoneNumberHash": phone_hash,
-                    })
-                else:
-                    # 2. Check if user document exists with query by phoneNumber
-                    q = db.collection("users").where("phoneNumber", "==", phone_number).limit(1).get()
-                    if q and len(q) > 0:
-                        doc = q[0]
-                        data = doc.to_dict() or {}
-                        handle = data.get("handle", "") or data.get("userHandle", "")
-                        photo_url = data.get("photoUrl", "")
-                        is_new_user = (handle == "")
-                        user_id = doc.id
-                        doc.reference.update({
-                            "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
-                            "phoneNumberHash": phone_hash,
-                        })
-                    else:
-                        # 3. Check profiles collection as fallback
-                        prof_q = db.collection("profiles").where("phoneNumber", "==", phone_number).limit(1).get()
-                        if prof_q and len(prof_q) > 0:
-                            pdata = prof_q[0].to_dict() or {}
-                            handle = pdata.get("handle", "")
-                            photo_url = pdata.get("photoUrl", "")
-                            is_new_user = (handle == "")
-
-                        # Initialize canonical record for this device
-                        user_ref.set({
-                            "userId": user_id,
-                            "phoneNumber": phone_number,
-                            "phoneNumberHash": phone_hash,
-                            "handle": handle,
-                            "photoUrl": photo_url,
-                            "createdAt": fb_firestore.SERVER_TIMESTAMP,
-                            "updatedAt": fb_firestore.SERVER_TIMESTAMP,
-                            "lastLoginAt": fb_firestore.SERVER_TIMESTAMP,
-                        }, merge=True)
-            except Exception as e:
-                print(f"[AUTH] Error during user record creation/lookup: {e}")
+        anon_handle = f"Anon#{phone_hash[:6].upper()}"
+        
+        user_record = D1Service.get_or_create_user(phone=phone_number, handle=anon_handle)
+        user_id = user_record.get("id", phone_hash)
+        handle = user_record.get("handle", anon_handle)
+        photo_url = user_record.get("avatar_url", "")
+        is_new_user = (user_record.get("handle") == "" or user_record.get("handle") is None)
 
         tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
 
@@ -361,7 +287,7 @@ async def refresh_token(
     x_refresh_token: Optional[str] = Header(None, alias="X-Refresh-Token")
 ):
     """
-    Refreshes access token given a valid refresh token.
+    Refreshes access token given a valid refresh token verified in Cloudflare D1.
     """
     token_str = (req.refresh_token if req and req.refresh_token else None) or x_refresh_token
     if not token_str:
@@ -380,10 +306,10 @@ async def refresh_token(
         handle = payload.get("handle", "")
         jti = payload.get("jti")
 
-        # Check DB status if active
-        if db is not None and jti:
-            t_doc = db.collection("refresh_tokens").document(jti).get()
-            if not t_doc.exists or t_doc.to_dict().get("status") != "active":
+        # Check D1 status if jti exists
+        if jti:
+            t_doc = D1Service.get_refresh_token(jti)
+            if not t_doc or t_doc.get("status") != "active":
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is revoked or expired.")
 
         tokens = _mint_tokens(user_id=user_id, phone_number=phone, handle=handle)
@@ -404,7 +330,7 @@ async def delete_account(
     x_session_token: Optional[str] = Header(None, alias="X-Session-Token")
 ):
     """
-    Permanently deletes user account, profile, posts, friend requests, friendships, blocks, and auth user.
+    Permanently deletes user account, posts, and auth sessions from Cloudflare D1.
     """
     token = authorization or (f"Bearer {x_session_token}" if x_session_token else None)
     if not token or not token.startswith("Bearer "):
@@ -414,7 +340,6 @@ async def delete_account(
     user_id = None
     handle = None
 
-    # 1. Try decoding Backend JWT Token
     try:
         payload = jwt.decode(
             raw_token,
@@ -426,85 +351,20 @@ async def delete_account(
             user_id = payload.get("sub")
             handle = payload.get("handle")
     except Exception:
-        pass
-
-    # 2. Fallback to Firebase verify_id_token
-    if not user_id:
-        try:
-            from firebase_admin import auth as firebase_auth
-            decoded = firebase_auth.verify_id_token(raw_token)
-            user_id = decoded.get("uid")
-        except Exception:
-            pass
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session token.")
 
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session token.")
 
-    # If handle not in token, fetch from users doc
-    if not handle and db is not None:
-        try:
-            u_doc = db.collection("users").document(user_id).get()
-            if u_doc.exists:
-                handle = u_doc.to_dict().get("handle", "")
-        except Exception:
-            pass
-
-    # Delete Firestore Data using Admin SDK
-    if db is not None:
-        try:
-            # 1. Delete user's posts
-            if handle:
-                posts = db.collection("posts").where("authorHandle", "==", handle).stream()
-                for p in posts:
-                    p.reference.delete()
-
-            # 2. Delete friend requests (both sent & received)
-            reqs1 = db.collection("friend_requests").where("senderUid", "==", user_id).stream()
-            for r in reqs1:
-                r.reference.delete()
-            reqs2 = db.collection("friend_requests").where("receiverUid", "==", user_id).stream()
-            for r in reqs2:
-                r.reference.delete()
-            if handle:
-                reqs3 = db.collection("friend_requests").where("senderHandle", "==", handle).stream()
-                for r in reqs3:
-                    r.reference.delete()
-                reqs4 = db.collection("friend_requests").where("receiverHandle", "==", handle).stream()
-                for r in reqs4:
-                    r.reference.delete()
-
-            # 3. Delete friendships
-            fs1 = db.collection("friendships").where("usersUids", "array_contains", user_id).stream()
-            for f in fs1:
-                f.reference.delete()
-
-            # 4. Delete blocks
-            bl1 = db.collection("blocks").where("blockerUid", "==", user_id).stream()
-            for b in bl1:
-                b.reference.delete()
-
-            # 5. Delete profile doc
-            if handle:
-                db.collection("profiles").document(handle).delete()
-
-            # 6. Delete user doc
-            db.collection("users").document(user_id).delete()
-
-            # 7. Delete refresh tokens
-            r_tokens = db.collection("refresh_tokens").where("userId", "==", user_id).stream()
-            for rt in r_tokens:
-                rt.reference.delete()
-        except Exception as e:
-            print(f"[AUTH] Error cleaning up user Firestore data: {e}")
-
-    # Delete Firebase Auth user via Admin SDK (bypasses requires-recent-login)
     try:
-        from firebase_admin import auth as firebase_auth
-        firebase_auth.delete_user(user_id)
+        if handle:
+            D1Service.execute("UPDATE posts SET deleted_at = (strftime('%s', 'now')) WHERE author_handle = ?;", [handle])
+            D1Service.execute("DELETE FROM users WHERE handle = ?;", [handle])
+        D1Service.execute("DELETE FROM refresh_tokens WHERE user_id = ?;", [user_id])
     except Exception as e:
-        print(f"[AUTH] Firebase admin delete user note: {e}")
+        print(f"[AUTH] Error deleting user in D1: {e}")
 
     return {
         "status": "success",
-        "message": "Account and all associated data permanently deleted."
+        "message": "User account and associated content successfully deleted."
     }

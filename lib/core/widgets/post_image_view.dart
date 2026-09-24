@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'safe_image.dart';
 import 'post_full_screen_viewer.dart';
 import 'universal_media_view.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 /// Reusable Post Image & Video View Widget
 ///
@@ -53,7 +53,7 @@ class PostImageView extends StatelessWidget {
     final radius = borderRadius ?? BorderRadius.circular(14);
     final count = images.length;
 
-    if (TelegramStorageService.isVideoFile(imageUrl)) {
+    if (R2StorageService.isVideoFile(imageUrl)) {
       return UniversalMediaView(
         url: imageUrl,
         height: height,

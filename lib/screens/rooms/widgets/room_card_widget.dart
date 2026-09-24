@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../models/post_model.dart';
-import '../../../services/telegram_storage_service.dart';
+import '../../../services/r2_storage_service.dart';
 
 class RoomCardWidget extends StatefulWidget {
   final Post post;
@@ -139,7 +139,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!)) ...[
+                          if (hasImage && R2StorageService.isVideoFile(post.imageUrl!)) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(

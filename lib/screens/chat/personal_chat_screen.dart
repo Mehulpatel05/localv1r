@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../services/audio_upload_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/notification_service.dart';
@@ -119,7 +119,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   // Swipe-to-reply state
   Map<String, dynamic>? _replyingTo; // {messageId, senderHandle, previewText}
 
-  // Telegram-style Multi-Message Selection State
+  // Multi-Message Selection State
   final Set<String> _selectedMessageIds = {};
   final Map<String, Map<String, dynamic>> _selectedMessagesData = {};
   String? _editingMessageId;
@@ -735,7 +735,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     });
 
     try {
-      final uploadFutures = uploadItem.files.map((f) => TelegramStorageService.uploadImage(f));
+      final uploadFutures = uploadItem.files.map((f) => R2StorageService.uploadImage(f));
       final uploadedUrls = await Future.wait(uploadFutures);
       final validUrls = uploadedUrls.whereType<String>().toList();
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../models/post_model.dart';
-import '../../../services/telegram_storage_service.dart';
+import '../../../services/r2_storage_service.dart';
 
 /// Reusable 2-Column Product Card Widget matching Nearhood Buy & Sell design (Image 3)
 class ShopCardWidget extends StatefulWidget {
@@ -96,7 +96,7 @@ class _ShopCardWidgetState extends State<ShopCardWidget> {
                     ),
 
                     // Photo/Video Count Badge (Top-Right)
-                    if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!))
+                    if (hasImage && R2StorageService.isVideoFile(post.imageUrl!))
                       Positioned(
                         top: 8,
                         right: 8,

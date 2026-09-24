@@ -12,7 +12,7 @@ import '../../services/post_repository.dart';
 import '../../services/presence_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../main/main_screen.dart';
@@ -468,7 +468,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       // If user selected a profile image, upload and sync
       if (_pickedProfileImage != null) {
         try {
-          final uploadedUrl = await TelegramStorageService.uploadImage(_pickedProfileImage!);
+          final uploadedUrl = await R2StorageService.uploadImage(_pickedProfileImage!);
           if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
             await AuthService.instance.updateUserProfileImage(uploadedUrl);
           }

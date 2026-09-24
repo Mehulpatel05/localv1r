@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../models/post_model.dart';
-import '../../../services/telegram_storage_service.dart';
+import '../../../services/r2_storage_service.dart';
 
 class ServiceCardWidget extends StatelessWidget {
   final Post post;
@@ -125,7 +125,7 @@ class ServiceCardWidget extends StatelessWidget {
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                     // Top Right Video Indicator Badge
-                    if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!))
+                    if (hasImage && R2StorageService.isVideoFile(post.imageUrl!))
                       Positioned(
                         top: 8,
                         right: 8,

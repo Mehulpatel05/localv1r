@@ -7,7 +7,7 @@ import '../../core/location/location_models.dart';
 import '../../core/location/location_selector_field.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class RoomPostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -212,7 +212,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       for (int i = 0; i < _mediaFiles.length; i++) {
         setState(() => _uploadCurrentIndex = i + 1);
         final file = _mediaFiles[i];
-        final url = await TelegramStorageService.uploadMedia(
+        final url = await R2StorageService.uploadMedia(
           file,
           onProgress: (p) {
             if (mounted) {
@@ -578,7 +578,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                       itemBuilder: (context, index) {
                         final file = _mediaFiles[index];
                         final isCover = index == 0;
-                        final isVideo = TelegramStorageService.isVideoFile(file.path);
+                        final isVideo = R2StorageService.isVideoFile(file.path);
 
                         return Stack(
                           fit: StackFit.expand,

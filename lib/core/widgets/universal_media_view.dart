@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class UniversalMediaView extends StatefulWidget {
   final String? url;
@@ -59,7 +59,7 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
 
   void _checkAndInitMedia() {
     final path = widget.url ?? widget.file?.path ?? '';
-    _isVideo = TelegramStorageService.isVideoFile(path);
+    _isVideo = R2StorageService.isVideoFile(path);
 
     if (_isVideo) {
       _initVideoPlayer();

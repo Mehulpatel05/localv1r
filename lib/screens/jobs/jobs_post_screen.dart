@@ -6,7 +6,7 @@ import '../../core/location/location_models.dart';
 import '../../core/location/location_selector_field.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class JobsPostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -184,7 +184,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       String? imageUrl;
       if (_bannerImage != null) {
         setState(() => _uploadProgress = 0.5);
-        imageUrl = await TelegramStorageService.uploadMedia(_bannerImage!);
+        imageUrl = await R2StorageService.uploadMedia(_bannerImage!);
       }
 
       setState(() => _uploadProgress = 0.85);
@@ -566,7 +566,7 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(14),
-                            child: TelegramStorageService.isVideoFile(_bannerImage!.path)
+                            child: R2StorageService.isVideoFile(_bannerImage!.path)
                                 ? Container(
                                     height: 140,
                                     width: double.infinity,

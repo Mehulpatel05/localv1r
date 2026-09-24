@@ -13,7 +13,7 @@ import '../../core/theme.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/auth_service.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../services/avatar_cache_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
@@ -292,7 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       AvatarCacheService.instance.setCachedUrl(handle, croppedFile.path);
 
       // Fast background network upload
-      final uploadedUrl = await TelegramStorageService.uploadImage(croppedFile);
+      final uploadedUrl = await R2StorageService.uploadImage(croppedFile);
 
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
         await AuthService.instance.updateUserProfileImage(uploadedUrl);

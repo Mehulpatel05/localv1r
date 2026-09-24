@@ -6,7 +6,7 @@ import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/post_repository.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -119,7 +119,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       List<String> uploadedMediaUrls = [];
       if (_mediaFiles.isNotEmpty) {
         try {
-          uploadedMediaUrls = await TelegramStorageService.uploadMultipleMedia(
+          uploadedMediaUrls = await R2StorageService.uploadMultipleMedia(
             _mediaFiles,
             onProgress: (p) {
               if (mounted) setState(() => _uploadProgress = p);
@@ -201,7 +201,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     if (_mediaFiles.length == 1) {
       final file = _mediaFiles.first;
-      final isVideo = TelegramStorageService.isVideoFile(file.path);
+      final isVideo = R2StorageService.isVideoFile(file.path);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -332,7 +332,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               }
 
               final file = _mediaFiles[index];
-              final isVideo = TelegramStorageService.isVideoFile(file.path);
+              final isVideo = R2StorageService.isVideoFile(file.path);
               return Stack(
                 children: [
                   ClipRRect(

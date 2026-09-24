@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_model.dart';
-import 'telegram_storage_service.dart';
+import 'r2_storage_service.dart';
 import 'notification_service.dart';
 
 class CommunityRepository {
@@ -197,7 +197,7 @@ class CommunityRepository {
   }) async {
     String? imageUrl;
     if (imageFile != null) {
-      imageUrl = await TelegramStorageService.uploadImage(imageFile);
+      imageUrl = await R2StorageService.uploadImage(imageFile);
     }
 
     final docRef = await _db.collection('communities').add({
@@ -227,7 +227,7 @@ class CommunityRepository {
 
   // Feature #7: Update community avatar (kept for direct use)
   Future<void> updateCommunityImage(String communityId, File imageFile) async {
-    final imageUrl = await TelegramStorageService.uploadImage(imageFile);
+    final imageUrl = await R2StorageService.uploadImage(imageFile);
     if (imageUrl == null) throw Exception('Image upload failed.');
     await _db.collection('communities').doc(communityId).update({
       'imageUrl': imageUrl,
@@ -252,7 +252,7 @@ class CommunityRepository {
     };
 
     if (imageFile != null) {
-      final imageUrl = await TelegramStorageService.uploadImage(imageFile);
+      final imageUrl = await R2StorageService.uploadImage(imageFile);
       if (imageUrl == null) throw Exception('Image upload failed.');
       updates['imageUrl'] = imageUrl;
     }
@@ -450,13 +450,13 @@ class CommunityRepository {
     _dispatchCommunityNotification(communityId, content.trim());
   }
 
-  // Feature #11: Send an image message via existing Telegram CDN
+  // Feature #11: Send an image message via Cloudflare R2 CDN
   Future<void> sendImageMessage(String communityId, File imageFile,
       {String caption = ''}) async {
     final isMem = await isMember(communityId);
     if (!isMem) throw Exception('Must be a member to post.');
 
-    final imageUrl = await TelegramStorageService.uploadImage(imageFile);
+    final imageUrl = await R2StorageService.uploadImage(imageFile);
     if (imageUrl == null) throw Exception('Image upload failed.');
 
     await _db.collection('community_messages').add({
@@ -486,13 +486,13 @@ class CommunityRepository {
     if (imageFiles.isEmpty) return;
 
     final uploadFutures =
-        imageFiles.map((f) => TelegramStorageService.uploadMedia(f));
+        imageFiles.map((f) => R2StorageService.uploadMedia(f));
     final uploadedUrls = await Future.wait(uploadFutures);
     final validUrls = uploadedUrls.whereType<String>().toList();
 
     if (validUrls.isEmpty) throw Exception('Media upload failed.');
 
-    final isVideo = validUrls.length == 1 && TelegramStorageService.isVideoFile(validUrls.first);
+    final isVideo = validUrls.length == 1 && R2StorageService.isVideoFile(validUrls.first);
 
     if (validUrls.length == 1) {
       await _db.collection('community_messages').add({

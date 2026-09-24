@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/motion.dart';
 import '../../../core/widgets/universal_media_view.dart';
-import '../../../services/telegram_storage_service.dart';
+import '../../../services/r2_storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 class MultiImageGalleryViewer extends StatefulWidget {
@@ -75,7 +75,7 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
               },
               itemBuilder: (context, index) {
                 final url = widget.imageUrls[index];
-                final isVideo = TelegramStorageService.isVideoFile(url);
+                final isVideo = R2StorageService.isVideoFile(url);
 
                 if (isVideo) {
                   return Center(

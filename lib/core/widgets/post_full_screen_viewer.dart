@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/motion.dart';
 import 'safe_image.dart';
 import 'universal_media_view.dart';
-import '../../services/telegram_storage_service.dart';
+import '../../services/r2_storage_service.dart';
 
 /// Full-screen image viewer supporting:
 /// - Hero transition animation
@@ -162,7 +162,7 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
                 },
                 itemBuilder: (context, index) {
                   final url = widget.imageUrls[index];
-                  final isVideo = TelegramStorageService.isVideoFile(url);
+                  final isVideo = R2StorageService.isVideoFile(url);
 
                   if (isVideo) {
                     return Center(

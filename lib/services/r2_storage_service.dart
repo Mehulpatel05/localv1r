@@ -165,6 +165,3 @@ class R2StorageService {
     return results;
   }
 }
-
-/// Backward compatibility alias
-typedef TelegramStorageService = R2StorageService;
