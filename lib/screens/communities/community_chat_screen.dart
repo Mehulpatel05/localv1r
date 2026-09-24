@@ -1,14 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/media_attachment_picker.dart';
-import 'package:flutter/services.dart';
-import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
-import '../chat/widgets/image_group_bubble.dart';
-import 'community_members_screen.dart';
-import 'edit_community_screen.dart';
-import 'package:intl/intl.dart';
+import '../../services/community_repository.dart';
 import '../../services/notification_service.dart';
+import '../chat/widgets/image_group_bubble.dart';
+import 'community_info_screen.dart';
 
 class CommunityChatScreen extends StatefulWidget {
   final CommunityRepository repository;
@@ -30,16 +30,14 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   bool _isMember = false;
   bool _isLoading = true;
   bool _isSendingImage = false;
-  // B5: mutable local copy — updated after admin edits community
   late CommunityModel _community;
 
-  // Feature #9: available emojis for reactions
   static const List<String> _quickEmojis = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
 
   @override
   void initState() {
     super.initState();
-    _community = widget.community; // B5: init from widget
+    _community = widget.community;
     NotificationService().activeCommunityId = widget.community.id;
     final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
     final adminHandle = widget.community.adminHandle.toLowerCase().replaceAll('@', '');
@@ -48,6 +46,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     _isMember = isAdmin || isCachedMember;
     _isLoading = false;
     _checkMembership();
+    _refreshCommunity();
   }
 
   @override
@@ -60,6 +59,15 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     super.dispose();
   }
 
+  Future<void> _refreshCommunity() async {
+    final updated = await widget.repository.getCommunityById(_community.id);
+    if (updated != null && mounted) {
+      setState(() {
+        _community = updated;
+      });
+    }
+  }
+
   Future<void> _checkMembership() async {
     final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
     final adminHandle = _community.adminHandle.toLowerCase().replaceAll('@', '');
@@ -70,91 +78,34 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       return;
     }
     try {
-      final isMember = await widget.repository.isMember(widget.community.id);
-      if (mounted && _isMember != isMember) {
-        setState(() {
-          _isMember = isMember;
-        });
+      final isMem = await widget.repository.isMember(widget.community.id);
+      if (mounted && _isMember != isMem) {
+        setState(() => _isMember = isMem);
       }
-    } catch (e) {
-      debugPrint('Error checking membership: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _joinCommunity() async {
-    setState(() {
-      _isLoading = true;
-      _isMember = true; // Optimistically unlock chat immediately
-    });
-    try {
-      await widget.repository.joinCommunity(widget.community.id);
-    } catch (e) {
-      debugPrint('Error joining community: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  // Feature #15: Leave confirmation dialog
-  Future<void> _leaveCommunity() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Leave Community?'),
-        content: Text('Are you sure you want to leave "${_community.name}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    
-    // Instant optimistic state change & instant pop back
-    setState(() {
-      _isMember = false;
-      _isLoading = false;
-    });
-    
-    widget.repository.leaveCommunity(widget.community.id);
-    if (mounted) {
-      Navigator.pop(context);
-    }
-  }
-
-  Future<void> _deleteCommunity() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Community?'),
-        content: Text(
-            'This will permanently delete "${_community.name}" and all its messages.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
     setState(() => _isLoading = true);
     try {
-      await widget.repository.deleteCommunity(widget.community.id);
-      if (mounted) Navigator.pop(context);
+      final res = await widget.repository.joinCommunity(widget.community.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res.message)),
+        );
+        if (res.status == JoinStatus.joined) {
+          setState(() => _isMember = true);
+          _refreshCommunity();
+        }
+      }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -164,7 +115,6 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     _messageController.clear();
     HapticFeedback.lightImpact();
 
-    // Smooth scroll down immediately
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0.0,
@@ -174,7 +124,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     }
 
     try {
-      await widget.repository.sendMessage(widget.community.id, text);
+      await widget.repository.sendMessage(_community.id, text);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,8 +137,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     }
   }
 
-  // F1: Show bottom sheet to choose Camera or Gallery (Multi-select)
-  Future<void> _pickAndSendImage() async {
+  Future<void> _pickAndSendMedia() async {
     final filesToUpload = await MediaAttachmentPicker.showPickerSheet(
       context: context,
       maxFiles: 8,
@@ -202,31 +151,41 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
     try {
       await widget.repository.sendImageGroupMessage(
-        widget.community.id,
+        _community.id,
         filesToUpload,
         caption: caption,
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Image send failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Media send failed: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSendingImage = false);
     }
   }
 
-  // Feature #9 + F2: Long press → emoji reactions + copy text option
   void _showMessageOptions(BuildContext context, CommunityMessage msg) {
+    final myHandle = widget.repository.currentUserHandle;
+    final canEdit = msg.canEdit(myHandle);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         margin: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 12)],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -238,8 +197,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: _quickEmojis.map((emoji) {
-                  final alreadyReacted = (msg.reactions[emoji] ?? [])
-                      .contains(widget.repository.currentUserHandle);
+                  final alreadyReacted = (msg.reactions[emoji] ?? []).contains(myHandle);
                   return GestureDetector(
                     onTap: () async {
                       Navigator.pop(context);
@@ -262,18 +220,16 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                 }).toList(),
               ),
             ),
-            // F2: Copy option — only shown when message has text content
-            if (msg.content.isNotEmpty) ...[
-              const Divider(height: 1, indent: 16, endIndent: 16),
+            const Divider(height: 16),
+
+            // Copy text
+            if (msg.content.isNotEmpty && !msg.deletedForEveryone)
               ListTile(
-                leading: const Icon(Icons.copy_outlined, color: Colors.black54),
-                title: const Text('Copy text',
-                    style: TextStyle(color: Colors.black87, fontSize: 14)),
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('Copy text'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Copy to clipboard
-                  final data = ClipboardData(text: msg.content);
-                  Clipboard.setData(data);
+                  Clipboard.setData(ClipboardData(text: msg.content));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Message copied'),
@@ -283,7 +239,39 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                   );
                 },
               ),
-            ],
+
+            // Edit message (Own message within 48h)
+            if (canEdit)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit message'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEditMessageDialog(msg);
+                },
+              ),
+
+            // Pin / Unpin (Admins/Owner)
+            if (_community.isAdmin && !msg.isSystem && !msg.deletedForEveryone)
+              ListTile(
+                leading: Icon(msg.pinned ? Icons.push_pin : Icons.push_pin_outlined),
+                title: Text(msg.pinned ? 'Unpin message' : 'Pin message'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await widget.repository.pinMessage(_community.id, msg.id, !msg.pinned);
+                },
+              ),
+
+            // Delete Message
+            if (!msg.isSystem && !msg.deletedForEveryone)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                title: const Text('Delete message', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteMessage(msg);
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -291,477 +279,609 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isAdmin =
-        _community.adminHandle == widget.repository.currentUserHandle;
-    final canPost = !_isLoading &&
-        _isMember &&
-        (!_community.isChannel || isAdmin);
-
-    return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_community.name,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black,
-                )),
-            Text(
-              '${_community.isChannel ? 'Channel' : 'Group'} · ${widget.community.memberCount} members',
-              style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
-            ),
-          ],
+  void _showEditMessageDialog(CommunityMessage msg) {
+    final editController = TextEditingController(text: msg.content);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Message'),
+        content: TextField(
+          controller: editController,
+          maxLines: 4,
+          autofocus: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Edit message content...',
+          ),
         ),
         actions: [
-          if (_isMember)
-            IconButton(
-              icon: Icon(Icons.people_outline, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
-              tooltip: 'Members',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CommunityMembersScreen(
-                    repository: widget.repository,
-                    community: _community,
-                  ),
-                ),
-              ),
-            ),
-          if (isAdmin)
-            IconButton(
-              icon: Icon(Icons.edit_outlined, color: isDark ? const Color(0xFF9A9A9A) : Colors.black54),
-              tooltip: 'Edit Community',
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditCommunityScreen(
-                      repository: widget.repository,
-                      community: _community,
-                    ),
-                  ),
-                );
-              },
-            ),
-          if (isAdmin)
-            IconButton(
-              icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-              tooltip: 'Delete Community',
-              onPressed: _deleteCommunity,
-            )
-          else if (_isMember)
-            IconButton(
-              icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-              tooltip: 'Leave Community',
-              onPressed: _leaveCommunity,
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<List<CommunityMessage>>(
-              stream: widget.repository.getCommunityMessages(widget.community.id),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF3B82F6),
-                      strokeWidth: 2.5,
-                    ),
-                  );
-                }
-                // F3: Error state — network/permission failure
-                if (snapshot.hasError) {
-                  debugPrint('Community chat error: ${snapshot.error}');
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off,
-                            size: 48, color: Colors.black26),
-                        const SizedBox(height: 12),
-                        const Text('Could not load messages.',
-                            style: TextStyle(color: Colors.black54)),
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: () => setState(() {}),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                final messages = snapshot.data ?? [];
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet. Say hi!',
-                        style: TextStyle(color: Colors.black54)),
-                  );
-                }
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics()),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  // F1: each message + possible date separator = 2 potential items per message
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    final isMe =
-                        msg.authorHandle == widget.repository.currentUserHandle;
-                    final bubble = _buildMessageBubble(msg, isMe);
-
-                    // B5 fixed: reversed list — index+1 is OLDER message
-                    // Separator should appear ABOVE older group.
-                    // In a reversed ListView, "above" = rendered AFTER bubble in Column
-                    final showDateSeparator = index == messages.length - 1 ||
-                        !_isSameDay(msg.timestamp, messages[index + 1].timestamp);
-
-                    if (showDateSeparator) {
-                      return Column(
-                        children: [
-                          bubble,
-                          _buildDateSeparator(msg.timestamp),
-                        ],
-                      );
-                    }
-                    return bubble;
-                  },
-                );
-              },
-            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-          if (_isSendingImage)
-            const LinearProgressIndicator(
-              backgroundColor: Color(0xFFE2E8F0),
-              color: Color(0xFF3B82F6),
-            ),
-          if (!_isMember && !_isLoading)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
-              child: ElevatedButton(
-                onPressed: _joinCommunity,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
-                  foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Text(
-                    'Join ${_community.isChannel ? 'Channel' : 'Group'}',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            )
-          else if (canPost)
-            _buildMessageInput()
-          else if (_community.isChannel && !isAdmin && _isMember)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Colors.white,
-              child: const Text(
-                'Only admins can broadcast messages here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
-              ),
-            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
+            onPressed: () async {
+              final newContent = editController.text.trim();
+              if (newContent.isNotEmpty && newContent != msg.content) {
+                Navigator.pop(ctx);
+                await widget.repository.editMessage(_community.id, msg.id, newContent);
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
     );
   }
 
-  // F1: Check if two timestamps are on the same calendar day
+  void _confirmDeleteMessage(CommunityMessage msg) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This will delete the message for everyone in this community.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await widget.repository.deleteMessage(_community.id, msg.id, mode: 'everyone');
+            },
+            child: const Text('Delete for Everyone'),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  // F1: Date separator pill — "Today", "Yesterday", or "8 Sep 2025"
-  Widget _buildDateSeparator(DateTime date) {
+  String _formatDateSeparator(DateTime dt) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final msgDay = DateTime(date.year, date.month, date.day);
-    final diff = today.difference(msgDay).inDays;
+    if (_isSameDay(dt, now)) return 'Today';
+    if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) return 'Yesterday';
+    return DateFormat('MMMM d, y').format(dt);
+  }
 
-    String label;
-    if (diff == 0) {
-      label = 'Today';
-    } else if (diff == 1) {
-      label = 'Yesterday';
-    } else {
-      label = DateFormat('MMMM d, y').format(date);
-    }
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF475569),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
+    final canPost = !_isLoading && _isMember && _community.canPost;
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: cardBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 0,
+        title: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommunityInfoScreen(
+                  community: _community,
+                  repository: widget.repository,
+                ),
+              ),
+            );
+            _refreshCommunity();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              children: [
+                _buildAppBarLogo(size: 38),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _community.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
+                      ),
+                      Text(
+                        '${_community.isChannel ? 'Channel' : 'Group'} · ${_community.memberCount} ${_community.isChannel ? 'subscribers' : 'members'}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.info_outline_rounded, color: textColor),
+            tooltip: 'Info',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CommunityInfoScreen(
+                    community: _community,
+                    repository: widget.repository,
+                  ),
+                ),
+              );
+              _refreshCommunity();
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ── Messages Stream ──
+          Expanded(
+            child: StreamBuilder<List<CommunityMessage>>(
+              stream: widget.repository.getCommunityMessages(_community.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  );
+                }
+
+                final messages = snapshot.data ?? [];
+                final pinnedMessages = messages.where((m) => m.pinned && !m.deletedForEveryone).toList();
+
+                return Column(
+                  children: [
+                    // ── Pinned Message Banner ──
+                    if (pinnedMessages.isNotEmpty)
+                      _buildPinnedBanner(pinnedMessages.first, isDark),
+
+                    // Messages List
+                    Expanded(
+                      child: messages.isEmpty
+                          ? Center(
+                              child: Text(
+                                _community.isChannel
+                                    ? 'No announcements yet.'
+                                    : 'No messages yet. Say hi!',
+                                style: const TextStyle(color: Color(0xFF94A3B8)),
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: _scrollController,
+                              reverse: true,
+                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                final msg = messages[index];
+                                final isMe = msg.authorHandle.toLowerCase().replaceAll('@', '') ==
+                                    widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
+
+                                final bubble = _buildMessageBubble(msg, isMe, isDark);
+
+                                final showDateSeparator = index == messages.length - 1 ||
+                                    !_isSameDay(msg.timestamp, messages[index + 1].timestamp);
+
+                                if (showDateSeparator) {
+                                  return Column(
+                                    children: [
+                                      _buildDateSeparator(msg.timestamp, isDark),
+                                      bubble,
+                                    ],
+                                  );
+                                }
+                                return bubble;
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          if (_isSendingImage)
+            const LinearProgressIndicator(
+              backgroundColor: Color(0xFFE2E8F0),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+            ),
+
+          // ── Bottom Input Bar / Join Bar ──
+          _buildBottomInputArea(canPost, cardBg, textColor, isDark),
+        ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(CommunityMessage msg, bool isMe) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasReactions = msg.reactions.isNotEmpty;
-    final timeStr = DateFormat('hh:mm a').format(msg.timestamp);
+  Widget _buildAppBarLogo({double size = 38}) {
+    final isChannel = _community.isChannel;
+    final bgColor = isChannel ? const Color(0xFFE0F2FE) : const Color(0xFFDCFCE7);
+    final iconColor = isChannel ? const Color(0xFF0284C7) : const Color(0xFF16A34A);
 
-    final List<String> mediaUrls = [];
-    if (msg.mediaUrls.isNotEmpty) {
-      mediaUrls.addAll(msg.mediaUrls);
-    } else if (msg.imageUrl != null && msg.imageUrl!.isNotEmpty) {
-      mediaUrls.add(msg.imageUrl!);
+    if (_community.imageUrl != null && _community.imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          _community.imageUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => _buildFallbackBox(size, bgColor, isChannel ? Icons.campaign_rounded : Icons.group_rounded, iconColor),
+        ),
+      );
+    }
+    return _buildFallbackBox(size, bgColor, isChannel ? Icons.campaign_rounded : Icons.group_rounded, iconColor);
+  }
+
+  Widget _buildFallbackBox(double size, Color bgColor, IconData icon, Color iconColor) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: iconColor, size: size * 0.52),
+    );
+  }
+
+  // ── Pinned Message Banner ──
+  Widget _buildPinnedBanner(CommunityMessage msg, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.push_pin_rounded, size: 16, color: Color(0xFF3B82F6)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Pinned Message',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3B82F6),
+                  ),
+                ),
+                Text(
+                  msg.content.isNotEmpty ? msg.content : 'Photo/Media',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Message Bubble ──
+  Widget _buildMessageBubble(CommunityMessage msg, bool isMe, bool isDark) {
+    if (msg.isSystem) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            msg.content,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+            ),
+          ),
+        ),
+      );
     }
 
-    final hasImages = mediaUrls.isNotEmpty;
-
-    final bubbleRadius = BorderRadius.only(
-      topLeft: const Radius.circular(18),
-      topRight: const Radius.circular(18),
-      bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
-      bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
-    );
+    final isTombstone = msg.deletedForEveryone;
 
     return GestureDetector(
-      onLongPress: () => _showMessageOptions(context, msg), // Feature #9 + F2
-      child: Align(
+      onLongPress: () => _showMessageOptions(context, msg),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3.5),
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * (hasImages ? 0.70 : 0.78),
+        child: Container(
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isTombstone
+                ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9))
+                : (isMe
+                    ? const Color(0xFF3B82F6)
+                    : (isDark ? const Color(0xFF1E293B) : Colors.white)),
+            borderRadius: BorderRadius.circular(16),
+            border: !isMe && !isTombstone
+                ? Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? (isDark ? Colors.white : Colors.black)
-                    : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF4F4F4)),
-                borderRadius: bubbleRadius,
-                border: Border.all(
-                  color: isMe
-                      ? (isDark ? Colors.white : Colors.black)
-                      : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Author header for non-me messages in groups
+              if (!isMe && !_community.isChannel) ...[
+                Text(
+                  '@${msg.authorHandle}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF2563EB),
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    offset: const Offset(0, 1),
-                    blurRadius: 3,
+                const SizedBox(height: 4),
+              ],
+
+              // Tombstone vs Content
+              if (isTombstone)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.block_rounded, size: 14, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'This message was deleted',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                if (msg.mediaUrls.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: ImageGroupBubble(
+                      mediaUrls: msg.mediaUrls,
+                      caption: msg.content.isNotEmpty ? msg.content : null,
+                      timeStr: DateFormat('h:mm a').format(msg.timestamp),
+                      isMe: isMe,
+                      messageId: msg.id,
+                      bubbleRadius: BorderRadius.circular(16),
+                    ),
+                  )
+                else if (msg.imageUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        msg.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+
+                if (msg.content.isNotEmpty)
+                  Text(
+                    msg.content,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      color: isMe ? Colors.white : (isDark ? Colors.white : const Color(0xFF0F172A)),
+                    ),
+                  ),
+              ],
+
+              const SizedBox(height: 4),
+
+              // Time + Edited + Pinned indicators
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (msg.pinned) ...[
+                    const Icon(Icons.push_pin_rounded, size: 11, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 4),
+                  ],
+                  if (msg.isEdited) ...[
+                    Text(
+                      'edited',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isMe ? Colors.white70 : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    DateFormat('h:mm a').format(msg.timestamp),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isMe ? Colors.white70 : const Color(0xFF94A3B8),
+                    ),
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isMe && !widget.community.isChannel)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(13, 8, 13, 2),
-                      child: Text(
-                        '@${msg.authorHandle}',
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : const Color(0xFF0F172A),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
 
-                  if (hasImages)
-                    ImageGroupBubble(
-                      mediaUrls: mediaUrls,
-                      caption: msg.content.isNotEmpty ? msg.content : null,
-                      timeStr: timeStr,
-                      isMe: isMe,
-                      messageId: msg.id,
-                      bubbleRadius: (!isMe && !widget.community.isChannel)
-                          ? const BorderRadius.only(
-                              bottomLeft: Radius.circular(4),
-                              bottomRight: Radius.circular(18),
-                              topLeft: Radius.circular(4),
-                              topRight: Radius.circular(4),
-                            )
-                          : bubbleRadius,
-                    )
-                  else
-                    // Pure Text Bubble
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 13, vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: isMe
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            msg.content,
-                            style: TextStyle(
-                              color: isMe
-                                  ? (isDark ? Colors.black : Colors.white)
-                                  : (isDark ? Colors.white : const Color(0xFF0F172A)),
-                              fontSize: 14.5,
-                              height: 1.35,
-                            ),
-                          ),
-                          if (timeStr.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              timeStr,
-                              style: TextStyle(
-                                color: isMe
-                                    ? (isDark ? Colors.black54 : Colors.white70)
-                                    : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Feature #9: Show reaction counts below bubble
-            if (hasReactions)
-              Padding(
-                padding: const EdgeInsets.only(
-                    left: 16, right: 16, bottom: 4),
-                child: Wrap(
+              // Reactions
+              if (msg.reactions.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
                   spacing: 4,
                   children: msg.reactions.entries.map((entry) {
                     final emoji = entry.key;
                     final count = entry.value.length;
-                    final iReacted = entry.value
-                        .contains(widget.repository.currentUserHandle);
-                    return GestureDetector(
-                      onTap: () async {
-                        await widget.repository
-                            .toggleReaction(msg.id, emoji);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: iReacted
-                              ? const Color(0xFFEFF6FF)
-                              : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: iReacted
-                              ? Border.all(
-                                  color: const Color(0xFF2563EB),
-                                  width: 1.5)
-                              : null,
-                        ),
-                        child: Text(
-                          '$emoji $count',
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$emoji $count',
+                        style: const TextStyle(fontSize: 11),
                       ),
                     );
                   }).toList(),
                 ),
-              ),
-          ],
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMessageInput() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildDateSeparator(DateTime dt, bool isDark) {
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        border: Border(top: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6))),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            offset: const Offset(0, -2),
-            blurRadius: 8,
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          _formatDateSeparator(dt),
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           ),
-        ],
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8).copyWith(
-          bottom: MediaQuery.of(context).padding.bottom + 8),
-      child: Row(
-        children: [
-          // Feature #11: Image attach button
-          IconButton(
-            icon: Icon(Icons.image_outlined, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E), size: 24),
-            onPressed: _isSendingImage ? null : _pickAndSendImage,
-            tooltip: 'Send Image',
+    );
+  }
+
+  // ── Bottom Input Area ──
+  Widget _buildBottomInputArea(bool canPost, Color cardBg, Color textColor, bool isDark) {
+    if (!_isMember) {
+      return Container(
+        color: cardBg,
+        padding: const EdgeInsets.all(16),
+        child: SafeArea(
+          child: SizedBox(
+            height: 48,
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: _isLoading ? null : _joinCommunity,
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(
+                      _community.approveNewMembers ? 'Request to Join' : 'Join Community',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+            ),
           ),
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 15),
-              textCapitalization: TextCapitalization.sentences,
-              maxLines: null,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.send,
-              decoration: InputDecoration(
-                hintText: 'Type a message...',
-                hintStyle: TextStyle(color: isDark ? const Color(0xFF6E6E6E) : Colors.black38, fontSize: 14),
-                filled: true,
-                fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+        ),
+      );
+    }
+
+    if (!canPost) {
+      return Container(
+        color: cardBg,
+        padding: const EdgeInsets.all(16),
+        child: SafeArea(
+          child: Center(
+            child: Text(
+              _community.isChannel
+                  ? 'Only channel admins can post.'
+                  : 'Only admins can send messages in this group.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: cardBg,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SafeArea(
+        child: Row(
+          children: [
+            if (_community.canSendMedia)
+              IconButton(
+                icon: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF3B82F6)),
+                onPressed: _pickAndSendMedia,
+              ),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-              onSubmitted: (_) => _sendMessage(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Material(
-            color: isDark ? Colors.white : Colors.black,
-            shape: const CircleBorder(),
-            elevation: 2,
-            shadowColor: Colors.black.withValues(alpha: 0.2),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _sendMessage,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Icon(Icons.send_rounded, color: isDark ? Colors.black : Colors.white, size: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: TextField(
+                  controller: _messageController,
+                  maxLines: 4,
+                  minLines: 1,
+                  style: TextStyle(color: textColor, fontSize: 14.5),
+                  decoration: const InputDecoration(
+                    hintText: 'Message...',
+                    hintStyle: TextStyle(color: Color(0xFF94A3B8)),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+                onPressed: _sendMessage,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

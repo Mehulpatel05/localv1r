@@ -380,6 +380,33 @@ class D1Service:
                 call_privacy TEXT DEFAULT 'everyone',
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))
             );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS join_requests (
+                id TEXT PRIMARY KEY,
+                community_id TEXT NOT NULL,
+                user_handle TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_jr_comm ON join_requests(community_id, status);
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_jr_user ON join_requests(user_handle, status);
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS community_message_deletions (
+                message_id TEXT NOT NULL,
+                user_handle TEXT NOT NULL,
+                deleted_at INTEGER DEFAULT (strftime('%s', 'now')),
+                PRIMARY KEY (message_id, user_handle)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_cmd_user ON community_message_deletions(user_handle);
             """
         ]
 
@@ -392,6 +419,19 @@ class D1Service:
         migrations = [
             "ALTER TABLE posts ADD COLUMN meta_json TEXT;",
             "ALTER TABLE posts ADD COLUMN deleted_at INTEGER;",
+            "ALTER TABLE communities ADD COLUMN visibility TEXT DEFAULT 'public';",
+            "ALTER TABLE communities ADD COLUMN username TEXT;",
+            "ALTER TABLE communities ADD COLUMN invite_link TEXT;",
+            "ALTER TABLE communities ADD COLUMN settings_json TEXT DEFAULT '{}';",
+            "ALTER TABLE communities ADD COLUMN owner_handle TEXT;",
+            "ALTER TABLE community_members ADD COLUMN admin_permissions_json TEXT DEFAULT '{}';",
+            "ALTER TABLE community_members ADD COLUMN muted_until INTEGER DEFAULT 0;",
+            "ALTER TABLE community_members ADD COLUMN is_archived INTEGER DEFAULT 0;",
+            "ALTER TABLE community_messages ADD COLUMN pinned INTEGER DEFAULT 0;",
+            "ALTER TABLE community_messages ADD COLUMN is_system INTEGER DEFAULT 0;",
+            "ALTER TABLE community_messages ADD COLUMN edited_at INTEGER;",
+            "ALTER TABLE community_messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;",
+            "ALTER TABLE community_messages ADD COLUMN deleted_by TEXT;",
         ]
         for m in migrations:
             cls.execute(m.strip())
@@ -1082,26 +1122,102 @@ class D1Service:
     # ==========================================
 
     @classmethod
+    def check_community_username_available(cls, username: str) -> bool:
+        clean = username.strip().lower().lstrip('@')
+        if not clean or len(clean) < 3 or len(clean) > 30:
+            return False
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', clean):
+            return False
+        rows = cls.query("SELECT id FROM communities WHERE LOWER(username) = ? LIMIT 1;", [clean])
+        return not (rows and len(rows) > 0)
+
+    @classmethod
     def create_community(
         cls,
         name: str,
         description: str,
         admin_handle: str,
         is_channel: bool = False,
-        image_url: Optional[str] = None
+        visibility: str = "public",
+        username: Optional[str] = None,
+        invite_link: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+        image_url: Optional[str] = None,
+        initial_members: Optional[List[str]] = None
     ) -> Optional[str]:
         comm_id = str(uuid.uuid4())
         now_ts = int(time.time())
         clean_admin = admin_handle.replace("@", "").strip()
+        clean_visibility = "private" if visibility.lower() == "private" else "public"
+        clean_username = username.strip().lower().lstrip('@') if (username and clean_visibility == "public") else None
+
+        if clean_username and not cls.check_community_username_available(clean_username):
+            return None
+
+        clean_invite = invite_link.strip() if invite_link else (uuid.uuid4().hex[:8] if clean_visibility == "private" else None)
+
+        default_settings = {
+            "who_can_send": "admins_only" if is_channel else "all",
+            "media_permissions": {
+                "text": True,
+                "photo": True,
+                "video": True,
+                "file": True,
+                "call": True
+            },
+            "approve_new_members": False,
+            "delete_mode": "everyone"
+        }
+        if settings:
+            default_settings.update(settings)
+        if is_channel:
+            default_settings["who_can_send"] = "admins_only"
+
+        settings_json = json.dumps(default_settings)
+        member_count = 1 + (len(initial_members) if initial_members else 0)
 
         sql = """
-        INSERT INTO communities (id, name, description, is_channel, admin_handle, member_count, image_url, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?);
+        INSERT INTO communities (
+            id, name, description, is_channel, admin_handle, owner_handle, visibility, username, invite_link, settings_json, member_count, image_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
-        if cls.execute(sql, [comm_id, name.strip(), description.strip(), 1 if is_channel else 0, clean_admin, image_url, now_ts, now_ts]):
-            # Add admin as first member
+        if cls.execute(sql, [
+            comm_id, name.strip(), description.strip(), 1 if is_channel else 0,
+            clean_admin, clean_admin, clean_visibility, clean_username, clean_invite,
+            settings_json, member_count, image_url, now_ts, now_ts
+        ]):
+            admin_perms = json.dumps({
+                "can_add_members": True,
+                "can_remove_members": True,
+                "can_edit_info": True,
+                "can_pin_messages": True,
+                "can_delete_messages": True,
+                "can_manage_admins": True
+            })
             member_id = f"{comm_id}_{clean_admin.lower()}"
-            cls.execute("INSERT OR REPLACE INTO community_members (id, community_id, user_handle, role, last_read_at, joined_at) VALUES (?, ?, ?, 'admin', ?, ?);", [member_id, comm_id, clean_admin, now_ts, now_ts])
+            cls.execute(
+                "INSERT OR REPLACE INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'owner', ?, 0, 0, ?, ?);",
+                [member_id, comm_id, clean_admin, admin_perms, now_ts, now_ts]
+            )
+
+            if initial_members:
+                for m_handle in initial_members:
+                    clean_m = m_handle.replace("@", "").strip()
+                    if clean_m and clean_m.lower() != clean_admin.lower():
+                        m_id = f"{comm_id}_{clean_m.lower()}"
+                        cls.execute(
+                            "INSERT OR IGNORE INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);",
+                            [m_id, comm_id, clean_m, now_ts, now_ts]
+                        )
+
+            system_text = f"{clean_admin} created this {'channel' if is_channel else 'group'}"
+            cls.send_community_message(
+                community_id=comm_id,
+                author_handle="System",
+                content=system_text,
+                message_type="system"
+            )
             return comm_id
         return None
 
@@ -1109,88 +1225,203 @@ class D1Service:
     def get_communities(
         cls,
         user_handle: Optional[str] = None,
-        filter_mode: str = "all"
+        filter_mode: str = "all",
+        search_query: Optional[str] = None,
+        type_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         clean_user = user_handle.replace("@", "").strip().lower() if user_handle else None
+        now_ts = int(time.time())
 
         if filter_mode == "joined":
             if not clean_user:
                 return []
             sql = """
-            SELECT c.* FROM communities c
+            SELECT c.*, m.role as my_role, m.muted_until as my_muted_until, m.is_archived as my_is_archived, m.last_read_at as my_last_read_at,
+                   (SELECT COUNT(*) FROM community_messages msg WHERE msg.community_id = c.id AND msg.created_at > COALESCE(m.last_read_at, 0) AND msg.deleted_at IS NULL AND LOWER(msg.author_handle) != ?) as unread_count,
+                   (SELECT content FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_message,
+                   (SELECT created_at FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_message_at,
+                   (SELECT author_handle FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_sender_handle
+            FROM communities c
             INNER JOIN community_members m ON c.id = m.community_id
             WHERE LOWER(m.user_handle) = ?
-            ORDER BY c.name ASC;
             """
-            rows = cls.query(sql, [clean_user]) or []
-        elif filter_mode == "discover":
+            params: List[Any] = [clean_user, clean_user]
+            if type_filter == "group":
+                sql += " AND c.is_channel = 0"
+            elif type_filter == "channel":
+                sql += " AND c.is_channel = 1"
+
+            if search_query and len(search_query.strip()) >= 2:
+                q = f"%{search_query.strip().lower()}%"
+                sql += " AND (LOWER(c.name) LIKE ? OR LOWER(COALESCE(c.username, '')) LIKE ? OR LOWER(COALESCE(c.description, '')) LIKE ?)"
+                params.extend([q, q, q])
+
+            sql += " ORDER BY COALESCE(last_message_at, c.created_at) DESC;"
+            rows = cls.query(sql, params) or []
+
+        elif filter_mode == "discover" or filter_mode == "directory":
+            sql = """
+            SELECT c.*, NULL as my_role, 0 as my_muted_until, 0 as my_is_archived, 0 as unread_count,
+                   NULL as last_message, NULL as last_message_at, NULL as last_sender_handle
+            FROM communities c
+            WHERE c.visibility = 'public'
+            """
+            params = []
             if clean_user:
-                sql = """
-                SELECT c.* FROM communities c
-                WHERE c.id NOT IN (
-                    SELECT community_id FROM community_members WHERE LOWER(user_handle) = ?
-                )
-                ORDER BY c.created_at DESC;
-                """
-                rows = cls.query(sql, [clean_user]) or []
+                sql += " AND c.id NOT IN (SELECT community_id FROM community_members WHERE LOWER(user_handle) = ?)"
+                params.append(clean_user)
+
+            if type_filter == "group":
+                sql += " AND c.is_channel = 0"
+            elif type_filter == "channel":
+                sql += " AND c.is_channel = 1"
+
+            if search_query and len(search_query.strip()) >= 2:
+                q = f"%{search_query.strip().lower()}%"
+                sql += " AND (LOWER(c.name) LIKE ? OR LOWER(COALESCE(c.username, '')) LIKE ? OR LOWER(COALESCE(c.description, '')) LIKE ?)"
+                params.extend([q, q, q])
+
+            sql += " ORDER BY c.member_count DESC, c.created_at DESC LIMIT 50;"
+            rows = cls.query(sql, params) or []
+
+        else: # filter_mode == "all"
+            if clean_user:
+                return cls.get_communities(user_handle=clean_user, filter_mode="joined", search_query=search_query, type_filter=type_filter)
             else:
-                sql = "SELECT * FROM communities ORDER BY created_at DESC;"
-                rows = cls.query(sql) or []
-        else:
-            sql = "SELECT * FROM communities ORDER BY created_at DESC;"
-            rows = cls.query(sql) or []
+                return cls.get_communities(user_handle=None, filter_mode="discover", search_query=search_query, type_filter=type_filter)
 
         res = []
         for r in rows:
+            settings_obj = {}
+            if r.get("settings_json"):
+                try:
+                    settings_obj = json.loads(r["settings_json"])
+                except:
+                    pass
+
+            muted_until = r.get("my_muted_until") or 0
+            is_muted = (muted_until == -1) or (muted_until > now_ts)
+            is_archived = bool(r.get("my_is_archived", 0))
+
             res.append({
                 "id": r["id"],
                 "name": r["name"],
                 "description": r.get("description", ""),
                 "isChannel": bool(r.get("is_channel", 0)),
-                "adminHandle": r["admin_handle"],
+                "adminHandle": r.get("owner_handle") or r["admin_handle"],
+                "ownerHandle": r.get("owner_handle") or r["admin_handle"],
+                "visibility": r.get("visibility", "public"),
+                "username": r.get("username"),
+                "inviteLink": r.get("invite_link"),
+                "settings": settings_obj,
                 "memberCount": r.get("member_count", 1),
                 "imageUrl": r.get("image_url"),
+                "myRole": r.get("my_role") or "member",
+                "isMuted": is_muted,
+                "mutedUntil": muted_until,
+                "isArchived": is_archived,
+                "unreadCount": r.get("unread_count", 0) or 0,
+                "lastMessage": r.get("last_message"),
+                "lastMessageAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["last_message_at"])) if r.get("last_message_at") else None,
+                "lastSenderHandle": r.get("last_sender_handle"),
                 "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None,
                 "updatedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["updated_at"])) if r.get("updated_at") else None
             })
         return res
 
     @classmethod
-    def get_community_by_id(cls, community_id: str) -> Optional[Dict[str, Any]]:
+    def get_community_by_id(cls, community_id: str, user_handle: Optional[str] = None) -> Optional[Dict[str, Any]]:
         sql = "SELECT * FROM communities WHERE id = ? LIMIT 1;"
         rows = cls.query(sql, [community_id])
+        if not rows or len(rows) == 0:
+            return None
+        r = rows[0]
+        now_ts = int(time.time())
+
+        my_role = None
+        my_muted_until = 0
+        my_is_archived = False
+        my_permissions = {}
+
+        if user_handle:
+            clean_u = user_handle.replace("@", "").strip().lower()
+            m_rows = cls.query("SELECT role, admin_permissions_json, muted_until, is_archived FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ? LIMIT 1;", [community_id, clean_u])
+            if m_rows and len(m_rows) > 0:
+                mr = m_rows[0]
+                my_role = mr.get("role")
+                my_muted_until = mr.get("muted_until") or 0
+                my_is_archived = bool(mr.get("is_archived", 0))
+                if mr.get("admin_permissions_json"):
+                    try:
+                        my_permissions = json.loads(mr["admin_permissions_json"])
+                    except:
+                        pass
+
+        settings_obj = {}
+        if r.get("settings_json"):
+            try:
+                settings_obj = json.loads(r["settings_json"])
+            except:
+                pass
+
+        is_muted = (my_muted_until == -1) or (my_muted_until > now_ts)
+
+        return {
+            "id": r["id"],
+            "name": r["name"],
+            "description": r.get("description", ""),
+            "isChannel": bool(r.get("is_channel", 0)),
+            "adminHandle": r.get("owner_handle") or r["admin_handle"],
+            "ownerHandle": r.get("owner_handle") or r["admin_handle"],
+            "visibility": r.get("visibility", "public"),
+            "username": r.get("username"),
+            "inviteLink": r.get("invite_link"),
+            "settings": settings_obj,
+            "memberCount": r.get("member_count", 1),
+            "imageUrl": r.get("image_url"),
+            "myRole": my_role,
+            "myPermissions": my_permissions,
+            "isMuted": is_muted,
+            "mutedUntil": my_muted_until,
+            "isArchived": my_is_archived,
+            "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None,
+            "updatedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["updated_at"])) if r.get("updated_at") else None
+        }
+
+    @classmethod
+    def get_community_by_username_or_link(cls, identifier: str) -> Optional[Dict[str, Any]]:
+        clean = identifier.strip().lstrip('@').lower()
+        sql = "SELECT id FROM communities WHERE LOWER(username) = ? OR LOWER(invite_link) = ? LIMIT 1;"
+        rows = cls.query(sql, [clean, clean])
         if rows and len(rows) > 0:
-            r = rows[0]
-            return {
-                "id": r["id"],
-                "name": r["name"],
-                "description": r.get("description", ""),
-                "isChannel": bool(r.get("is_channel", 0)),
-                "adminHandle": r["admin_handle"],
-                "memberCount": r.get("member_count", 1),
-                "imageUrl": r.get("image_url"),
-                "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None
-            }
+            return cls.get_community_by_id(rows[0]["id"])
         return None
 
     @classmethod
-    def update_community(
+    def update_community_settings(
         cls,
         community_id: str,
-        admin_handle: str,
+        user_handle: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        image_url: Optional[str] = None
+        image_url: Optional[str] = None,
+        visibility: Optional[str] = None,
+        username: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None
     ) -> bool:
-        comm = cls.get_community_by_id(community_id)
+        clean_user = user_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_user)
         if not comm:
             return False
-        clean_admin = admin_handle.replace("@", "").strip().lower()
-        if comm["adminHandle"].lower() != clean_admin:
+
+        # Verify user is owner or admin with can_edit_info
+        role = comm.get("myRole")
+        perms = comm.get("myPermissions", {})
+        if role != "owner" and not (role == "admin" and perms.get("can_edit_info", True)):
             return False
 
         updates = ["updated_at = ?"]
-        params = [int(time.time())]
+        params: List[Any] = [int(time.time())]
 
         if name:
             updates.append("name = ?")
@@ -1201,55 +1432,292 @@ class D1Service:
         if image_url is not None:
             updates.append("image_url = ?")
             params.append(image_url.strip())
+        if visibility:
+            clean_vis = "private" if visibility.lower() == "private" else "public"
+            updates.append("visibility = ?")
+            params.append(clean_vis)
+        if username is not None:
+            clean_u = username.strip().lower().lstrip('@')
+            if clean_u:
+                if not cls.check_community_username_available(clean_u):
+                    current_u = (comm.get("username") or "").lower()
+                    if clean_u != current_u:
+                        return False
+                updates.append("username = ?")
+                params.append(clean_u)
+            else:
+                updates.append("username = NULL")
+        if settings is not None:
+            current_settings = comm.get("settings", {})
+            current_settings.update(settings)
+            updates.append("settings_json = ?")
+            params.append(json.dumps(current_settings))
 
         params.append(community_id)
         sql = f"UPDATE communities SET {', '.join(updates)} WHERE id = ?;"
         return cls.execute(sql, params)
 
     @classmethod
-    def join_community(cls, community_id: str, user_handle: str) -> bool:
+    def join_community(cls, community_id: str, user_handle: str, invite_code: Optional[str] = None) -> Dict[str, Any]:
         clean_user = user_handle.replace("@", "").strip()
-        member_id = f"{community_id}_{clean_user.lower()}"
-        now_ts = int(time.time())
+        comm = cls.get_community_by_id(community_id)
+        if not comm:
+            return {"success": False, "error": "Community not found"}
 
-        # Check existing membership
+        member_id = f"{community_id}_{clean_user.lower()}"
         existing = cls.query("SELECT id FROM community_members WHERE id = ? LIMIT 1;", [member_id])
         if existing and len(existing) > 0:
-            return True
+            return {"success": True, "status": "already_member", "message": "Already a member"}
 
-        sql = "INSERT INTO community_members (id, community_id, user_handle, role, last_read_at, joined_at) VALUES (?, ?, ?, 'member', ?, ?);"
+        settings = comm.get("settings", {})
+        approve_required = settings.get("approve_new_members", False)
+
+        now_ts = int(time.time())
+
+        # If approval is required, create pending join request
+        if approve_required:
+            req_id = str(uuid.uuid4())
+            sql = "INSERT INTO join_requests (id, community_id, user_handle, status, created_at) VALUES (?, ?, ?, 'pending', ?);"
+            if cls.execute(sql, [req_id, community_id, clean_user, now_ts]):
+                return {"success": True, "status": "pending", "message": "Join request submitted for admin review."}
+            return {"success": False, "error": "Failed to submit join request"}
+
+        # Instant join
+        sql = "INSERT INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);"
         if cls.execute(sql, [member_id, community_id, clean_user, now_ts, now_ts]):
             cls.execute("UPDATE communities SET member_count = member_count + 1 WHERE id = ?;", [community_id])
-            return True
-        return False
+            
+            # System message
+            comm_type = "channel" if comm.get("isChannel") else "group"
+            cls.send_community_message(
+                community_id=community_id,
+                author_handle="System",
+                content=f"{clean_user} joined the {comm_type}",
+                message_type="system"
+            )
+            return {"success": True, "status": "joined", "message": "Joined community successfully."}
+
+        return {"success": False, "error": "Failed to join community"}
 
     @classmethod
-    def leave_community(cls, community_id: str, user_handle: str) -> bool:
-        clean_user = user_handle.replace("@", "").strip().lower()
-        cls.execute("DELETE FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_user])
+    def leave_community(cls, community_id: str, user_handle: str) -> Dict[str, Any]:
+        clean_user = user_handle.replace("@", "").strip()
+        comm = cls.get_community_by_id(community_id)
+        if not comm:
+            return {"success": False, "error": "Community not found"}
+
+        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").lower()
+        if owner_handle == clean_user.lower() and comm.get("memberCount", 1) > 1:
+            return {"success": False, "error": "You must transfer ownership before leaving the community."}
+
+        cls.execute("DELETE FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_user.lower()])
         cls.execute("UPDATE communities SET member_count = MAX(1, member_count - 1) WHERE id = ?;", [community_id])
-        return True
+
+        comm_type = "channel" if comm.get("isChannel") else "group"
+        cls.send_community_message(
+            community_id=community_id,
+            author_handle="System",
+            content=f"{clean_user} left the {comm_type}",
+            message_type="system"
+        )
+        return {"success": True, "message": "Left community successfully."}
 
     @classmethod
-    def get_community_members(cls, community_id: str) -> List[Dict[str, Any]]:
+    def get_join_requests(cls, community_id: str, admin_handle: str) -> List[Dict[str, Any]]:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return []
+        role = comm.get("myRole")
+        perms = comm.get("myPermissions", {})
+        if role != "owner" and not (role == "admin" and perms.get("can_add_members", True)):
+            return []
+
         sql = """
-        SELECT m.user_handle, m.role, m.joined_at, u.avatar_url, u.reputation
-        FROM community_members m
-        LEFT JOIN users u ON LOWER(m.user_handle) = LOWER(u.handle)
-        WHERE m.community_id = ?
-        ORDER BY m.joined_at ASC;
+        SELECT r.id, r.community_id, r.user_handle, r.status, r.created_at, u.avatar_url, u.reputation
+        FROM join_requests r
+        LEFT JOIN users u ON LOWER(r.user_handle) = LOWER(u.handle)
+        WHERE r.community_id = ? AND r.status = 'pending'
+        ORDER BY r.created_at ASC;
         """
         rows = cls.query(sql, [community_id]) or []
         res = []
         for r in rows:
             res.append({
+                "id": r["id"],
+                "communityId": r["community_id"],
+                "userHandle": r["user_handle"],
+                "status": r["status"],
+                "avatarUrl": r.get("avatar_url") or "",
+                "reputation": r.get("reputation") or 0,
+                "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None
+            })
+        return res
+
+    @classmethod
+    def respond_join_request(cls, community_id: str, request_id: str, admin_handle: str, approve: bool) -> bool:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return False
+        role = comm.get("myRole")
+        perms = comm.get("myPermissions", {})
+        if role != "owner" and not (role == "admin" and perms.get("can_add_members", True)):
+            return False
+
+        req_rows = cls.query("SELECT user_handle FROM join_requests WHERE id = ? AND community_id = ? AND status = 'pending' LIMIT 1;", [request_id, community_id])
+        if not req_rows or len(req_rows) == 0:
+            return False
+        target_handle = req_rows[0]["user_handle"]
+        now_ts = int(time.time())
+
+        if approve:
+            cls.execute("UPDATE join_requests SET status = 'approved' WHERE id = ?;", [request_id])
+            member_id = f"{community_id}_{target_handle.lower()}"
+            cls.execute("INSERT OR REPLACE INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);", [member_id, community_id, target_handle, now_ts, now_ts])
+            cls.execute("UPDATE communities SET member_count = member_count + 1 WHERE id = ?;", [community_id])
+            comm_type = "channel" if comm.get("isChannel") else "group"
+            cls.send_community_message(
+                community_id=community_id,
+                author_handle="System",
+                content=f"{target_handle} was approved to join the {comm_type}",
+                message_type="system"
+            )
+        else:
+            cls.execute("UPDATE join_requests SET status = 'declined' WHERE id = ?;", [request_id])
+        return True
+
+    @classmethod
+    def get_community_members(cls, community_id: str) -> List[Dict[str, Any]]:
+        sql = """
+        SELECT m.user_handle, m.role, m.admin_permissions_json, m.joined_at, u.avatar_url, u.reputation
+        FROM community_members m
+        LEFT JOIN users u ON LOWER(m.user_handle) = LOWER(u.handle)
+        WHERE m.community_id = ?
+        ORDER BY 
+            CASE m.role 
+                WHEN 'owner' THEN 1 
+                WHEN 'admin' THEN 2 
+                ELSE 3 
+            END ASC,
+            m.joined_at ASC;
+        """
+        rows = cls.query(sql, [community_id]) or []
+        res = []
+        for r in rows:
+            perms = {}
+            if r.get("admin_permissions_json"):
+                try:
+                    perms = json.loads(r["admin_permissions_json"])
+                except:
+                    pass
+            res.append({
                 "userHandle": r["user_handle"],
                 "role": r["role"],
+                "permissions": perms,
                 "avatarUrl": r.get("avatar_url") or "",
                 "reputation": r.get("reputation") or 0,
                 "joinedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["joined_at"])) if r.get("joined_at") else None
             })
         return res
+
+    @classmethod
+    def update_member_role_and_permissions(
+        cls,
+        community_id: str,
+        admin_handle: str,
+        target_handle: str,
+        role: str,
+        permissions: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        clean_target = target_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return False
+
+        my_role = comm.get("myRole")
+        my_perms = comm.get("myPermissions", {})
+        if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_manage_admins", False)):
+            return False
+
+        if clean_target == (comm.get("ownerHandle") or "").lower():
+            return False
+
+        clean_role = "admin" if role.lower() == "admin" else "member"
+        perms_json = json.dumps(permissions) if permissions else ("{}" if clean_role == "member" else json.dumps({
+            "can_add_members": True,
+            "can_remove_members": True,
+            "can_edit_info": True,
+            "can_pin_messages": True,
+            "can_delete_messages": True,
+            "can_manage_admins": False
+        }))
+
+        sql = "UPDATE community_members SET role = ?, admin_permissions_json = ? WHERE community_id = ? AND LOWER(user_handle) = ?;"
+        return cls.execute(sql, [clean_role, perms_json, community_id, clean_target])
+
+    @classmethod
+    def transfer_community_ownership(cls, community_id: str, current_owner_handle: str, new_owner_handle: str) -> bool:
+        clean_owner = current_owner_handle.replace("@", "").strip().lower()
+        clean_new = new_owner_handle.replace("@", "").strip()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_owner)
+        if not comm or comm.get("myRole") != "owner":
+            return False
+
+        # Update community owner_handle
+        cls.execute("UPDATE communities SET owner_handle = ?, admin_handle = ? WHERE id = ?;", [clean_new, clean_new, community_id])
+        # Promote new owner
+        cls.execute("UPDATE community_members SET role = 'owner' WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_new.lower()])
+        # Demote old owner to admin
+        cls.execute("UPDATE community_members SET role = 'admin' WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_owner])
+        
+        cls.send_community_message(
+            community_id=community_id,
+            author_handle="System",
+            content=f"{clean_owner} transferred community ownership to {clean_new}",
+            message_type="system"
+        )
+        return True
+
+    @classmethod
+    def remove_community_member(cls, community_id: str, admin_handle: str, target_handle: str) -> bool:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        clean_target = target_handle.replace("@", "").strip()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return False
+
+        my_role = comm.get("myRole")
+        my_perms = comm.get("myPermissions", {})
+        if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_remove_members", True)):
+            return False
+
+        if clean_target.lower() == (comm.get("ownerHandle") or "").lower():
+            return False
+
+        cls.execute("DELETE FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_target.lower()])
+        cls.execute("UPDATE communities SET member_count = MAX(1, member_count - 1) WHERE id = ?;", [community_id])
+
+        cls.send_community_message(
+            community_id=community_id,
+            author_handle="System",
+            content=f"{clean_target} was removed from the community",
+            message_type="system"
+        )
+        return True
+
+    @classmethod
+    def mute_community(cls, community_id: str, user_handle: str, muted_until: int) -> bool:
+        clean_user = user_handle.replace("@", "").strip().lower()
+        member_id = f"{community_id}_{clean_user}"
+        return cls.execute("UPDATE community_members SET muted_until = ? WHERE id = ?;", [muted_until, member_id])
+
+    @classmethod
+    def archive_community(cls, community_id: str, user_handle: str, is_archived: bool) -> bool:
+        clean_user = user_handle.replace("@", "").strip().lower()
+        member_id = f"{community_id}_{clean_user}"
+        return cls.execute("UPDATE community_members SET is_archived = ? WHERE id = ?;", [1 if is_archived else 0, member_id])
 
     @classmethod
     def send_community_message(
@@ -1261,33 +1729,179 @@ class D1Service:
         media_urls: Optional[List[str]] = None,
         message_type: str = "text"
     ) -> Optional[str]:
-        msg_id = str(uuid.uuid4())
-        now_ts = int(time.time())
         clean_author = author_handle.replace("@", "").strip()
+        now_ts = int(time.time())
+
+        # If not a system message, validate sender permissions
+        if message_type != "system":
+            comm = cls.get_community_by_id(community_id, user_handle=clean_author)
+            if not comm:
+                return None
+
+            user_role = comm.get("myRole")
+            if not user_role:
+                return None # Must be a member to post
+
+            settings = comm.get("settings", {})
+            is_channel = comm.get("isChannel", False)
+
+            # Channels: only admin and owner can post
+            if is_channel and user_role not in ("owner", "admin"):
+                return None
+
+            # Groups: check who_can_send
+            who_can_send = settings.get("who_can_send", "all")
+            if who_can_send == "admins_only" and user_role not in ("owner", "admin"):
+                return None
+
+            # Check media permissions
+            media_perms = settings.get("media_permissions", {})
+            if message_type in ("image", "image_group") and not media_perms.get("photo", True) and user_role not in ("owner", "admin"):
+                return None
+            if message_type == "video" and not media_perms.get("video", True) and user_role not in ("owner", "admin"):
+                return None
+            if message_type == "file" and not media_perms.get("file", True) and user_role not in ("owner", "admin"):
+                return None
+
+        msg_id = str(uuid.uuid4())
         media_json = json.dumps(media_urls) if media_urls else None
 
         sql = """
         INSERT INTO community_messages (
-            id, community_id, author_handle, content, image_url, media_urls_json, message_type, reactions_json, created_at
+            id, community_id, author_handle, content, image_url, media_urls_json, message_type, reactions_json, pinned, is_system, created_at
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, '{}', ?
+            ?, ?, ?, ?, ?, ?, ?, '{}', 0, ?, ?
         );
         """
-        if cls.execute(sql, [msg_id, community_id, clean_author, content, image_url, media_json, message_type, now_ts]):
-            # Update community timestamp
+        is_sys_int = 1 if message_type == "system" else 0
+        if cls.execute(sql, [msg_id, community_id, clean_author, content, image_url, media_json, message_type, is_sys_int, now_ts]):
             cls.execute("UPDATE communities SET updated_at = ? WHERE id = ?;", [now_ts, community_id])
             return msg_id
         return None
 
     @classmethod
+    def edit_community_message(cls, community_id: str, message_id: str, author_handle: str, new_content: str) -> bool:
+        clean_author = author_handle.replace("@", "").strip().lower()
+        now_ts = int(time.time())
+
+        # Check message exists and is authored by user within 48h (48 * 3600 = 172800)
+        rows = cls.query("SELECT author_handle, created_at, deleted_at FROM community_messages WHERE id = ? AND community_id = ? LIMIT 1;", [message_id, community_id])
+        if not rows or len(rows) == 0:
+            return False
+        msg = rows[0]
+        if msg.get("deleted_at") or LOWER(msg.get("author_handle", "")) != clean_author:
+            return False
+        created_at = msg.get("created_at") or 0
+        if (now_ts - created_at) > 172800:
+            return False # Past 48 hours
+
+        sql = "UPDATE community_messages SET content = ?, edited_at = ? WHERE id = ?;"
+        return cls.execute(sql, [new_content.strip(), now_ts, message_id])
+
+    @classmethod
+    def delete_community(cls, community_id: str, user_handle: str) -> bool:
+        clean_user = user_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_user)
+        if not comm:
+            return False
+        if comm.get("myRole") != "owner":
+            return False
+
+        cls.execute("DELETE FROM join_requests WHERE community_id = ?;", [community_id])
+        cls.execute("DELETE FROM community_messages WHERE community_id = ?;", [community_id])
+        cls.execute("DELETE FROM community_members WHERE community_id = ?;", [community_id])
+        return cls.execute("DELETE FROM communities WHERE id = ?;", [community_id])
+
+    @classmethod
+    def regenerate_community_invite_link(cls, community_id: str, admin_handle: str) -> Optional[str]:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return None
+        my_role = comm.get("myRole")
+        my_perms = comm.get("myPermissions", {})
+        if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_edit_info", True)):
+            return None
+
+        new_token = f"join_{uuid.uuid4().hex[:10]}"
+        now_ts = int(time.time())
+        sql = "UPDATE communities SET invite_link = ?, updated_at = ? WHERE id = ?;"
+        if cls.execute(sql, [new_token, now_ts, community_id]):
+            return new_token
+        return None
+
+    @classmethod
+    def delete_community_message(cls, community_id: str, message_id: str, user_handle: str, mode: str = "everyone") -> bool:
+        clean_user = user_handle.replace("@", "").strip().lower()
+        now_ts = int(time.time())
+
+        rows = cls.query("SELECT author_handle FROM community_messages WHERE id = ? AND community_id = ? LIMIT 1;", [message_id, community_id])
+        if not rows or len(rows) == 0:
+            return False
+        author = rows[0].get("author_handle", "").lower()
+
+        if mode == "for_me":
+            sql = "INSERT OR REPLACE INTO community_message_deletions (message_id, user_handle, deleted_at) VALUES (?, ?, ?);"
+            return cls.execute(sql, [message_id, clean_user, now_ts])
+
+        comm = cls.get_community_by_id(community_id, user_handle=clean_user)
+        if not comm:
+            return False
+        my_role = comm.get("myRole")
+        my_perms = comm.get("myPermissions", {})
+
+        is_author = (author == clean_user)
+        is_mod = (my_role == "owner") or (my_role == "admin" and my_perms.get("can_delete_messages", True))
+
+        if not is_author and not is_mod:
+            return False
+
+        # Admin cannot delete owner's message
+        owner_handle = (comm.get("ownerHandle") or "").lower()
+        if not is_author and author == owner_handle and my_role != "owner":
+            return False
+
+        settings = comm.get("settings", {})
+        del_mode = settings.get("delete_mode", "tombstone")
+
+        if comm.get("isChannel") or del_mode == "silent":
+            # Hard delete
+            sql = "UPDATE community_messages SET deleted_at = ? WHERE id = ?;"
+            return cls.execute(sql, [now_ts, message_id])
+        else:
+            # Group tombstone for everyone
+            sql = "UPDATE community_messages SET deleted_for_everyone = 1, deleted_by = ?, content = 'This message was deleted' WHERE id = ?;"
+            return cls.execute(sql, [clean_user, message_id])
+
+    @classmethod
+    def pin_community_message(cls, community_id: str, message_id: str, admin_handle: str, pin: bool) -> bool:
+        clean_admin = admin_handle.replace("@", "").strip().lower()
+        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
+        if not comm:
+            return False
+        my_role = comm.get("myRole")
+        my_perms = comm.get("myPermissions", {})
+        if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_pin_messages", True)):
+            return False
+
+        sql = "UPDATE community_messages SET pinned = ? WHERE id = ? AND community_id = ?;"
+        return cls.execute(sql, [1 if pin else 0, message_id, community_id])
+
+    @classmethod
     def get_community_messages(
         cls,
         community_id: str,
+        user_handle: Optional[str] = None,
         limit: int = 50,
         before_ts: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        clean_user = user_handle.replace("@", "").strip().lower() if user_handle else None
         conditions = ["community_id = ?", "deleted_at IS NULL"]
-        params = [community_id]
+        params: List[Any] = [community_id]
+
+        if clean_user:
+            conditions.append("id NOT IN (SELECT message_id FROM community_message_deletions WHERE LOWER(user_handle) = ?)")
+            params.append(clean_user)
 
         if before_ts:
             conditions.append("created_at < ?")
@@ -1328,6 +1942,11 @@ class D1Service:
                 "mediaUrls": media_urls,
                 "type": r.get("message_type", "text"),
                 "reactions": reactions,
+                "pinned": bool(r.get("pinned", 0)),
+                "isSystem": bool(r.get("is_system", 0)),
+                "editedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["edited_at"])) if r.get("edited_at") else None,
+                "deletedForEveryone": bool(r.get("deleted_for_everyone", 0)),
+                "deletedBy": r.get("deleted_by"),
                 "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None,
                 "timestamp": r.get("created_at")
             })
@@ -1369,13 +1988,6 @@ class D1Service:
         reactions_json = json.dumps(reactions)
         cls.execute("UPDATE community_messages SET reactions_json = ? WHERE id = ?;", [reactions_json, message_id])
         return {"success": True, "reactions": reactions}
-
-    @classmethod
-    def delete_community_message(cls, message_id: str, user_handle: str) -> bool:
-        clean_user = user_handle.replace("@", "").strip().lower()
-        now_ts = int(time.time())
-        sql = "UPDATE community_messages SET deleted_at = ? WHERE id = ? AND LOWER(author_handle) = ?;"
-        return cls.execute(sql, [now_ts, message_id, clean_user])
 
     @classmethod
     def mark_community_read(cls, community_id: str, user_handle: str) -> bool:

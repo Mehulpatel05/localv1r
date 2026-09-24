@@ -7,6 +7,14 @@ import '../models/community_model.dart';
 import 'auth_service.dart';
 import 'r2_storage_service.dart';
 
+enum JoinStatus { joined, pending, error }
+
+class JoinResult {
+  final JoinStatus status;
+  final String message;
+  JoinResult({required this.status, required this.message});
+}
+
 class CommunityRepository {
   static final CommunityRepository _instance = CommunityRepository._internal();
   factory CommunityRepository() => _instance;
@@ -31,13 +39,11 @@ class CommunityRepository {
 
   // ── Cache ──
   List<CommunityModel> _cachedUserCommunities = [];
-  List<CommunityModel> _cachedAllCommunities = [];
   List<CommunityModel> _cachedDiscoverCommunities = [];
   final Map<String, List<CommunityMessage>> _cachedMessages = {};
 
   // ── Stream Controllers ──
   final _userCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
-  final _allCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
   final _discoverCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
   final _joinedIdsCtrl = StreamController<Set<String>>.broadcast();
   final Map<String, StreamController<List<CommunityMessage>>> _messageControllers = {};
@@ -45,10 +51,8 @@ class CommunityRepository {
   Timer? _pollingTimer;
 
   void _startPollingIfNeeded() {
-    _pollingTimer ??= Timer.periodic(const Duration(seconds: 10), (_) {
+    _pollingTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
       fetchUserCommunities();
-      fetchAllCommunities();
-      fetchDiscoverCommunities();
     });
   }
 
@@ -61,7 +65,22 @@ class CommunityRepository {
     };
   }
 
-  // ── Fetch User Communities (Joined) ──
+  // ── Username Check ──
+  Future<bool> checkUsernameAvailable(String username) async {
+    final clean = username.replaceAll('@', '').trim();
+    if (clean.length < 3) return false;
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/check-username?username=$clean');
+    try {
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['available'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // ── Fetch Joined Communities ──
   Future<List<CommunityModel>> fetchUserCommunities() async {
     final uri = Uri.parse('${AuthService.baseUrl}/communities?filter=joined');
     try {
@@ -84,31 +103,16 @@ class CommunityRepository {
     return _cachedUserCommunities;
   }
 
-  // ── Fetch All Communities ──
-  Future<List<CommunityModel>> fetchAllCommunities() async {
-    final uri = Uri.parse('${AuthService.baseUrl}/communities?filter=all');
-    try {
-      final headers = await _getAuthHeaders();
-      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final rawList = data['communities'] as List? ?? [];
-        _cachedAllCommunities = rawList.map((item) {
-          final map = item as Map<String, dynamic>;
-          return CommunityModel.fromMap(map, map['id']?.toString() ?? '');
-        }).toList();
-        _allCommunitiesCtrl.add(List.unmodifiable(_cachedAllCommunities));
-        return _cachedAllCommunities;
-      }
-    } catch (e) {
-      debugPrint('[CommunityRepository] fetchAllCommunities error: $e');
+  // ── Fetch Public Directory / Discover ──
+  Future<List<CommunityModel>> fetchDiscoverCommunities({String? query, String? type}) async {
+    String url = '${AuthService.baseUrl}/communities?filter=discover';
+    if (query != null && query.trim().length >= 2) {
+      url += '&q=${Uri.encodeComponent(query.trim())}';
     }
-    return _cachedAllCommunities;
-  }
-
-  // ── Fetch Discover Communities (Not Joined) ──
-  Future<List<CommunityModel>> fetchDiscoverCommunities() async {
-    final uri = Uri.parse('${AuthService.baseUrl}/communities?filter=discover');
+    if (type != null) {
+      url += '&type=$type';
+    }
+    final uri = Uri.parse(url);
     try {
       final headers = await _getAuthHeaders();
       final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
@@ -128,6 +132,30 @@ class CommunityRepository {
     return _cachedDiscoverCommunities;
   }
 
+  // ── Global Search (Joined + Public Directory) ──
+  Future<Map<String, List<CommunityModel>>> searchCommunities(String query, {String? typeFilter}) async {
+    final clean = query.trim().toLowerCase();
+    if (clean.length < 2) {
+      return {'joined': _cachedUserCommunities, 'public': []};
+    }
+
+    // Filter joined locally
+    final filteredJoined = _cachedUserCommunities.where((c) {
+      if (typeFilter == 'group' && c.isChannel) return false;
+      if (typeFilter == 'channel' && !c.isChannel) return false;
+      return c.name.toLowerCase().contains(clean) ||
+          (c.username != null && c.username!.toLowerCase().contains(clean)) ||
+          c.description.toLowerCase().contains(clean);
+    }).toList();
+
+    // Query backend for global public directory
+    final publicResults = await fetchDiscoverCommunities(query: clean, type: typeFilter);
+    return {
+      'joined': filteredJoined,
+      'public': publicResults,
+    };
+  }
+
   // ── Streams ──
   Stream<List<CommunityModel>> getUserCommunities() {
     _startPollingIfNeeded();
@@ -138,17 +166,6 @@ class CommunityRepository {
       }
     });
     return _userCommunitiesCtrl.stream;
-  }
-
-  Stream<List<CommunityModel>> getAllCommunities() {
-    _startPollingIfNeeded();
-    fetchAllCommunities();
-    Future.microtask(() {
-      if (!_allCommunitiesCtrl.isClosed) {
-        _allCommunitiesCtrl.add(List.unmodifiable(_cachedAllCommunities));
-      }
-    });
-    return _allCommunitiesCtrl.stream;
   }
 
   Stream<Set<String>> getJoinedCommunityIds() {
@@ -163,7 +180,6 @@ class CommunityRepository {
   }
 
   Stream<List<CommunityModel>> getDiscoverCommunities() {
-    _startPollingIfNeeded();
     fetchDiscoverCommunities();
     Future.microtask(() {
       if (!_discoverCommunitiesCtrl.isClosed) {
@@ -171,10 +187,6 @@ class CommunityRepository {
       }
     });
     return _discoverCommunitiesCtrl.stream;
-  }
-
-  Future<int> getUnreadCount(String communityId) async {
-    return 0;
   }
 
   Future<void> markAsRead(String communityId) async {
@@ -199,7 +211,7 @@ class CommunityRepository {
           return CommunityMessage.fromMap(map, map['id']?.toString() ?? '');
         }).toList();
 
-        // Sort descending by timestamp (newest first for chat view)
+        // Sort descending by timestamp (newest first for chat list view)
         messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         _cachedMessages[communityId] = messages;
 
@@ -224,7 +236,6 @@ class CommunityRepository {
     final ctrl = _getOrCreateMessageController(communityId);
     fetchCommunityMessages(communityId);
 
-    // Set up dedicated polling timer for this community chat room
     Timer.periodic(const Duration(seconds: 3), (timer) {
       if (ctrl.isClosed || !ctrl.hasListener) {
         timer.cancel();
@@ -244,11 +255,16 @@ class CommunityRepository {
   }
 
   // ── Create Community ──
-  Future<void> createCommunity({
+  Future<String> createCommunity({
     required String name,
     required String description,
     required bool isChannel,
+    String visibility = 'public',
+    String? username,
+    String? inviteLink,
+    Map<String, dynamic>? settings,
     File? imageFile,
+    List<String>? initialMembers,
   }) async {
     String? imageUrl;
     if (imageFile != null) {
@@ -264,41 +280,33 @@ class CommunityRepository {
         'name': name.trim(),
         'description': description.trim(),
         'isChannel': isChannel,
+        'visibility': visibility,
+        if (username != null && username.isNotEmpty) 'username': username.trim().replaceAll('@', ''),
+        if (inviteLink != null) 'inviteLink': inviteLink,
+        if (settings != null) 'settings': settings,
         'imageUrl': imageUrl,
+        if (initialMembers != null) 'initialMembers': initialMembers,
       }),
     );
 
     if (res.statusCode == 201) {
+      final data = jsonDecode(res.body);
       await fetchUserCommunities();
-      await fetchAllCommunities();
+      return data['communityId']?.toString() ?? '';
     } else {
       final data = jsonDecode(res.body);
       throw Exception(data['detail'] ?? 'Failed to create community');
     }
   }
 
-  Future<void> updateCommunityImage(String communityId, File imageFile) async {
-    final imageUrl = await R2StorageService.uploadImage(imageFile);
-    if (imageUrl == null) throw Exception('Image upload failed.');
-
-    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
-    final headers = await _getAuthHeaders();
-    final res = await http.put(
-      uri,
-      headers: headers,
-      body: jsonEncode({'imageUrl': imageUrl}),
-    );
-
-    if (res.statusCode != 200) {
-      final data = jsonDecode(res.body);
-      throw Exception(data['detail'] ?? 'Failed to update community image');
-    }
-  }
-
-  Future<void> editCommunity({
+  // ── Update Community Settings ──
+  Future<void> updateCommunitySettings({
     required String communityId,
-    required String name,
-    required String description,
+    String? name,
+    String? description,
+    String? visibility,
+    String? username,
+    Map<String, dynamic>? settings,
     File? imageFile,
   }) async {
     String? imageUrl;
@@ -309,9 +317,12 @@ class CommunityRepository {
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
     final headers = await _getAuthHeaders();
     final payload = <String, dynamic>{
-      'name': name.trim(),
-      'description': description.trim(),
+      if (name != null) 'name': name.trim(),
+      if (description != null) 'description': description.trim(),
       if (imageUrl != null) 'imageUrl': imageUrl,
+      if (visibility != null) 'visibility': visibility,
+      if (username != null) 'username': username.trim().replaceAll('@', ''),
+      if (settings != null) 'settings': settings,
     };
 
     final res = await http.put(
@@ -320,118 +331,149 @@ class CommunityRepository {
       body: jsonEncode(payload),
     );
 
-    if (res.statusCode != 200) {
+    if (res.statusCode == 200) {
+      await fetchUserCommunities();
+    } else {
       final data = jsonDecode(res.body);
-      throw Exception(data['detail'] ?? 'Failed to edit community');
+      throw Exception(data['detail'] ?? 'Failed to update community settings');
     }
   }
 
-  bool isMemberCached(String communityId) {
-    return _cachedUserCommunities.any((c) => c.id == communityId);
-  }
-
-  Future<void> joinCommunity(String communityId) async {
-    // 1. Optimistic instant cache update
-    final target = _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull ??
-                   _cachedAllCommunities.where((c) => c.id == communityId).firstOrNull;
-    if (target != null) {
-      if (!_cachedUserCommunities.any((c) => c.id == communityId)) {
-        _cachedUserCommunities.add(target);
-      }
-      _cachedDiscoverCommunities.removeWhere((c) => c.id == communityId);
-      _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
-      _discoverCommunitiesCtrl.add(List.unmodifiable(_cachedDiscoverCommunities));
-      _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+  // ── Join Community ──
+  Future<JoinResult> joinCommunity(String communityId, {String? inviteCode}) async {
+    String url = '${AuthService.baseUrl}/communities/$communityId/join';
+    if (inviteCode != null) {
+      url += '?invite_code=${Uri.encodeComponent(inviteCode)}';
     }
-
-    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/join');
+    final uri = Uri.parse(url);
     final headers = await _getAuthHeaders();
     final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+
     if (res.statusCode == 200 || res.statusCode == 201) {
-      await Future.wait([
-        fetchUserCommunities(),
-        fetchDiscoverCommunities(),
-        fetchAllCommunities(),
-      ]);
+      final data = jsonDecode(res.body);
+      final statusStr = data['joinStatus']?.toString() ?? 'joined';
+      final msg = data['message']?.toString() ?? 'Success';
+
+      if (statusStr == 'pending') {
+        return JoinResult(status: JoinStatus.pending, message: msg);
+      } else {
+        await fetchUserCommunities();
+        await fetchDiscoverCommunities();
+        return JoinResult(status: JoinStatus.joined, message: msg);
+      }
     } else {
       String errMsg = 'Failed to join community';
       try {
         final data = jsonDecode(res.body);
         errMsg = data['detail'] ?? errMsg;
       } catch (_) {}
-      throw Exception(errMsg);
+      return JoinResult(status: JoinStatus.error, message: errMsg);
     }
   }
 
+  // ── Leave Community ──
   Future<void> leaveCommunity(String communityId) async {
-    // 1. Optimistic instant cache update
-    _cachedUserCommunities.removeWhere((c) => c.id == communityId);
-    _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
-    _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
-
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/leave');
-    try {
-      final headers = await _getAuthHeaders();
-      final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
-      if (res.statusCode == 200 || res.statusCode == 204) {
-        await Future.wait([
-          fetchUserCommunities(),
-          fetchDiscoverCommunities(),
-          fetchAllCommunities(),
-        ]);
-      }
-    } catch (e) {
-      debugPrint('[CommunityRepository] leaveCommunity error: $e');
+    final headers = await _getAuthHeaders();
+    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200 || res.statusCode == 204) {
+      _cachedUserCommunities.removeWhere((c) => c.id == communityId);
+      _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+      _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+      await fetchUserCommunities();
+      await fetchDiscoverCommunities();
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to leave community');
     }
   }
 
+  // ── Delete Entire Community (Owner Only) ──
   Future<void> deleteCommunity(String communityId) async {
-    _cachedUserCommunities.removeWhere((c) => c.id == communityId);
-    _cachedAllCommunities.removeWhere((c) => c.id == communityId);
-    _cachedDiscoverCommunities.removeWhere((c) => c.id == communityId);
-    _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
-    _allCommunitiesCtrl.add(List.unmodifiable(_cachedAllCommunities));
-    _discoverCommunitiesCtrl.add(List.unmodifiable(_cachedDiscoverCommunities));
-    _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
-
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
     final headers = await _getAuthHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
-    await fetchUserCommunities();
-    await fetchAllCommunities();
+    final res = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200 || res.statusCode == 204) {
+      _cachedUserCommunities.removeWhere((c) => c.id == communityId);
+      _cachedDiscoverCommunities.removeWhere((c) => c.id == communityId);
+      _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+      _discoverCommunitiesCtrl.add(List.unmodifiable(_cachedDiscoverCommunities));
+      _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+      await fetchUserCommunities();
+      await fetchDiscoverCommunities();
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to delete community');
+    }
   }
 
-  Future<CommunityModel?> getCommunityById(String communityId) async {
-    final cached = _cachedAllCommunities.where((c) => c.id == communityId).firstOrNull ??
-                   _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
-                   _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
-    if (cached != null) return cached;
+  // ── Regenerate / Revoke Invite Link ──
+  Future<String> regenerateInviteLink(String communityId) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/regenerate-invite-link');
+    final headers = await _getAuthHeaders();
+    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      await fetchUserCommunities();
+      return data['inviteLink']?.toString() ?? '';
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to regenerate invite link');
+    }
+  }
 
-    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
+  // ── Mute & Archive ──
+  Future<void> muteCommunity(String communityId, int mutedUntil) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/mute');
+    final headers = await _getAuthHeaders();
+    await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'mutedUntil': mutedUntil}),
+    );
+    await fetchUserCommunities();
+  }
+
+  Future<void> archiveCommunity(String communityId, bool isArchived) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/archive');
+    final headers = await _getAuthHeaders();
+    await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'isArchived': isArchived}),
+    );
+    await fetchUserCommunities();
+  }
+
+  // ── Join Requests ──
+  Future<List<Map<String, dynamic>>> getJoinRequests(String communityId) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/requests');
     try {
       final headers = await _getAuthHeaders();
-      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      final res = await http.get(uri, headers: headers);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final comm = data['community'] as Map<String, dynamic>?;
-        if (comm != null) {
-          return CommunityModel.fromMap(comm, comm['id']?.toString() ?? communityId);
-        }
+        return (data['requests'] as List? ?? []).cast<Map<String, dynamic>>();
       }
-    } catch (e) {
-      debugPrint('[CommunityRepository] getCommunityById error: $e');
-    }
-    return null;
+    } catch (_) {}
+    return [];
   }
 
-  Future<bool> isMember(String communityId) async {
-    if (_cachedUserCommunities.any((c) => c.id == communityId)) {
-      return true;
+  Future<void> respondJoinRequest(String communityId, String requestId, bool approve) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/requests/$requestId/respond');
+    final headers = await _getAuthHeaders();
+    final res = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'approve': approve}),
+    );
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to respond to request');
     }
-    final comms = await fetchUserCommunities();
-    return comms.any((c) => c.id == communityId);
   }
 
+  // ── Member Roles & Permissions ──
   Stream<List<Map<String, dynamic>>> getCommunityMembers(String communityId) async* {
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/members');
     try {
@@ -447,12 +489,45 @@ class CommunityRepository {
     }
   }
 
-  Future<void> transferAdmin(String communityId, String newAdminHandle) async {
-    // Admin transfer logic
+  Future<void> updateMemberRole(String communityId, String targetHandle, String role, Map<String, dynamic>? permissions) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/members/$targetHandle/role');
+    final headers = await _getAuthHeaders();
+    final res = await http.put(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'role': role,
+        if (permissions != null) 'permissions': permissions,
+      }),
+    );
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to update member role');
+    }
+  }
+
+  Future<void> transferOwnership(String communityId, String newOwnerHandle) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/transfer-ownership');
+    final headers = await _getAuthHeaders();
+    final res = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'newOwnerHandle': newOwnerHandle}),
+    );
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to transfer ownership');
+    }
   }
 
   Future<void> removeMember(String communityId, String memberHandle) async {
-    // Member removal logic
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/members/$memberHandle');
+    final headers = await _getAuthHeaders();
+    final res = await http.delete(uri, headers: headers);
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to remove member');
+    }
   }
 
   // ── Send Messages ──
@@ -541,7 +616,118 @@ class CommunityRepository {
     }
   }
 
-  Future<void> toggleReaction(String messageId, String emoji) async {
-    // Handled via REST API
+  Future<void> editMessage(String communityId, String messageId, String newContent) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/messages/$messageId');
+    final headers = await _getAuthHeaders();
+    final res = await http.put(
+      uri,
+      headers: headers,
+      body: jsonEncode({'content': newContent.trim()}),
+    );
+    if (res.statusCode == 200) {
+      fetchCommunityMessages(communityId);
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to edit message');
+    }
+  }
+
+  Future<void> deleteMessage(String communityId, String messageId, {String mode = 'everyone'}) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/messages/$messageId?mode=$mode');
+    final headers = await _getAuthHeaders();
+    final res = await http.delete(uri, headers: headers);
+    if (res.statusCode == 200) {
+      fetchCommunityMessages(communityId);
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to delete message');
+    }
+  }
+
+  Future<void> pinMessage(String communityId, String messageId, bool pin) async {
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/messages/$messageId/pin');
+    final headers = await _getAuthHeaders();
+    final res = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'pin': pin}),
+    );
+    if (res.statusCode == 200) {
+      fetchCommunityMessages(communityId);
+    } else {
+      final data = jsonDecode(res.body);
+      throw Exception(data['detail'] ?? 'Failed to pin message');
+    }
+  }
+
+  Future<CommunityModel?> getCommunityById(String communityId) async {
+    final cached = _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
+                   _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
+    if (cached != null) return cached;
+
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
+    try {
+      final headers = await _getAuthHeaders();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final comm = data['community'] as Map<String, dynamic>?;
+        if (comm != null) {
+          return CommunityModel.fromMap(comm, comm['id']?.toString() ?? communityId);
+        }
+      }
+    } catch (e) {
+      debugPrint('[CommunityRepository] getCommunityById error: $e');
+    }
+    return null;
+  }
+
+  // ── Compatibility Helpers ──
+  Future<List<CommunityModel>> fetchAllCommunities() async {
+    return fetchDiscoverCommunities();
+  }
+
+  Stream<List<CommunityModel>> getAllCommunities() {
+    return getDiscoverCommunities();
+  }
+
+  Future<void> transferAdmin(String communityId, String newAdminHandle) async {
+    return transferOwnership(communityId, newAdminHandle);
+  }
+
+  Future<void> editCommunity({
+    required String communityId,
+    required String name,
+    required String description,
+    File? imageFile,
+  }) async {
+    return updateCommunitySettings(
+      communityId: communityId,
+      name: name,
+      description: description,
+      imageFile: imageFile,
+    );
+  }
+
+  Future<void> toggleReaction(String messageId, String emoji, {String? communityId}) async {
+    final cid = communityId ?? 'default';
+    final uri = Uri.parse('${AuthService.baseUrl}/communities/$cid/messages/$messageId/react');
+    try {
+      final headers = await _getAuthHeaders();
+      await http.post(uri, headers: headers, body: jsonEncode({'emoji': emoji}));
+      if (communityId != null) {
+        fetchCommunityMessages(communityId);
+      }
+    } catch (_) {}
+  }
+
+  bool isMemberCached(String communityId) {
+    return _cachedUserCommunities.any((c) => c.id == communityId);
+  }
+
+  Future<bool> isMember(String communityId) async {
+    if (isMemberCached(communityId)) return true;
+    final list = await fetchUserCommunities();
+    return list.any((c) => c.id == communityId);
   }
 }

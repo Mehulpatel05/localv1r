@@ -25,6 +25,11 @@ def auth_headers():
     token = create_mock_jwt("user-123", "alice")
     return {"Authorization": f"Bearer {token}"}
 
+@pytest.fixture
+def bob_auth_headers():
+    token = create_mock_jwt("user-456", "bob")
+    return {"Authorization": f"Bearer {token}"}
+
 def test_list_communities():
     with patch.object(D1Service, 'get_communities', return_value=[
         {"id": "comm-1", "name": "Vadodara General Chat", "description": "City chat", "isChannel": False, "adminHandle": "alice", "memberCount": 10, "imageUrl": None, "createdAt": "2026-09-24T12:00:00Z"}
@@ -36,12 +41,20 @@ def test_list_communities():
         assert len(data["communities"]) == 1
         assert data["communities"][0]["name"] == "Vadodara General Chat"
 
+def test_check_username():
+    with patch.object(D1Service, 'check_community_username_available', return_value=True):
+        res = client.get("/api/v1/communities/check-username?username=vadodara_hub")
+        assert res.status_code == 200
+        assert res.json()["available"] == True
+
 def test_create_community(auth_headers):
     with patch.object(D1Service, 'create_community', return_value="new-comm-id"):
         res = client.post("/api/v1/communities", json={
             "name": "Tech Enthusiasts",
             "description": "Tech discussions",
-            "isChannel": False
+            "isChannel": False,
+            "visibility": "public",
+            "username": "tech_vadodara"
         }, headers=auth_headers)
         assert res.status_code == 201
         data = res.json()
@@ -61,7 +74,73 @@ def test_send_and_get_messages(auth_headers):
         assert send_res.json()["messageId"] == "msg-123"
 
         # Get
-        get_res = client.get("/api/v1/communities/comm-1/messages")
+        get_res = client.get("/api/v1/communities/comm-1/messages", headers=auth_headers)
         assert get_res.status_code == 200
         assert len(get_res.json()["messages"]) == 1
         assert get_res.json()["messages"][0]["content"] == "Hello everyone!"
+
+def test_mute_and_archive(auth_headers):
+    with patch.object(D1Service, 'mute_community', return_value=True), \
+         patch.object(D1Service, 'archive_community', return_value=True):
+        res_mute = client.post("/api/v1/communities/comm-1/mute", json={"mutedUntil": 3600}, headers=auth_headers)
+        assert res_mute.status_code == 200
+        res_archive = client.post("/api/v1/communities/comm-1/archive", json={"isArchived": True}, headers=auth_headers)
+        assert res_archive.status_code == 200
+
+def test_edit_message(auth_headers):
+    with patch.object(D1Service, 'edit_community_message', return_value=True):
+        res = client.put("/api/v1/communities/comm-1/messages/msg-123", json={
+            "content": "Updated content"
+        }, headers=auth_headers)
+        assert res.status_code == 200
+        assert res.json()["status"] == "success"
+
+def test_delete_message_for_me_and_everyone(auth_headers):
+    with patch.object(D1Service, 'delete_community_message', return_value=True):
+        # Delete for me
+        res_me = client.delete("/api/v1/communities/comm-1/messages/msg-123?mode=for_me", headers=auth_headers)
+        assert res_me.status_code == 200
+
+        # Delete for everyone
+        res_all = client.delete("/api/v1/communities/comm-1/messages/msg-123?mode=everyone", headers=auth_headers)
+        assert res_all.status_code == 200
+
+def test_delete_entire_community(auth_headers, bob_auth_headers):
+    with patch.object(D1Service, 'delete_community', side_effect=lambda cid, handle: handle == "alice"):
+        # Owner delete succeeds
+        res_owner = client.delete("/api/v1/communities/comm-1", headers=auth_headers)
+        assert res_owner.status_code == 200
+        assert res_owner.json()["status"] == "success"
+
+        # Non-owner delete fails with 403
+        res_non_owner = client.delete("/api/v1/communities/comm-1", headers=bob_auth_headers)
+        assert res_non_owner.status_code == 403
+
+def test_regenerate_invite_link(auth_headers, bob_auth_headers):
+    with patch.object(D1Service, 'regenerate_community_invite_link', side_effect=lambda cid, handle: "join_new_abc123" if handle == "alice" else None):
+        res_admin = client.post("/api/v1/communities/comm-1/regenerate-invite-link", headers=auth_headers)
+        assert res_admin.status_code == 200
+        assert res_admin.json()["inviteLink"] == "join_new_abc123"
+
+        res_non_admin = client.post("/api/v1/communities/comm-1/regenerate-invite-link", headers=bob_auth_headers)
+        assert res_non_admin.status_code == 403
+
+def test_remove_member(auth_headers):
+    with patch.object(D1Service, 'remove_community_member', return_value=True):
+        res = client.delete("/api/v1/communities/comm-1/members/bob", headers=auth_headers)
+        assert res.status_code == 200
+        assert res.json()["message"] == "Member removed successfully."
+
+def test_update_member_role_and_transfer_ownership(auth_headers):
+    with patch.object(D1Service, 'update_member_role_and_permissions', return_value=True), \
+         patch.object(D1Service, 'transfer_community_ownership', return_value=True):
+        res_role = client.put("/api/v1/communities/comm-1/members/bob/role", json={
+            "role": "admin",
+            "permissions": {"can_delete_messages": True}
+        }, headers=auth_headers)
+        assert res_role.status_code == 200
+
+        res_transfer = client.post("/api/v1/communities/comm-1/transfer-ownership", json={
+            "newOwnerHandle": "bob"
+        }, headers=auth_headers)
+        assert res_transfer.status_code == 200
