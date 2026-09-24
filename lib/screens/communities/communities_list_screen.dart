@@ -16,6 +16,16 @@ class CommunitiesListScreen extends StatefulWidget {
 
 class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   final Map<String, int> _unreadCounts = {};
+  final TextEditingController _discoverSearchController = TextEditingController();
+  String _discoverSearchQuery = '';
+  int _discoverFilterIndex = 0; // 0: All, 1: Groups, 2: Channels, 3: Popular
+  final Set<String> _joiningCommunityIds = {};
+
+  @override
+  void dispose() {
+    _discoverSearchController.dispose();
+    super.dispose();
+  }
 
   Color _getCommunityColor(bool isChannel, String id) {
     if (isChannel) {
@@ -54,54 +64,44 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(
-          'Communities',
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
-            fontWeight: FontWeight.w800,
-            fontSize: 22,
-            letterSpacing: -0.4,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          backgroundColor: isDark ? Colors.black : Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: Text(
+            'Communities',
+            style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              letterSpacing: -0.4,
+            ),
+          ),
+          bottom: TabBar(
+            indicatorColor: isDark ? Colors.white : const Color(0xFF0F172A),
+            labelColor: isDark ? Colors.white : const Color(0xFF0F172A),
+            unselectedLabelColor: const Color(0xFF64748B),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            indicatorWeight: 3,
+            tabs: const [
+              Tab(text: 'Joined'),
+              Tab(text: 'Discover'),
+            ],
           ),
         ),
-        actions: [
-          // Search Action Button
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.search_rounded,
-                color: isDark ? Colors.white : const Color(0xFF1E293B),
-                size: 20,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DiscoverCommunitiesScreen(
-                      repository: widget.repository,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        body: TabBarView(
+          children: [
+            _buildMyCommunitiesTab(),
+            _buildDiscoverTab(),
+          ],
+        ),
+        floatingActionButton: _buildFloatingCreateButton(),
       ),
-      body: _buildMyCommunitiesTab(),
-      floatingActionButton: _buildFloatingCreateButton(),
     );
   }
 
@@ -516,7 +516,494 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     );
   }
 
-  // Panel 3: Error / Offline State
+  // ── DISCOVER TAB ──
+  Widget _buildDiscoverTab() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        // Search & Filter Header
+        Container(
+          color: isDark ? Colors.black : Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            children: [
+              // Search Bar
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF94A3B8),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _discoverSearchController,
+                        onChanged: (val) {
+                          setState(() {
+                            _discoverSearchQuery = val.trim().toLowerCase();
+                          });
+                        },
+                        style: TextStyle(
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          fontSize: 14,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Search channels & groups...',
+                          hintStyle: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    if (_discoverSearchQuery.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Color(0xFF94A3B8),
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          _discoverSearchController.clear();
+                          setState(() {
+                            _discoverSearchQuery = '';
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Filter Pills Row (All, Groups, Channels, Popular)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildDiscoverFilterPill(0, 'All'),
+                    const SizedBox(width: 8),
+                    _buildDiscoverFilterPill(1, 'Groups'),
+                    const SizedBox(width: 8),
+                    _buildDiscoverFilterPill(2, 'Channels'),
+                    const SizedBox(width: 8),
+                    _buildDiscoverFilterPill(3, 'Popular'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Discover List Stream
+        Expanded(
+          child: StreamBuilder<Set<String>>(
+            stream: widget.repository.getJoinedCommunityIds(),
+            builder: (context, joinedSnap) {
+              final joinedIds = joinedSnap.data ?? {};
+
+              return StreamBuilder<List<CommunityModel>>(
+                stream: widget.repository.getAllCommunities(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return _buildLoadingSkeleton();
+                  }
+
+                  if (snapshot.hasError) {
+                    return _buildErrorState();
+                  }
+
+                  var communities = (snapshot.data ?? [])
+                      .where((c) => !joinedIds.contains(c.id))
+                      .toList();
+
+                  // Apply search query
+                  if (_discoverSearchQuery.isNotEmpty) {
+                    communities = communities.where((c) {
+                      return c.name.toLowerCase().contains(_discoverSearchQuery) ||
+                          c.description.toLowerCase().contains(_discoverSearchQuery);
+                    }).toList();
+                  }
+
+                  // Apply filter pills
+                  if (_discoverFilterIndex == 1) {
+                    communities =
+                        communities.where((c) => !c.isChannel).toList();
+                  } else if (_discoverFilterIndex == 2) {
+                    communities =
+                        communities.where((c) => c.isChannel).toList();
+                  } else if (_discoverFilterIndex == 3) {
+                    communities.sort((a, b) =>
+                        b.memberCount.compareTo(a.memberCount));
+                  }
+
+                  if (communities.isEmpty) {
+                    final allJoined =
+                        (snapshot.data ?? []).isNotEmpty && joinedIds.isNotEmpty;
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              allJoined && _discoverSearchQuery.isEmpty
+                                  ? Icons.check_circle_outline_rounded
+                                  : Icons.search_off_rounded,
+                              size: 48,
+                              color: allJoined && _discoverSearchQuery.isEmpty
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _discoverSearchQuery.isNotEmpty
+                                  ? 'No matches for "$_discoverSearchQuery"'
+                                  : (allJoined
+                                      ? 'All Caught Up!'
+                                      : 'No communities to discover'),
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _discoverSearchQuery.isNotEmpty
+                                  ? 'Try searching for something else or create your own!'
+                                  : (allJoined
+                                      ? "You've joined all available communities in Vadodara!"
+                                      : 'Create your own channel or group to connect with neighbors!'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(
+                      top: 12,
+                      bottom: 84,
+                      left: 16,
+                      right: 16,
+                    ),
+                    itemCount: communities.length,
+                    itemBuilder: (context, index) {
+                      final community = communities[index];
+                      final isJoined = joinedIds.contains(community.id);
+                      return _buildDiscoverCard(community, isJoined);
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiscoverFilterPill(int index, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSelected = _discoverFilterIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _discoverFilterIndex = index;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? Colors.white : const Color(0xFF0F172A))
+              : (isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                : (isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? (isDark ? Colors.black : Colors.white)
+                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoverCard(CommunityModel community, bool isJoined) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final avatarColor = _getCommunityColor(community.isChannel, community.id);
+    final initials = _getInitials(community.name);
+    final typeLabel = community.isChannel ? 'CHANNEL' : 'GROUP';
+    final isJoining = _joiningCommunityIds.contains(community.id);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141414) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row (Avatar + Title + Badge + Members)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: avatarColor,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          community.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF334155) : const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                typeLabel,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _formatMemberCount(community.memberCount),
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (community.description.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            community.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 12.5,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Bottom Full-Width Action Button (Join / Joined)
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: isJoined
+                    ? OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF10B981),
+                          side: const BorderSide(color: Color(0xFF10B981)),
+                          shape: const StadiumBorder(),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CommunityChatScreen(
+                                community: community,
+                                repository: widget.repository,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.check_rounded, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Joined',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? Colors.white : Colors.black,
+                          foregroundColor: isDark ? Colors.black : Colors.white,
+                          elevation: 0,
+                          shape: const StadiumBorder(),
+                        ),
+                        onPressed: isJoining
+                            ? null
+                            : () async {
+                                setState(() {
+                                  _joiningCommunityIds.add(community.id);
+                                });
+                                try {
+                                  await widget.repository.joinCommunity(community.id);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        content: Text(
+                                          'Joined "${community.name}"! Added to Joined tab.',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFEF4444),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        content: Text(
+                                          'Failed to join: ${e.toString().replaceAll("Exception:", "").trim()}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _joiningCommunityIds.remove(community.id);
+                                    });
+                                  }
+                                }
+                              },
+                        child: isJoining
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Join',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
   Widget _buildErrorState() {
     return Center(
       child: Padding(

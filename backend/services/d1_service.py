@@ -1113,7 +1113,9 @@ class D1Service:
     ) -> List[Dict[str, Any]]:
         clean_user = user_handle.replace("@", "").strip().lower() if user_handle else None
 
-        if filter_mode == "joined" and clean_user:
+        if filter_mode == "joined":
+            if not clean_user:
+                return []
             sql = """
             SELECT c.* FROM communities c
             INNER JOIN community_members m ON c.id = m.community_id
@@ -1121,15 +1123,19 @@ class D1Service:
             ORDER BY c.name ASC;
             """
             rows = cls.query(sql, [clean_user]) or []
-        elif filter_mode == "discover" and clean_user:
-            sql = """
-            SELECT c.* FROM communities c
-            WHERE c.id NOT IN (
-                SELECT community_id FROM community_members WHERE LOWER(user_handle) = ?
-            )
-            ORDER BY c.created_at DESC;
-            """
-            rows = cls.query(sql, [clean_user]) or []
+        elif filter_mode == "discover":
+            if clean_user:
+                sql = """
+                SELECT c.* FROM communities c
+                WHERE c.id NOT IN (
+                    SELECT community_id FROM community_members WHERE LOWER(user_handle) = ?
+                )
+                ORDER BY c.created_at DESC;
+                """
+                rows = cls.query(sql, [clean_user]) or []
+            else:
+                sql = "SELECT * FROM communities ORDER BY created_at DESC;"
+                rows = cls.query(sql) or []
         else:
             sql = "SELECT * FROM communities ORDER BY created_at DESC;"
             rows = cls.query(sql) or []
