@@ -76,6 +76,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 Navigator.pop(ctx);
                 final title = widget.post.serviceTitle ?? 'Service';
                 final area = widget.post.areaName ?? 'Vadodara';
+                // ignore: deprecated_member_use
                 Share.share('Check out $title in $area on Nearhood!');
               },
             ),
@@ -181,7 +182,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                             : Center(
                                 child: Icon(
                                   style['icon'] as IconData,
-                                  color: (style['color'] as Color).withOpacity(0.35),
+                                  color: (style['color'] as Color).withValues(alpha: 0.35),
                                   size: 80,
                                 ),
                               ),
@@ -200,10 +201,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     shape: BoxShape.circle,
                                     boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 2)),
+                                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 2)),
                                     ],
                                   ),
                                   child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A), size: 20),
@@ -215,10 +216,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     shape: BoxShape.circle,
                                     boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 2)),
+                                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 2)),
                                     ],
                                   ),
                                   child: const Icon(Icons.more_horiz_rounded, color: Color(0xFF0F172A), size: 22),
@@ -236,10 +237,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2)),
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2)),
                             ],
                           ),
                           child: Row(
@@ -568,7 +569,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -3),
                 ),

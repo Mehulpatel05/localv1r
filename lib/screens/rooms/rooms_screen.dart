@@ -243,7 +243,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _budgetFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final filter = _budgetFilters[index];
                     final isSelected = _selectedBudgetFilter == filter;
@@ -290,7 +290,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _typeFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final type = _typeFilters[index];
                     final isSelected = _selectedTypeFilter == type;

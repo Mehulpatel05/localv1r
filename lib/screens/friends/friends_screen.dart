@@ -754,7 +754,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
           itemCount: requests.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, i) {
             final req = requests[i];
             return _buildRequestCard(req);
@@ -939,7 +939,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
           itemCount: friendships.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
             final friendship = friendships[i];
             final otherHandle = friendship.getOtherUser(widget.currentUserHandle);
@@ -1100,7 +1100,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
           itemCount: requests.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
             final req = requests[i];
             return _buildSentCard(req.receiverHandle);
@@ -1288,7 +1288,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: 5,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         return Container(
           padding: const EdgeInsets.all(14),

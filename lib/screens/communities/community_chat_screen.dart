@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/motion.dart';
+import '../../core/widgets/media_attachment_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/community_repository.dart';
@@ -188,70 +189,10 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
 
   // F1: Show bottom sheet to choose Camera or Gallery (Multi-select)
   Future<void> _pickAndSendImage() async {
-    final choice = await showModalBottomSheet<String>(
+    final filesToUpload = await MediaAttachmentPicker.showPickerSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF2563EB),
-                child: Icon(Icons.camera_alt_rounded, color: Colors.white),
-              ),
-              title: const Text('Camera', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Take a new photo'),
-              onTap: () => Navigator.pop(context, 'camera'),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF2563EB),
-                child: Icon(Icons.photo_library_rounded, color: Colors.white),
-              ),
-              title: const Text('Gallery (Multi-select)', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Choose multiple photos as an album'),
-              onTap: () => Navigator.pop(context, 'gallery'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      maxFiles: 8,
     );
-    if (choice == null) return;
-
-    final picker = ImagePicker();
-    List<File> filesToUpload = [];
-
-    if (choice == 'camera') {
-      final picked = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked != null) filesToUpload.add(File(picked.path));
-    } else {
-      final pickedList = await picker.pickMultiImage(
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (pickedList.isNotEmpty) {
-        filesToUpload = pickedList.map((x) => File(x.path)).toList();
-      }
-    }
 
     if (filesToUpload.isEmpty) return;
 
@@ -810,7 +751,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
             color: isDark ? Colors.white : Colors.black,
             shape: const CircleBorder(),
             elevation: 2,
-            shadowColor: Colors.black.withOpacity(0.2),
+            shadowColor: Colors.black.withValues(alpha: 0.2),
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: _sendMessage,

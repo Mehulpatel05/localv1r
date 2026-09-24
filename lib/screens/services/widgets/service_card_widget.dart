@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../models/post_model.dart';
+import '../../../services/telegram_storage_service.dart';
 
 class ServiceCardWidget extends StatelessWidget {
   final Post post;
@@ -53,7 +54,7 @@ class ServiceCardWidget extends StatelessWidget {
         border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -88,7 +89,7 @@ class ServiceCardWidget extends StatelessWidget {
                               child: Center(
                                 child: Icon(
                                   style['icon'] as IconData,
-                                  color: (style['color'] as Color).withOpacity(0.35),
+                                  color: (style['color'] as Color).withValues(alpha: 0.35),
                                   size: 48,
                                 ),
                               ),
@@ -102,11 +103,11 @@ class ServiceCardWidget extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.92),
+                          color: Colors.white.withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
+                              color: Colors.black.withValues(alpha: 0.06),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
@@ -123,12 +124,34 @@ class ServiceCardWidget extends StatelessWidget {
                                 color: style['color'] as Color,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
+                    // Top Right Video Indicator Badge
+                    if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!))
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.videocam_rounded, color: Colors.white, size: 12),
+                              SizedBox(width: 3),
+                              Text(
+                                'Video',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

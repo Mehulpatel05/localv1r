@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../models/post_model.dart';
+import '../../../services/telegram_storage_service.dart';
 
 /// Reusable 2-Column Product Card Widget matching Nearhood Buy & Sell design (Image 3)
 class ShopCardWidget extends StatefulWidget {
@@ -94,8 +95,39 @@ class _ShopCardWidgetState extends State<ShopCardWidget> {
                       ),
                     ),
 
-                    // Photo Count Badge (Top-Right)
-                    if (photoCount > 1)
+                    // Photo/Video Count Badge (Top-Right)
+                    if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!))
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(
+                                Icons.videocam_rounded,
+                                color: Colors.white,
+                                size: 13,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'Video',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (photoCount > 1)
                       Positioned(
                         top: 8,
                         right: 8,

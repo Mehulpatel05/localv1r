@@ -74,7 +74,7 @@ class AccountInfoSheet extends StatelessWidget {
                 Divider(height: 1, thickness: 1, color: c.line),
                 _InfoRow(
                   label: 'Joined',
-                  value: '${profile.joinedYear}',
+                  value: profile.joinedFormatted,
                 ),
               ],
             ),

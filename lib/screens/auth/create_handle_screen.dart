@@ -11,6 +11,7 @@ import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
 import '../../services/presence_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/telegram_storage_service.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
@@ -477,6 +478,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       }
 
       widget.repository.currentUserHandle = handle;
+      NotificationService().initialize();
+      NotificationService().startListening(handle);
       PresenceService.instance.init(handle);
 
       if (!mounted) return;
@@ -790,7 +793,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         if (_focusNode.hasFocus) {
           shadows = [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(0.12),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
               blurRadius: 10,
               spreadRadius: 2,
             ),
@@ -802,7 +805,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         fillColor = Colors.white;
         shadows = [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withOpacity(0.12),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -817,7 +820,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         fillColor = Colors.white;
         shadows = [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withOpacity(0.14),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.14),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -1056,7 +1059,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         boxShadow: isButtonActive
             ? [
                 BoxShadow(
-                  color: const Color(0xFF3B82F6).withOpacity(0.35),
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -1067,7 +1070,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: isButtonActive
               ? const Color(0xFF3B82F6)
-              : const Color(0xFF93C5FD).withOpacity(0.6),
+              : const Color(0xFF93C5FD).withValues(alpha: 0.6),
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(

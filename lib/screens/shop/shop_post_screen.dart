@@ -236,7 +236,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: currentCity.areas.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, _) => const Divider(height: 1),
                         itemBuilder: (context, i) {
                           final area = currentCity.areas[i];
                           final isSelected = _selectedGeoArea?.id == area.id;
@@ -517,7 +517,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     itemCount: _categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, i) {
                       final cat = _categories[i];
                       final name = cat['name'] as String;
@@ -1082,7 +1082,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: _mediaFiles.length + (_mediaFiles.length < 8 ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
           // Add Button (Image 1 dotted + Add item)
           if (i == _mediaFiles.length) {

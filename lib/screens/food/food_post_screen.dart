@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/location/location_selector_field.dart';
 import '../../core/location/location_models.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
@@ -73,23 +71,94 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       _errorMessage == null;
 
   // ── Media pickers ───────────────────────────────────────────────────────
-  Future<void> _pickImages() async {
+  Future<void> _pickMedia() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.photo_library_rounded, color: Colors.black87),
+                ),
+                title: const Text('Photos & Media', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose photos from gallery'),
+                onTap: () => Navigator.pop(ctx, 'media'),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.videocam_rounded, color: Colors.black87),
+                ),
+                title: const Text('Video', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose or record a video review'),
+                onTap: () => Navigator.pop(ctx, 'video'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickMultiImage(
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked.isNotEmpty) {
-        setState(() {
-          for (final x in picked) {
-            if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+      if (choice == 'video') {
+        final picked = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+        if (picked != null) {
+          setState(() {
+            if (_mediaFiles.length < 8) _mediaFiles.add(File(picked.path));
+          });
+        }
+      } else {
+        try {
+          final pickedList = await picker.pickMultipleMedia(
+            imageQuality: 80,
+            maxWidth: 2048,
+            maxHeight: 2048,
+          );
+          if (pickedList.isNotEmpty) {
+            setState(() {
+              for (final x in pickedList) {
+                if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+              }
+            });
           }
-        });
+        } catch (_) {
+          final picked = await picker.pickMultiImage(
+            imageQuality: 80,
+            maxWidth: 2048,
+            maxHeight: 2048,
+          );
+          if (picked.isNotEmpty) {
+            setState(() {
+              for (final x in picked) {
+                if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+              }
+            });
+          }
+        }
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting images: $e');
+      setState(() => _errorMessage = 'Error selecting media: $e');
     }
   }
 
@@ -113,7 +182,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
       for (int i = 0; i < _mediaFiles.length; i++) {
         setState(() => _uploadProgress = (i / _mediaFiles.length) * 0.8);
         final file = _mediaFiles[i];
-        final url = await TelegramStorageService.uploadImage(file);
+        final url = await TelegramStorageService.uploadMedia(file);
         if (url != null) {
           uploadedUrls.add(url);
         }
@@ -223,9 +292,9 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: Colors.red.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -460,7 +529,7 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
               GestureDetector(
                 onTap: () {
                   FocusScope.of(context).unfocus();
-                  _pickImages();
+                  _pickMedia();
                 },
                 child: Container(
                   width: 80,
@@ -476,15 +545,16 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.add_photo_alternate,
+                        Icons.add_photo_alternate_rounded,
                         color: isDark ? Colors.white : Colors.black,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Add',
+                        'Add Media',
                         style: TextStyle(
                           color: isDark ? Colors.white54 : Colors.black54,
-                          fontSize: 12,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -496,11 +566,28 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      _mediaFiles[i],
+                    child: Container(
                       width: 80,
                       height: 80,
-                      fit: BoxFit.cover,
+                      color: isDark ? Colors.white10 : Colors.black12,
+                      child: TelegramStorageService.isVideoFile(_mediaFiles[i].path)
+                          ? Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Container(
+                                  color: Colors.black87,
+                                  child: const Center(
+                                    child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 36),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Image.file(
+                              _mediaFiles[i],
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                   ),
                   Positioned(

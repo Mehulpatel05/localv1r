@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'multi_image_gallery_viewer.dart';
+import '../../../services/telegram_storage_service.dart';
 
 class ImageGroupBubble extends StatelessWidget {
   final List<String> mediaUrls;
@@ -85,6 +86,25 @@ class ImageGroupBubble extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (TelegramStorageService.isVideoFile(url))
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black26,
+                      alignment: Alignment.center,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (isLastWithOverlay && extraCount > 0)
                   Container(
                     color: Colors.black.withValues(alpha: 0.6),

@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../core/widgets/post_image_view.dart';
 import '../../services/post_repository.dart';
 import '../../services/telegram_storage_service.dart';
 
@@ -29,7 +28,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   // Common
   final _contentController = TextEditingController();
   String? _errorMessage;
-  File? _imageFile;
+  final List<File> _mediaFiles = [];
   bool _isPublishing = false;
   double _uploadProgress = 0.0;
 
@@ -56,20 +55,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (mounted) setState(() => _errorMessage = validationError);
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickMedia() async {
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 95,
+      final pickedList = await picker.pickMultipleMedia(
+        imageQuality: 90,
+        maxWidth: 2048,
+        maxHeight: 2048,
       );
-      if (picked != null) setState(() => _imageFile = File(picked.path));
+      if (pickedList.isNotEmpty) {
+        setState(() {
+          for (final x in pickedList) {
+            if (_mediaFiles.length < 10) {
+              _mediaFiles.add(File(x.path));
+            }
+          }
+        });
+      }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting image: $e');
+      // Fallback for platform compatibility
+      try {
+        final picker = ImagePicker();
+        final pickedImages = await picker.pickMultiImage(
+          imageQuality: 90,
+          maxWidth: 2048,
+          maxHeight: 2048,
+        );
+        if (pickedImages.isNotEmpty) {
+          setState(() {
+            for (final x in pickedImages) {
+              if (_mediaFiles.length < 10) {
+                _mediaFiles.add(File(x.path));
+              }
+            }
+          });
+        }
+      } catch (fallbackError) {
+        setState(() => _errorMessage = 'Error selecting media: $fallbackError');
+      }
     }
   }
-
-
 
   bool get _canPublish =>
       !_isPublishing &&
@@ -91,26 +116,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     });
 
     try {
-      String? telegramImageUrl;
-      if (_imageFile != null) {
+      List<String> uploadedMediaUrls = [];
+      if (_mediaFiles.isNotEmpty) {
         try {
-          telegramImageUrl = await TelegramStorageService.uploadImage(
-            _imageFile!,
+          uploadedMediaUrls = await TelegramStorageService.uploadMultipleMedia(
+            _mediaFiles,
             onProgress: (p) {
               if (mounted) setState(() => _uploadProgress = p);
             },
           );
         } catch (e) {
-          debugPrint('Error uploading image: $e');
+          debugPrint('Error uploading media: $e');
         }
-        if (telegramImageUrl == null || telegramImageUrl.isEmpty) {
-          // Upload failed — post without image, show warning
-          debugPrint('Image upload failed, posting without image');
+        if (uploadedMediaUrls.isEmpty && _mediaFiles.isNotEmpty) {
+          // Upload failed — post without media, show warning
+          debugPrint('Media upload failed, posting without media');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 backgroundColor: Color(0xFFF59E0B),
-                content: Text('⚠️ Image upload failed — post will be published without image'),
+                content: Text('⚠️ Media upload failed — post will be published without media'),
                 duration: Duration(seconds: 3),
               ),
             );
@@ -125,13 +150,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         orElse: () => effectiveCity.areas.isNotEmpty ? effectiveCity.areas.first : throw Exception('City has no areas configured.'),
       );
 
+      final String? firstImageUrl = uploadedMediaUrls.isNotEmpty ? uploadedMediaUrls.first : null;
+
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
         cityId: effectiveCity.id,
         areaId: effectiveArea.id,
         category: PostCategory.general,
-        imageUrl: telegramImageUrl,
+        imageUrl: firstImageUrl,
+        mediaUrls: uploadedMediaUrls,
       );
 
       if (mounted) {
@@ -155,6 +183,221 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
     }
   }
+
+  Widget _buildMediaPreviews(bool isDark) {
+    if (_mediaFiles.isEmpty) {
+      return OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: isDark ? Colors.white : Colors.black,
+          side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        icon: const Icon(Icons.image, size: 18),
+        label: const Text('Add Image'),
+        onPressed: _isPublishing ? null : _pickMedia,
+      );
+    }
+
+    if (_mediaFiles.length == 1) {
+      final file = _mediaFiles.first;
+      final isVideo = TelegramStorageService.isVideoFile(file.path);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 220,
+                  width: double.infinity,
+                  color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFF0F172A),
+                  child: isVideo
+                      ? Center(
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white38),
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
+                          ),
+                        )
+                      : Image.file(
+                          file,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 220,
+                        ),
+                ),
+              ),
+              if (isVideo)
+                Positioned(
+                  left: 10,
+                  bottom: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.videocam_rounded, color: Colors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text('Video', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: InkWell(
+                  onTap: _isPublishing ? null : () => setState(() => _mediaFiles.clear()),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_mediaFiles.length < 10)
+            TextButton.icon(
+              onPressed: _isPublishing ? null : _pickMedia,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+              label: Text('Add more (${_mediaFiles.length}/10)'),
+              style: TextButton.styleFrom(
+                foregroundColor: isDark ? Colors.white70 : Colors.black87,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 120,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _mediaFiles.length + (_mediaFiles.length < 10 ? 1 : 0),
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              if (index == _mediaFiles.length) {
+                // Add more card
+                return InkWell(
+                  onTap: _isPublishing ? null : _pickMedia,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 110,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF333333) : const Color(0xFFCBD5E1),
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_rounded, color: isDark ? Colors.white70 : Colors.black87, size: 28),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Add (${_mediaFiles.length}/10)',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black87,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final file = _mediaFiles[index];
+              final isVideo = TelegramStorageService.isVideoFile(file.path);
+              return Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 110,
+                      height: 120,
+                      color: isDark ? const Color(0xFF141414) : const Color(0xFF0F172A),
+                      child: isVideo
+                          ? Center(
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                              ),
+                            )
+                          : Image.file(
+                              file,
+                              fit: BoxFit.cover,
+                              width: 110,
+                              height: 120,
+                            ),
+                    ),
+                  ),
+                  if (isVideo)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 12),
+                      ),
+                    ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: InkWell(
+                      onTap: _isPublishing ? null : () => setState(() => _mediaFiles.removeAt(index)),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildNormalForm() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
@@ -186,42 +429,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        if (_imageFile != null)
-          Stack(
-            children: [
-              PostImageView(
-                imageUrl: _imageFile!.path,
-                height: 220,
-                borderRadius: BorderRadius.circular(12),
-                enableFullScreen: false,
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: InkWell(
-                  onTap: () => setState(() => _imageFile = null),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                        color: Colors.black54, shape: BoxShape.circle),
-                    child: const Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ],
-          )
-        else
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
-              side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: const Icon(Icons.image, size: 18),
-            label: const Text('Add Image (Free Telegram CDN)'),
-            onPressed: _isPublishing ? null : _pickImage,
-          ),
+        _buildMediaPreviews(isDark),
       ],
     );
   }
@@ -396,7 +604,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ),
               const SizedBox(height: 20),
               _buildNormalForm(),
-              if (_isPublishing && _imageFile != null) ...[
+              if (_isPublishing && _mediaFiles.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(16),

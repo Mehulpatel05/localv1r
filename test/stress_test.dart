@@ -1,6 +1,8 @@
 /// Nearhood System Stress Test
 /// Tests 1000+ concurrent user requests across ALL categories & features
 /// Run with: dart run test/stress_test.dart
+// ignore_for_file: avoid_print
+library;
 
 import 'dart:async';
 import 'dart:convert';
@@ -174,7 +176,7 @@ Future<void> testConcurrentPostCreation() async {
         try {
           final body = <String, dynamic>{
             'authorHandle': handle,
-            'content': 'Stress test post #$i — $title. Testing concurrent load with ${totalUsers}+ users.',
+            'content': 'Stress test post #$i — $title. Testing concurrent load with $totalUsers+ users.',
             'category': cat,
             'cityId': 'vadodara',
             'areaId': 'gotri',
@@ -500,9 +502,9 @@ Future<void> testMixedTrafficPattern() async {
 // ── Final Summary Report ────────────────────────────────────────────────────
 void printFinalReport() {
   print('\n');
-  print('╔' + '═' * 68 + '╗');
+  print('╔${'═' * 68}╗');
   print('║           🏁  NEARHOOD STRESS TEST — FINAL REPORT  🏁            ║');
-  print('╠' + '═' * 68 + '╣');
+  print('╠${'═' * 68}╣');
   print('║                                                                    ║');
   print('║  Total Requests Sent:     ${_totalRequests.toString().padRight(40)}║');
   print('║  ✅ Successful:            ${_successCount.toString().padRight(40)}║');
@@ -512,7 +514,7 @@ void printFinalReport() {
   final successRate = _totalRequests > 0
       ? (_successCount * 100.0 / _totalRequests).toStringAsFixed(1)
       : '0.0';
-  print('║  📊 Success Rate:          ${(successRate + '%').padRight(40)}║');
+  print('║  📊 Success Rate:          ${('$successRate%').padRight(40)}║');
   
   _latencies.sort();
   if (_latencies.isNotEmpty) {
@@ -524,18 +526,18 @@ void printFinalReport() {
     
     print('║                                                                    ║');
     print('║  ── Latency Statistics ──                                          ║');
-    print('║  Average:     ${(avgMs.toString() + 'ms').padRight(52)}║');
-    print('║  P50 (Median):${(p50.toString() + 'ms').padRight(52)}║');
-    print('║  P95:         ${(p95.toString() + 'ms').padRight(52)}║');
-    print('║  P99:         ${(p99.toString() + 'ms').padRight(52)}║');
-    print('║  Max:         ${(maxMs.toString() + 'ms').padRight(52)}║');
+    print('║  Average:     ${('${avgMs}ms').padRight(52)}║');
+    print('║  P50 (Median):${('${p50}ms').padRight(52)}║');
+    print('║  P95:         ${('${p95}ms').padRight(52)}║');
+    print('║  P99:         ${('${p99}ms').padRight(52)}║');
+    print('║  Max:         ${('${maxMs}ms').padRight(52)}║');
   }
   
   final elapsedSec = _globalTimer.elapsedMilliseconds / 1000.0;
   final overallThroughput = (_totalRequests / max(0.1, elapsedSec)).toStringAsFixed(1);
   print('║                                                                    ║');
-  print('║  ⏱️  Total Wall Time:       ${(elapsedSec.toStringAsFixed(1) + 's').padRight(40)}║');
-  print('║  🔥 Overall Throughput:    ${(overallThroughput + ' req/s').padRight(40)}║');
+  print('║  ⏱️  Total Wall Time:       ${('${elapsedSec.toStringAsFixed(1)}s').padRight(40)}║');
+  print('║  🔥 Overall Throughput:    ${('$overallThroughput req/s').padRight(40)}║');
   
   if (_errorsByType.isNotEmpty) {
     print('║                                                                    ║');
@@ -563,15 +565,15 @@ void printFinalReport() {
   }
   print('║  GRADE: ${grade.padRight(59)}║');
   print('║                                                                    ║');
-  print('╚' + '═' * 68 + '╝');
+  print('╚${'═' * 68}╝');
 }
 
 // ── Main Entry Point ────────────────────────────────────────────────────────
 Future<void> main() async {
-  print('╔' + '═' * 68 + '╗');
+  print('╔${'═' * 68}╗');
   print('║       🧪  NEARHOOD SYSTEM STRESS TEST — 1000+ CONCURRENT        ║');
   print('║       Testing ALL categories, ALL features, ALL endpoints       ║');
-  print('╚' + '═' * 68 + '╝');
+  print('╚${'═' * 68}╝');
   print('');
   print('  👥 Simulated Users:      $totalUsers');
   print('  📦 Batch Size:           $concurrentBatchSize concurrent');

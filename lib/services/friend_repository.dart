@@ -19,12 +19,49 @@ class FriendRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   String _currentUserHandle = '';
 
-  String get currentUserHandle => _currentUserHandle;
+  String get currentUserHandle {
+    if (_currentUserHandle.isEmpty) {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u?.displayName != null && u!.displayName!.isNotEmpty) {
+        _currentUserHandle = u.displayName!.replaceAll('@', '').trim();
+      }
+    }
+    return _currentUserHandle;
+  }
+
   set currentUserHandle(String handle) =>
       _currentUserHandle = handle.replaceAll('@', '').trim();
 
-  // ── Helper: Deterministic friendship ID ──
+  // ── Helper: Resolve current user handle from Firestore if uninitialized ──
+  Future<String> _resolveCurrentUserHandle() async {
+    if (_currentUserHandle.isNotEmpty) return _currentUserHandle;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return '';
+    try {
+      final userDoc = await _db.collection('users').doc(uid).get();
+      if (userDoc.exists && userDoc.data()?['handle'] != null) {
+        _currentUserHandle = userDoc.data()!['handle'].toString().replaceAll('@', '').trim();
+        return _currentUserHandle;
+      }
+      final profSnap = await _db.collection('profiles').where('ownerUid', isEqualTo: uid).limit(1).get();
+      if (profSnap.docs.isNotEmpty) {
+        _currentUserHandle = profSnap.docs.first.id.replaceAll('@', '').trim();
+        return _currentUserHandle;
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  // ── Helper: Deterministic canonical friendship ID (lowercase) ──
   String _friendshipId(String a, String b) {
+    final cleanA = a.replaceAll('@', '').trim().toLowerCase();
+    final cleanB = b.replaceAll('@', '').trim().toLowerCase();
+    final sorted = [cleanA, cleanB]..sort();
+    return sorted.join('_');
+  }
+
+  // ── Helper: Deterministic legacy friendship ID (raw casing) ──
+  String _friendshipIdRaw(String a, String b) {
     final cleanA = a.replaceAll('@', '').trim();
     final cleanB = b.replaceAll('@', '').trim();
     final sorted = [cleanA, cleanB]..sort();
@@ -33,45 +70,122 @@ class FriendRepository {
 
   // ── Check relationship status with another user ──
   Future<RelationshipStatus> getRelationshipStatus(String otherHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) {
+      me = await _resolveCurrentUserHandle();
+    }
     final them = otherHandle.replaceAll('@', '').trim();
     if (me.isEmpty || them.isEmpty) return RelationshipStatus.none;
+    if (me.toLowerCase() == them.toLowerCase()) return RelationshipStatus.none;
 
-    // Check if blocked by me
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+
+    // 1. Check if blocked by me (raw & lowercase)
     try {
       final blockByMe = await _db.collection('blocks')
           .doc('${me}_$them').get();
       if (blockByMe.exists) return RelationshipStatus.blockedByMe;
+      final blockByMeLower = await _db.collection('blocks')
+          .doc('${me.toLowerCase()}_${them.toLowerCase()}').get();
+      if (blockByMeLower.exists) return RelationshipStatus.blockedByMe;
     } catch (_) {}
 
-    // Check if blocked by them
+    // 2. Check if blocked by them (raw & lowercase)
     try {
       final blockByThem = await _db.collection('blocks')
           .doc('${them}_$me').get();
       if (blockByThem.exists) return RelationshipStatus.blockedByThem;
+      final blockByThemLower = await _db.collection('blocks')
+          .doc('${them.toLowerCase()}_${me.toLowerCase()}').get();
+      if (blockByThemLower.exists) return RelationshipStatus.blockedByThem;
     } catch (_) {}
 
-    // Check if friends
+    // 3. Check if friends (Canonical lowercase ID, Legacy raw ID, users query, usersUids query)
     try {
       final friendshipDoc = await _db.collection('friendships')
           .doc(_friendshipId(me, them)).get();
       if (friendshipDoc.exists) return RelationshipStatus.friends;
     } catch (_) {}
 
-    // Check if I sent a request
+    try {
+      final friendshipDocRaw = await _db.collection('friendships')
+          .doc(_friendshipIdRaw(me, them)).get();
+      if (friendshipDocRaw.exists) return RelationshipStatus.friends;
+    } catch (_) {}
+
+    // Fallback A: Search by users array
+    try {
+      final qUsers = await _db.collection('friendships')
+          .where('users', arrayContainsAny: [
+            me,
+            them,
+            me.toLowerCase(),
+            them.toLowerCase(),
+            '@$me',
+            '@$them',
+          ])
+          .limit(10)
+          .get();
+      for (final doc in qUsers.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final rawUsers = data?['users'];
+        if (rawUsers is List) {
+          final list = rawUsers.map((u) => u.toString().replaceAll('@', '').trim().toLowerCase()).toList();
+          if (list.contains(me.toLowerCase()) && list.contains(them.toLowerCase())) {
+            return RelationshipStatus.friends;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback B: Search by usersUids array (matching current user UID)
+    if (myUid != null && myUid.isNotEmpty) {
+      try {
+        final qUids = await _db.collection('friendships')
+            .where('usersUids', arrayContains: myUid)
+            .limit(20)
+            .get();
+        for (final doc in qUids.docs) {
+          final data = doc.data() as Map<String, dynamic>?;
+          final rawUsers = data?['users'];
+          if (rawUsers is List) {
+            final list = rawUsers.map((u) => u.toString().replaceAll('@', '').trim().toLowerCase()).toList();
+            if (list.contains(them.toLowerCase())) {
+              return RelationshipStatus.friends;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Check if I sent a pending request (raw & lowercase)
     try {
       final sentRequest = await _db.collection('friend_requests')
           .doc('${me}_$them').get();
-      if (sentRequest.exists && sentRequest.data()?['status'] == 'pending') {
+      final sentData = sentRequest.data();
+      if (sentRequest.exists && sentData?['status'] == 'pending') {
+        return RelationshipStatus.requestSentByMe;
+      }
+      final sentRequestLower = await _db.collection('friend_requests')
+          .doc('${me.toLowerCase()}_${them.toLowerCase()}').get();
+      final sentLowerData = sentRequestLower.data();
+      if (sentRequestLower.exists && sentLowerData?['status'] == 'pending') {
         return RelationshipStatus.requestSentByMe;
       }
     } catch (_) {}
 
-    // Check if they sent me a request
+    // 5. Check if they sent me a pending request (raw & lowercase)
     try {
       final receivedRequest = await _db.collection('friend_requests')
           .doc('${them}_$me').get();
-      if (receivedRequest.exists && receivedRequest.data()?['status'] == 'pending') {
+      final recvData = receivedRequest.data();
+      if (receivedRequest.exists && recvData?['status'] == 'pending') {
+        return RelationshipStatus.requestReceivedByMe;
+      }
+      final receivedRequestLower = await _db.collection('friend_requests')
+          .doc('${them.toLowerCase()}_${me.toLowerCase()}').get();
+      final recvLowerData = receivedRequestLower.data();
+      if (receivedRequestLower.exists && recvLowerData?['status'] == 'pending') {
         return RelationshipStatus.requestReceivedByMe;
       }
     } catch (_) {}
@@ -81,29 +195,56 @@ class FriendRepository {
 
   // ── Send Friend Request ──
   Future<void> sendFriendRequest(String receiverHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) {
+      me = await _resolveCurrentUserHandle();
+    }
     final them = receiverHandle.replaceAll('@', '').trim();
-    if (them == me) throw Exception('Cannot friend yourself');
+    if (them.isEmpty) throw Exception('Target user not specified');
+    if (them.toLowerCase() == me.toLowerCase()) throw Exception('Cannot friend yourself');
 
     final status = await getRelationshipStatus(them);
     if (status != RelationshipStatus.none) {
       throw Exception('Cannot send request: relationship already exists');
     }
 
-    // Fetch receiverUid from profiles
-    final profileDoc = await _db.collection('profiles').doc(them).get();
+    // Fetch receiverUid from profiles with case-insensitive fallback
+    var profileDoc = await _db.collection('profiles').doc(them).get();
     if (!profileDoc.exists) {
-      throw Exception('User not found.');
+      profileDoc = await _db.collection('profiles').doc(them.toLowerCase()).get();
     }
-    final receiverUid = profileDoc.data()?['ownerUid'];
-    if (receiverUid == null) {
-      throw Exception('User profile is incomplete.');
+    
+    String? receiverUid;
+    if (profileDoc.exists) {
+      final pData = profileDoc.data();
+      receiverUid = pData?['ownerUid'] ?? pData?['uid'] ?? pData?['userId'];
+    }
+
+    // Fallback: search in users collection by handle if receiverUid is still null
+    if (receiverUid == null || receiverUid.isEmpty) {
+      try {
+        final userSnap = await _db.collection('users')
+            .where('handle', isEqualTo: them)
+            .limit(1)
+            .get();
+        if (userSnap.docs.isNotEmpty) {
+          receiverUid = userSnap.docs.first.id;
+        } else {
+          final userSnapLower = await _db.collection('users')
+              .where('handle', isEqualTo: them.toLowerCase())
+              .limit(1)
+              .get();
+          if (userSnapLower.docs.isNotEmpty) {
+            receiverUid = userSnapLower.docs.first.id;
+          }
+        }
+      } catch (_) {}
     }
 
     final senderUid = FirebaseAuth.instance.currentUser?.uid;
     if (senderUid == null) throw Exception('Not authenticated.');
 
-    final docId = '${me}_$them';
+    final docId = '${me.toLowerCase()}_${them.toLowerCase()}';
     await _db.collection('friend_requests').doc(docId).set({
       'senderHandle': me,
       'senderUid': senderUid,
@@ -114,10 +255,26 @@ class FriendRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    // Also set raw docId for backwards compatibility if case differs
+    final rawDocId = '${me}_$them';
+    if (rawDocId != docId) {
+      try {
+        await _db.collection('friend_requests').doc(rawDocId).set({
+          'senderHandle': me,
+          'senderUid': senderUid,
+          'receiverHandle': them,
+          'receiverUid': receiverUid,
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    }
+
     // Dispatch notification
-    NotificationService().sendNotification(
+    await NotificationService().sendNotification(
       targetHandle: them,
-      targetUid: receiverUid as String?,
+      targetUid: receiverUid,
       title: 'New Friend Request',
       body: '@$me sent you a friend request',
       data: {
@@ -129,102 +286,172 @@ class FriendRepository {
 
   // ── Accept Friend Request ──
   Future<void> acceptFriendRequest(String senderHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) {
+      me = await _resolveCurrentUserHandle();
+    }
     final them = senderHandle.replaceAll('@', '').trim();
+    if (them.isEmpty || me.isEmpty || them.toLowerCase() == me.toLowerCase()) return;
+
     final requestDocId = '${them}_$me';
+    final requestDocIdLower = '${them.toLowerCase()}_${me.toLowerCase()}';
     final friendshipDocId = _friendshipId(them, me);
+    final friendshipDocIdRaw = _friendshipIdRaw(them, me);
 
     try {
-      await _db.runTransaction((transaction) async {
-        final requestRef = _db.collection('friend_requests').doc(requestDocId);
-        final doc = await transaction.get(requestRef);
-        
-        if (!doc.exists) {
-          throw Exception('Friend request no longer exists.');
-        }
-        if (doc.data()?['status'] != 'pending') {
-          throw Exception('Friend request is already processed.');
-        }
+      // 1. Check if friendship document already exists
+      final f1 = await _db.collection('friendships').doc(friendshipDocId).get();
+      final f2 = (friendshipDocId != friendshipDocIdRaw)
+          ? await _db.collection('friendships').doc(friendshipDocIdRaw).get()
+          : null;
+      final bool alreadyFriends = f1.exists || (f2 != null && f2.exists);
 
-        // Update request status
-        transaction.update(requestRef, {
+      // 2. Fetch sender UID if available
+      String? senderUid;
+      try {
+        final rDoc = await _db.collection('friend_requests').doc(requestDocIdLower).get();
+        if (rDoc.exists) {
+          senderUid = rDoc.data()?['senderUid']?.toString();
+        } else {
+          final rDocRaw = await _db.collection('friend_requests').doc(requestDocId).get();
+          if (rDocRaw.exists) {
+            senderUid = rDocRaw.data()?['senderUid']?.toString();
+          }
+        }
+      } catch (_) {}
+
+      if (senderUid == null || senderUid.isEmpty) {
+        try {
+          var pDoc = await _db.collection('profiles').doc(them).get();
+          if (!pDoc.exists) {
+            pDoc = await _db.collection('profiles').doc(them.toLowerCase()).get();
+          }
+          if (pDoc.exists) {
+            senderUid = pDoc.data()?['ownerUid'] ?? pDoc.data()?['uid'] ?? pDoc.data()?['userId'];
+          }
+        } catch (_) {}
+      }
+
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final usersUidsList = <String>[];
+      if (senderUid != null && senderUid.toString().isNotEmpty) {
+        usersUidsList.add(senderUid.toString());
+      }
+      if (currentUid != null && currentUid.isNotEmpty && !usersUidsList.contains(currentUid)) {
+        usersUidsList.add(currentUid);
+      }
+
+      // 3. Mark friend request documents as accepted
+      final batch = _db.batch();
+      final r1 = _db.collection('friend_requests').doc(requestDocIdLower);
+      final r2 = _db.collection('friend_requests').doc(requestDocId);
+      batch.set(r1, {
+        'status': 'accepted',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (requestDocId != requestDocIdLower) {
+        batch.set(r2, {
           'status': 'accepted',
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }, SetOptions(merge: true));
+      }
 
-        // Create friendship
+      // 4. If not already friends, create friendship doc and update friend counts
+      if (!alreadyFriends) {
         final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
-        transaction.set(friendshipRef, {
-          'users': [them, me],
-          'usersUids': [doc.data()?['senderUid'], FirebaseAuth.instance.currentUser?.uid],
+        batch.set(friendshipRef, {
+          'users': [them, me, them.toLowerCase(), me.toLowerCase()],
+          'usersUids': usersUidsList,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        }, SetOptions(merge: true));
 
-        // Update friend counts atomically
         final senderProfileRef = _db.collection('profiles').doc(them);
         final currentProfileRef = _db.collection('profiles').doc(me);
-        
-        transaction.update(senderProfileRef, {'friendCount': FieldValue.increment(1)});
-        transaction.update(currentProfileRef, {'friendCount': FieldValue.increment(1)});
-      });
+        batch.set(senderProfileRef, {'friendCount': FieldValue.increment(1)}, SetOptions(merge: true));
+        batch.set(currentProfileRef, {'friendCount': FieldValue.increment(1)}, SetOptions(merge: true));
+      }
 
-      // Dispatch acceptance notification
-      NotificationService().sendNotification(
-        targetHandle: them,
-        title: 'Friend Request Accepted',
-        body: '@$me accepted your friend request! Tap to start chatting.',
-        data: {
-          'type': 'chat',
-          'partnerHandle': me,
-          'senderHandle': me,
-        },
-      );
+      await batch.commit();
+
+      // Dispatch acceptance notification only if newly friended
+      if (!alreadyFriends) {
+        NotificationService().sendNotification(
+          targetHandle: them,
+          title: 'Friend Request Accepted',
+          body: '@$me accepted your friend request! Tap to start chatting.',
+          data: {
+            'type': 'chat',
+            'partnerHandle': me,
+            'senderHandle': me,
+          },
+        );
+      }
     } catch (e) {
+      debugPrint('[FriendRepo] Error in acceptFriendRequest: $e');
       rethrow;
     }
   }
 
   // ── Reject Friend Request ──
   Future<void> rejectFriendRequest(String senderHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) me = await _resolveCurrentUserHandle();
     final them = senderHandle.replaceAll('@', '').trim();
-    final requestDocId = '${them}_$me';
-    final requestRef = _db.collection('friend_requests').doc(requestDocId);
     
-    final doc = await requestRef.get();
-    if (doc.exists) {
-      await requestRef.update({
-        'status': 'rejected',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
+    final r1 = _db.collection('friend_requests').doc('${them}_$me');
+    final r2 = _db.collection('friend_requests').doc('${them.toLowerCase()}_${me.toLowerCase()}');
+    
+    try {
+      final doc1 = await r1.get();
+      if (doc1.exists) {
+        await r1.update({'status': 'rejected', 'updatedAt': FieldValue.serverTimestamp()});
+      }
+    } catch (_) {}
+    try {
+      final doc2 = await r2.get();
+      if (doc2.exists) {
+        await r2.update({'status': 'rejected', 'updatedAt': FieldValue.serverTimestamp()});
+      }
+    } catch (_) {}
   }
 
   // ── Cancel Sent Request ──
   Future<void> cancelFriendRequest(String receiverHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) me = await _resolveCurrentUserHandle();
     final them = receiverHandle.replaceAll('@', '').trim();
-    final requestDocId = '${me}_$them';
-    await _db.collection('friend_requests').doc(requestDocId).delete();
-  }
 
-  // ── Unfriend ──
-  Future<void> unfriend(String otherHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
-    final them = otherHandle.replaceAll('@', '').trim();
-    final friendshipDocId = _friendshipId(me, them);
-
-    await _db.runTransaction((transaction) async {
-      final friendshipRef = _db.collection('friendships').doc(friendshipDocId);
-      transaction.delete(friendshipRef);
-    });
-
-    // Cleanup any old requests
     try {
       await _db.collection('friend_requests').doc('${me}_$them').delete();
     } catch (_) {}
     try {
+      await _db.collection('friend_requests').doc('${me.toLowerCase()}_${them.toLowerCase()}').delete();
+    } catch (_) {}
+  }
+
+  // ── Unfriend ──
+  Future<void> unfriend(String otherHandle) async {
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) me = await _resolveCurrentUserHandle();
+    final them = otherHandle.replaceAll('@', '').trim();
+    final friendshipDocId = _friendshipId(me, them);
+    final friendshipDocIdRaw = _friendshipIdRaw(me, them);
+
+    try {
+      await _db.collection('friendships').doc(friendshipDocId).delete();
+    } catch (_) {}
+    try {
+      await _db.collection('friendships').doc(friendshipDocIdRaw).delete();
+    } catch (_) {}
+
+    // Cleanup any old requests
+    try {
+      await _db.collection('friend_requests').doc('${me}_$them').delete();
+      await _db.collection('friend_requests').doc('${me.toLowerCase()}_${them.toLowerCase()}').delete();
+    } catch (_) {}
+    try {
       await _db.collection('friend_requests').doc('${them}_$me').delete();
+      await _db.collection('friend_requests').doc('${them.toLowerCase()}_${me.toLowerCase()}').delete();
     } catch (_) {}
 
     // Decrement counts
@@ -234,9 +461,10 @@ class FriendRepository {
 
   // ── Block User ──
   Future<void> blockUser(String otherHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) me = await _resolveCurrentUserHandle();
     final them = otherHandle.replaceAll('@', '').trim();
-    final blockDocId = '${me}_$them';
+    final blockDocId = '${me.toLowerCase()}_${them.toLowerCase()}';
 
     // Create block
     await _db.collection('blocks').doc(blockDocId).set({
@@ -248,27 +476,38 @@ class FriendRepository {
 
     // Remove friendship if exists
     final friendshipDocId = _friendshipId(me, them);
-    final friendshipDoc = await _db.collection('friendships').doc(friendshipDocId).get();
-    if (friendshipDoc.exists) {
+    final friendshipDocIdRaw = _friendshipIdRaw(me, them);
+    try {
       await _db.collection('friendships').doc(friendshipDocId).delete();
-      await _incrementFriendCount(me, -1);
-      await _incrementFriendCount(them, -1);
-    }
+    } catch (_) {}
+    try {
+      await _db.collection('friendships').doc(friendshipDocIdRaw).delete();
+    } catch (_) {}
+    await _incrementFriendCount(me, -1);
+    await _incrementFriendCount(them, -1);
 
     // Remove any pending requests
     try {
       await _db.collection('friend_requests').doc('${me}_$them').delete();
+      await _db.collection('friend_requests').doc('${me.toLowerCase()}_${them.toLowerCase()}').delete();
     } catch (_) {}
     try {
       await _db.collection('friend_requests').doc('${them}_$me').delete();
+      await _db.collection('friend_requests').doc('${them.toLowerCase()}_${me.toLowerCase()}').delete();
     } catch (_) {}
   }
 
   // ── Unblock User ──
   Future<void> unblockUser(String otherHandle) async {
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    String me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) me = await _resolveCurrentUserHandle();
     final them = otherHandle.replaceAll('@', '').trim();
-    await _db.collection('blocks').doc('${me}_$them').delete();
+    try {
+      await _db.collection('blocks').doc('${me}_$them').delete();
+    } catch (_) {}
+    try {
+      await _db.collection('blocks').doc('${me.toLowerCase()}_${them.toLowerCase()}').delete();
+    } catch (_) {}
   }
 
   // ── Get Incoming Pending Requests (Stream) ──
@@ -414,9 +653,8 @@ class FriendRepository {
 
   // ── Check if two users are friends ──
   Future<bool> areFriends(String otherHandle) async {
-    final doc = await _db.collection('friendships')
-        .doc(_friendshipId(_currentUserHandle, otherHandle)).get();
-    return doc.exists;
+    final status = await getRelationshipStatus(otherHandle);
+    return status == RelationshipStatus.friends;
   }
 
   // ── Helper: lookup user data by handle ──
@@ -431,8 +669,10 @@ class FriendRepository {
 
   // ── Helper: Increment friend count ──
   Future<void> _incrementFriendCount(String handle, int delta) async {
-    await _db.collection('profiles').doc(handle).update({
+    final clean = handle.replaceAll('@', '').trim();
+    if (clean.isEmpty) return;
+    await _db.collection('profiles').doc(clean).set({
       'friendCount': FieldValue.increment(delta),
-    }).catchError((_) {}); // Ignore if profile doesn't exist
+    }, SetOptions(merge: true)).catchError((_) {});
   }
 }

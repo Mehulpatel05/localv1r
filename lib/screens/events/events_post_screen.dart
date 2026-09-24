@@ -73,20 +73,74 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
       _errorMessage == null;
 
   // ── Media pickers ───────────────────────────────────────────────────────
-  Future<void> _pickImage() async {
+  Future<void> _pickMedia() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.photo_library_rounded, color: Colors.black87),
+                ),
+                title: const Text('Event Poster / Photo', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose banner image from gallery'),
+                onTap: () => Navigator.pop(ctx, 'photo'),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.videocam_rounded, color: Colors.black87),
+                ),
+                title: const Text('Event Teaser / Video', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose a promotional video'),
+                onTap: () => Navigator.pop(ctx, 'video'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked != null) {
-        setState(() => _bannerImage = File(picked.path));
+      if (choice == 'video') {
+        final picked = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+        if (picked != null) {
+          setState(() => _bannerImage = File(picked.path));
+        }
+      } else {
+        final picked = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 80,
+          maxWidth: 2048,
+          maxHeight: 2048,
+        );
+        if (picked != null) {
+          setState(() => _bannerImage = File(picked.path));
+        }
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting image: $e');
+      setState(() => _errorMessage = 'Error selecting media: $e');
     }
   }
 
@@ -102,9 +156,9 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
       String? imageUrl;
       if (_bannerImage != null) {
         setState(() => _uploadProgress = 0.5);
-        imageUrl = await TelegramStorageService.uploadImage(_bannerImage!);
+        imageUrl = await TelegramStorageService.uploadMedia(_bannerImage!);
         if (imageUrl == null || imageUrl.isEmpty) {
-          throw Exception('Image upload failed. Please try again.');
+          throw Exception('Media upload failed. Please try again.');
         }
       }
 
@@ -201,9 +255,9 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: Colors.red.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -250,12 +304,12 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                           firstDate: DateTime.now(),
                           lastDate: DateTime(2030),
                         );
-                        if (date != null && mounted) {
+                        if (date != null && context.mounted) {
                           final time = await showTimePicker(
                             context: context,
                             initialTime: TimeOfDay.now(),
                           );
-                          if (time != null) {
+                          if (time != null && mounted) {
                             final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
                             final monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
                             final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
@@ -395,6 +449,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
 
   Widget _buildBannerUpload() {
     if (_bannerImage != null) {
+      final isVideo = TelegramStorageService.isVideoFile(_bannerImage!.path);
       return Stack(
         children: [
           Container(
@@ -402,11 +457,32 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
             width: double.infinity,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: FileImage(_bannerImage!),
-                fit: BoxFit.cover,
-              ),
+              color: Colors.black12,
+              image: isVideo
+                  ? null
+                  : DecorationImage(
+                      image: FileImage(_bannerImage!),
+                      fit: BoxFit.cover,
+                    ),
             ),
+            child: isVideo
+                ? Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 54),
+                          SizedBox(height: 8),
+                          Text('Event Promo Video Attached', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,
           ),
           Positioned(
             top: 8,
@@ -431,7 +507,7 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
-        _pickImage();
+        _pickMedia();
       },
       child: Container(
         height: 150,

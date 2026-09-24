@@ -3,119 +3,207 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
+const db = admin.firestore();
+
 /**
- * Trigger: When a new Friend Request is created
- * Sends a push notification to the receiver.
+ * Helper to resolve FCM token for a user by handle and/or uid
  */
-exports.sendFriendRequestNotification = onDocumentCreated(
-  "friend_requests/{requestId}",
+async function resolveFcmToken(handle, uid) {
+  const cleanHandle = (handle || "").replace("@", "").trim();
+
+  // 1. Check profiles collection by clean handle
+  if (cleanHandle) {
+    try {
+      const profileDoc = await db.collection("profiles").doc(cleanHandle).get();
+      if (profileDoc.exists && profileDoc.data().fcmToken) {
+        return profileDoc.data().fcmToken;
+      }
+      // Try lowercase handle
+      const lowerDoc = await db.collection("profiles").doc(cleanHandle.toLowerCase()).get();
+      if (lowerDoc.exists && lowerDoc.data().fcmToken) {
+        return lowerDoc.data().fcmToken;
+      }
+    } catch (e) {
+      console.log("Error checking profile doc for FCM token:", e);
+    }
+  }
+
+  // 2. Check users collection by uid
+  if (uid) {
+    try {
+      const userDoc = await db.collection("users").doc(uid).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        return userDoc.data().fcmToken;
+      }
+    } catch (e) {
+      console.log("Error checking user doc for FCM token:", e);
+    }
+  }
+
+  // 3. Fallback: Query users collection where handle == cleanHandle
+  if (cleanHandle) {
+    try {
+      const query = await db
+        .collection("users")
+        .where("handle", "in", [cleanHandle, `@${cleanHandle}`, cleanHandle.toLowerCase()])
+        .limit(1)
+        .get();
+      if (!query.empty && query.docs[0].data().fcmToken) {
+        return query.docs[0].data().fcmToken;
+      }
+    } catch (e) {
+      console.log("Error querying users collection for handle:", e);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Trigger: When ANY notification document is created in `notifications`
+ * Handles all in-app notifications (Chat, Friend Request, Community, Post, etc.)
+ */
+exports.onNotificationCreated = onDocumentCreated(
+  "notifications/{notifId}",
   async (event) => {
     const snap = event.data;
     if (!snap) return;
 
-    const requestData = snap.data();
-    if (requestData.status !== "pending") return;
-
-    const senderHandle = requestData.senderHandle;
-    const receiverHandle = requestData.receiverHandle;
+    const data = snap.data();
+    const targetHandle = data.targetHandle;
+    const targetUid = data.targetUid;
+    const title = data.title || "Nearhood";
+    const body = data.body || "";
+    const payloadData = data.data || {};
 
     try {
-      // 1. Get receiver's FCM token from users collection
-      const usersRef = admin.firestore().collection("users");
-      const query = await usersRef.where("handle", "==", receiverHandle).limit(1).get();
-
-      if (query.empty) {
-        console.log(`User ${receiverHandle} not found`);
+      const token = await resolveFcmToken(targetHandle, targetUid);
+      if (!token) {
+        console.log(`No FCM token found for target ${targetHandle || targetUid}`);
         return;
       }
 
-      const receiverDoc = query.docs[0];
-      const fcmToken = receiverDoc.data().fcmToken;
-
-      if (!fcmToken) {
-        console.log(`No FCM token for user ${receiverHandle}`);
-        return;
+      // Convert all payload values to string (FCM data block requirement)
+      const stringData = {};
+      for (const [key, value] of Object.entries(payloadData)) {
+        stringData[key] = typeof value === "string" ? value : JSON.stringify(value);
       }
+      stringData.click_action = "FLUTTER_NOTIFICATION_CLICK";
 
-      // 2. Build the notification payload
       const message = {
+        token: token,
         notification: {
-          title: "New Friend Request",
-          body: `@${senderHandle} wants to be your friend!`,
+          title: title,
+          body: body,
         },
-        data: {
-          type: "friend_request",
-          sender: senderHandle,
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
+        data: stringData,
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "nearhood_channel",
+            icon: "ic_launcher",
+            color: "#000000",
+            sound: "default",
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            priority: "max",
+            visibility: "public",
+            clickAction: "FLUTTER_NOTIFICATION_CLICK",
+          },
         },
-        token: fcmToken,
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+              contentAvailable: true,
+            },
+          },
+        },
       };
 
-      // 3. Send the message
       const response = await admin.messaging().send(message);
-      console.log(`Successfully sent friend request notification:`, response);
+      console.log(`Sent push notification to ${targetHandle || targetUid}:`, response);
     } catch (error) {
-      console.error(`Error sending friend request notification:`, error);
+      console.error(`Error sending push notification:`, error);
     }
   }
 );
 
 /**
- * Trigger: When a new personal chat message is sent
- * Sends a push notification to the receiver.
+ * Trigger: When a new Audio/Video Call is initiated in `calls/{callId}`
+ * High-priority wake-up push notification for incoming calls
  */
-exports.sendChatMessageNotification = onDocumentCreated(
-  "chats/{chatId}/messages/{messageId}",
+exports.onCallCreated = onDocumentCreated(
+  "calls/{callId}",
   async (event) => {
     const snap = event.data;
     if (!snap) return;
 
-    const messageData = snap.data();
-    const senderHandle = messageData.senderHandle;
-    const text = messageData.content || "Sent an image/file";
-    
-    // We need to figure out who the receiver is.
-    const chatId = event.params.chatId;
-    const chatDoc = await admin.firestore().collection("chats").doc(chatId).get();
-    if (!chatDoc.exists) return;
-    
-    const participants = chatDoc.data().participants || [];
-    const receiverHandle = participants.find(h => h !== senderHandle);
+    const callData = snap.data();
+    const status = callData.status;
+    if (status !== "calling" && status !== "ringing") return;
 
-    if (!receiverHandle) return;
+    const callId = event.params.callId;
+    const callerHandle = callData.callerHandle || "Neighbor";
+    const receiverHandle = callData.receiverHandle;
+    const receiverUid = callData.receiverUid;
+    const callType = callData.callType || "audio";
 
     try {
-      // 1. Get receiver's FCM token
-      const usersRef = admin.firestore().collection("users");
-      const query = await usersRef.where("handle", "==", receiverHandle).limit(1).get();
+      const token = await resolveFcmToken(receiverHandle, receiverUid);
+      if (!token) {
+        console.log(`No FCM token found for call receiver ${receiverHandle || receiverUid}`);
+        return;
+      }
 
-      if (query.empty) return;
+      const isVideo = callType === "video";
+      const title = `@${callerHandle.replace("@", "")} is calling...`;
+      const body = isVideo ? "Incoming Video Call 📹" : "Incoming Voice Call 📞";
 
-      const receiverDoc = query.docs[0];
-      const fcmToken = receiverDoc.data().fcmToken;
-
-      if (!fcmToken) return;
-
-      // 2. Build the notification payload
       const message = {
+        token: token,
         notification: {
-          title: `@${senderHandle}`,
-          body: text,
+          title: title,
+          body: body,
         },
         data: {
-          type: "chat_message",
-          chatId: chatId,
-          sender: senderHandle,
+          type: "call",
+          callId: callId,
+          callerHandle: callerHandle,
+          callType: callType,
           click_action: "FLUTTER_NOTIFICATION_CLICK",
         },
-        token: fcmToken,
+        android: {
+          priority: "high",
+          ttl: 60 * 1000, // 60s timeout
+          notification: {
+            channelId: "nearhood_channel",
+            icon: "ic_launcher",
+            color: "#000000",
+            sound: "default",
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            priority: "max",
+            visibility: "public",
+            clickAction: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+              contentAvailable: true,
+            },
+          },
+        },
       };
 
-      // 3. Send the message
       const response = await admin.messaging().send(message);
-      console.log(`Successfully sent chat notification:`, response);
+      console.log(`Sent call push alert to ${receiverHandle}:`, response);
     } catch (error) {
-      console.error(`Error sending chat notification:`, error);
+      console.error(`Error sending call push notification:`, error);
     }
   }
 );

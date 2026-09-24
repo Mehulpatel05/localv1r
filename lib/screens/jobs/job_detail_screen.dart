@@ -64,6 +64,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 Navigator.pop(ctx);
                 final title = widget.post.jobTitle ?? 'Job Opportunity';
                 final company = widget.post.jobCompany ?? 'Nearhood';
+                // ignore: deprecated_member_use
                 Share.share('Check out this job opening on Nearhood: $title at $company in Vadodara!');
               },
             ),
@@ -515,7 +516,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -3),
                 ),

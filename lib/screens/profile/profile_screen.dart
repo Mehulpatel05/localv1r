@@ -15,6 +15,9 @@ import '../../services/post_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/telegram_storage_service.dart';
 import '../../services/avatar_cache_service.dart';
+import '../../services/friend_repository.dart';
+import '../../models/friendship_model.dart';
+import '../friends/friends_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../../features/settings/settings_page.dart';
 
@@ -39,11 +42,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSavingBio = false;
   bool _isUploadingPhoto = false;
   late TextEditingController _bioController;
+  late final FriendRepository _friendRepository;
 
   @override
   void initState() {
     super.initState();
     _bioController = TextEditingController();
+    _friendRepository = FriendRepository()
+      ..currentUserHandle = widget.currentUserHandle;
     _loadProfileData();
   }
 
@@ -107,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'email': data['email'] ?? user?.email ?? '',
         'bio': (data['bio'] as String?)?.trim() ?? '',
         'photoUrl': photoUrl,
-        'createdAt': data['createdAt'],
+        'createdAt': data['createdAt'] ?? user?.metadata.creationTime,
       };
       if (photoUrl != null && photoUrl.isNotEmpty) {
         AvatarCacheService.instance.setCachedUrl(cleanHandle, photoUrl);
@@ -568,12 +574,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       widget.currentUserHandle;
                   final phone = _userData?['phone'] as String?;
                   final email = _userData?['email'] as String?;
+                  DateTime? joinedDate;
+                  final rawCreated = _userData?['createdAt'];
+                  if (rawCreated is Timestamp) {
+                    joinedDate = rawCreated.toDate();
+                  } else if (rawCreated is DateTime) {
+                    joinedDate = rawCreated;
+                  }
                   final profile = UserProfile(
                     handle: handle.replaceAll('@', '').trim(),
                     phone: (phone == null || phone.isEmpty) ? null : phone,
                     email: (email == null || email.isEmpty) ? null : email,
-                    joinedYear: int.tryParse(_getJoinedYear()) ??
+                    joinedYear: joinedDate?.year ??
+                        int.tryParse(_getJoinedYear()) ??
                         DateTime.now().year,
+                    joinedDate: joinedDate,
                   );
                   Navigator.push(
                     context,
@@ -718,7 +733,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // 3. Stats Card (Posts | Upvotes | Joined)
+              // 3. Stats Card (Posts | Upvotes | Friends)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(
@@ -741,7 +756,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 1,
                       color: borderColor,
                     ),
-                    _buildStatItem(_getJoinedYear(), 'Joined', isDark),
+                    StreamBuilder<List<Friendship>>(
+                      stream: _friendRepository.getFriendsList(),
+                      builder: (context, snapshot) {
+                        final count = snapshot.hasData
+                            ? snapshot.data!.length
+                            : (_userData?['friendCount'] as int? ?? 0);
+                        return _buildStatItem(
+                          '$count',
+                          'Friends',
+                          isDark,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FriendsScreen(
+                                  repository: _friendRepository,
+                                  currentUserHandle: widget.currentUserHandle,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -974,8 +1012,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   );
 }
 
-  Widget _buildStatItem(String count, String label, bool isDark) {
-    return Column(
+  Widget _buildStatItem(
+    String count,
+    String label,
+    bool isDark, {
+    VoidCallback? onTap,
+  }) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           count,
@@ -997,6 +1041,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: content,
+      );
+    }
+    return content;
   }
 
   Widget _buildUserPostCard(Post rawPost) {

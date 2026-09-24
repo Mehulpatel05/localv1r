@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
 import '../../../models/post_model.dart';
+import '../../../services/telegram_storage_service.dart';
 
 class RoomCardWidget extends StatefulWidget {
   final Post post;
@@ -52,7 +53,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -102,7 +103,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
                             colors: [
-                              Colors.black.withOpacity(0.75),
+                              Colors.black.withValues(alpha: 0.75),
                               Colors.transparent,
                             ],
                           ),
@@ -117,7 +118,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.65),
+                          color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -131,18 +132,42 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
                       ),
                     ),
 
-                    // Top Right Media Counter Badge (if multiple photos) & Heart Favorite Icon
+                    // Top Right Media Counter Badge (if multiple photos / video) & Heart Favorite Icon
                     Positioned(
                       top: 8,
                       right: 8,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (mediaCount > 1) ...[
+                          if (hasImage && TelegramStorageService.isVideoFile(post.imageUrl!)) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
+                                color: Colors.black.withValues(alpha: 0.75),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.videocam_rounded, color: Colors.white, size: 12),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'Video',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ] else if (mediaCount > 1) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -163,7 +188,7 @@ class _RoomCardWidgetState extends State<RoomCardWidget> {
                             child: Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.4),
+                                color: Colors.black.withValues(alpha: 0.4),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(

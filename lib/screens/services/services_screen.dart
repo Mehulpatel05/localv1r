@@ -362,7 +362,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           backgroundColor: isDark ? Colors.white : Colors.black,
           foregroundColor: isDark ? Colors.black : Colors.white,
           elevation: 4,
-          shadowColor: Colors.black.withOpacity(0.25),
+          shadowColor: Colors.black.withValues(alpha: 0.25),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
           shape: const StadiumBorder(),
         ),
@@ -454,7 +454,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _categoriesRow1.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final cat = _categoriesRow1[index];
                     final name = cat['name'] as String;
@@ -517,7 +517,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _categoriesRow2.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final cat = _categoriesRow2[index];
                     final name = cat['name'] as String;

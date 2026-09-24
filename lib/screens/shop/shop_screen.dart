@@ -138,7 +138,7 @@ class _ShopScreenState extends State<ShopScreen> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: city.areas.length + 1,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       if (i == 0) {
                         final isSelected = locService.area == null;
@@ -338,7 +338,7 @@ class _ShopScreenState extends State<ShopScreen> {
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         itemCount: _categories.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
                         itemBuilder: (context, i) {
                           final cat = _categories[i];
                           final name = cat['name'] as String;
@@ -461,7 +461,7 @@ class _ShopScreenState extends State<ShopScreen> {
           backgroundColor: isDark ? Colors.white : Colors.black,
           foregroundColor: isDark ? Colors.black : Colors.white,
           elevation: 4,
-          shadowColor: Colors.black.withOpacity(0.25),
+          shadowColor: Colors.black.withValues(alpha: 0.25),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
           shape: const StadiumBorder(),
         ),

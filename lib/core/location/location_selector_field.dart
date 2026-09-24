@@ -59,7 +59,7 @@ class _LocationSelectorFieldState extends State<LocationSelectorField> {
             labelText: 'Area *',
             border: OutlineInputBorder(),
           ),
-          value: _selectedArea,
+          initialValue: _selectedArea,
           items: city.areas.map((area) {
             final isGeneral = area.id.contains('GENERAL') || area.name.toLowerCase().contains('general');
             return DropdownMenuItem<GeoArea>(

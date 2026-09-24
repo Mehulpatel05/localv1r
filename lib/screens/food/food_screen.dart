@@ -91,10 +91,11 @@ class _FoodScreenState extends State<FoodScreen> {
                     ),
                   )
                 : ListView.builder(
+                    // ignore: deprecated_member_use
+                    cacheExtent: 1500,
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    cacheExtent: 1500,
                     addRepaintBoundaries: true,
                     addAutomaticKeepAlives: false,
                     padding: const EdgeInsets.only(

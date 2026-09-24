@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/motion.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
 import 'community_chat_screen.dart';
 import 'create_community_screen.dart';
+import 'discover_communities_screen.dart';
 
 class CommunitiesListScreen extends StatefulWidget {
   final CommunityRepository repository;
@@ -15,18 +15,7 @@ class CommunitiesListScreen extends StatefulWidget {
 }
 
 class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
-  int _selectedTab = 0; // 0: My Communities, 1: Discover
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  int _discoverFilterIndex = 0; // 0: All, 1: Groups, 2: Channels, 3: Popular
   final Map<String, int> _unreadCounts = {};
-  final Set<String> _joiningCommunityIds = {};
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   Color _getCommunityColor(bool isChannel, String id) {
     if (isChannel) {
@@ -83,7 +72,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         actions: [
           // Search Action Button
           Container(
-            margin: const EdgeInsets.only(right: 8),
+            margin: const EdgeInsets.only(right: 16),
             width: 38,
             height: 38,
             decoration: BoxDecoration(
@@ -98,106 +87,21 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                 size: 20,
               ),
               onPressed: () {
-                setState(() {
-                  _selectedTab = 1; // Switch to Discover tab
-                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DiscoverCommunitiesScreen(
+                      repository: widget.repository,
+                    ),
+                  ),
+                );
               },
             ),
           ),
-          // Create Action Button
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.add_rounded,
-                color: isDark ? Colors.white : const Color(0xFF1E293B),
-                size: 22,
-              ),
-              onPressed: () => _showCreateOptions(context),
-            ),
-          ),
         ],
       ),
-      body: Column(
-        children: [
-          // Segmented Capsule Tabs (My Communities / Discover)
-          Container(
-            color: isDark ? Colors.black : Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildSegmentButton(0, 'My Communities'),
-                  ),
-                  Expanded(
-                    child: _buildSegmentButton(1, 'Discover'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Tab Content
-          Expanded(
-            child: _selectedTab == 0
-                ? _buildMyCommunitiesTab()
-                : _buildDiscoverTab(),
-          ),
-        ],
-      ),
+      body: _buildMyCommunitiesTab(),
       floatingActionButton: _buildFloatingCreateButton(),
-    );
-  }
-
-  Widget _buildSegmentButton(int index, String label) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSelected = _selectedTab == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedTab = index;
-        });
-      },
-      child: AnimatedContainer(
-        duration: AppMotion.durationMicro,
-        curve: AppMotion.interactiveCurve,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? (isDark ? Colors.black : Colors.white) : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B)),
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            fontSize: 13.5,
-          ),
-        ),
-      ),
     );
   }
 
@@ -272,7 +176,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -426,475 +330,6 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     );
   }
 
-  // ── DISCOVER TAB ──
-  Widget _buildDiscoverTab() {
-    return Column(
-      children: [
-        // Search Bar & Filter Pills (Image 2)
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Column(
-            children: [
-              // Search Input Box
-              Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 12, right: 8),
-                      child: Icon(
-                        Icons.search_rounded,
-                        color: Color(0xFF94A3B8),
-                        size: 20,
-                      ),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (val) {
-                          setState(() {
-                            _searchQuery = val.trim().toLowerCase();
-                          });
-                        },
-                        style: const TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Search communities',
-                          hintStyle: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                    if (_searchQuery.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Color(0xFF94A3B8),
-                          size: 18,
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Filter Pills Row (All, Groups, Channels, Popular)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildDiscoverFilterPill(0, 'All'),
-                    const SizedBox(width: 8),
-                    _buildDiscoverFilterPill(1, 'Groups'),
-                    const SizedBox(width: 8),
-                    _buildDiscoverFilterPill(2, 'Channels'),
-                    const SizedBox(width: 8),
-                    _buildDiscoverFilterPill(3, 'Popular'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Discover List Stream
-        Expanded(
-          child: StreamBuilder<Set<String>>(
-            stream: widget.repository.getJoinedCommunityIds(),
-            builder: (context, joinedSnap) {
-              final joinedIds = joinedSnap.data ?? {};
-
-              return StreamBuilder<List<CommunityModel>>(
-                stream: widget.repository.getAllCommunities(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return _buildLoadingSkeleton();
-                  }
-
-                  if (snapshot.hasError) {
-                    return _buildErrorState();
-                  }
-
-                  // Discover logic: Only show communities the user has NOT joined yet!
-                  var communities = (snapshot.data ?? [])
-                      .where((c) => !joinedIds.contains(c.id))
-                      .toList();
-
-                  // Apply search query
-                  if (_searchQuery.isNotEmpty) {
-                    communities = communities.where((c) {
-                      return c.name.toLowerCase().contains(_searchQuery) ||
-                          c.description.toLowerCase().contains(_searchQuery);
-                    }).toList();
-                  }
-
-                  // Apply filter pills
-                  if (_discoverFilterIndex == 1) {
-                    // Groups only
-                    communities =
-                        communities.where((c) => !c.isChannel).toList();
-                  } else if (_discoverFilterIndex == 2) {
-                    // Channels only
-                    communities =
-                        communities.where((c) => c.isChannel).toList();
-                  } else if (_discoverFilterIndex == 3) {
-                    // Popular (sorted by memberCount)
-                    communities.sort((a, b) =>
-                        b.memberCount.compareTo(a.memberCount));
-                  }
-
-                  if (communities.isEmpty) {
-                    final allJoined = (snapshot.data ?? []).isNotEmpty && joinedIds.isNotEmpty;
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              allJoined && _searchQuery.isEmpty
-                                  ? Icons.check_circle_outline_rounded
-                                  : Icons.search_off_rounded,
-                              size: 48,
-                              color: allJoined && _searchQuery.isEmpty
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _searchQuery.isNotEmpty
-                                  ? 'No matches for "$_searchQuery"'
-                                  : (allJoined ? 'All Caught Up!' : 'No communities found'),
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _searchQuery.isNotEmpty
-                                  ? 'Try searching for something else or create your own!'
-                                  : (allJoined
-                                      ? "You've joined all available communities in Vadodara! View them in 'My Communities'."
-                                      : 'Create your own community to connect with neighbors!'),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.only(
-                      top: 12,
-                      bottom: 84,
-                      left: 16,
-                      right: 16,
-                    ),
-                    itemCount: communities.length,
-                    itemBuilder: (context, index) {
-                      final community = communities[index];
-                      final isJoined = joinedIds.contains(community.id);
-                      return _buildDiscoverCard(community, isJoined);
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDiscoverFilterPill(int index, String label) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSelected = _discoverFilterIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _discoverFilterIndex = index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? Colors.white : Colors.black)
-              : (isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4)),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: isSelected
-                ? (isDark ? Colors.white : Colors.black)
-                : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? (isDark ? Colors.black : Colors.white)
-                : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF334155)),
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiscoverCard(CommunityModel community, bool isJoined) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final avatarColor = _getCommunityColor(community.isChannel, community.id);
-    final initials = _getInitials(community.name);
-    final typeLabel = community.isChannel ? 'CHANNEL' : 'GROUP';
-    final isJoining = _joiningCommunityIds.contains(community.id);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row (Avatar + Title + Badge + Members)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: avatarColor,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          community.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF334155) : const Color(0xFF0F172A),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                typeLabel,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _formatMemberCount(community.memberCount),
-                              style: const TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (community.description.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            community.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 12.5,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Bottom Full-Width Action Button (Join / Joined)
-              SizedBox(
-                width: double.infinity,
-                height: 40,
-                child: isJoined
-                    ? OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? Colors.white : Colors.black,
-                          side: BorderSide(
-                            color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
-                            width: 1.5,
-                          ),
-                          shape: const StadiumBorder(),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CommunityChatScreen(
-                                community: community,
-                                repository: widget.repository,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.check_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Joined',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? Colors.white : Colors.black,
-                          foregroundColor: isDark ? Colors.black : Colors.white,
-                          elevation: 0,
-                          shape: const StadiumBorder(),
-                        ),
-                        onPressed: isJoining
-                            ? null
-                            : () async {
-                                setState(() {
-                                  _joiningCommunityIds.add(community.id);
-                                });
-                                await widget.repository
-                                    .joinCommunity(community.id);
-                                if (mounted) {
-                                  setState(() {
-                                    _joiningCommunityIds.remove(community.id);
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: const Color(0xFF10B981),
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      content: Text(
-                                        'Joined "${community.name}"! Added to My Communities.',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                        child: isJoining
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Join',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── STATES: SKELETON, EMPTY, ERROR (Image 3) ──
 
   // Panel 2: Loading State Skeleton
@@ -1032,9 +467,14 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                   shape: const StadiumBorder(),
                 ),
                 onPressed: () {
-                  setState(() {
-                    _selectedTab = 1; // Switch to Discover tab
-                  });
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DiscoverCommunitiesScreen(
+                        repository: widget.repository,
+                      ),
+                    ),
+                  );
                 },
                 child: const Text(
                   'Discover Communities',
@@ -1211,9 +651,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                         ),
                       );
                       if (created == true && mounted) {
-                        setState(() {
-                          _selectedTab = 0;
-                        });
+                        setState(() {});
                       }
                     },
                     child: Padding(
@@ -1297,9 +735,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                         ),
                       );
                       if (created == true && mounted) {
-                        setState(() {
-                          _selectedTab = 0;
-                        });
+                        setState(() {});
                       }
                     },
                     child: Padding(
@@ -1371,7 +807,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.3),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.3),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),

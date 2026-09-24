@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/motion.dart';
+import '../../../core/widgets/universal_media_view.dart';
+import '../../../services/telegram_storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 class MultiImageGalleryViewer extends StatefulWidget {
@@ -45,6 +47,7 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
 
   void _shareCurrentImage() {
     final url = widget.imageUrls[_currentIndex];
+    // ignore: deprecated_member_use
     Share.share(
       widget.caption != null && widget.caption!.isNotEmpty
           ? '${widget.caption}\n$url'
@@ -60,7 +63,7 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Swipeable Image PageView
+          // Swipeable Image / Video PageView
           GestureDetector(
             onTap: _toggleUi,
             child: PageView.builder(
@@ -72,6 +75,23 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
               },
               itemBuilder: (context, index) {
                 final url = widget.imageUrls[index];
+                final isVideo = TelegramStorageService.isVideoFile(url);
+
+                if (isVideo) {
+                  return Center(
+                    child: Hero(
+                      tag: '${widget.heroTagPrefix}_$index',
+                      child: UniversalMediaView(
+                        url: url,
+                        fit: BoxFit.contain,
+                        autoPlay: true,
+                        isMuted: false,
+                        showControls: true,
+                      ),
+                    ),
+                  );
+                }
+
                 return InteractiveViewer(
                   minScale: 0.8,
                   maxScale: 4.0,
@@ -97,7 +117,7 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
                                 color: Colors.white38, size: 48),
                             SizedBox(height: 8),
                             Text(
-                              'Could not load image',
+                              'Could not load media',
                               style: TextStyle(color: Colors.white54),
                             ),
                           ],

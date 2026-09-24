@@ -120,6 +120,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         // Background non-critical service setup
         WidgetsBinding.instance.addPostFrameCallback((_) {
           NotificationService().initialize();
+          NotificationService().startListening(handle);
           PresenceService.instance.init(handle);
           CallListenerService.instance.startListening(handle);
         });

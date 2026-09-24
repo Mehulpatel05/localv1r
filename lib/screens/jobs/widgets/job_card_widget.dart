@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/safe_image.dart';
+import '../../../core/widgets/universal_media_view.dart';
 import '../../../models/post_model.dart';
+import '../../../services/telegram_storage_service.dart';
 
 class JobCardWidget extends StatelessWidget {
   final Post post;
@@ -61,7 +63,7 @@ class JobCardWidget extends StatelessWidget {
         border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -78,16 +80,24 @@ class JobCardWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Top Banner Image (Variant A)
+                // 1. Top Banner Image or Video (Variant A)
                 if (hasImage) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: SafeImage(
-                      imageUrl: post.imageUrl!,
-                      height: 150,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
+                    child: TelegramStorageService.isVideoFile(post.imageUrl!)
+                        ? UniversalMediaView(
+                            url: post.imageUrl!,
+                            height: 150,
+                            width: double.infinity,
+                            borderRadius: BorderRadius.circular(14),
+                            showControls: true,
+                          )
+                        : SafeImage(
+                            imageUrl: post.imageUrl!,
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   const SizedBox(height: 14),
                 ],

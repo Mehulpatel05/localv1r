@@ -389,12 +389,13 @@ class FirebaseService:
             return False
 
     @staticmethod
-    def register_media(media_id: str, telegram_file_id: str, size: int, mime_type: str, content_hash: str, storage_provider: str = "telegram") -> bool:
+    def register_media(media_id: str, object_key: str, size: int, mime_type: str, content_hash: str, storage_provider: str = "r2", media_type: str = "photo", telegram_file_id: Optional[str] = None, thumbnail_file_id: Optional[str] = None) -> bool:
         if not FirebaseService._is_db_active():
             return False
         try:
             db.collection("media").document(media_id).set({
                 "mediaId": media_id,
+                "objectKey": object_key,
                 "telegramFileId": telegram_file_id,
                 "telegramMessageId": None,
                 "storageProvider": storage_provider,
@@ -402,6 +403,8 @@ class FirebaseService:
                 "contentHash": content_hash,
                 "size": size,
                 "mimeType": mime_type,
+                "mediaType": media_type,
+                "thumbnailFileId": thumbnail_file_id,
                 "createdAt": firestore.SERVER_TIMESTAMP,
                 "deletedAt": None
             })

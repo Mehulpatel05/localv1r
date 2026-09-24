@@ -92,10 +92,11 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   )
                 : ListView.builder(
+                    // ignore: deprecated_member_use
+                    cacheExtent: 1500,
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    cacheExtent: 1500,
                     addRepaintBoundaries: true,
                     addAutomaticKeepAlives: false,
                     padding: const EdgeInsets.only(
@@ -113,7 +114,7 @@ class _EventsScreenState extends State<EventsScreen> {
           backgroundColor: isDark ? Colors.white : Colors.black,
           foregroundColor: isDark ? Colors.black : Colors.white,
           elevation: 4,
-          shadowColor: Colors.black.withOpacity(0.25),
+          shadowColor: Colors.black.withValues(alpha: 0.25),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
           shape: const StadiumBorder(),
         ),

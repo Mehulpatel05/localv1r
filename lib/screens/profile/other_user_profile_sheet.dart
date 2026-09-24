@@ -69,31 +69,48 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   @override
   void initState() {
     super.initState();
-    _targetHandle = widget.userHandle ?? widget.partnerHandle;
-    _friendRepo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
+    _targetHandle = (widget.userHandle ?? widget.partnerHandle).replaceAll('@', '').trim();
+    final cleanCurrent = widget.currentUserHandle.replaceAll('@', '').trim();
+    _friendRepo = FriendRepository()..currentUserHandle = cleanCurrent;
     _loadData();
   }
 
   Future<void> _loadData() async {
     try {
-      // 1. Fetch user data from Firestore by handle
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('handle', isEqualTo: _targetHandle)
-          .limit(1)
+      // 1. Fetch user data from public profiles collection (Firestore rules compliant)
+      var profDoc = await FirebaseFirestore.instance
+          .collection('profiles')
+          .doc(_targetHandle)
           .get();
-
-      if (query.docs.isNotEmpty) {
-        _userData = query.docs.first.data();
-      } else {
-        // Fallback to profiles collection
-        final profDoc = await FirebaseFirestore.instance
+      if (!profDoc.exists) {
+        profDoc = await FirebaseFirestore.instance
             .collection('profiles')
-            .doc(_targetHandle)
+            .doc(_targetHandle.toLowerCase())
             .get();
-        if (profDoc.exists) {
-          _userData = profDoc.data();
-        }
+      }
+      if (profDoc.exists) {
+        _userData = profDoc.data();
+      } else {
+        // Fallback: search in users collection if own profile or if allowed
+        try {
+          var query = await FirebaseFirestore.instance
+              .collection('users')
+              .where('handle', isEqualTo: _targetHandle)
+              .limit(1)
+              .get();
+
+          if (query.docs.isEmpty) {
+            query = await FirebaseFirestore.instance
+                .collection('users')
+                .where('handle', isEqualTo: _targetHandle.toLowerCase())
+                .limit(1)
+                .get();
+          }
+
+          if (query.docs.isNotEmpty) {
+            _userData = query.docs.first.data();
+          }
+        } catch (_) {}
       }
 
       // 2. Fetch post count & upvotes
@@ -108,11 +125,18 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           _upvoteCount = totalUpvotes;
         } else {
           // Direct Firestore query fallback for posts by user
-          final postDocs = await FirebaseFirestore.instance
+          var postDocs = await FirebaseFirestore.instance
               .collection('posts')
               .where('authorHandle', isEqualTo: _targetHandle)
               .limit(50)
               .get();
+          if (postDocs.docs.isEmpty) {
+            postDocs = await FirebaseFirestore.instance
+                .collection('posts')
+                .where('authorHandle', isEqualTo: _targetHandle.toLowerCase())
+                .limit(50)
+                .get();
+          }
           _postCount = postDocs.docs.length;
           int totalUpvotes = 0;
           for (final doc in postDocs.docs) {
@@ -673,6 +697,12 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
   /// 6 Dynamic Relationship Button States
   Widget _buildRelationshipButton() {
+    if (_targetHandle.isNotEmpty &&
+        _friendRepo.currentUserHandle.isNotEmpty &&
+        _targetHandle.toLowerCase() == _friendRepo.currentUserHandle.toLowerCase()) {
+      return const SizedBox.shrink();
+    }
+
     if (_friendActionLoading) {
       return Container(
         width: double.infinity,

@@ -42,7 +42,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   int _uploadCurrentIndex = 0;
   bool _publishError = false;
   bool _publishSuccess = false;
-  String? _createdPostId;
 
   @override
   void initState() {
@@ -86,24 +85,96 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
     }
   }
 
-  Future<void> _pickImages() async {
+  Future<void> _pickMedia() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.photo_library_rounded, color: Colors.black87),
+                ),
+                title: const Text('Property Photos', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose photos from gallery'),
+                onTap: () => Navigator.pop(ctx, 'media'),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.videocam_rounded, color: Colors.black87),
+                ),
+                title: const Text('Room Tour Video', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Upload a video walkthrough of the room'),
+                onTap: () => Navigator.pop(ctx, 'video'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickMultiImage(
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked.isNotEmpty) {
-        setState(() {
-          for (final x in picked) {
-            if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+      if (choice == 'video') {
+        final picked = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+        if (picked != null) {
+          setState(() {
+            if (_mediaFiles.length < 8) _mediaFiles.add(File(picked.path));
+          });
+        }
+      } else {
+        try {
+          final pickedList = await picker.pickMultipleMedia(
+            imageQuality: 80,
+            maxWidth: 2048,
+            maxHeight: 2048,
+          );
+          if (pickedList.isNotEmpty) {
+            setState(() {
+              for (final x in pickedList) {
+                if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+              }
+            });
           }
-        });
+        } catch (_) {
+          final picked = await picker.pickMultiImage(
+            imageQuality: 80,
+            maxWidth: 2048,
+            maxHeight: 2048,
+          );
+          if (picked.isNotEmpty) {
+            setState(() {
+              for (final x in picked) {
+                if (_mediaFiles.length < 8) _mediaFiles.add(File(x.path));
+              }
+            });
+          }
+        }
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking images: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('Error picking media: $e'), backgroundColor: Colors.redAccent),
       );
     }
   }
@@ -141,7 +212,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       for (int i = 0; i < _mediaFiles.length; i++) {
         setState(() => _uploadCurrentIndex = i + 1);
         final file = _mediaFiles[i];
-        final url = await TelegramStorageService.uploadImage(
+        final url = await TelegramStorageService.uploadMedia(
           file,
           onProgress: (p) {
             if (mounted) {
@@ -449,7 +520,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
 
                   // Media Picker Box
                   GestureDetector(
-                    onTap: _mediaFiles.length < 8 ? _pickImages : null,
+                    onTap: _mediaFiles.length < 8 ? _pickMedia : null,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 22),
@@ -474,7 +545,7 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                           ),
                           const SizedBox(height: 10),
                           const Text(
-                            'Add property photos',
+                            'Add property photos & video',
                             style: TextStyle(
                               color: Color(0xFF0F172A),
                               fontWeight: FontWeight.w700,
@@ -507,13 +578,24 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                       itemBuilder: (context, index) {
                         final file = _mediaFiles[index];
                         final isCover = index == 0;
+                        final isVideo = TelegramStorageService.isVideoFile(file.path);
 
                         return Stack(
                           fit: StackFit.expand,
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.file(file, fit: BoxFit.cover),
+                              child: Container(
+                                color: Colors.black12,
+                                child: isVideo
+                                    ? Container(
+                                        color: Colors.black87,
+                                        child: const Center(
+                                          child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 40),
+                                        ),
+                                      )
+                                    : Image.file(file, fit: BoxFit.cover),
+                              ),
                             ),
                             if (isCover)
                               Positioned(

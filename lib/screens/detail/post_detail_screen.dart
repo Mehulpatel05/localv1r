@@ -66,11 +66,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (author.isNotEmpty && author != me) {
       NotificationService().sendNotification(
         targetHandle: author,
-        title: '@$me commented on your post',
-        body: text,
+        title: 'New Comment',
+        body: '@$me commented: "$text"',
         data: {
-          'type': 'post',
+          'type': 'post_comment',
           'postId': widget.post.id,
+          'senderHandle': me,
         },
       );
     }

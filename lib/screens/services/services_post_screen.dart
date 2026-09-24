@@ -96,21 +96,76 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickMedia() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.photo_library_rounded, color: Colors.black87),
+                ),
+                title: const Text('Service Photo', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Choose photo from gallery'),
+                onTap: () => Navigator.pop(ctx, 'photo'),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF3F4F6),
+                  child: Icon(Icons.videocam_rounded, color: Colors.black87),
+                ),
+                title: const Text('Service Demo / Video', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Upload a video demonstration of your service'),
+                onTap: () => Navigator.pop(ctx, 'video'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked != null) {
-        setState(() => _serviceImage = File(picked.path));
+      if (choice == 'video') {
+        final picked = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+        if (picked != null) {
+          setState(() => _serviceImage = File(picked.path));
+        }
+      } else {
+        final picked = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 80,
+          maxWidth: 2048,
+          maxHeight: 2048,
+        );
+        if (picked != null) {
+          setState(() => _serviceImage = File(picked.path));
+        }
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error selecting image: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('Error selecting media: $e'), backgroundColor: Colors.redAccent),
       );
     }
   }
@@ -146,7 +201,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
       String? imageUrl;
       if (_serviceImage != null) {
         setState(() => _uploadProgress = 0.4);
-        imageUrl = await TelegramStorageService.uploadImage(
+        imageUrl = await TelegramStorageService.uploadMedia(
           _serviceImage!,
           onProgress: (p) {
             if (mounted) {
@@ -290,12 +345,28 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: Image.file(
-                            _serviceImage!,
-                            height: 150,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
+                          child: TelegramStorageService.isVideoFile(_serviceImage!.path)
+                              ? Container(
+                                  height: 150,
+                                  width: double.infinity,
+                                  color: Colors.black87,
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 48),
+                                        SizedBox(height: 6),
+                                        Text('Service Video Attached', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  _serviceImage!,
+                                  height: 150,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         Positioned(
                           top: 8,
@@ -316,7 +387,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                     ),
                   ] else ...[
                     GestureDetector(
-                      onTap: _pickImage,
+                      onTap: _pickMedia,
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -341,7 +412,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                             ),
                             const SizedBox(height: 10),
                             const Text(
-                              'Add Photo',
+                              'Add Photo or Video',
                               style: TextStyle(
                                 color: Color(0xFF0F172A),
                                 fontWeight: FontWeight.w700,
@@ -350,7 +421,7 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                             ),
                             const SizedBox(height: 2),
                             const Text(
-                              'Recommended: clear service image',
+                              'Recommended: clear photo or short work video',
                               style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                             ),
                           ],

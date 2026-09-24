@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/motion.dart';
 import 'safe_image.dart';
+import 'universal_media_view.dart';
+import '../../services/telegram_storage_service.dart';
 
 /// Full-screen image viewer supporting:
 /// - Hero transition animation
@@ -124,6 +126,7 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
 
   void _shareCurrentImage() {
     final url = widget.imageUrls[_currentIndex];
+    // ignore: deprecated_member_use
     Share.share(
       widget.caption != null && widget.caption!.isNotEmpty
           ? '${widget.caption}\n$url'
@@ -159,6 +162,23 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
                 },
                 itemBuilder: (context, index) {
                   final url = widget.imageUrls[index];
+                  final isVideo = TelegramStorageService.isVideoFile(url);
+
+                  if (isVideo) {
+                    return Center(
+                      child: Hero(
+                        tag: '${widget.heroTagPrefix}_$index',
+                        child: UniversalMediaView(
+                          url: url,
+                          fit: BoxFit.contain,
+                          autoPlay: true,
+                          isMuted: false,
+                          showControls: true,
+                        ),
+                      ),
+                    );
+                  }
+
                   final controller = _getController(index);
 
                   return GestureDetector(

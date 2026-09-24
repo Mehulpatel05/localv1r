@@ -8,6 +8,7 @@ import '../../features/auth/login_flow_page.dart';
 import '../../screens/profile/blocked_users_screen.dart';
 import 'feedback_support_page.dart';
 import 'widgets/account_info_sheet.dart';
+import 'widgets/call_privacy_settings_sheet.dart';
 import 'widgets/confirm_sheet.dart';
 import 'widgets/notification_settings_sheet.dart';
 import 'widgets/settings_group.dart';
@@ -198,6 +199,17 @@ class SettingsPage extends StatelessWidget {
                   onTap: () => showNotificationSettingsSheet(context),
                   semanticsLabel:
                       'Notification Alerts, Manage push and chat alerts, button',
+                ),
+                SettingsTile(
+                  icon: Icons.phone_in_talk_outlined,
+                  title: 'Call Privacy',
+                  description: 'Control who can call you (Everyone, Friends, Nobody)',
+                  onTap: () => showCallPrivacySettingsSheet(
+                    context,
+                    userHandle: profile.handle,
+                  ),
+                  semanticsLabel:
+                      'Call Privacy, Control who can call you, button',
                 ),
               ],
             ),

@@ -248,7 +248,7 @@ class _JobsScreenState extends State<JobsScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _quickFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final filter = _quickFilters[index];
                     final isSelected = _selectedQuickFilter == filter;
@@ -298,7 +298,7 @@ class _JobsScreenState extends State<JobsScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _employmentFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final emp = _employmentFilters[index];
                     final isSelected = _selectedEmploymentFilter == emp;

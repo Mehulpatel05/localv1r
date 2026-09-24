@@ -2,10 +2,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'safe_image.dart';
 import 'post_full_screen_viewer.dart';
+import 'universal_media_view.dart';
+import '../../services/telegram_storage_service.dart';
 
-/// Reusable Post Image View Widget
+/// Reusable Post Image & Video View Widget
 ///
-/// Ensures both portrait/tall images (e.g. 720x1570 screenshots) and landscape images
+/// Ensures both portrait/tall images (e.g. 720x1570 screenshots), videos, and landscape images
 /// appear 100% uncropped inside a consistent-sized card container.
 ///
 /// Features:
@@ -50,6 +52,18 @@ class PostImageView extends StatelessWidget {
     final tagPrefix = heroTagPrefix ?? 'post_img_${imageUrl.hashCode}';
     final radius = borderRadius ?? BorderRadius.circular(14);
     final count = images.length;
+
+    if (TelegramStorageService.isVideoFile(imageUrl)) {
+      return UniversalMediaView(
+        url: imageUrl,
+        height: height,
+        width: width,
+        borderRadius: radius,
+        showControls: true,
+        autoPlay: false,
+        isMuted: true,
+      );
+    }
 
     Widget imageCard = ClipRRect(
       borderRadius: radius,

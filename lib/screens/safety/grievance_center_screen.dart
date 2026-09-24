@@ -92,7 +92,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E293B),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                      border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +287,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: reportedPosts.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final post = reportedPosts[index];
                   return Container(
@@ -295,7 +295,7 @@ class _GrievanceCenterScreenState extends State<GrievanceCenterScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E1E2A),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
+                      border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

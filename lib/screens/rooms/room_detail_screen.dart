@@ -30,7 +30,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final media = widget.post.mediaUrls ?? [];
+    final media = widget.post.mediaUrls;
     if (media.isNotEmpty) {
       _images = media;
     } else if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) {
@@ -97,9 +97,6 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
     final title = post.roomTitle?.isNotEmpty == true ? post.roomTitle! : post.content;
     final location = post.areaName ?? (post.roomArea ?? 'Vadodara');
     final roomType = _inferType(post);
-    final authorInitial = post.authorHandle.isNotEmpty
-        ? post.authorHandle.replaceAll('@', '')[0].toUpperCase()
-        : 'U';
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -152,7 +149,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.4),
+                                    color: Colors.black.withValues(alpha: 0.4),
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
@@ -162,13 +159,14 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                                 children: [
                                   GestureDetector(
                                     onTap: () {
+                                      // ignore: deprecated_member_use
                                       Share.share('Check out this room listing on Nearhood: $title in $location for $rentStr/month!');
                                     },
                                     child: Container(
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.4),
+                                        color: Colors.black.withValues(alpha: 0.4),
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
@@ -190,7 +188,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.4),
+                                        color: Colors.black.withValues(alpha: 0.4),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
@@ -222,7 +220,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                                 width: isSelected ? 16 : 6,
                                 height: 6,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
+                                  color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.5),
                                   borderRadius: BorderRadius.circular(3),
                                 ),
                               );
@@ -235,7 +233,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
+                              color: Colors.black.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -395,7 +393,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                                   fit: BoxFit.cover,
                                   width: double.infinity,
                                   height: double.infinity,
-                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                                 ),
                               ),
                               Container(
@@ -592,7 +590,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
               border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -3),
                 ),

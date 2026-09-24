@@ -109,6 +109,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       child: IconButton(
                         icon: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
                         onPressed: () {
+                          // ignore: deprecated_member_use
                           Share.share('Check out "$title" on Nearhood Buy & Sell for $_formattedPrice in $location!');
                         },
                       ),

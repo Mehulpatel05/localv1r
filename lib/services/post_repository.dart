@@ -10,6 +10,7 @@ import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../core/location/location_service.dart';
 import 'auth_service.dart';
+import 'notification_service.dart';
 
 enum FeedTab { latest, trending }
 
@@ -552,7 +553,7 @@ class PostRepository extends ChangeNotifier {
           if (shopPrice != null) 'shopPrice': _cleanOptional(shopPrice, maxLen: 30),
           if (shopCategory != null) 'shopCategory': _cleanOptional(shopCategory, maxLen: 50),
           if (foodTitle != null) 'foodTitle': _cleanOptional(foodTitle),
-          if (foodRating != null) 'foodRating': foodRating,
+          'foodRating': ?foodRating,
           if (foodPrice != null) 'foodPrice': _cleanOptional(foodPrice, maxLen: 30),
           if (eventTitle != null) 'eventTitle': _cleanOptional(eventTitle),
           if (eventDate != null) 'eventDate': _cleanOptional(eventDate, maxLen: 50),
@@ -568,6 +569,23 @@ class PostRepository extends ChangeNotifier {
         }),
       );
       if (response.statusCode == 201) {
+        try {
+          final resData = jsonDecode(response.body) as Map<String, dynamic>?;
+          final createdPostId = resData?['id'] as String? ?? resData?['post']?['id'] as String?;
+          final cleanAuthor = authorHandle.replaceAll('@', '').trim();
+          if (cleanAuthor.isNotEmpty) {
+            NotificationService().sendNotification(
+              targetHandle: cleanAuthor,
+              title: 'Post Published',
+              body: 'Your post is now live in Nearhood!',
+              data: {
+                'type': 'post_upload',
+                'postId': createdPostId ?? '',
+                'senderHandle': cleanAuthor,
+              },
+            );
+          }
+        } catch (_) {}
         _listenToPosts(); // refresh feed
       } else {
         throw Exception('Failed to create post: ${response.statusCode} - ${response.body}');
@@ -634,19 +652,42 @@ class PostRepository extends ChangeNotifier {
     _saveLocalVotes();
 
     final postIndex = _posts.indexWhere((p) => p.id == postId);
+    Post? targetPost;
     if (postIndex != -1) {
       final p = _posts[postIndex];
+      targetPost = p;
       p.userVote = newVote;
       p.upvotes = (p.upvotes + upvoteDelta).clamp(0, 9999999);
       p.downvotes = (p.downvotes + downvoteDelta).clamp(0, 9999999);
     }
     final regPost = _postsRegistry[postId];
-    if (regPost != null && (postIndex == -1 || _posts[postIndex] != regPost)) {
-      regPost.userVote = newVote;
-      regPost.upvotes = (regPost.upvotes + upvoteDelta).clamp(0, 9999999);
-      regPost.downvotes = (regPost.downvotes + downvoteDelta).clamp(0, 9999999);
+    if (regPost != null) {
+      targetPost ??= regPost;
+      if (postIndex == -1 || _posts[postIndex] != regPost) {
+        regPost.userVote = newVote;
+        regPost.upvotes = (regPost.upvotes + upvoteDelta).clamp(0, 9999999);
+        regPost.downvotes = (regPost.downvotes + downvoteDelta).clamp(0, 9999999);
+      }
     }
     notifyListeners();
+
+    // 🔔 Dispatch Instagram-style Like notification to post author when liked
+    if (direction == 1 && newVote == 1 && targetPost != null) {
+      final author = targetPost.authorHandle.replaceAll('@', '').trim();
+      final me = _currentUserHandle.replaceAll('@', '').trim();
+      if (author.isNotEmpty && me.isNotEmpty && author.toLowerCase() != me.toLowerCase()) {
+        NotificationService().sendNotification(
+          targetHandle: author,
+          title: 'New Like',
+          body: '@$me liked your post',
+          data: {
+            'type': 'post_like',
+            'postId': postId,
+            'senderHandle': me,
+          },
+        );
+      }
+    }
 
     // 2. Dispatch vote transaction to backend proxy
     try {

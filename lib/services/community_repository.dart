@@ -486,11 +486,13 @@ class CommunityRepository {
     if (imageFiles.isEmpty) return;
 
     final uploadFutures =
-        imageFiles.map((f) => TelegramStorageService.uploadImage(f));
+        imageFiles.map((f) => TelegramStorageService.uploadMedia(f));
     final uploadedUrls = await Future.wait(uploadFutures);
     final validUrls = uploadedUrls.whereType<String>().toList();
 
-    if (validUrls.isEmpty) throw Exception('Image upload failed.');
+    if (validUrls.isEmpty) throw Exception('Media upload failed.');
+
+    final isVideo = validUrls.length == 1 && TelegramStorageService.isVideoFile(validUrls.first);
 
     if (validUrls.length == 1) {
       await _db.collection('community_messages').add({
@@ -499,7 +501,7 @@ class CommunityRepository {
         'authorUid': FirebaseAuth.instance.currentUser?.uid,
         'content': caption,
         'imageUrl': validUrls.first,
-        'type': 'image',
+        'type': isVideo ? 'video' : 'image',
         'timestamp': FieldValue.serverTimestamp(),
       });
     } else {

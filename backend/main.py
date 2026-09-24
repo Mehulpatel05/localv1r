@@ -22,6 +22,8 @@ from PIL import Image
 import requests
 
 from config import Config
+from services.r2_service import R2Service
+from services.d1_service import D1Service
 from services.telegram_service import TelegramService
 from google.cloud import firestore
 from services.firebase_service import FirebaseService, db
@@ -278,21 +280,30 @@ def evaluate_request_risk(
         return False
     return True
 
-# 🛡️ MAGIC BYTE SIGNATURE DETECTION
-def verify_magic_bytes(data: bytes) -> str:
+# 🛡️ MAGIC BYTE SIGNATURE DETECTION (Images & Videos)
+def verify_magic_bytes(data: bytes) -> Tuple[str, str, str]:
     """
     🛡️ Verifies file format using magic byte signatures.
-    Returns the normalized format string ('JPEG', 'PNG', 'WEBP') or raises HTTPException.
+    Returns (format, media_type, mime_type) or raises HTTPException.
+    media_type: 'photo' or 'video'
     """
     if len(data) < 12:
-        raise HTTPException(status_code=400, detail="Invalid image file size.")
+        raise HTTPException(status_code=400, detail="Invalid media file size.")
     if data.startswith(b"\xff\xd8\xff"):
-        return "JPEG"
+        return "JPEG", "photo", "image/jpeg"
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "PNG"
+        return "PNG", "photo", "image/png"
     if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
-        return "WEBP"
-    raise HTTPException(status_code=400, detail="Unsupported file signature. Only JPEG, PNG, and WEBP images are allowed.")
+        return "WEBP", "photo", "image/webp"
+    # Video signatures (MP4, MOV, M4V, 3GP)
+    if len(data) >= 12 and (data[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip") or data[:4] in (b"moov", b"mdat")):
+        return "MP4", "video", "video/mp4"
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "WEBM", "video", "video/webm"
+    if data.startswith(b"RIFF") and data[8:12] == b"AVI ":
+        return "AVI", "video", "video/x-msvideo"
+    raise HTTPException(status_code=400, detail="Unsupported media signature. Only JPEG, PNG, WEBP images and MP4, WEBM, MOV videos are allowed.")
+
 
 
 # 🛡️ CRYPTOGRAPHIC DUAL-TOKEN AUTH PROTOCOL
@@ -1279,59 +1290,67 @@ async def delete_post(
 
 
 
-# 9. Media Upload
+# 9. Universal Media Upload (Photos & Videos)
+MEDIA_CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache", "media")
+os.makedirs(MEDIA_CACHE_DIR, exist_ok=True)
+
 @app.post("/api/v1/storage/upload")
-async def upload_image(
+async def upload_media(
     server_request: Request,
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(None, description="Bearer token"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
-
     device_id, user_handle = verify_session_token(authorization)
-    await enforce_route_rate_limit("upload", device_id, max_requests=10)
+    await enforce_route_rate_limit("upload", device_id, max_requests=15)
     if idempotency_key:
         cached = await get_cached_idempotent_response(idempotency_key, "api", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else (installation_id if "installation_id" in locals() else (device_id if "device_id" in locals() else "default"))))
         if cached:
             return cached
 
-    allowed_extensions = (".jpg", ".jpeg", ".png", ".webp")
-    filename = file.filename or "upload.png"
-    if not filename.lower().endswith(allowed_extensions):
-        raise HTTPException(status_code=400, detail="Unsupported file extension. Only JPEG, PNG, and WEBP allowed.")
+    allowed_extensions = (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".3gp")
+    filename = file.filename or "upload.bin"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Unsupported file format. Only JPEG, PNG, WEBP, and MP4/WEBM/MOV videos allowed.")
         
-    max_bytes = 5 * 1024 * 1024
+    max_bytes = 35 * 1024 * 1024  # Max 35MB for videos
     file_content = await file.read(max_bytes + 1)
     if len(file_content) > max_bytes:
-        raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 5MB.")
+        raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 35MB.")
         
-    verified_format = verify_magic_bytes(file_content)
+    verified_format, media_type, mime_type = verify_magic_bytes(file_content)
     
-    try:
-        image = Image.open(io.BytesIO(file_content))
-        image.verify()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file format. Image decoding failed.")
-        
-    try:
-        image = Image.open(io.BytesIO(file_content))
-        max_resolution = 4096
-        if image.width > max_resolution or image.height > max_resolution:
-            raise HTTPException(status_code=400, detail=f"Image resolution exceeds the limit of {max_resolution}x{max_resolution}.")
+    sanitized_content = file_content
+    if media_type == "photo":
+        # Additional photo size check (10MB)
+        if len(file_content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image size exceeds the maximum limit of 10MB.")
+        try:
+            image = Image.open(io.BytesIO(file_content))
+            image.verify()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image file format. Image decoding failed.")
             
-        output_bytes = io.BytesIO()
-        img_format = image.format if image.format in ("JPEG", "PNG", "WEBP") else verified_format
-        
-        if img_format == "JPEG" and image.mode in ("RGBA", "LA", "P"):
-            image = image.convert("RGB")
+        try:
+            image = Image.open(io.BytesIO(file_content))
+            max_resolution = 4096
+            if image.width > max_resolution or image.height > max_resolution:
+                raise HTTPException(status_code=400, detail=f"Image resolution exceeds the limit of {max_resolution}x{max_resolution}.")
+                
+            output_bytes = io.BytesIO()
+            img_format = image.format if image.format in ("JPEG", "PNG", "WEBP") else verified_format
             
-        image.save(output_bytes, format=img_format)
-        sanitized_content = output_bytes.getvalue()
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error sanitizing image metadata: {e}")
-        raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
+            if img_format == "JPEG" and image.mode in ("RGBA", "LA", "P"):
+                image = image.convert("RGB")
+                
+            image.save(output_bytes, format=img_format)
+            sanitized_content = output_bytes.getvalue()
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error sanitizing image metadata: {e}")
+            raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
         
     base_url = os.environ.get("PRODUCTION_URL", "https://localv1r.onrender.com").rstrip("/")
 
@@ -1339,37 +1358,69 @@ async def upload_image(
     existing_media = FirebaseService.get_media_by_hash(content_hash)
     if existing_media:
         public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
-        res = {"status": "success", "imageUrl": public_proxy_url}
+        res = {
+            "status": "success",
+            "mediaId": existing_media['mediaId'],
+            "imageUrl": public_proxy_url,
+            "mediaUrl": public_proxy_url,
+            "mediaType": existing_media.get("mediaType", media_type)
+        }
         if idempotency_key:
             await save_idempotent_response(idempotency_key, "upload_image", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
         return res
         
     media_id = str(uuid.uuid4())
-    file_id = TelegramService.upload_photo(sanitized_content, f"upload.{img_format.lower()}")
-    if not file_id:
-        print("[WARN] Telegram upload failed, returning direct fallback")
-        raise HTTPException(status_code=500, detail="Failed to upload image to CDN proxy.")
+    object_ext = verified_format.lower()
+    object_key = f"media/{media_id}.{object_ext}"
+    
+    # Upload to Cloudflare R2
+    uploaded_key = R2Service.upload_media(
+        file_bytes=sanitized_content,
+        filename=f"{media_id}.{object_ext}",
+        content_type=mime_type,
+        object_key=object_key
+    )
+        
+    if not uploaded_key:
+        print("[WARN] Cloudflare R2 upload failed")
+        raise HTTPException(status_code=500, detail="Failed to upload media to Cloudflare R2 storage.")
         
     size = len(sanitized_content)
-    mime_type = f"image/{img_format.lower()}"
     FirebaseService.register_media(
         media_id=media_id,
-        telegram_file_id=file_id,
+        object_key=uploaded_key,
         size=size,
         mime_type=mime_type,
         content_hash=content_hash,
-        storage_provider="telegram"
+        storage_provider="r2",
+        media_type=media_type
     )
+    
+    # Cache locally to speed up initial requests
+    try:
+        cache_file_path = os.path.join(MEDIA_CACHE_DIR, f"{media_id}.bin")
+        with open(cache_file_path, "wb") as f:
+            f.write(sanitized_content)
+        if len(sanitized_content) <= 3 * 1024 * 1024:
+            MEDIA_CACHE.put(media_id, sanitized_content)
+        MEDIA_TYPE_CACHE[media_id] = mime_type
+    except Exception as cache_err:
+        print(f"[WARN] Local disk cache write error: {cache_err}")
         
     public_proxy_url = f"{base_url}/api/v1/media/{media_id}"
-    res = {"status": "success", "imageUrl": public_proxy_url}
+    res = {
+        "status": "success",
+        "mediaId": media_id,
+        "imageUrl": public_proxy_url,
+        "mediaUrl": public_proxy_url,
+        "mediaType": media_type
+    }
     if idempotency_key:
         await save_idempotent_response(idempotency_key, "upload_image", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
 
 
 # 🛡️ IN-MEMORY BANDWIDTH DOS & CACHE LAYER
-
 from collections import OrderedDict
 class LRUCache:
     def __init__(self, capacity: int):
@@ -1390,11 +1441,10 @@ class LRUCache:
         if key in self.cache: del self.cache[key]
 
 MEDIA_CACHE = LRUCache(500) # max 500 items in RAM for high-speed delivery
-
 MEDIA_TYPE_CACHE: Dict[str, str] = {}
 
 
-# 10. Secure Media Proxy Endpoint (High-Performance Cached CDN Gateway)
+# 10. Secure Media Proxy Endpoint (High-Performance Cached CDN Gateway & Video Range Streaming)
 @app.get("/api/v1/media/{media_id}")
 async def serve_media(media_id: str, request: Request):
     # Support HTTP 304 Not Modified
@@ -1403,66 +1453,116 @@ async def serve_media(media_id: str, request: Request):
         return Response(status_code=304)
 
     mime_type = MEDIA_TYPE_CACHE.get(media_id, "image/jpeg")
+    range_header = request.headers.get("range")
+    
+    # 1. Try RAM Cache
     cached_bytes = MEDIA_CACHE.get(media_id)
-    if cached_bytes:
-        return Response(
-            content=cached_bytes,
-            media_type=mime_type,
-            headers={
-                "Cache-Control": "public, max-age=31536000, immutable",
-                "ETag": f'"{media_id}"',
-            }
-        )
+    
+    # 2. Try Disk Cache
+    cache_file_path = os.path.join(MEDIA_CACHE_DIR, f"{media_id}.bin")
+    if not cached_bytes and os.path.exists(cache_file_path):
+        try:
+            with open(cache_file_path, "rb") as f:
+                cached_bytes = f.read()
+                if len(cached_bytes) <= 3 * 1024 * 1024:
+                    MEDIA_CACHE.put(media_id, cached_bytes)
+        except Exception as read_err:
+            print(f"[WARN] Error reading disk cache: {read_err}")
 
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database connection offline.")
-        
-    try:
+    # 3. If not in cache, fetch from Cloudflare R2 (or fallback to Telegram for legacy)
+    if not cached_bytes:
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection offline.")
+            
         def _fetch_media_sync():
             media_record = FirebaseService.get_media_by_id(media_id)
             if not media_record or media_record.get("deletedAt") is not None:
                 return None, None
-            provider = media_record.get("storageProvider", "telegram")
+            provider = media_record.get("storageProvider", "r2")
             file_bytes = None
             m_type = media_record.get("mimeType", "image/jpeg")
-            if provider == "telegram":
+            
+            # Primary: Cloudflare R2
+            if provider == "r2" or "objectKey" in media_record:
+                object_key = media_record.get("objectKey") or f"media/{media_id}.{m_type.split('/')[-1]}"
+                file_bytes = R2Service.get_media_bytes(object_key)
+            
+            # Legacy Fallback: Telegram
+            elif provider == "telegram":
                 file_id = media_record.get("telegramFileId")
-                url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
-                try:
-                    res = requests.get(url, timeout=10)
-                    if res.status_code == 200:
-                        data = res.json()
-                        if data.get("ok"):
-                            file_path = data["result"]["file_path"]
-                            telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
-                            img_res = requests.get(telegram_file_url, timeout=15)
-                            if img_res.status_code == 200:
-                                file_bytes = img_res.content
-                except Exception as tg_err:
-                    print(f"[WARN] Telegram fetch failed: {tg_err}")
+                if file_id and Config.TELEGRAM_BOT_TOKEN:
+                    url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
+                    try:
+                        res = requests.get(url, timeout=15)
+                        if res.status_code == 200:
+                            data = res.json()
+                            if data.get("ok"):
+                                file_path = data["result"]["file_path"]
+                                telegram_file_url = f"https://api.telegram.org/file/bot{Config.TELEGRAM_BOT_TOKEN}/{file_path}"
+                                img_res = requests.get(telegram_file_url, timeout=30)
+                                if img_res.status_code == 200:
+                                    file_bytes = img_res.content
+                    except Exception as tg_err:
+                        print(f"[WARN] Telegram fetch failed: {tg_err}")
             return file_bytes, m_type
 
-        file_bytes, mime_type = await anyio.to_thread.run_sync(_fetch_media_sync)
+        cached_bytes, mime_type = await anyio.to_thread.run_sync(_fetch_media_sync)
         
-        if file_bytes is None:
-            raise HTTPException(status_code=404, detail="Media not found or CDN is offline.")
+        if cached_bytes is None:
+            raise HTTPException(status_code=404, detail="Media not found or Storage is offline.")
                 
-        MEDIA_CACHE.put(media_id, file_bytes)
+        # Save to RAM and Disk caches
+        try:
+            with open(cache_file_path, "wb") as f:
+                f.write(cached_bytes)
+        except Exception as write_err:
+            print(f"[WARN] Failed to write to disk cache: {write_err}")
+            
+        if len(cached_bytes) <= 3 * 1024 * 1024:
+            MEDIA_CACHE.put(media_id, cached_bytes)
         MEDIA_TYPE_CACHE[media_id] = mime_type
-        
-        return Response(
-            content=file_bytes,
-            media_type=mime_type,
-            headers={
-                "Cache-Control": "public, max-age=31536000, immutable",
-                "ETag": f'"{media_id}"',
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error serving proxy media: {e}")
-        raise HTTPException(status_code=404, detail="Image not found or CDN is offline.")
+
+    total_size = len(cached_bytes)
+
+    # 4. Handle HTTP 206 Range Requests (Essential for Video Buffering / Seeking)
+    if range_header and range_header.startswith("bytes="):
+        try:
+            ranges = range_header.replace("bytes=", "").split("-")
+            start = int(ranges[0]) if ranges[0] else 0
+            end = int(ranges[1]) if len(ranges) > 1 and ranges[1] else total_size - 1
+            if start >= total_size:
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{total_size}"})
+            end = min(end, total_size - 1)
+            chunk_length = end - start + 1
+            sliced_bytes = cached_bytes[start:end + 1]
+
+            return Response(
+                content=sliced_bytes,
+                status_code=206,
+                media_type=mime_type,
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{total_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(chunk_length),
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                    "ETag": f'"{media_id}"',
+                }
+            )
+        except Exception as range_err:
+            print(f"[WARN] Range header parse failed: {range_err}")
+
+    # 5. Full Content Response
+    return Response(
+        content=cached_bytes,
+        status_code=200,
+        media_type=mime_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(total_size),
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": f'"{media_id}"',
+        }
+    )
 
 
 # 🛡️ 11. MODERATOR AUTH & PERMISSIONS API GATEWAY (§16, §17)

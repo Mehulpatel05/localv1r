@@ -20,9 +20,11 @@ subprojects {
 }
 
 subprojects {
-    plugins.withId("com.android.library") {
-        configure<com.android.build.gradle.BaseExtension> {
-            compileSdkVersion(35)
+    if (project.name != "app") {
+        afterEvaluate {
+            project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)?.apply {
+                compileSdkVersion(36)
+            }
         }
     }
 }

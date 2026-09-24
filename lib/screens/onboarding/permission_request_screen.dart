@@ -99,7 +99,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF3B82F6).withOpacity(0.4),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.4),
                           blurRadius: 20,
                           offset: const Offset(0, 6),
                         ),
@@ -135,7 +135,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: _permissions.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) =>
                     _buildPermissionCard(_permissions[index]),
               ),
@@ -224,14 +224,14 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: item.granted
-            ? item.color.withOpacity(0.08)
+            ? item.color.withValues(alpha: 0.08)
             : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: item.granted
-              ? item.color.withOpacity(0.5)
+              ? item.color.withValues(alpha: 0.5)
               : item.denied
-                  ? Colors.redAccent.withOpacity(0.4)
+                  ? Colors.redAccent.withValues(alpha: 0.4)
                   : const BorderSide(color: Colors.black12).color,
           width: 1.2,
         ),
@@ -242,7 +242,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: item.color.withOpacity(0.12),
+              color: item.color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(item.icon, color: item.color, size: 22),

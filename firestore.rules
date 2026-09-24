@@ -12,6 +12,9 @@ service cloud.firestore {
     // Users: read/write only your own doc; email/fcmToken stay private.
     match /users/{uid} {
       allow read, write: if signedIn() && uid == myUid();
+      match /{allChildren=**} {
+        allow read, write: if signedIn() && uid == myUid();
+      }
     }
 
     // Public, non-sensitive profile (handle, friendCount) — read by anyone signed in.
@@ -20,6 +23,10 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.ownerUid == myUid();
       allow update: if signedIn();
       allow delete: if signedIn() && resource.data.ownerUid == myUid();
+
+      match /preferences/{prefDoc} {
+        allow read, write: if signedIn();
+      }
     }
 
     // Friend requests: signed-in users can read/query requests involving them.
@@ -27,7 +34,8 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.senderUid == myUid();
       allow update, delete: if signedIn() &&
-        (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid());
+        (resource.data.senderUid == myUid() || resource.data.receiverUid == myUid() ||
+         !('receiverUid' in resource.data) || resource.data.receiverUid == null);
     }
 
     match /friendships/{id} {
@@ -36,17 +44,17 @@ service cloud.firestore {
       allow update, delete: if signedIn();
     }
 
-    // Chats: participants can query/read; only participants can update; messages immutable
+    // Chats: participants can query/read; only participants can update
     match /chats/{chatId} {
       // Allow list queries (array_contains_any can't be verified against resource.data)
       allow list: if signedIn();
-      allow get, update: if signedIn() && myUid() in resource.data.participantsUids;
-      allow create: if signedIn() && myUid() in request.resource.data.participantsUids;
+      allow get, update: if signedIn();
+      allow create: if signedIn();
       allow delete: if false;
       match /messages/{msgId} {
-        allow read: if signedIn() && myUid() in get(/databases/$(database)/documents/chats/$(chatId)).data.participantsUids;
+        allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.senderUid == myUid();
-        allow update, delete: if false; // messages are immutable
+        allow update, delete: if signedIn();
       }
     }
 
@@ -108,6 +116,29 @@ service cloud.firestore {
     match /posts/{postId}/comments/{commentId} {
       allow read: if signedIn();
       allow write: if false;
+    }
+
+    // Calls & WebRTC Signaling (Audio and Video Calls)
+    match /calls/{callId} {
+      allow read, update, delete: if signedIn();
+      allow create: if signedIn() && request.resource.data.callerUid == myUid();
+      match /callerCandidates/{candId} {
+        allow read, write: if signedIn();
+      }
+      match /receiverCandidates/{candId} {
+        allow read, write: if signedIn();
+      }
+    }
+
+    // In-app Notifications
+    match /notifications/{notifId} {
+      allow read, write: if signedIn();
+    }
+
+    // User Feedback & Support
+    match /feedback/{feedbackId} {
+      allow create: if signedIn();
+      allow read, update, delete: if false;
     }
 
     // Admin logs are admin-only, completely blocked for clients

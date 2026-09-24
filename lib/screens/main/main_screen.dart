@@ -5,6 +5,7 @@ import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
 import '../communities/communities_list_screen.dart';
 import '../../services/community_repository.dart';
+import '../../services/notification_service.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/user_avatar.dart';
 
@@ -194,13 +195,20 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                 tooltip: 'Communities',
                                 isDark: isDark,
                               ),
-                              _buildNavItem(
-                                index: 2,
-                                currentIndex: currentIndex,
-                                icon: Icons.chat_bubble_outline_rounded,
-                                selectedIcon: Icons.chat_bubble_rounded,
-                                tooltip: 'Chats',
-                                isDark: isDark,
+                              StreamBuilder<int>(
+                                stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
+                                builder: (context, snapshot) {
+                                  final unreadCount = snapshot.data ?? 0;
+                                  return _buildNavItem(
+                                    index: 2,
+                                    currentIndex: currentIndex,
+                                    icon: Icons.chat_bubble_outline_rounded,
+                                    selectedIcon: Icons.chat_bubble_rounded,
+                                    tooltip: 'Chats',
+                                    isDark: isDark,
+                                    badgeCount: unreadCount,
+                                  );
+                                },
                               ),
                               // Profile tab with live avatar
                               _buildProfileNavItem(
@@ -229,6 +237,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     required IconData selectedIcon,
     String? tooltip,
     required bool isDark,
+    int badgeCount = 0,
   }) {
     final isSelected = currentIndex == index;
     final selectedColor = isDark ? Colors.white : Colors.black;
@@ -247,15 +256,55 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             child: SizedBox(
               height: 48,
               child: Center(
-                child: AnimatedScale(
-                  scale: isSelected ? 1.06 : 1.0,
-                  duration: AppMotion.durationMicro,
-                  curve: AppMotion.interactiveCurve,
-                  child: Icon(
-                    isSelected ? selectedIcon : icon,
-                    size: 25,
-                    color: isSelected ? selectedColor : unselectedColor,
-                  ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: isSelected ? 1.06 : 1.0,
+                      duration: AppMotion.durationMicro,
+                      curve: AppMotion.interactiveCurve,
+                      child: Icon(
+                        isSelected ? selectedIcon : icon,
+                        size: 25,
+                        color: isSelected ? selectedColor : unselectedColor,
+                      ),
+                    ),
+                    if (badgeCount > 0)
+                      Positioned(
+                        top: -5,
+                        right: -10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark ? Colors.black : Colors.white,
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            badgeCount > 99 ? '99+' : '$badgeCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -269,7 +318,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     required int currentIndex,
     required bool isDark,
   }) {
-    final isSelected = currentIndex == 3;
     return Expanded(
       child: Material(
         color: Colors.transparent,

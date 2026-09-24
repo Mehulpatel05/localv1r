@@ -8,6 +8,7 @@ class ChatConversation {
   final String lastSenderHandle;
   final DateTime? updatedAt;
   final Map<String, int> unreadCounts;
+  final Map<String, bool> typing;
 
   const ChatConversation({
     required this.id,
@@ -17,6 +18,7 @@ class ChatConversation {
     this.lastSenderHandle = '',
     this.updatedAt,
     this.unreadCounts = const {},
+    this.typing = const {},
   });
 
   factory ChatConversation.fromFirestore(DocumentSnapshot doc) {
@@ -41,6 +43,9 @@ class ChatConversation {
     final rawUnread = data['unreadCounts'] as Map<String, dynamic>? ?? {};
     final unreadCounts = rawUnread.map((k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0));
 
+    final rawTyping = data['typing'] as Map<String, dynamic>? ?? {};
+    final typing = rawTyping.map((k, v) => MapEntry(k, v == true));
+
     return ChatConversation(
       id: doc.id,
       participants: participants,
@@ -49,7 +54,13 @@ class ChatConversation {
       lastSenderHandle: data['lastSenderHandle'] as String? ?? '',
       updatedAt: updated,
       unreadCounts: unreadCounts,
+      typing: typing,
     );
+  }
+
+  bool isPartnerTyping(String currentUserHandle) {
+    final partner = getPartnerHandle(currentUserHandle).replaceAll('@', '').trim();
+    return typing[partner] == true || typing[partner.toLowerCase()] == true;
   }
 
   String getPartnerHandle(String currentUserHandle) {
