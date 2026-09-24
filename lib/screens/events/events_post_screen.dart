@@ -25,7 +25,6 @@ class EventsPostScreen extends StatefulWidget {
 
 class _EventsPostScreenState extends State<EventsPostScreen> {
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
 
   final _titleController = TextEditingController();
   final _dateController = TextEditingController();
@@ -169,7 +168,6 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
         content: _descController.text.trim(),
         category: PostCategory.events,
         cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
-          areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         eventTitle: _titleController.text.trim(),
         eventDate: _dateController.text.trim(),
         eventLocationText: _locationController.text.trim(),
@@ -360,10 +358,9 @@ class _EventsPostScreenState extends State<EventsPostScreen> {
                             fontSize: 14)),
                     const SizedBox(height: 8),
                     LocationSelectorField(
-                          onLocationSelected: (city, area) {
+                          onLocationSelected: (city, _) {
                             setState(() {
                               _selectedGeoCity = city;
-                              _selectedGeoArea = area;
                             });
                           },
                         ),

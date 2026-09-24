@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:http/http.dart' as http;
+import '../../services/auth_service.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/call_model.dart';
@@ -32,7 +34,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   final ValueNotifier<int> _durationNotifier = ValueNotifier<int>(0);
   Timer? _callTimer;
   Timer? _ringTimeoutTimer;
-  StreamSubscription<DocumentSnapshot>? _callSubscription;
+  Timer? _statusPollingTimer;
   StreamSubscription<dynamic>? _proximitySubscription;
 
   bool _isMicMuted = false;
@@ -48,8 +50,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _isDismissed = true;
     _ringTimeoutTimer?.cancel();
     _callTimer?.cancel();
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = null;
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     CallAudioToneService.instance.stop();
@@ -122,53 +124,62 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   }
 
   void _listenToCallDoc() {
-    _callSubscription = FirebaseFirestore.instance
-        .collection('calls')
-        .doc(widget.call.callId)
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.stop();
-        _handleCallTerminated(CallStatus.ended);
-        return;
-      }
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/calls/${widget.call.callId}'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 2));
 
-      final data = doc.data() ?? {};
-      final statusStr = (data['status'] ?? '').toString().toLowerCase();
-
-      if (statusStr == 'ringing' && _status != CallStatus.ringing && _status != CallStatus.connected) {
-        setState(() {
-          _status = CallStatus.ringing;
-        });
-      } else if (statusStr == 'connected' && _status != CallStatus.connected) {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.stop();
-        if (_pulseController.isAnimating) {
-          _pulseController.stop();
+        if (res.statusCode != 200) {
+          if (res.statusCode == 404) {
+            _ringTimeoutTimer?.cancel();
+            CallAudioToneService.instance.stop();
+            _handleCallTerminated(CallStatus.ended);
+          }
+          return;
         }
-        setState(() {
-          _status = CallStatus.connected;
-        });
-        HapticFeedback.mediumImpact();
-        _startTimer();
-      } else if (statusStr == 'rejected') {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.stop();
-        _handleCallTerminated(CallStatus.rejected);
-      } else if (statusStr == 'ended') {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.stop();
-        _handleCallTerminated(CallStatus.ended);
-      } else if (statusStr == 'missed') {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.stop();
-        _handleCallTerminated(CallStatus.missed);
-      } else if (statusStr == 'busy') {
-        _ringTimeoutTimer?.cancel();
-        CallAudioToneService.instance.playBusyTone();
-        _handleCallTerminated(CallStatus.busy);
-      }
+
+        final body = jsonDecode(res.body);
+        final data = body['call'] as Map<String, dynamic>? ?? {};
+        final statusStr = (data['status'] ?? '').toString().toLowerCase();
+
+        if (!mounted) return;
+
+        if (statusStr == 'ringing' && _status != CallStatus.ringing && _status != CallStatus.connected) {
+          setState(() {
+            _status = CallStatus.ringing;
+          });
+        } else if ((statusStr == 'connected' || statusStr == 'accepted') && _status != CallStatus.connected) {
+          _ringTimeoutTimer?.cancel();
+          CallAudioToneService.instance.stop();
+          if (_pulseController.isAnimating) {
+            _pulseController.stop();
+          }
+          setState(() {
+            _status = CallStatus.connected;
+          });
+          HapticFeedback.mediumImpact();
+          _startTimer();
+        } else if (statusStr == 'rejected') {
+          _ringTimeoutTimer?.cancel();
+          CallAudioToneService.instance.stop();
+          _handleCallTerminated(CallStatus.rejected);
+        } else if (statusStr == 'ended') {
+          _ringTimeoutTimer?.cancel();
+          CallAudioToneService.instance.stop();
+          _handleCallTerminated(CallStatus.ended);
+        } else if (statusStr == 'missed') {
+          _ringTimeoutTimer?.cancel();
+          CallAudioToneService.instance.stop();
+          _handleCallTerminated(CallStatus.missed);
+        } else if (statusStr == 'busy') {
+          _ringTimeoutTimer?.cancel();
+          CallAudioToneService.instance.playBusyTone();
+          _handleCallTerminated(CallStatus.busy);
+        }
+      } catch (_) {}
     });
   }
 
@@ -187,8 +198,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _isEnding = true;
     _ringTimeoutTimer?.cancel();
     _callTimer?.cancel();
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     CallAudioToneService.instance.stop();
@@ -224,8 +234,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _isEnding = true;
     _ringTimeoutTimer?.cancel();
     _callTimer?.cancel();
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     CallAudioToneService.instance.stop();
@@ -260,8 +269,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _isEnding = true;
     _ringTimeoutTimer?.cancel();
     _callTimer?.cancel();
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     CallAudioToneService.instance.stop();
@@ -397,6 +405,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         return 'Call Ended';
       case CallStatus.missed:
         return 'Missed Call';
+      case CallStatus.accepted:
+        return 'Connecting...';
       case CallStatus.busy:
         return 'User Busy';
     }
@@ -408,10 +418,10 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     _ringTimeoutTimer?.cancel();
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = null;
     CallAudioToneService.instance.stop();
     _pulseController.dispose();
-    _callSubscription?.cancel();
-    _callSubscription = null;
     _callTimer?.cancel();
     _durationNotifier.dispose();
     _callService.cleanup();

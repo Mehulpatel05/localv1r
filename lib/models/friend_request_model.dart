@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum FriendRequestStatus { pending, accepted, rejected }
 
 class FriendRequest {
@@ -7,6 +5,8 @@ class FriendRequest {
   final String senderHandle;
   final String receiverHandle;
   final FriendRequestStatus status;
+  final String? senderAvatarUrl;
+  final String? receiverAvatarUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -15,15 +15,27 @@ class FriendRequest {
     required this.senderHandle,
     required this.receiverHandle,
     required this.status,
+    this.senderAvatarUrl,
+    this.receiverAvatarUrl,
     required this.createdAt,
     required this.updatedAt,
   });
 
   factory FriendRequest.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDateTime(dynamic val) {
-      if (val is Timestamp) return val.toDate();
       if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
-      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      if (val is int) {
+        if (val > 10000000000) {
+          return DateTime.fromMillisecondsSinceEpoch(val);
+        } else {
+          return DateTime.fromMillisecondsSinceEpoch(val * 1000);
+        }
+      }
+      if (val != null) {
+        try {
+          return (val as dynamic).toDate();
+        } catch (_) {}
+      }
       return DateTime.now();
     }
 
@@ -35,6 +47,8 @@ class FriendRequest {
         (e) => e.name == (map['status'] ?? 'pending'),
         orElse: () => FriendRequestStatus.pending,
       ),
+      senderAvatarUrl: (map['senderAvatarUrl'] ?? map['senderAvatar']) as String?,
+      receiverAvatarUrl: (map['receiverAvatarUrl'] ?? map['receiverAvatar']) as String?,
       createdAt: parseDateTime(map['createdAt']),
       updatedAt: parseDateTime(map['updatedAt']),
     );
@@ -45,8 +59,10 @@ class FriendRequest {
       'senderHandle': senderHandle,
       'receiverHandle': receiverHandle,
       'status': status.name,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'senderAvatarUrl': senderAvatarUrl,
+      'receiverAvatarUrl': receiverAvatarUrl,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 }

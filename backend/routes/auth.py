@@ -418,14 +418,21 @@ async def get_my_profile(
     user = D1Service.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    handle = user.get("handle", "")
+    total_upvotes = D1Service.get_user_upvotes(handle)
+    friend_count = D1Service.get_friend_count(handle)
+    
     return {
         "status": "success",
         "user": {
             "userId": user["id"],
-            "handle": user["handle"],
+            "handle": handle,
             "phoneNumber": user.get("phone", ""),
             "avatarUrl": user.get("avatar_url", ""),
             "reputation": user.get("reputation", 0),
+            "upvotes": total_upvotes,
+            "friendCount": friend_count,
             "createdAt": user.get("created_at"),
         }
     }
@@ -493,12 +500,18 @@ async def get_public_profile(handle: str):
     user = D1Service.get_user_by_handle(clean)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    total_upvotes = D1Service.get_user_upvotes(clean)
+    friend_count = D1Service.get_friend_count(clean)
+
     return {
         "status": "success",
         "user": {
             "handle": user["handle"],
             "avatarUrl": user.get("avatar_url", ""),
             "reputation": user.get("reputation", 0),
+            "upvotes": total_upvotes,
+            "friendCount": friend_count,
             "createdAt": user.get("created_at"),
         }
     }

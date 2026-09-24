@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
@@ -7,7 +6,6 @@ import '../../services/friend_repository.dart';
 import '../chat/personal_chat_screen.dart';
 
 /// Shows a bottom sheet with another user's profile
-/// Called when tapping a username in the feed that is NOT the current user.
 Future<void> showOtherUserProfileSheet(
   BuildContext context, {
   required String partnerHandle,
@@ -45,7 +43,6 @@ class OtherUserProfileSheet extends StatefulWidget {
   State<OtherUserProfileSheet> createState() => _OtherUserProfileSheetState();
 }
 
-// Dummy repo for when repository is not passed (e.g. from FriendsScreen or ChatScreen)
 class _DummyRepo implements PostRepository {
   const _DummyRepo();
   @override
@@ -77,40 +74,11 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
   Future<void> _loadData() async {
     try {
-      // 1. Fetch user data from public profiles collection (Firestore rules compliant)
-      var profDoc = await FirebaseFirestore.instance
-          .collection('profiles')
-          .doc(_targetHandle)
-          .get();
-      if (!profDoc.exists) {
-        profDoc = await FirebaseFirestore.instance
-            .collection('profiles')
-            .doc(_targetHandle.toLowerCase())
-            .get();
-      }
-      if (profDoc.exists) {
-        _userData = profDoc.data();
-      } else {
-        // Fallback: search in users collection if own profile or if allowed
-        try {
-          var query = await FirebaseFirestore.instance
-              .collection('users')
-              .where('handle', isEqualTo: _targetHandle)
-              .limit(1)
-              .get();
-
-          if (query.docs.isEmpty) {
-            query = await FirebaseFirestore.instance
-                .collection('users')
-                .where('handle', isEqualTo: _targetHandle.toLowerCase())
-                .limit(1)
-                .get();
-          }
-
-          if (query.docs.isNotEmpty) {
-            _userData = query.docs.first.data();
-          }
-        } catch (_) {}
+      // 1. Fetch user data via REST API
+      final user = await _friendRepo.getUserByHandle(_targetHandle);
+      if (user != null) {
+        _userData = user;
+        _upvoteCount = (user['reputation'] as num?)?.toInt() ?? 0;
       }
 
       // 2. Fetch post count & upvotes
@@ -122,28 +90,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           for (final p in posts) {
             totalUpvotes += (p.upvotes > 0 ? p.upvotes : 0);
           }
-          _upvoteCount = totalUpvotes;
-        } else {
-          // Direct Firestore query fallback for posts by user
-          var postDocs = await FirebaseFirestore.instance
-              .collection('posts')
-              .where('authorHandle', isEqualTo: _targetHandle)
-              .limit(50)
-              .get();
-          if (postDocs.docs.isEmpty) {
-            postDocs = await FirebaseFirestore.instance
-                .collection('posts')
-                .where('authorHandle', isEqualTo: _targetHandle.toLowerCase())
-                .limit(50)
-                .get();
-          }
-          _postCount = postDocs.docs.length;
-          int totalUpvotes = 0;
-          for (final doc in postDocs.docs) {
-            final up = doc.data()['upvotes'];
-            if (up is int && up > 0) totalUpvotes += up;
-          }
-          _upvoteCount = totalUpvotes;
+          if (totalUpvotes > 0) _upvoteCount = totalUpvotes;
         }
       } catch (_) {}
 
@@ -523,10 +470,10 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
                 ),
               ] else ...[
-                // Instagram-style Profile Avatar with Story Gradient Ring
+                // Profile Avatar
                 UserAvatar(
                   handle: _targetHandle,
-                  photoUrl: _userData?['photoUrl'] as String?,
+                  photoUrl: _userData?['photoUrl'] as String? ?? _userData?['avatar_url'] as String?,
                   size: 88,
                   showRing: true,
                   ringGradient: UserAvatar.instagramGradient,
@@ -560,7 +507,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 if (bio.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  // Bio Text
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
@@ -577,66 +523,54 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 const SizedBox(height: 16),
 
-                // Stats Row (Posts & Upvotes)
-                ListenableBuilder(
-                  listenable: widget.repository is! _DummyRepo ? widget.repository : ValueNotifier(0),
-                  builder: (context, _) {
-                    int displayUpvotes = _upvoteCount;
-                    if (widget.repository is! _DummyRepo) {
-                      try {
-                        final live = widget.repository.getTotalUpvotesForUser(_targetHandle);
-                        displayUpvotes = live;
-                      } catch (_) {}
-                    }
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                // Stats Row
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF64748B)),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$_postCount Posts',
-                                style: const TextStyle(
-                                  color: Color(0xFF1E293B),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 16),
-                          Container(height: 14, width: 1, color: const Color(0xFFCBD5E1)),
-                          const SizedBox(width: 16),
-                          Row(
-                            children: [
-                              const Icon(Icons.arrow_upward_rounded, size: 15, color: Color(0xFF10B981)),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$displayUpvotes Upvotes',
-                                style: const TextStyle(
-                                  color: Color(0xFF1E293B),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
+                          const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_postCount Posts',
+                            style: const TextStyle(
+                              color: Color(0xFF1E293B),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  },
+                      const SizedBox(width: 16),
+                      Container(height: 14, width: 1, color: const Color(0xFFCBD5E1)),
+                      const SizedBox(width: 16),
+                      Row(
+                        children: [
+                          const Icon(Icons.arrow_upward_rounded, size: 15, color: Color(0xFF10B981)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_upvoteCount Upvotes',
+                            style: const TextStyle(
+                              color: Color(0xFF1E293B),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 22),
 
-                // Dynamic Relationship Button (6 exact states from image 2)
+                // Dynamic Relationship Button
                 _buildRelationshipButton(),
 
                 const SizedBox(height: 10),
@@ -695,7 +629,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     );
   }
 
-  /// 6 Dynamic Relationship Button States
   Widget _buildRelationshipButton() {
     if (_targetHandle.isNotEmpty &&
         _friendRepo.currentUserHandle.isNotEmpty &&
@@ -724,7 +657,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     }
 
     switch (_relationshipStatus) {
-      // 1. No Relationship -> + Add Friend (Blue)
       case RelationshipStatus.none:
         return SizedBox(
           width: double.infinity,
@@ -753,7 +685,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           ),
         );
 
-      // 2. Request Sent -> ✓ Request Sent (White/Slate border)
       case RelationshipStatus.requestSentByMe:
         return SizedBox(
           width: double.infinity,
@@ -782,7 +713,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           ),
         );
 
-      // 3. Request Received -> ✓ Accept Friend Request (Blue)
       case RelationshipStatus.requestReceivedByMe:
         return SizedBox(
           width: double.infinity,
@@ -811,7 +741,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           ),
         );
 
-      // 4. Friends -> ✓ Friends (Soft Green)
       case RelationshipStatus.friends:
         return SizedBox(
           width: double.infinity,
@@ -841,7 +770,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           ),
         );
 
-      // 5. Blocked by Me -> ⊘ Blocked (Soft Red)
       case RelationshipStatus.blockedByMe:
         return SizedBox(
           width: double.infinity,
@@ -871,7 +799,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           ),
         );
 
-      // 6. Blocked by Them -> Unavailable (Soft Grey)
       case RelationshipStatus.blockedByThem:
         return Container(
           width: double.infinity,

@@ -2,14 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 import '../main.dart';
-import '../models/community_model.dart';
-import '../models/post_model.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/personal_chat_screen.dart';
 import '../screens/communities/community_chat_screen.dart';
@@ -29,7 +26,6 @@ import 'chat_preferences_service.dart';
 /// Top-level background message handler (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Background messages are handled automatically by the system tray.
   debugPrint('BG message received: ${message.notification?.title} | data: ${message.data}');
 }
 
@@ -42,7 +38,7 @@ class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
-  StreamSubscription<QuerySnapshot>? _userNotificationsSubscription;
+  Timer? _pollingTimer;
 
   /// Currently open chat partner handle (to suppress heads-up notification while chatting)
   String? activeChatPartnerHandle;
@@ -93,7 +89,7 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
-      // 3. Request Android 13+ (API 33+) runtime notification permission & create channels
+      // 3. Request Android 13+ runtime notification permission & create channels
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.requestNotificationsPermission();
@@ -119,15 +115,7 @@ class NotificationService {
         _handleNotificationTap(initialMessage);
       }
 
-      // 8. Save/refresh FCM token
-      await _saveToken();
-
-      // 9. Listen for token refresh
-      _fcm.onTokenRefresh.listen((newToken) {
-        _saveTokenToFirestore(newToken);
-      });
-
-      // 10. Start listening to realtime notifications for logged in user
+      // 8. Start listening to realtime notifications for logged in user
       final currentHandle = await AuthService.instance.getUserHandle();
       if (currentHandle != null && currentHandle.isNotEmpty) {
         startListening(currentHandle);
@@ -154,42 +142,50 @@ class NotificationService {
 
   final Set<String> _processedNotificationIds = {};
 
-  /// Start realtime notification listener for a specific handle
+  /// Start realtime notification poller for a specific handle
   void startListening(String handle) {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty) return;
 
-    _userNotificationsSubscription?.cancel();
+    _pollingTimer?.cancel();
     final sessionThreshold = DateTime.now().subtract(const Duration(seconds: 30));
 
-    _userNotificationsSubscription = FirebaseFirestore.instance
-        .collection('notifications')
-        .where('targetHandle', isEqualTo: cleanHandle)
-        .snapshots()
-        .listen(
-      (snapshot) async {
-        for (final change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.added) {
-            final docId = change.doc.id;
+    _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/notifications?handle=$cleanHandle'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final notifs = (data['notifications'] as List<dynamic>?) ?? [];
+
+          for (final raw in notifs) {
+            final notif = raw as Map<String, dynamic>;
+            final docId = (notif['id'] ?? '').toString();
             if (_processedNotificationIds.contains(docId)) continue;
             _processedNotificationIds.add(docId);
 
-            final data = change.doc.data();
-            if (data == null) continue;
-
-            final isRead = data['isRead'] as bool? ?? false;
-            final createdAt = data['createdAt'] as Timestamp?;
-
-            // If it's an old notification already marked read or before session start, skip
+            final isRead = notif['isRead'] == true;
             if (isRead) continue;
-            if (createdAt != null && createdAt.toDate().isBefore(sessionThreshold)) {
+
+            final rawCreated = notif['timestamp'] ?? notif['createdAt'];
+            DateTime? createdAt;
+            if (rawCreated is int) {
+              createdAt = DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
+            } else if (rawCreated is String) {
+              createdAt = DateTime.tryParse(rawCreated);
+            }
+
+            if (createdAt != null && createdAt.isBefore(sessionThreshold)) {
               continue;
             }
 
-            final title = data['title'] as String? ?? 'Nearhood';
-            final body = data['body'] as String? ?? '';
-            final payloadData = (data['data'] as Map<String, dynamic>?) ?? {};
-            final type = payloadData['type'] as String?;
+            final title = notif['title'] as String? ?? 'Nearhood';
+            final body = notif['body'] as String? ?? '';
+            final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
+            final type = payloadData['type'] as String? ?? notif['type'] as String?;
 
             // Check user notification preferences
             final isAllowed = await _checkIfCategoryAllowed(type);
@@ -199,23 +195,19 @@ class NotificationService {
             if (type == 'chat' || type == 'message') {
               final sender = (payloadData['senderHandle'] ?? payloadData['partnerHandle'] as String?)?.replaceAll('@', '').trim();
               if (sender != null && sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
-                continue; // User is already in active conversation with this person
+                continue;
               }
-              // Check if chat is muted for this user (re-checks absolute UTC expiry)
               if (sender != null && sender.isNotEmpty) {
                 final isMuted = await ChatPreferencesService.instance.isChatMutedForUser(cleanHandle, sender);
-                if (isMuted) {
-                  continue; // Suppress notification for muted conversation
-                }
+                if (isMuted) continue;
               }
             } else if (type == 'community_message' || type == 'community') {
               final commId = payloadData['communityId'] as String?;
               if (commId != null && commId == activeCommunityId) {
-                continue; // User is currently looking at this community chat
+                continue;
               }
             }
 
-            // Show floating in-app banner if app is foreground and context is active (Skip for calls since IncomingCallScreen presents directly)
             final currentContext = navigatorKey.currentContext;
             if (type != 'call' && currentContext != null && currentContext.mounted) {
               final sender = (payloadData['senderHandle'] ?? payloadData['partnerHandle'] as String?)?.replaceAll('@', '').trim();
@@ -228,7 +220,6 @@ class NotificationService {
               );
             }
 
-            // Also show system heads-up notification with sound
             showLocalNotification(
               title: title,
               body: body,
@@ -236,62 +227,13 @@ class NotificationService {
             );
           }
         }
-      },
-      onError: (e) {
-        debugPrint('Notification listener error for @$cleanHandle: $e');
-      },
-    );
+      } catch (_) {}
+    });
   }
 
   void stopListening() {
-    _userNotificationsSubscription?.cancel();
-    _userNotificationsSubscription = null;
-  }
-
-  /// Save FCM token to Firestore under the current user's document
-  Future<void> _saveToken() async {
-    try {
-      final token = await _fcm.getToken();
-      if (token != null) {
-        await _saveTokenToFirestore(token);
-      }
-    } catch (e) {
-      debugPrint('Error getting FCM token: $e');
-    }
-  }
-
-  Future<void> _saveTokenToFirestore(String token) async {
-    try {
-      final storedUserId = await AuthService.instance.getUserId();
-      final uid = storedUserId ?? FirebaseAuth.instance.currentUser?.uid;
-      final handle = await AuthService.instance.getUserHandle();
-
-      if (uid != null && uid.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'fcmToken': token,
-          'tokenUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        debugPrint('FCM token saved for user $uid');
-      }
-
-      if (handle != null && handle.isNotEmpty) {
-        final clean = handle.replaceAll('@', '').trim();
-        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
-          'fcmToken': token,
-          'tokenUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        if (clean.toLowerCase() != clean) {
-          await FirebaseFirestore.instance.collection('profiles').doc(clean.toLowerCase()).set({
-            'fcmToken': token,
-            'tokenUpdatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-        debugPrint('FCM token saved for @$clean');
-      }
-    } catch (e) {
-      debugPrint('FCM token save error: $e');
-    }
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
   }
 
   /// Show a local notification when an FCM message arrives in the foreground
@@ -340,95 +282,78 @@ class NotificationService {
     navigateToScreen(message.data);
   }
 
-  /// Get stream of unread social notifications count for badge (excludes 1-on-1 chat messages)
-  Stream<int> getUnreadNotificationCount(String handle) {
+  /// Get stream of unread social notifications count for badge
+  Stream<int> getUnreadNotificationCount(String handle) async* {
     final clean = handle.replaceAll('@', '').trim();
-    if (clean.isEmpty) return Stream.value(0);
+    if (clean.isEmpty) {
+      yield 0;
+      return;
+    }
 
-    return FirebaseFirestore.instance
-        .collection('notifications')
-        .where('targetHandle', isEqualTo: clean)
-        .where('isRead', isEqualTo: false)
-        .snapshots()
-        .map((snap) {
+    while (true) {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/notifications?handle=$clean'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final notifs = (data['notifications'] as List<dynamic>?) ?? [];
           int count = 0;
-          for (final doc in snap.docs) {
-            final data = doc.data();
-            final payload = (data['data'] as Map<String, dynamic>?) ?? {};
-            final type = payload['type'] as String?;
-            // Only count Instagram-style social and system notifications (chats are in Chat tab)
-            if (type != 'chat' && type != 'message') {
+          for (final n in notifs) {
+            final isRead = n['isRead'] == true;
+            final type = (n['data']?['type'] ?? n['type']) as String?;
+            if (!isRead && type != 'chat' && type != 'message') {
               count++;
             }
           }
-          return count;
-        })
-        .handleError((e) {
-          debugPrint('Error getting unread count: $e');
-          return 0;
-        });
+          yield count;
+        }
+      } catch (_) {}
+
+      await Future.delayed(const Duration(seconds: 10));
+    }
   }
 
   /// Get stream of total unread chat messages count across all conversations
-  Stream<int> getUnreadChatCount(String handle) {
-    final rawHandle = handle.trim();
-    final cleanHandle = rawHandle.replaceAll('@', '');
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
+  Stream<int> getUnreadChatCount(String handle) async* {
+    final clean = handle.replaceAll('@', '').trim();
+    if (clean.isEmpty) {
+      yield 0;
+      return;
+    }
 
-    final handles = <String>{
-      rawHandle,
-      cleanHandle,
-      '@$cleanHandle',
-      rawHandle.toLowerCase(),
-      cleanHandle.toLowerCase(),
-      '@${cleanHandle.toLowerCase()}',
-      if (myUid != null && myUid.isNotEmpty) myUid,
-    }.where((h) => h.isNotEmpty).toList();
+    while (true) {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/chats?handle=$clean'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 4));
 
-    if (handles.isEmpty) return Stream.value(0);
-
-    return FirebaseFirestore.instance
-        .collection('chats')
-        .where('participants', arrayContainsAny: handles)
-        .snapshots()
-        .map((snapshot) {
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final chats = (data['chats'] as List<dynamic>?) ?? [];
           int totalUnread = 0;
-          for (final doc in snapshot.docs) {
-            try {
-              final data = doc.data();
-              final unreadMap = data['unreadCounts'] as Map<String, dynamic>? ?? {};
-              final count = (unreadMap[cleanHandle] ??
-                      unreadMap[rawHandle] ??
-                      unreadMap['@$cleanHandle'] ??
-                      unreadMap[cleanHandle.toLowerCase()] ??
-                      unreadMap['@${cleanHandle.toLowerCase()}'] ??
-                      (myUid != null ? unreadMap[myUid] : null) ??
-                      0) as num;
-              totalUnread += count.toInt();
-            } catch (_) {}
+          for (final c in chats) {
+            final unread = (c['unreadCount'] as num?)?.toInt() ?? 0;
+            totalUnread += unread;
           }
-          return totalUnread;
-        })
-        .handleError((e) {
-          debugPrint('Error getting unread chat count: $e');
-          return 0;
-        });
+          yield totalUnread;
+        }
+      } catch (_) {}
+
+      await Future.delayed(const Duration(seconds: 10));
+    }
   }
 
-  /// Deep linking router for Instagram-style notification types:
-  /// 1. 'post', 'post_like', 'post_comment', 'post_upload', 'mention' -> PostDetailScreen
-  /// 2. 'friend_request' -> FriendsScreen (Requests tab)
-  /// 3. 'friend_accepted' -> OtherUserProfileSheet or FriendsScreen
-  /// 4. 'chat', 'message' -> PersonalChatScreen
-  /// 5. 'community_message', 'community' -> CommunityChatScreen
-  /// 6. 'call' -> IncomingCallScreen
+  /// Deep linking router
   Future<void> navigateToScreen(Map<String, dynamic> data) async {
     final context = navigatorKey.currentContext;
     if (context == null) return;
 
     final type = data['type'] as String?;
     
-    // Fetch currentUserHandle from SharedPreferences / AuthService
     final prefs = await SharedPreferences.getInstance();
     final currentHandle = await AuthService.instance.getUserHandle() ??
         prefs.getString('user_handle') ??
@@ -437,7 +362,7 @@ class NotificationService {
 
     if (!context.mounted) return;
 
-    // ── 1. Post Interactions (Like, Comment, Mention, Upload, New Post) ──
+    // ── 1. Post Interactions ──
     if (type == 'post' ||
         type == 'new_post' ||
         type == 'post_like' ||
@@ -447,13 +372,11 @@ class NotificationService {
       final postId = data['postId'] as String?;
       if (postId != null && postId.isNotEmpty) {
         try {
-          final doc = await FirebaseFirestore.instance.collection('posts').doc(postId).get();
-          if (doc.exists && doc.data() != null && context.mounted) {
-            final post = Post.fromFirestore(doc);
-            final locService = LocationService();
-            final postRepo = PostRepository(locService);
-            postRepo.currentUserHandle = cleanCurrentHandle;
-
+          final locService = LocationService();
+          final postRepo = PostRepository(locService);
+          postRepo.currentUserHandle = cleanCurrentHandle;
+          final post = postRepo.getPostById(postId);
+          if (post != null && context.mounted) {
             await Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => PostDetailScreen(
@@ -470,7 +393,7 @@ class NotificationService {
         }
       }
     }
-    // ── 2. Friend Request ────────────────────────────────────────────────
+    // ── 2. Friend Request ──
     else if (type == 'friend_request') {
       final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
       await Navigator.of(context).push(
@@ -482,7 +405,7 @@ class NotificationService {
         ),
       );
     }
-    // ── 3. Friend Request Accepted ───────────────────────────────────────
+    // ── 3. Friend Request Accepted ──
     else if (type == 'friend_accepted') {
       final senderHandle = (data['senderHandle'] as String?)?.replaceAll('@', '').trim();
       if (senderHandle != null && senderHandle.isNotEmpty) {
@@ -506,7 +429,7 @@ class NotificationService {
         );
       }
     }
-    // ── 4. Direct / Private Chat ──────────────────────────────────────────
+    // ── 4. Direct / Private Chat ──
     else if (type == 'chat' || type == 'message') {
       final partnerHandle = (data['senderHandle'] ?? data['partnerHandle'] ?? data['handle'] as String?)?.replaceAll('@', '').trim();
       if (partnerHandle != null && partnerHandle.isNotEmpty) {
@@ -528,16 +451,14 @@ class NotificationService {
         );
       }
     }
-    // ── 4. Community Message ─────────────────────────────────────────────
+    // ── 4. Community Message ──
     else if (type == 'community_message' || type == 'community') {
       final communityId = data['communityId'] as String?;
       if (communityId != null && communityId.isNotEmpty) {
         try {
-          final doc = await FirebaseFirestore.instance.collection('communities').doc(communityId).get();
-          if (doc.exists && doc.data() != null && context.mounted) {
-            final community = CommunityModel.fromFirestore(doc);
-            final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
-
+          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
+          final community = await commRepo.getCommunityById(communityId);
+          if (community != null && context.mounted) {
             await Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => CommunityChatScreen(
@@ -553,26 +474,34 @@ class NotificationService {
         }
       }
     }
-    // ── 5. Incoming Call ────────────────────────────────────────────────
+    // ── 5. Incoming Call ──
     else if (type == 'call') {
       final callId = data['callId'] as String?;
       final callerHandle = (data['callerHandle'] as String?)?.replaceAll('@', '').trim();
       if (callId != null && callId.isNotEmpty) {
         try {
-          final doc = await FirebaseFirestore.instance.collection('calls').doc(callId).get();
-          if (doc.exists && doc.data() != null && context.mounted) {
-            final call = CallModel.fromFirestore(doc);
-            if (call.status == CallStatus.calling || call.status == CallStatus.ringing) {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => IncomingCallScreen(
-                    call: call,
-                    currentUserHandle: cleanCurrentHandle,
+          final res = await http.get(
+            Uri.parse('${AuthService.baseUrl}/calls/$callId'),
+            headers: {'Content-Type': 'application/json'},
+          ).timeout(const Duration(seconds: 4));
+
+          if (res.statusCode == 200) {
+            final json = jsonDecode(res.body);
+            final callData = json['call'] as Map<String, dynamic>?;
+            if (callData != null && context.mounted) {
+              final call = CallModel.fromJson(callData);
+              if (call.status == CallStatus.calling || call.status == CallStatus.ringing) {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => IncomingCallScreen(
+                      call: call,
+                      currentUserHandle: cleanCurrentHandle,
+                    ),
+                    fullscreenDialog: true,
                   ),
-                  fullscreenDialog: true,
-                ),
-              );
-              return;
+                );
+                return;
+              }
             }
           }
         } catch (e) {
@@ -580,7 +509,6 @@ class NotificationService {
         }
       }
 
-      // If call is already ended/missed or callId not found, open chat
       if (callerHandle != null && callerHandle.isNotEmpty && context.mounted) {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -596,7 +524,7 @@ class NotificationService {
 
   // ── Dispatch & Helper Methods ──
 
-  /// Dispatch an in-app and remote notification to a target user
+  /// Dispatch an in-app notification via D1 REST API
   Future<void> sendNotification({
     required String targetHandle,
     String? targetUid,
@@ -608,15 +536,20 @@ class NotificationService {
     if (cleanTarget.isEmpty) return;
 
     try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'targetHandle': cleanTarget,
-        'targetUid': targetUid,
+      final payload = {
+        'target_handle': cleanTarget,
         'title': title,
         'body': body,
+        'type': data['type'] ?? 'general',
+        'sender_handle': data['senderHandle'] ?? data['partnerHandle'],
         'data': data,
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/notifications'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint('Error dispatching notification to $cleanTarget: $e');
     }
@@ -666,7 +599,7 @@ class NotificationService {
     }
   }
 
-  /// Dedicated high-priority full-screen incoming call notification (wakes lock screen)
+  /// Dedicated high-priority full-screen incoming call notification
   Future<int> showIncomingCallNotification({
     required CallModel call,
   }) async {

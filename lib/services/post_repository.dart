@@ -80,10 +80,8 @@ class PostRepository extends ChangeNotifier {
 
   String _getCacheKey() {
     final cityId = locationService.cityId;
-    final areaId = locationService.areaId;
-    final effectiveAreaId = (areaId != null && !areaId.contains('GENERAL')) ? areaId : 'ALL';
     final categoryStr = _selectedCategory?.name ?? 'ALL';
-    return 'cached_feed_${cityId}_${effectiveAreaId}_$categoryStr';
+    return 'cached_feed_${cityId}_$categoryStr';
   }
 
   /// 🚀 0ms Instant Disk Cache Reader (Offline-First)
@@ -254,9 +252,6 @@ class PostRepository extends ChangeNotifier {
     
     try {
       final cityId = locationService.cityId;
-      final areaId = locationService.areaId;
-      // Don't send areaId filter for GENERAL area — it means "all areas"
-      final effectiveAreaId = (areaId != null && !areaId.contains('GENERAL')) ? areaId : null;
       final categoryStr = _selectedCategory?.name;
       
       var uri = Uri.parse('$backendBaseUrl/posts');
@@ -264,7 +259,6 @@ class PostRepository extends ChangeNotifier {
         'limit': '50',
         'cityId': cityId,
         if (_nextCursor != null) 'cursor': _nextCursor!,
-        if (effectiveAreaId != null) 'areaId': effectiveAreaId,
         if (categoryStr != null) 'category': categoryStr,
       };
       
@@ -497,7 +491,7 @@ class PostRepository extends ChangeNotifier {
     required PostCategory category,
     String? imageUrl,
     required String cityId,
-    required String areaId,
+    String? areaId,
     // 🏠 Room-specific optional fields
     String? roomTitle,
     String? roomArea,
@@ -538,7 +532,7 @@ class PostRepository extends ChangeNotifier {
           'category': category.name,
           'imageUrl': imageUrl,
           'cityId': cityId,
-          'areaId': areaId,
+          'areaId': areaId ?? cityId,
           if (roomTitle != null) 'roomTitle': _cleanOptional(roomTitle),
           if (roomArea != null) 'roomArea': _cleanOptional(roomArea),
           if (roomRent != null) 'roomRent': _cleanOptional(roomRent, maxLen: 30),

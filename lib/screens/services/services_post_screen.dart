@@ -28,7 +28,6 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
   final _descController = TextEditingController();
 
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
   String _selectedCategory = 'Electrical';
   File? _serviceImage;
 
@@ -214,14 +213,12 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
       setState(() => _uploadProgress = 0.85);
 
       final city = _selectedGeoCity ?? widget.repository.locationService.city;
-      final area = _selectedGeoArea ?? widget.repository.locationService.area ?? city.areas.first;
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.services,
         cityId: city.id,
-        areaId: area.id,
         serviceTitle: title,
         servicePrice: price,
         serviceCategoryText: _selectedCategory,
@@ -609,10 +606,9 @@ class _ServicesPostScreenState extends State<ServicesPostScreen> {
                   const SizedBox(height: 10),
 
                   LocationSelectorField(
-                    onLocationSelected: (city, area) {
+                    onLocationSelected: (city, _) {
                       setState(() {
                         _selectedGeoCity = city;
-                        _selectedGeoArea = area;
                       });
                     },
                   ),

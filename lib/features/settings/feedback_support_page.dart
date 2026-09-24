@@ -3,7 +3,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/user_profile.dart';
 import '../../core/theme.dart';
-import '../../services/auth_service.dart';
 
 enum FeedbackCategory {
   bug('Report a Bug', Icons.bug_report_outlined),

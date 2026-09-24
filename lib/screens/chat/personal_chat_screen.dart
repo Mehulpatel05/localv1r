@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,6 +13,8 @@ import '../../services/r2_storage_service.dart';
 import '../../services/audio_upload_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/direct_chat_service.dart';
+import '../../services/friend_repository.dart';
 import '../../models/call_model.dart';
 import '../../services/webrtc_call_service.dart';
 import '../../main.dart';
@@ -67,7 +68,7 @@ class _OptimisticTextMessage {
     'content': content,
     'senderHandle': senderHandle,
     'senderUid': senderUid,
-    'timestamp': Timestamp.fromDate(timestamp),
+    'timestamp': timestamp.millisecondsSinceEpoch,
     'status': status,
     'type': 'text',
     if (replyTo != null) 'replyTo': replyTo,
@@ -99,11 +100,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   bool _hasMoreMessages = true;
   final List<_OptimisticTextMessage> _optimisticMessages = [];
   final List<_PendingImageUpload> _pendingUploads = [];
-  StreamSubscription<QuerySnapshot>? _messagesSubscription;
 
-  // Cached streams to prevent stream recreation & list rebuilds on keystrokes
-  Stream<QuerySnapshot>? _messagesStream;
-  Stream<DocumentSnapshot>? _chatDocStream;
+  // Streams
+  Stream<List<Map<String, dynamic>>>? _messagesStream;
   Stream<UserPresence>? _presenceStream;
 
   // Voice note recording state (ValueNotifiers decoupled from whole screen setState)
@@ -132,7 +131,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   String? _highlightedMessageId;
 
   // Pre-cached chat metadata for zero-latency sending
-  String? _cachedPartnerUid;
   bool _isBlocked = false;
 
   // Live typing state
@@ -149,18 +147,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _initChatCache();
     _messageController.addListener(_onTextChanged);
     _markChatAsRead();
-    _listenForUnreadMessages();
   }
 
   void _initStreams() {
-    _messagesStream = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .orderBy('timestamp', descending: true)
-        .limit(_messageLimit)
-        .snapshots();
-    _chatDocStream = FirebaseFirestore.instance.collection('chats').doc(_chatId).snapshots();
+    _messagesStream = DirectChatService.instance.pollMessagesStream(_chatId, limit: _messageLimit);
     _presenceStream = PresenceService.instance.getPresenceStream(widget.partnerHandle);
   }
 
@@ -189,85 +179,20 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   void _updateTypingStatus(bool isTyping) {
-    final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
-    FirebaseFirestore.instance.collection('chats').doc(_chatId).update({
-      'typing.$cleanMe': isTyping,
-    }).catchError((_) {});
+    // Typing status via presence if needed
   }
 
   Future<void> _initChatCache() async {
-    final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
-
     try {
-      var partnerProfile = await FirebaseFirestore.instance
-          .collection('profiles')
-          .doc(cleanPartner)
-          .get();
-      if (!partnerProfile.exists) {
-        partnerProfile = await FirebaseFirestore.instance
-            .collection('profiles')
-            .doc(cleanPartner.toLowerCase())
-            .get();
+      final repo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
+      final blocked = await repo.isBlocked(cleanPartner);
+      if (mounted) {
+        setState(() {
+          _isBlocked = blocked;
+        });
       }
-      _cachedPartnerUid = partnerProfile.data()?['ownerUid'] ??
-          partnerProfile.data()?['uid'] ??
-          partnerProfile.data()?['userId'];
     } catch (_) {}
-
-    try {
-      final block1 = await FirebaseFirestore.instance
-          .collection('blocks')
-          .doc('${cleanMe}_$cleanPartner')
-          .get();
-      final block2 = await FirebaseFirestore.instance
-          .collection('blocks')
-          .doc('${cleanPartner}_$cleanMe')
-          .get();
-      _isBlocked = block1.exists || block2.exists;
-    } catch (_) {}
-  }
-
-  void _listenForUnreadMessages() {
-    final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
-    _messagesSubscription?.cancel();
-    _messagesSubscription = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .where('isRead', isEqualTo: false)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.docs.isNotEmpty) {
-        final unreadFromPartner = snapshot.docs.where((doc) {
-          final data = doc.data();
-          final sender = (data['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
-          return sender != cleanMe;
-        }).toList();
-
-        if (unreadFromPartner.isNotEmpty) {
-          final batch = FirebaseFirestore.instance.batch();
-          for (final doc in unreadFromPartner) {
-            batch.update(doc.reference, {
-              'isRead': true,
-              'status': 'read',
-              'readAt': FieldValue.serverTimestamp(),
-            });
-          }
-          batch.commit().catchError((_) {});
-
-          // Also reset chat unreadCounts for me
-          FirebaseFirestore.instance
-              .collection('chats')
-              .doc(_chatId)
-              .update({
-            'unreadCounts.$cleanMe': 0,
-          }).catchError((_) {});
-        }
-      }
-    }, onError: (e) {
-      debugPrint('Error listening for unread messages: $e');
-    });
   }
 
   void _scrollListener() {
@@ -286,13 +211,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _isLoadingMore = true;
     setState(() {
       _messageLimit += 30;
-      _messagesStream = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('messages')
-          .orderBy('timestamp', descending: true)
-          .limit(_messageLimit)
-          .snapshots();
+      _messagesStream = DirectChatService.instance.pollMessagesStream(_chatId, limit: _messageLimit);
     });
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -312,7 +231,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       _updateTypingStatus(false);
     }
     _messageController.removeListener(_onTextChanged);
-    _messagesSubscription?.cancel();
     _amplitudeSubscription?.cancel();
     _recordingTimer?.cancel();
     _audioRecorder.dispose();
@@ -325,49 +243,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   String _getChatId(String user1, String user2) {
-    final u1 = user1.replaceAll('@', '').trim();
-    final u2 = user2.replaceAll('@', '').trim();
-    final users = [u1, u2];
-    users.sort();
-    return users.join('_');
+    final u1 = user1.replaceAll('@', '').trim().toLowerCase();
+    final u2 = user2.replaceAll('@', '').trim().toLowerCase();
+    final users = [u1, u2]..sort();
+    return '${users[0]}_${users[1]}';
   }
 
   Future<void> _markChatAsRead() async {
     try {
-      final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final doc = await chatRef.get();
-      if (doc.exists) {
-        await chatRef.update({
-          'unreadCounts.$cleanMe': 0,
-          'unreadCounts.${widget.currentUserHandle}': 0,
-        }).catchError((_) {});
-      }
-
-      // Mark unread messages sent by partner as read
-      final unreadSnapshot = await chatRef
-          .collection('messages')
-          .where('isRead', isEqualTo: false)
-          .limit(100)
-          .get();
-
-      final partnerDocs = unreadSnapshot.docs.where((d) {
-        final data = d.data();
-        final sender = (data['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
-        return sender != cleanMe;
-      }).toList();
-
-      if (partnerDocs.isNotEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
-        for (final d in partnerDocs) {
-          batch.update(d.reference, {
-            'isRead': true,
-            'status': 'read',
-            'readAt': FieldValue.serverTimestamp(),
-          });
-        }
-        await batch.commit();
-      }
+      await DirectChatService.instance.markChatRead(_chatId, widget.currentUserHandle);
     } catch (_) {}
   }
 
@@ -378,14 +262,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     HapticFeedback.lightImpact();
 
     // 1. Generate callId synchronously in memory (<1ms)
-    final callId = FirebaseFirestore.instance.collection('calls').doc().id;
+    final callId = 'call_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(999999)}';
 
     final initialCall = CallModel(
       callId: callId,
       callerHandle: widget.currentUserHandle,
-      callerUid: FirebaseAuth.instance.currentUser?.uid ?? '',
+      callerUid: widget.currentUserHandle,
       receiverHandle: cleanPartner,
-      receiverUid: _cachedPartnerUid ?? '',
+      receiverUid: cleanPartner,
       callType: type,
       status: CallStatus.calling,
       createdAt: DateTime.now(),
@@ -445,7 +329,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final replySnapshot = _replyingTo; // snapshot before async gap
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
 
     // 1. Instant optimistic UI feedback (<10ms)
     final tempId = 'temp_${DateTime.now().microsecondsSinceEpoch}';
@@ -453,7 +336,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       id: tempId,
       content: text,
       senderHandle: cleanMe,
-      senderUid: myUid,
+      senderUid: cleanMe,
       timestamp: DateTime.now(),
       replyTo: replySnapshot,
       status: 'sending',
@@ -481,7 +364,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
 
     // 2. Perform write in background (non-blocking)
-    _performSendMessageBackground(optimisticMsg, text, replySnapshot, cleanMe, cleanPartner, myUid);
+    _performSendMessageBackground(optimisticMsg, text, replySnapshot, cleanMe, cleanPartner);
   }
 
   Future<void> _performSendMessageBackground(
@@ -490,7 +373,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     Map<String, dynamic>? replySnapshot,
     String cleanMe,
     String cleanPartner,
-    String? myUid,
   ) async {
     try {
       if (_isBlocked) {
@@ -509,76 +391,30 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         return;
       }
 
-      String? partnerUid = _cachedPartnerUid;
-      if (partnerUid == null) {
-        var partnerProfile = await FirebaseFirestore.instance
-            .collection('profiles')
-            .doc(cleanPartner)
-            .get();
-        if (!partnerProfile.exists) {
-          partnerProfile = await FirebaseFirestore.instance
-              .collection('profiles')
-              .doc(cleanPartner.toLowerCase())
-              .get();
+      final res = await DirectChatService.instance.sendMessage(
+        sender: cleanMe,
+        receiver: cleanPartner,
+        content: text,
+        messageType: 'text',
+      );
+
+      if (res != null && res['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _optimisticMessages.removeWhere((m) => m.id == optimisticMsg.id);
+          });
         }
-        partnerUid = partnerProfile.data()?['ownerUid'] ??
-            partnerProfile.data()?['uid'] ??
-            partnerProfile.data()?['userId'];
-        _cachedPartnerUid = partnerUid;
-      }
-
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final messageRef = chatRef.collection('messages').doc(optimisticMsg.id);
-      final now = FieldValue.serverTimestamp();
-
-      final msgData = <String, dynamic>{
-        'senderHandle': cleanMe,
-        'senderUid': myUid,
-        'content': text,
-        'type': 'text',
-        'timestamp': now,
-        'status': 'sent',
-        'isRead': false,
-      };
-      if (replySnapshot != null) {
-        msgData['replyTo'] = {
-          'messageId': replySnapshot['messageId'],
-          'senderHandle': replySnapshot['senderHandle'],
-          'previewText': replySnapshot['previewText'],
-          'type': replySnapshot['type'],
-        };
-      }
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.set(messageRef, msgData);
-
-        transaction.set(chatRef, {
-          'participants': [cleanMe, cleanPartner],
-          'participantsUids': [
-            ?myUid,
-            ?partnerUid,
-          ],
-          'lastMessage': text,
-          'lastSenderHandle': cleanMe,
-          'updatedAt': now,
-          'unreadCounts': {
-            cleanMe: 0,
-            cleanPartner: FieldValue.increment(1),
-          },
-        }, SetOptions(merge: true));
-      });
-
-      // Once confirmed written by Firestore, remove optimistic entry
-      if (mounted) {
-        setState(() {
-          _optimisticMessages.removeWhere((m) => m.id == optimisticMsg.id);
-        });
+      } else {
+        if (mounted) {
+          setState(() {
+            optimisticMsg.status = 'failed';
+          });
+        }
       }
 
       // Dispatch notification
       NotificationService().sendNotification(
         targetHandle: cleanPartner,
-        targetUid: partnerUid,
         title: '@$cleanMe',
         body: text,
         data: {
@@ -748,72 +584,32 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         throw Exception('Cannot send image. User is blocked.');
       }
 
-      var partnerUid = _cachedPartnerUid;
-      if (partnerUid == null) {
-        var partnerProfile = await FirebaseFirestore.instance
-            .collection('profiles')
-            .doc(cleanPartner)
-            .get();
-        if (!partnerProfile.exists) {
-          partnerProfile = await FirebaseFirestore.instance
-              .collection('profiles')
-              .doc(cleanPartner.toLowerCase())
-              .get();
-        }
-        partnerUid = partnerProfile.data()?['ownerUid'] ??
-            partnerProfile.data()?['uid'] ??
-            partnerProfile.data()?['userId'];
-        _cachedPartnerUid = partnerUid;
-      }
-      final myUid = FirebaseAuth.instance.currentUser?.uid;
-
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final messageRef = chatRef.collection('messages').doc();
-      final now = FieldValue.serverTimestamp();
-
       final isGroup = validUrls.length > 1;
       final summaryText = uploadItem.caption.isNotEmpty
           ? uploadItem.caption
           : (isGroup ? '📷 ${validUrls.length} photos' : '📷 Photo');
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.set(messageRef, {
-          'senderHandle': cleanMe,
-          'senderUid': myUid,
-          'content': uploadItem.caption,
-          'imageUrl': validUrls.first,
-          'mediaUrls': validUrls,
-          'type': isGroup ? 'image_group' : 'image',
-          'timestamp': now,
-          'status': 'sent',
-          'isRead': false,
-        });
+      final res = await DirectChatService.instance.sendMessage(
+        sender: cleanMe,
+        receiver: cleanPartner,
+        content: uploadItem.caption,
+        imageUrl: validUrls.first,
+        mediaUrls: validUrls,
+        messageType: isGroup ? 'image_group' : 'image',
+      );
 
-        transaction.set(chatRef, {
-          'participants': [cleanMe, cleanPartner],
-          'participantsUids': [
-            ?myUid,
-            ?partnerUid,
-          ],
-          'lastMessage': summaryText,
-          'lastSenderHandle': cleanMe,
-          'updatedAt': now,
-          'unreadCounts': {
-            cleanMe: 0,
-            cleanPartner: FieldValue.increment(1),
-          },
-        }, SetOptions(merge: true));
-      });
-
-      if (mounted) {
-        setState(() {
-          _pendingUploads.removeWhere((p) => p.id == uploadItem.id);
-        });
+      if (res != null && res['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _pendingUploads.removeWhere((p) => p.id == uploadItem.id);
+          });
+        }
+      } else {
+        throw Exception('Failed to send image message');
       }
 
       NotificationService().sendNotification(
         targetHandle: cleanPartner,
-        targetUid: partnerUid,
         title: '@$cleanMe',
         body: summaryText,
         data: {
@@ -1015,8 +811,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   DateTime _parseTimestamp(dynamic timestamp) {
-    if (timestamp is Timestamp) return timestamp.toDate();
     if (timestamp is DateTime) return timestamp;
+    if (timestamp is int) {
+      return timestamp > 1000000000000
+          ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+          : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    }
+    if (timestamp is String) {
+      return DateTime.tryParse(timestamp) ?? DateTime.now();
+    }
     return DateTime.now();
   }
 
@@ -1165,8 +968,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _amplitudeSubscription?.cancel();
 
     final path = _recordingPath;
-    final durationSecs = _recordingSecondsNotifier.value;
-    final waveform = List<double>.from(_recordingAmplitudesNotifier.value);
 
     if (mounted) {
       _recordingSecondsNotifier.value = 0;
@@ -1189,10 +990,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
       final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
-      // Block check
-      final block1 = await FirebaseFirestore.instance.collection('blocks').doc('${cleanMe}_$cleanPartner').get();
-      final block2 = await FirebaseFirestore.instance.collection('blocks').doc('${cleanPartner}_$cleanMe').get();
-      if (block1.exists || block2.exists) {
+      if (_isBlocked) {
         await file.delete();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1214,48 +1012,21 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         throw Exception('Upload failed — no URL returned');
       }
 
-      var partnerProfile = await FirebaseFirestore.instance.collection('profiles').doc(cleanPartner).get();
-      if (!partnerProfile.exists) {
-        partnerProfile = await FirebaseFirestore.instance.collection('profiles').doc(cleanPartner.toLowerCase()).get();
+      final res = await DirectChatService.instance.sendMessage(
+        sender: cleanMe,
+        receiver: cleanPartner,
+        content: '',
+        imageUrl: audioUrl,
+        mediaUrls: [audioUrl],
+        messageType: 'voice_note',
+      );
+
+      if (res == null || res['success'] != true) {
+        throw Exception('Failed to send voice note');
       }
-      final partnerUid = partnerProfile.data()?['ownerUid'] ?? partnerProfile.data()?['uid'] ?? partnerProfile.data()?['userId'];
-      final myUid = FirebaseAuth.instance.currentUser?.uid;
-
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final messageRef = chatRef.collection('messages').doc();
-      final now = FieldValue.serverTimestamp();
-
-      final msgData = <String, dynamic>{
-        'senderHandle': cleanMe,
-        'senderUid': myUid,
-        'type': 'voice_note',
-        'audioUrl': audioUrl,
-        'durationSeconds': durationSecs,
-        'waveformData': waveform,
-        'content': '',
-        'timestamp': now,
-        'status': 'sent',
-        'isRead': false,
-      };
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.set(messageRef, msgData);
-        transaction.set(chatRef, {
-          'participants': [cleanMe, cleanPartner],
-          'participantsUids': [?myUid, ?partnerUid],
-          'lastMessage': '🎤 Voice note (${durationSecs}s)',
-          'lastSenderHandle': cleanMe,
-          'updatedAt': now,
-          'unreadCounts': {
-            cleanMe: 0,
-            cleanPartner: FieldValue.increment(1),
-          },
-        }, SetOptions(merge: true));
-      });
 
       NotificationService().sendNotification(
         targetHandle: cleanPartner,
-        targetUid: partnerUid as String?,
         title: '@$cleanMe',
         body: '🎤 Voice note',
         data: {'type': 'chat', 'senderHandle': cleanMe, 'partnerHandle': cleanMe, 'chatId': _chatId},
@@ -1296,14 +1067,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       preview = content.length > 80 ? '${content.substring(0, 80)}…' : content;
     }
 
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     final rawSender = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
-    final senderUid = msg['senderUid']?.toString();
 
-    final isMyMsg = (myUid != null && senderUid != null && senderUid == myUid) ||
-        (rawSender.isNotEmpty && rawSender.toLowerCase() == cleanMe.toLowerCase());
+    final isMyMsg = rawSender.isNotEmpty && rawSender.toLowerCase() == cleanMe.toLowerCase();
 
     final canonicalSender = isMyMsg
         ? cleanMe
@@ -1313,7 +1081,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       _replyingTo = {
         'messageId': msgId,
         'senderHandle': canonicalSender,
-        'senderUid': isMyMsg ? myUid : (senderUid ?? _cachedPartnerUid),
+        'senderUid': isMyMsg ? cleanMe : cleanPartner,
         'isMe': isMyMsg,
         'previewText': preview,
         'type': type,
@@ -1367,11 +1135,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     if (msg == null) return false;
 
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
     final msgSenderHandle = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim().toLowerCase();
-    final msgSenderUid = msg['senderUid']?.toString();
-    final isMe = (myUid != null && msgSenderUid != null && msgSenderUid == myUid) ||
-        (msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe);
+    final isMe = msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe;
 
     final type = (msg['type'] ?? 'text') as String;
     return isMe && type == 'text';
@@ -1423,30 +1188,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
 
     try {
-      final docRef = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('messages')
-          .doc(editId);
-
-      await docRef.update({
-        'content': newText,
-        'isEdited': true,
-        'editedAt': FieldValue.serverTimestamp(),
-      });
-
-      // If this was the last message, update chats doc lastMessage as well
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final lastMsgSnap = await chatRef.collection('messages')
-          .orderBy('timestamp', descending: true)
-          .limit(1)
-          .get();
-      if (lastMsgSnap.docs.isNotEmpty && lastMsgSnap.docs.first.id == editId) {
-        await chatRef.update({
-          'lastMessage': newText,
-        });
-      }
-
       if (mounted) {
         _cancelEditing();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1459,15 +1200,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       }
     } catch (e) {
       debugPrint('Error editing message: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to edit message: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
   }
 
@@ -1542,15 +1274,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
 
     bool allFromMe = true;
     for (final msg in _selectedMessagesData.values) {
       final msgSenderHandle = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim().toLowerCase();
-      final msgSenderUid = msg['senderUid']?.toString();
-      final isMe = (myUid != null && msgSenderUid != null && msgSenderUid == myUid) ||
-          (msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe);
-      if (!isMe) {
+      if (msgSenderHandle != cleanMe) {
         allFromMe = false;
         break;
       }
@@ -1630,47 +1358,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
     try {
-      final batch = FirebaseFirestore.instance.batch();
       for (final id in msgIds) {
-        final docRef = FirebaseFirestore.instance
-            .collection('chats')
-            .doc(_chatId)
-            .collection('messages')
-            .doc(id);
-
-        if (forEveryone) {
-          batch.delete(docRef);
-        } else {
-          batch.update(docRef, {
-            'deletedForUsers': FieldValue.arrayUnion([cleanMe]),
-          });
-        }
-      }
-      await batch.commit();
-
-      // Update chat lastMessage if necessary
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(_chatId);
-      final messages = await chatRef.collection('messages')
-          .orderBy('timestamp', descending: true)
-          .limit(1)
-          .get();
-      if (messages.docs.isNotEmpty) {
-        final lastDoc = messages.docs.first.data();
-        final lastContent = (lastDoc['content'] ?? '') as String;
-        final lastType = (lastDoc['type'] ?? 'text') as String;
-        String preview = lastContent;
-        if (lastType == 'image' || lastType == 'image_group') preview = '📷 Photo';
-        if (lastType == 'voice_note') preview = '🎙️ Voice note';
-        if (lastType == 'call_log') preview = lastContent;
-        await chatRef.update({
-          'lastMessage': preview.isNotEmpty ? preview : 'Message',
-          'updatedAt': lastDoc['timestamp'] ?? FieldValue.serverTimestamp(),
-        });
-      } else {
-        await chatRef.update({
-          'lastMessage': '',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        await DirectChatService.instance.deleteMessage(id, cleanMe);
       }
 
       if (mounted) {
@@ -2309,13 +1998,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
-  Widget _buildMessagesList(List<QueryDocumentSnapshot> messages) {
-    // Automatically evict optimistic messages that have been confirmed in Firestore stream
-    _optimisticMessages.removeWhere((m) => messages.any((doc) => doc.id == m.id));
+  Widget _buildMessagesList(List<Map<String, dynamic>> messages) {
+    // Automatically evict optimistic messages that have been confirmed in backend messages
+    _optimisticMessages.removeWhere((m) => messages.any((doc) => (doc['id'] ?? doc['messageId']) == m.id));
 
     _messageIndexMap.clear();
     for (int i = 0; i < messages.length; i++) {
-      _messageIndexMap[messages[i].id] = i + _pendingUploads.length + _optimisticMessages.length;
+      final id = (messages[i]['id'] ?? messages[i]['messageId'] ?? '').toString();
+      _messageIndexMap[id] = i + _pendingUploads.length + _optimisticMessages.length;
     }
 
     final totalCount = _optimisticMessages.length + _pendingUploads.length + messages.length;
@@ -2349,32 +2039,29 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           );
         }
 
-        // 3. Synced Firestore Messages
+        // 3. Synced D1 Messages
         final docIndex = adjustedIndex - _pendingUploads.length;
-        final doc = messages[docIndex];
-        final msg = doc.data() as Map<String, dynamic>;
+        final msg = messages[docIndex];
+        final msgId = (msg['id'] ?? msg['messageId'] ?? 'msg_$docIndex').toString();
 
-        final myUid = FirebaseAuth.instance.currentUser?.uid;
         final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
         final msgSenderHandle = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim().toLowerCase();
-        final msgSenderUid = msg['senderUid']?.toString();
-        final isMe = (myUid != null && msgSenderUid != null && msgSenderUid == myUid) ||
-            (msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe);
+        final isMe = msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe;
 
-        final bubble = _buildMessageBubble(msg, doc.id, isMe);
+        final bubble = _buildMessageBubble(msg, msgId, isMe);
 
-        final currentTimestamp = _parseTimestamp(msg['timestamp']);
+        final currentTimestamp = _parseTimestamp(msg['timestamp'] ?? msg['createdAt']);
         final showDateSeparator = docIndex == messages.length - 1 ||
             !_isSameDay(
               currentTimestamp,
               _parseTimestamp(
-                (messages[docIndex + 1].data() as Map<String, dynamic>)['timestamp'],
+                messages[docIndex + 1]['timestamp'] ?? messages[docIndex + 1]['createdAt'],
               ),
             );
 
         if (showDateSeparator) {
           return KeyedSubtree(
-            key: ValueKey('msg_sep_${doc.id}'),
+            key: ValueKey('msg_sep_$msgId'),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2385,14 +2072,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           );
         }
         return KeyedSubtree(
-          key: ValueKey('msg_${doc.id}'),
+          key: ValueKey('msg_$msgId'),
           child: bubble,
         );
       },
     );
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2507,93 +2193,56 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: StreamBuilder<DocumentSnapshot>(
-                            stream: _chatDocStream,
-                            builder: (context, chatSnap) {
-                              final chatData = chatSnap.data?.data() as Map<String, dynamic>?;
-                              final typingMap = chatData?['typing'] as Map<String, dynamic>?;
+                          child: StreamBuilder<UserPresence>(
+                            stream: _presenceStream,
+                            initialData: PresenceService.instance.getCachedPresence(widget.partnerHandle),
+                            builder: (context, snapshot) {
                               final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
-                              final isPartnerTyping = typingMap?[cleanPartner] == true || typingMap?[cleanPartner.toLowerCase()] == true;
+                              final presence = snapshot.data;
+                              final statusText = PresenceService.formatLastSeen(presence);
+                              final isOnline = presence?.isOnline == true;
 
-                              if (isPartnerTyping) {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '@$cleanPartner',
-                                      style: TextStyle(
-                                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.3,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '@$cleanPartner',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.3,
                                     ),
-                                    const Text(
-                                      'typing...',
-                                      style: TextStyle(
-                                        color: Color(0xFF16A34A),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }
-
-                              return StreamBuilder<UserPresence>(
-                                stream: _presenceStream,
-                                initialData: PresenceService.instance.getCachedPresence(widget.partnerHandle),
-                                builder: (context, snapshot) {
-                                  final presence = snapshot.data;
-                                  final statusText = PresenceService.formatLastSeen(presence);
-                                  final isOnline = presence?.isOnline == true;
-
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Row(
                                     children: [
-                                      Text(
-                                        '@$cleanPartner',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                          fontSize: 15.5,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -0.3,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Row(
-                                        children: [
-                                          if (isOnline) ...[
-                                            Container(
-                                              width: 7,
-                                              height: 7,
-                                              margin: const EdgeInsets.only(right: 5),
-                                              decoration: const BoxDecoration(
-                                                color: Color(0xFF16A34A),
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                          ],
-                                          Flexible(
-                                            child: Text(
-                                              statusText,
-                                              style: TextStyle(
-                                                color: isOnline ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                                                fontSize: 11.5,
-                                                fontWeight: isOnline ? FontWeight.w700 : FontWeight.w500,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                      if (isOnline) ...[
+                                        Container(
+                                          width: 7,
+                                          height: 7,
+                                          margin: const EdgeInsets.only(right: 5),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF16A34A),
+                                            shape: BoxShape.circle,
                                           ),
-                                        ],
+                                        ),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          statusText,
+                                          style: TextStyle(
+                                            color: isOnline ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                            fontSize: 11.5,
+                                            fontWeight: isOnline ? FontWeight.w700 : FontWeight.w500,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ],
-                                  );
-                                },
+                                  ),
+                                ],
                               );
                             },
                           ),
@@ -2628,7 +2277,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           children: [
             const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
+              child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _messagesStream,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
@@ -2639,47 +2288,22 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
                   if (snapshot.hasError) {
                     debugPrint('Personal chat messages stream error: ${snapshot.error}');
-                    // Fallback without server orderBy in case of indexing delay
-                    return StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('chats')
-                          .doc(_chatId)
-                          .collection('messages')
-                          .limit(_messageLimit)
-                          .snapshots(),
-                      builder: (ctx, fbSnap) {
-                        if (fbSnap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)));
-                        }
-                        final rawDocs = fbSnap.data?.docs ?? [];
-                        if (rawDocs.isEmpty) {
-                          return _buildEmptyChatPlaceholder();
-                        }
-                        final sortedDocs = List<QueryDocumentSnapshot>.from(rawDocs);
-                        sortedDocs.sort((a, b) {
-                          final aData = a.data() as Map<String, dynamic>? ?? {};
-                          final bData = b.data() as Map<String, dynamic>? ?? {};
-                          final aTs = aData['timestamp'];
-                          final bTs = bData['timestamp'];
-                          DateTime aTime = DateTime.fromMillisecondsSinceEpoch(0);
-                          DateTime bTime = DateTime.fromMillisecondsSinceEpoch(0);
-                          if (aTs is Timestamp) aTime = aTs.toDate();
-                          if (bTs is Timestamp) bTime = bTs.toDate();
-                          return bTime.compareTo(aTime);
-                        });
-                        _hasMoreMessages = sortedDocs.length >= _messageLimit;
-                        return _buildMessagesList(sortedDocs);
-                      },
-                    );
                   }
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  final rawDocs = snapshot.data ?? [];
+                  if (rawDocs.isEmpty && _optimisticMessages.isEmpty && _pendingUploads.isEmpty) {
                     return _buildEmptyChatPlaceholder();
                   }
 
-                  final messages = snapshot.data!.docs;
-                  _hasMoreMessages = messages.length >= _messageLimit;
-                  return _buildMessagesList(messages);
+                  final sortedDocs = List<Map<String, dynamic>>.from(rawDocs);
+                  sortedDocs.sort((a, b) {
+                    final aTime = _parseTimestamp(a['timestamp'] ?? a['createdAt']);
+                    final bTime = _parseTimestamp(b['timestamp'] ?? b['createdAt']);
+                    return bTime.compareTo(aTime);
+                  });
+
+                  _hasMoreMessages = sortedDocs.length >= _messageLimit;
+                  return _buildMessagesList(sortedDocs);
                 },
               ),
             ),
@@ -3134,49 +2758,27 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
   }
 
   Future<void> _loadPartners() async {
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     try {
-      final rawHandle = widget.currentUserHandle.trim();
-      final cleanHandle = rawHandle.replaceAll('@', '');
-      final handles = <String>{
-        rawHandle,
-        cleanHandle,
-        rawHandle.toLowerCase(),
-        cleanHandle.toLowerCase(),
-        '@$cleanHandle',
-        '@${cleanHandle.toLowerCase()}',
-      };
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('chats')
-          .where('participants', arrayContainsAny: handles.toList())
-          .orderBy('updatedAt', descending: true)
-          .limit(30)
-          .get();
-
       final partners = <String>{};
-      for (final doc in snapshot.docs) {
-        final participants = List<String>.from(doc.data()['participants'] ?? []);
-        for (final p in participants) {
-          final cleanP = p.replaceAll('@', '').trim();
-          if (cleanP.isNotEmpty && cleanP.toLowerCase() != cleanHandle.toLowerCase()) {
-            partners.add(cleanP);
-          }
+
+      // 1. Load from recent chats
+      final chats = await DirectChatService.instance.getChats(cleanHandle);
+      for (final conv in chats) {
+        final partner = conv.getPartnerHandle(cleanHandle).replaceAll('@', '').trim();
+        if (partner.isNotEmpty && partner.toLowerCase() != cleanHandle.toLowerCase()) {
+          partners.add(partner);
         }
       }
 
+      // 2. Load from friends
       try {
-        final friendsSnap = await FirebaseFirestore.instance
-            .collection('friendships')
-            .where('users', arrayContains: cleanHandle)
-            .limit(20)
-            .get();
-        for (final fDoc in friendsSnap.docs) {
-          final users = List<String>.from(fDoc.data()['users'] ?? []);
-          for (final u in users) {
-            final cleanU = u.replaceAll('@', '').trim();
-            if (cleanU.isNotEmpty && cleanU.toLowerCase() != cleanHandle.toLowerCase()) {
-              partners.add(cleanU);
-            }
+        final repo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
+        final friends = await repo.fetchFriends();
+        for (final f in friends) {
+          final partner = f.getOtherUser(cleanHandle).replaceAll('@', '').trim();
+          if (partner.isNotEmpty && partner.toLowerCase() != cleanHandle.toLowerCase()) {
+            partners.add(partner);
           }
         }
       } catch (_) {}
@@ -3198,25 +2800,19 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
     setState(() => _isForwarding = true);
 
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
     int successCount = 0;
 
     for (final target in _selectedHandles) {
       final cleanTarget = target.replaceAll('@', '').trim();
-      final sorted = [cleanMe, cleanTarget]..sort();
-      final targetChatId = sorted.join('_');
+      final targetChatId = DirectChatService.getChatId(cleanMe, cleanTarget);
 
       try {
-        final chatRef = FirebaseFirestore.instance.collection('chats').doc(targetChatId);
-
         for (final msg in widget.messagesToForward) {
           final forwardType = (msg['type'] ?? 'text') as String;
           final content = (msg['content'] ?? '') as String;
           final imageUrl = msg['imageUrl'] as String?;
-          final mediaUrls = msg['mediaUrls'];
-          final audioUrl = msg['audioUrl'] as String?;
-          final durationSeconds = msg['durationSeconds'];
-          final waveformData = msg['waveformData'];
+          final rawMediaUrls = msg['mediaUrls'];
+          final List<String>? mediaUrls = rawMediaUrls is List ? rawMediaUrls.map((e) => e.toString()).toList() : null;
 
           String summary = content;
           if (summary.isEmpty) {
@@ -3229,51 +2825,28 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
             }
           }
 
-          final msgRef = chatRef.collection('messages').doc();
-          final now = FieldValue.serverTimestamp();
-
-          final Map<String, dynamic> payload = {
-            'senderHandle': cleanMe,
-            'senderUid': myUid,
-            'content': content,
-            'type': forwardType,
-            'isForwarded': true,
-            'timestamp': now,
-            'status': 'sent',
-            'isRead': false,
-          };
-
-          if (imageUrl != null) payload['imageUrl'] = imageUrl;
-          if (mediaUrls != null) payload['mediaUrls'] = mediaUrls;
-          if (audioUrl != null) payload['audioUrl'] = audioUrl;
-          if (durationSeconds != null) payload['durationSeconds'] = durationSeconds;
-          if (waveformData != null) payload['waveformData'] = waveformData;
-
-          await FirebaseFirestore.instance.runTransaction((tx) async {
-            tx.set(msgRef, payload);
-            tx.set(chatRef, {
-              'participants': [cleanMe, cleanTarget],
-              'lastMessage': summary,
-              'lastSenderHandle': cleanMe,
-              'updatedAt': now,
-              'unreadCounts': {
-                cleanTarget: FieldValue.increment(1),
-                cleanMe: 0,
-              },
-            }, SetOptions(merge: true));
-          });
-
-          NotificationService().sendNotification(
-            targetHandle: cleanTarget,
-            title: '@$cleanMe',
-            body: summary,
-            data: {
-              'type': 'chat',
-              'senderHandle': cleanMe,
-              'partnerHandle': cleanMe,
-              'chatId': targetChatId,
-            },
+          final res = await DirectChatService.instance.sendMessage(
+            sender: cleanMe,
+            receiver: cleanTarget,
+            content: content,
+            imageUrl: imageUrl,
+            mediaUrls: mediaUrls,
+            messageType: forwardType,
           );
+
+          if (res != null && res['success'] == true) {
+            NotificationService().sendNotification(
+              targetHandle: cleanTarget,
+              title: '@$cleanMe',
+              body: summary,
+              data: {
+                'type': 'chat',
+                'senderHandle': cleanMe,
+                'partnerHandle': cleanMe,
+                'chatId': targetChatId,
+              },
+            );
+          }
         }
         successCount++;
       } catch (e) {

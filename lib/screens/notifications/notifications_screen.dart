@@ -1,16 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
 
 enum NotificationFilter { all, unread, likes, comments, requests, uploads }
 
-/// Instagram-style Activity & Social Notification Center Screen.
-/// Strictly follows Nearhood Black & White design system.
 class NotificationsScreen extends StatefulWidget {
   final String currentUserHandle;
 
@@ -29,6 +29,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   final Set<String> _animatingOutDocIds = {};
   StreamSubscription<List<Friendship>>? _friendsSub;
   final Set<String> _friendHandles = {};
+
+  List<Map<String, dynamic>> _notifications = [];
+  bool _isLoading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -49,19 +53,62 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
       });
     }
+
+    _loadNotifications();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      _loadNotifications(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _friendsSub?.cancel();
     super.dispose();
   }
 
-  String _formatTime(Timestamp? timestamp) {
-    if (timestamp == null) return 'Just now';
-    final dt = timestamp.toDate();
-    final diff = DateTime.now().difference(dt);
+  Future<void> _loadNotifications({bool silent = false}) async {
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    if (cleanHandle.isEmpty) return;
 
+    if (!silent) {
+      setState(() => _isLoading = true);
+    }
+
+    try {
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/notifications?handle=$cleanHandle'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final list = (data['notifications'] as List<dynamic>?) ?? [];
+        if (mounted) {
+          setState(() {
+            _notifications = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted && !silent) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return 'Just now';
+    DateTime? dt;
+    if (timestamp is int) {
+      dt = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    } else if (timestamp is String) {
+      dt = DateTime.tryParse(timestamp);
+    }
+    if (dt == null) return 'Just now';
+
+    final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
@@ -69,88 +116,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return '${dt.day}/${dt.month}';
   }
 
-  Future<void> _deleteNotification(DocumentSnapshot doc) async {
-    try {
-      await doc.reference.delete();
-    } catch (e) {
-      debugPrint('Error deleting notification: $e');
-    }
+  Future<void> _deleteNotification(String notifId) async {
+    setState(() {
+      _notifications.removeWhere((n) => n['id'] == notifId);
+    });
   }
 
   Future<void> _clearReadNotifications(String cleanHandle) async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('targetHandle', isEqualTo: cleanHandle)
-          .where('isRead', isEqualTo: true)
-          .get();
-
-      if (snap.docs.isEmpty) {
-        if (mounted) {
-          final c = context.nearhoodColors;
-          ScaffoldMessenger.of(context)
-            ..clearSnackBars()
-            ..showSnackBar(
-              SnackBar(
-                content: Text(
-                  'No read notifications to clear',
-                  style: TextStyle(color: c.btnink, fontWeight: FontWeight.w600, fontSize: 13.5),
-                  textAlign: TextAlign.center,
-                ),
-                backgroundColor: c.btn,
-                behavior: SnackBarBehavior.floating,
-                shape: const StadiumBorder(),
-                duration: const Duration(milliseconds: 1400),
-                margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
-              ),
-            );
-        }
-        return;
-      }
-
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in snap.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-
-      if (mounted) {
-        final c = context.nearhoodColors;
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                'Cleared ${snap.docs.length} read notifications',
-                style: TextStyle(color: c.btnink, fontWeight: FontWeight.w600, fontSize: 13.5),
-                textAlign: TextAlign.center,
-              ),
-              backgroundColor: c.btn,
-              behavior: SnackBarBehavior.floating,
-              shape: const StadiumBorder(),
-              duration: const Duration(milliseconds: 1600),
-              margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
-            ),
-          );
-      }
-    } catch (e) {
-      debugPrint('Error clearing read notifications: $e');
-    }
+    setState(() {
+      _notifications.removeWhere((n) => n['isRead'] == true);
+    });
   }
 
   Future<void> _markAllAsRead(String cleanHandle) async {
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('targetHandle', isEqualTo: cleanHandle)
-          .where('isRead', isEqualTo: false)
-          .get();
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/notifications/read-all?handle=$cleanHandle'),
+        headers: {'Content-Type': 'application/json'},
+      );
 
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in snap.docs) {
-        batch.update(doc.reference, {'isRead': true});
-      }
-      await batch.commit();
+      setState(() {
+        for (final n in _notifications) {
+          n['isRead'] = true;
+        }
+      });
 
       if (mounted) {
         final c = context.nearhoodColors;
@@ -219,64 +208,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (confirm != true) return;
 
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('targetHandle', isEqualTo: cleanHandle)
-          .get();
-
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in snap.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-    } catch (e) {
-      debugPrint('Error clearing notifications: $e');
-    }
+    setState(() {
+      _notifications.clear();
+    });
   }
 
-  void _onNotificationTapped(DocumentSnapshot doc, Map<String, dynamic> data) async {
-    final docId = doc.id;
+  void _onNotificationTapped(Map<String, dynamic> notif) async {
+    final notifId = (notif['id'] ?? '').toString();
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+
     try {
-      if (doc.data() is Map && (doc.data() as Map)['isRead'] == false) {
-        await doc.reference.update({'isRead': true});
+      if (notif['isRead'] == false) {
+        http.post(
+          Uri.parse('${AuthService.baseUrl}/notifications/$notifId/read?handle=$cleanHandle'),
+          headers: {'Content-Type': 'application/json'},
+        ).catchError((_) => http.Response('', 500));
+        setState(() {
+          notif['isRead'] = true;
+        });
       }
     } catch (_) {}
 
-    final payloadData = (data['data'] as Map<String, dynamic>?) ?? {};
+    final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
     if (mounted) {
       final routerData = Map<String, dynamic>.from(payloadData);
-      // Wait until user returns from the destination screen
+      if (!routerData.containsKey('type') && notif['type'] != null) {
+        routerData['type'] = notif['type'];
+      }
       await NotificationService().navigateToScreen(routerData);
     }
 
-    // On return, trigger smooth animation out and delete the read notification
     if (mounted) {
       setState(() {
-        _animatingOutDocIds.add(docId);
+        _animatingOutDocIds.add(notifId);
       });
 
       await Future.delayed(const Duration(milliseconds: 320));
 
-      try {
-        await doc.reference.delete();
-      } catch (e) {
-        debugPrint('Error deleting read notification: $e');
-      }
-
-      if (mounted) {
-        setState(() {
-          _animatingOutDocIds.remove(docId);
-        });
-      }
-    } else {
-      try {
-        await doc.reference.delete();
-      } catch (_) {}
+      setState(() {
+        _notifications.removeWhere((n) => n['id'] == notifId);
+        _animatingOutDocIds.remove(notifId);
+      });
     }
   }
 
-  Future<void> _handleAcceptFriendRequest(String senderHandle, DocumentSnapshot doc) async {
+  Future<void> _handleAcceptFriendRequest(String senderHandle, Map<String, dynamic> notif) async {
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     final cleanSender = senderHandle.replaceAll('@', '').trim();
     if (cleanSender.isEmpty) return;
@@ -286,10 +262,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final repo = FriendRepository()..currentUserHandle = cleanHandle;
       await repo.acceptFriendRequest(cleanSender);
-      await doc.reference.update({
-        'isRead': true,
-        'isAccepted': true,
-        'status': 'accepted',
+
+      setState(() {
+        notif['isRead'] = true;
+        notif['isAccepted'] = true;
+        notif['status'] = 'accepted';
       });
 
       if (mounted) {
@@ -434,7 +411,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
 
-            // Instagram-Style Filter Pills
+            // Filter Pills
             SizedBox(
               height: 40,
               child: ListView(
@@ -453,132 +430,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             const SizedBox(height: 10),
 
-            // Notification Stream List
+            // Notification List
             Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('notifications')
-                    .where('targetHandle', isEqualTo: cleanHandle)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(
+              child: _isLoading
+                  ? Center(
                       child: CircularProgressIndicator(color: c.ink, strokeWidth: 2.5),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return _buildEmptyState(c);
-                  }
-
-                  var docs = snapshot.data!.docs.toList();
-                  // Sort descending by createdAt
-                  docs.sort((a, b) {
-                    final aTime = a.data()['createdAt'] as Timestamp?;
-                    final bTime = b.data()['createdAt'] as Timestamp?;
-                    if (aTime == null && bTime == null) return 0;
-                    if (aTime == null) return 1;
-                    if (bTime == null) return -1;
-                    return bTime.compareTo(aTime);
-                  });
-
-                  // Exclude regular chat messages from Social Notification Center
-                  docs = docs.where((doc) {
-                    final payload = (doc.data()['data'] as Map<String, dynamic>?) ?? {};
-                    final type = payload['type'] as String?;
-                    return type != 'chat' && type != 'message';
-                  }).toList();
-
-                  // Filter by category
-                  if (_selectedFilter != NotificationFilter.all) {
-                    docs = docs.where((doc) {
-                      final data = doc.data();
-                      final isRead = data['isRead'] as bool? ?? true;
-                      if (_selectedFilter == NotificationFilter.unread) {
-                        return !isRead;
-                      }
-                      final payload = (data['data'] as Map<String, dynamic>?) ?? {};
-                      final type = payload['type'] as String?;
-                      if (_selectedFilter == NotificationFilter.likes) {
-                        return type == 'post_like';
-                      } else if (_selectedFilter == NotificationFilter.comments) {
-                        return type == 'post_comment' || type == 'mention';
-                      } else if (_selectedFilter == NotificationFilter.requests) {
-                        return type == 'friend_request' || type == 'friend_accepted';
-                      } else if (_selectedFilter == NotificationFilter.uploads) {
-                        return type == 'post_upload' || type == 'post' || type == 'new_post';
-                      }
-                      return true;
-                    }).toList();
-                  }
-
-                  if (docs.isEmpty) {
-                    return _buildEmptyState(c);
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
-                    itemCount: docs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final isAnimatingOut = _animatingOutDocIds.contains(doc.id);
-                      final data = doc.data();
-                      final title = data['title'] as String? ?? 'Nearhood';
-                      final body = data['body'] as String? ?? '';
-                      final isRead = data['isRead'] as bool? ?? true;
-                      final timestamp = data['createdAt'] as Timestamp?;
-                      final payload = (data['data'] as Map<String, dynamic>?) ?? {};
-                      final type = payload['type'] as String?;
-                      final sender = (payload['senderHandle'] ?? payload['partnerHandle'] as String?)?.replaceAll('@', '').trim();
-
-                      return AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: isAnimatingOut
-                            ? const SizedBox(width: double.infinity, height: 0)
-                            : AnimatedOpacity(
-                                duration: const Duration(milliseconds: 220),
-                                curve: Curves.easeOut,
-                                opacity: isAnimatingOut ? 0.0 : 1.0,
-                                child: Dismissible(
-                                  key: ValueKey('notif_${doc.id}'),
-                                  direction: DismissDirection.endToStart,
-                                  background: Container(
-                                    alignment: Alignment.centerRight,
-                                    padding: const EdgeInsets.only(right: 20),
-                                    decoration: BoxDecoration(
-                                      color: c.danger,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: const Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  onDismissed: (_) {
-                                    _deleteNotification(doc);
-                                  },
-                                  child: _buildNotificationCard(
-                                    doc: doc,
-                                    data: data,
-                                    title: title,
-                                    body: body,
-                                    isRead: isRead,
-                                    timestamp: timestamp,
-                                    type: type,
-                                    sender: sender,
-                                    c: c,
-                                  ),
-                                ),
-                              ),
-                      );
-                    },
-                  );
-                },
-              ),
+                    )
+                  : _buildNotificationList(c),
             ),
           ],
         ),
@@ -586,13 +444,112 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Widget _buildNotificationList(NearhoodColors c) {
+    var items = List<Map<String, dynamic>>.from(_notifications);
+
+    // Exclude regular chat messages
+    items = items.where((n) {
+      final payload = (n['data'] as Map<String, dynamic>?) ?? {};
+      final type = payload['type'] as String? ?? n['type'] as String?;
+      return type != 'chat' && type != 'message';
+    }).toList();
+
+    // Filter by category
+    if (_selectedFilter != NotificationFilter.all) {
+      items = items.where((n) {
+        final isRead = n['isRead'] == true;
+        if (_selectedFilter == NotificationFilter.unread) {
+          return !isRead;
+        }
+        final payload = (n['data'] as Map<String, dynamic>?) ?? {};
+        final type = payload['type'] as String? ?? n['type'] as String?;
+        if (_selectedFilter == NotificationFilter.likes) {
+          return type == 'post_like';
+        } else if (_selectedFilter == NotificationFilter.comments) {
+          return type == 'post_comment' || type == 'mention';
+        } else if (_selectedFilter == NotificationFilter.requests) {
+          return type == 'friend_request' || type == 'friend_accepted';
+        } else if (_selectedFilter == NotificationFilter.uploads) {
+          return type == 'post_upload' || type == 'post' || type == 'new_post';
+        }
+        return true;
+      }).toList();
+    }
+
+    if (items.isEmpty) {
+      return _buildEmptyState(c);
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final notif = items[index];
+        final notifId = (notif['id'] ?? index.toString()).toString();
+        final isAnimatingOut = _animatingOutDocIds.contains(notifId);
+        final title = notif['title'] as String? ?? 'Nearhood';
+        final body = notif['body'] as String? ?? '';
+        final isRead = notif['isRead'] == true;
+        final timestamp = notif['timestamp'] ?? notif['createdAt'];
+        final payload = (notif['data'] as Map<String, dynamic>?) ?? {};
+        final type = payload['type'] as String? ?? notif['type'] as String?;
+        final sender = (payload['senderHandle'] ?? payload['partnerHandle'] ?? notif['senderHandle'] as String?)?.replaceAll('@', '').trim();
+
+        return AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+          alignment: Alignment.topCenter,
+          child: isAnimatingOut
+              ? const SizedBox(width: double.infinity, height: 0)
+              : AnimatedOpacity(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  opacity: isAnimatingOut ? 0.0 : 1.0,
+                  child: Dismissible(
+                    key: ValueKey('notif_$notifId'),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: c.danger,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    onDismissed: (_) {
+                      _deleteNotification(notifId);
+                    },
+                    child: _buildNotificationCard(
+                      notif: notif,
+                      notifId: notifId,
+                      title: title,
+                      body: body,
+                      isRead: isRead,
+                      timestamp: timestamp,
+                      type: type,
+                      sender: sender,
+                      c: c,
+                    ),
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
   Widget _buildNotificationCard({
-    required DocumentSnapshot doc,
-    required Map<String, dynamic> data,
+    required Map<String, dynamic> notif,
+    required String notifId,
     required String title,
     required String body,
     required bool isRead,
-    required Timestamp? timestamp,
+    required dynamic timestamp,
     required String? type,
     required String? sender,
     required NearhoodColors c,
@@ -601,12 +558,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final isFriendRequest = type == 'friend_request';
     final bool isAlreadyFriend = cleanSender.isNotEmpty &&
         (_friendHandles.contains(cleanSender.toLowerCase()) ||
-            data['isAccepted'] == true ||
-            data['status'] == 'accepted');
+            notif['isAccepted'] == true ||
+            notif['status'] == 'accepted');
     final isAccepting = cleanSender.isNotEmpty && _acceptingFriendHandles.contains(cleanSender);
 
     return GestureDetector(
-      onTap: () => _onNotificationTapped(doc, data),
+      onTap: () => _onNotificationTapped(notif),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -621,7 +578,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Instagram-Style Avatar with Badge Overlay
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -658,7 +614,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             const SizedBox(width: 14),
 
-            // Content Text
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -703,7 +658,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             const SizedBox(width: 8),
 
-            // Trailing Action Button or Unread Dot
             if (isFriendRequest && cleanSender.isNotEmpty) ...[
               if (isAlreadyFriend)
                 Container(
@@ -741,7 +695,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                   onPressed: isAccepting
                       ? null
-                      : () => _handleAcceptFriendRequest(cleanSender, doc),
+                      : () => _handleAcceptFriendRequest(cleanSender, notif),
                   child: isAccepting
                       ? SizedBox(
                           width: 14,
@@ -800,12 +754,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Color _getTypeColor(String? type) {
-    if (type == 'post_like') return const Color(0xFFEF4444); // Red Heart
-    if (type == 'post_comment') return const Color(0xFF3B82F6); // Blue Comment
-    if (type == 'friend_request') return const Color(0xFF8B5CF6); // Purple Add Friend
-    if (type == 'friend_accepted') return const Color(0xFF10B981); // Green Friend
-    if (type == 'post_upload') return const Color(0xFF10B981); // Green Live
-    if (type == 'mention') return const Color(0xFFF59E0B); // Amber Mention
+    if (type == 'post_like') return const Color(0xFFEF4444);
+    if (type == 'post_comment') return const Color(0xFF3B82F6);
+    if (type == 'friend_request') return const Color(0xFF8B5CF6);
+    if (type == 'friend_accepted') return const Color(0xFF10B981);
+    if (type == 'post_upload') return const Color(0xFF10B981);
+    if (type == 'mention') return const Color(0xFFF59E0B);
     return const Color(0xFF0F172A);
   }
 

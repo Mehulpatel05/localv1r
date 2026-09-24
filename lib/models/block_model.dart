@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class BlockEntry {
   final String id;
   final String blockerHandle;
@@ -15,9 +13,19 @@ class BlockEntry {
 
   factory BlockEntry.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDateTime(dynamic val) {
-      if (val is Timestamp) return val.toDate();
       if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
-      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      if (val is int) {
+        if (val > 10000000000) {
+          return DateTime.fromMillisecondsSinceEpoch(val);
+        } else {
+          return DateTime.fromMillisecondsSinceEpoch(val * 1000);
+        }
+      }
+      if (val != null) {
+        try {
+          return (val as dynamic).toDate();
+        } catch (_) {}
+      }
       return DateTime.now();
     }
 
@@ -33,7 +41,7 @@ class BlockEntry {
     return {
       'blockerHandle': blockerHandle,
       'blockedHandle': blockedHandle,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 }

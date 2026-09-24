@@ -29,7 +29,6 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
   final _descController = TextEditingController();
 
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
   final List<File> _mediaFiles = [];
 
   bool _showTitleError = false;
@@ -229,17 +228,15 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
       }
 
       final city = _selectedGeoCity ?? widget.repository.locationService.city;
-      final area = _selectedGeoArea ?? widget.repository.locationService.area ?? city.areas.first;
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
         cityId: city.id,
-        areaId: area.id,
         category: PostCategory.rooms,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         roomTitle: title,
-        roomArea: '${area.name}, ${city.name}',
+        roomArea: city.name,
         roomRent: rent,
         mediaUrls: uploadedUrls,
       );
@@ -344,10 +341,9 @@ class _RoomPostScreenState extends State<RoomPostScreen> {
                   const SizedBox(height: 12),
 
                   LocationSelectorField(
-                    onLocationSelected: (city, area) {
+                    onLocationSelected: (city, _) {
                       setState(() {
                         _selectedGeoCity = city;
-                        _selectedGeoArea = area;
                       });
                     },
                   ),

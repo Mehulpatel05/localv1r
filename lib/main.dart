@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +8,6 @@ import 'firebase_options.dart';
 import 'services/post_repository.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'screens/main/main_screen.dart';
 import 'services/auth_service.dart';
 import 'core/location/location_service.dart';
@@ -46,20 +44,7 @@ void main() async {
 }
 
 void _initNonCriticalServices() {
-  FirebaseAppCheck.instance.activate(
-    // ignore: deprecated_member_use
-    androidProvider: kReleaseMode 
-        ? AndroidProvider.playIntegrity 
-        : AndroidProvider.debug,
-    // ignore: deprecated_member_use
-    appleProvider: kReleaseMode 
-        ? AppleProvider.deviceCheck 
-        : AppleProvider.debug,
-  ).catchError((e) {
-    debugPrint('AppCheck initialization failed: $e');
-  });
-
-  // Register background message handler
+  // Register background message handler for push notifications
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 }
 
@@ -205,6 +190,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                   : LoginFlowPage(
                       key: const ValueKey('login_flow_view'),
                       authRepository: BackendAuthRepository(),
+                      postRepository: postRepository,
                       onLoggedIn: () async {
                         try {
                           debugPrint('[MainFlow] onLoggedIn callback triggered.');

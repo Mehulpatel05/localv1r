@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/constants/areas_and_categories.dart';
 
 class Post {
@@ -179,10 +178,6 @@ class Post {
     );
   }
 
-  factory Post.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return Post.fromMap(data, doc.id);
-  }
 
   factory Post.fromMap(Map<String, dynamic> json, String id) {
     DateTime parsedDate = DateTime.now();

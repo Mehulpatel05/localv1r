@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../services/auth_service.dart';
+import '../../models/block_model.dart';
+import '../../services/friend_repository.dart';
 
 /// Screen displaying all users blocked by the current user with unblock capability.
-/// Strictly follows the Nearhood Black & White design tokens.
 class BlockedUsersScreen extends StatefulWidget {
   const BlockedUsersScreen({super.key});
 
@@ -14,9 +13,9 @@ class BlockedUsersScreen extends StatefulWidget {
 }
 
 class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
-  List<Map<String, dynamic>> _blockedUsers = [];
+  List<BlockEntry> _blockedUsers = [];
   bool _isLoading = true;
-  final Set<String> _unblockingIds = {};
+  final Set<String> _unblockingHandles = {};
 
   @override
   void initState() {
@@ -27,97 +26,11 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Future<void> _loadBlockedUsers() async {
     setState(() => _isLoading = true);
     try {
-      final effectiveUid = await AuthService.instance.getUserId();
-      final rawHandle = await AuthService.instance.getUserHandle();
-      final cleanHandle = (rawHandle ?? '').replaceAll('@', '').trim();
-
-      final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> docsMap = {};
-
-      // 1. Query by blockerUid if available
-      if (effectiveUid != null && effectiveUid.isNotEmpty) {
-        try {
-          final snapByUid = await FirebaseFirestore.instance
-              .collection('blocks')
-              .where('blockerUid', isEqualTo: effectiveUid)
-              .get();
-          for (final doc in snapByUid.docs) {
-            docsMap[doc.id] = doc;
-          }
-        } catch (e) {
-          debugPrint('Error querying blocks by uid: $e');
-        }
-      }
-
-      // 2. Query by blockerHandle if available
-      if (cleanHandle.isNotEmpty) {
-        try {
-          final snapByHandle = await FirebaseFirestore.instance
-              .collection('blocks')
-              .where('blockerHandle', isEqualTo: cleanHandle)
-              .get();
-          for (final doc in snapByHandle.docs) {
-            docsMap[doc.id] = doc;
-          }
-        } catch (e) {
-          debugPrint('Error querying blocks by handle: $e');
-        }
-      }
-
-      final List<Map<String, dynamic>> users = [];
-
-      for (final doc in docsMap.values) {
-        final data = doc.data();
-        final blockedUid = (data['blockedUid'] as String?)?.trim() ?? '';
-        String blockedHandle = (data['blockedHandle'] as String?)?.replaceAll('@', '').trim() ?? '';
-        String photoUrl = '';
-
-        // If blockedHandle is empty, extract from docId pattern "${me}_${them}"
-        if (blockedHandle.isEmpty && doc.id.contains('_')) {
-          final parts = doc.id.split('_');
-          if (parts.length >= 2) {
-            blockedHandle = parts.sublist(1).join('_').trim();
-          }
-        }
-
-        // Try fetching user profile from profiles collection or users collection
-        if (blockedHandle.isNotEmpty) {
-          try {
-            final pDoc = await FirebaseFirestore.instance
-                .collection('profiles')
-                .doc(blockedHandle)
-                .get();
-            if (pDoc.exists && pDoc.data() != null) {
-              photoUrl = (pDoc.data()?['photoUrl'] as String?) ?? '';
-            }
-          } catch (_) {}
-        }
-
-        if (photoUrl.isEmpty && blockedUid.isNotEmpty) {
-          try {
-            final uDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(blockedUid)
-                .get();
-            if (uDoc.exists && uDoc.data() != null) {
-              photoUrl = (uDoc.data()?['photoUrl'] as String?) ?? '';
-              if (blockedHandle.isEmpty) {
-                blockedHandle = (uDoc.data()?['handle'] as String?)?.replaceAll('@', '').trim() ?? '';
-              }
-            }
-          } catch (_) {}
-        }
-
-        users.add({
-          'docId': doc.id,
-          'blockedUid': blockedUid,
-          'handle': blockedHandle.isNotEmpty ? blockedHandle : 'User',
-          'photoUrl': photoUrl,
-        });
-      }
-
+      final list = await FriendRepository().fetchBlocked();
       if (mounted) {
         setState(() {
-          _blockedUsers = users;
+          _blockedUsers = list;
+          _isLoading = false;
         });
       }
     } catch (e) {
@@ -131,16 +44,14 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+        setState(() => _isLoading = false);
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _unblockUser(Map<String, dynamic> user) async {
+  Future<void> _unblockUser(BlockEntry entry) async {
     final c = context.nearhoodColors;
-    final docId = user['docId'] as String;
-    final handle = user['handle'] as String;
+    final handle = entry.blockedHandle;
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -189,19 +100,13 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
 
     if (confirm != true) return;
 
-    setState(() => _unblockingIds.add(docId));
+    setState(() => _unblockingHandles.add(handle));
     try {
-      final me = (await AuthService.instance.getUserHandle() ?? '').replaceAll('@', '').trim();
-      await FirebaseFirestore.instance.collection('blocks').doc(docId).delete();
-      if (me.isNotEmpty && handle.isNotEmpty) {
-        try {
-          await FirebaseFirestore.instance.collection('blocks').doc('${me}_$handle').delete();
-        } catch (_) {}
-      }
+      await FriendRepository().unblockUser(handle);
 
       if (mounted) {
         setState(() {
-          _blockedUsers.removeWhere((u) => u['docId'] == docId);
+          _blockedUsers.removeWhere((u) => u.blockedHandle == handle);
         });
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
@@ -231,7 +136,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _unblockingIds.remove(docId));
+      if (mounted) setState(() => _unblockingHandles.remove(handle));
     }
   }
 
@@ -340,10 +245,8 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                             separatorBuilder: (_, _) => const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final user = _blockedUsers[index];
-                              final docId = user['docId'] as String;
-                              final handle = user['handle'] as String;
-                              final photoUrl = user['photoUrl'] as String;
-                              final isUnblocking = _unblockingIds.contains(docId);
+                              final handle = user.blockedHandle;
+                              final isUnblocking = _unblockingHandles.contains(handle);
 
                               return Container(
                                 padding: const EdgeInsets.symmetric(
@@ -359,7 +262,6 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                                   children: [
                                     UserAvatar(
                                       handle: handle,
-                                      photoUrl: photoUrl.isNotEmpty ? photoUrl : null,
                                       size: 42,
                                     ),
                                     const SizedBox(width: 12),

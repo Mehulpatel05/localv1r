@@ -78,6 +78,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'email': '',
         'bio': '',
         'photoUrl': photoUrl,
+        'reputation': cloudProfile?['reputation'] ?? 0,
+        'upvotes': cloudProfile?['upvotes'] ?? 0,
+        'friendCount': cloudProfile?['friendCount'] ?? 0,
         'createdAt': DateTime.now(),
       };
 
@@ -474,13 +477,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       seenIds.add(p.id);
       total += (live.upvotes > 0 ? live.upvotes : 0);
     }
+    final cleanCurrent = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
     final repoPosts = widget.repository.allPosts
-        .where((p) => p.authorHandle == widget.currentUserHandle);
+        .where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == cleanCurrent);
     for (final p in repoPosts) {
       if (!seenIds.contains(p.id)) {
         seenIds.add(p.id);
         total += (p.upvotes > 0 ? p.upvotes : 0);
       }
+    }
+    if (total == 0 && _userData != null && _userData!['upvotes'] != null) {
+      total = (_userData!['upvotes'] as num).toInt();
     }
     return total;
   }

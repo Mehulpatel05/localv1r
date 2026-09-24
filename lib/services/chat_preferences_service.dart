@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 /// Pure logic helpers for mixed-selection rules and limit calculations
 class ChatSelectionLogic {
@@ -168,7 +169,6 @@ class ChatSelectionLogic {
   }
 
   /// Multi-device conflict resolution: Server is always the source of truth (Server Wins).
-  /// Any local preferences cache that conflicts with Firestore server data is discarded.
   static Map<String, dynamic> resolveServerWins({
     required Map<String, dynamic> localCache,
     required Map<String, dynamic> serverData,
@@ -187,18 +187,14 @@ class ChatSelectionLogic {
   }
 }
 
-/// Service handling persistent Firestore single source of truth + SharedPreferences local cache
+/// Service handling persistent D1 SQL single source of truth + SharedPreferences local cache
 class ChatPreferencesService {
   static final ChatPreferencesService _instance = ChatPreferencesService._internal();
   factory ChatPreferencesService() => _instance;
   static ChatPreferencesService get instance => _instance;
   ChatPreferencesService._internal();
 
-  FirebaseFirestore firestore = FirebaseFirestore.instance;
-
-  /// Loads preferences with Firestore single source of truth (Server wins).
-  /// Discards any conflicting local cache in favor of Firestore, then overwrites local cache to match.
-  /// Falls back to local SharedPreferences cache if offline.
+  /// Loads preferences with Cloudflare D1 REST single source of truth (Server wins).
   Future<Map<String, dynamic>> loadPreferences(String userHandle) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return _emptyPreferences();
@@ -206,29 +202,27 @@ class ChatPreferencesService {
     Map<String, dynamic> localData = await _loadFromCache(clean);
 
     try {
-      final doc = await firestore
-          .collection('profiles')
-          .doc(clean)
-          .collection('preferences')
-          .doc('chats')
-          .get(const GetOptions(source: Source.serverAndCache));
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/preferences/$clean'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
 
-      if (doc.exists && doc.data() != null) {
-        final serverData = _parsePreferencesData(doc.data()!);
-        // Server Wins: Discard conflicting local cache and overwrite with server data
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final prefsData = body['preferences'] as Map<String, dynamic>? ?? {};
+        final serverData = _parsePreferencesData(prefsData);
+
         final resolved = ChatSelectionLogic.resolveServerWins(
           localCache: localData,
           serverData: serverData,
         );
-        // Clean any expired mutes before returning
+
         final activeMutes = ChatSelectionLogic.filterActiveMutes(resolved['mutedChatExpiries']);
         final hasExpired = activeMutes.length != resolved['mutedChatExpiries'].length;
         resolved['mutedChatExpiries'] = activeMutes;
 
-        // Persist resolved data to local cache
         await _saveToCache(clean, resolved);
 
-        // If expired mutes were cleaned up, update Firestore as well
         if (hasExpired) {
           unawaited(savePreferences(clean, resolved));
         }
@@ -236,17 +230,15 @@ class ChatPreferencesService {
         return resolved;
       }
     } catch (e) {
-      debugPrint('Error loading chat preferences from Firestore: $e');
+      debugPrint('Error loading chat preferences from D1 API: $e');
     }
 
-    // Clean expired mutes on local data too
     final activeLocalMutes = ChatSelectionLogic.filterActiveMutes(localData['mutedChatExpiries'] ?? {});
     localData['mutedChatExpiries'] = activeLocalMutes;
     return localData;
   }
 
-  /// Writes preferences to Firestore (source of truth) and updates local cache.
-  /// Persists immediately to local SharedPreferences and queues Firestore sync.
+  /// Writes preferences to D1 REST API (source of truth) and updates local cache.
   Future<bool> savePreferences(String userHandle, Map<String, dynamic> data) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return false;
@@ -254,37 +246,37 @@ class ChatPreferencesService {
     // 1. Optimistic write to local cache (guaranteed offline resilience)
     await _saveToCache(clean, data);
 
-    // 2. Write to Firestore
+    // 2. Write to Cloudflare D1 via backend
     try {
       final payload = {
-        'pinnedChatIds': (data['pinnedChatIds'] as Set<String>?)?.toList() ?? (data['pinnedChatIds'] as List<dynamic>?) ?? [],
-        'pinnedTimestamps': data['pinnedTimestamps'] ?? {},
-        'mutedChatExpiries': data['mutedChatExpiries'] ?? {},
-        'archivedChatIds': (data['archivedChatIds'] as Set<String>?)?.toList() ?? (data['archivedChatIds'] as List<dynamic>?) ?? [],
-        'archivedTimestamps': data['archivedTimestamps'] ?? {},
-        'keepChatsArchived': data['keepChatsArchived'] ?? false,
-        'favouriteChatIds': (data['favouriteChatIds'] as Set<String>?)?.toList() ?? (data['favouriteChatIds'] as List<dynamic>?) ?? [],
-        'lockedChatIds': (data['lockedChatIds'] as Set<String>?)?.toList() ?? (data['lockedChatIds'] as List<dynamic>?) ?? [],
-        'deletedChatIds': (data['deletedChatIds'] as Set<String>?)?.toList() ?? (data['deletedChatIds'] as List<dynamic>?) ?? [],
-        'updatedAt': FieldValue.serverTimestamp(),
+        'handle': clean,
+        'preferences': {
+          'pinnedChatIds': (data['pinnedChatIds'] as Set<String>?)?.toList() ?? (data['pinnedChatIds'] as List<dynamic>?) ?? [],
+          'pinnedTimestamps': data['pinnedTimestamps'] ?? {},
+          'mutedChatExpiries': data['mutedChatExpiries'] ?? {},
+          'archivedChatIds': (data['archivedChatIds'] as Set<String>?)?.toList() ?? (data['archivedChatIds'] as List<dynamic>?) ?? [],
+          'archivedTimestamps': data['archivedTimestamps'] ?? {},
+          'keepChatsArchived': data['keepChatsArchived'] ?? false,
+          'favouriteChatIds': (data['favouriteChatIds'] as Set<String>?)?.toList() ?? (data['favouriteChatIds'] as List<dynamic>?) ?? [],
+          'lockedChatIds': (data['lockedChatIds'] as Set<String>?)?.toList() ?? (data['lockedChatIds'] as List<dynamic>?) ?? [],
+          'deletedChatIds': (data['deletedChatIds'] as Set<String>?)?.toList() ?? (data['deletedChatIds'] as List<dynamic>?) ?? [],
+        },
       };
 
-      await firestore
-          .collection('profiles')
-          .doc(clean)
-          .collection('preferences')
-          .doc('chats')
-          .set(payload, SetOptions(merge: true));
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/preferences'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 8));
 
       return true;
     } catch (e) {
-      debugPrint('Firestore savePreferences note (saved to local cache): $e');
+      debugPrint('D1 savePreferences note (saved to local cache): $e');
       return true;
     }
   }
 
   /// Checks if a chat is currently muted for a specific user.
-  /// Evaluates absolute UTC timestamp.
   Future<bool> isChatMutedForUser(String userHandle, String partnerHandle) async {
     final cleanMe = userHandle.replaceAll('@', '').trim().toLowerCase();
     final cleanPartner = partnerHandle.replaceAll('@', '').trim().toLowerCase();

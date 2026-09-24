@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/auth_repository.dart';
+import '../../core/location/location_service.dart';
 import '../../core/theme.dart';
+import '../../services/auth_service.dart';
+import '../../services/post_repository.dart';
+import '../../screens/auth/create_handle_screen.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/otp_step.dart';
 import 'widgets/phone_step.dart';
@@ -11,11 +16,13 @@ enum AuthStep { phone, otp }
 /// Production-quality Login Flow matching the exact Nearhood Black & White design.
 class LoginFlowPage extends StatefulWidget {
   final AuthRepository authRepository;
+  final PostRepository? postRepository;
   final FutureOr<void> Function()? onLoggedIn;
 
   const LoginFlowPage({
     super.key,
     required this.authRepository,
+    this.postRepository,
     this.onLoggedIn,
   });
 
@@ -41,8 +48,40 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
   }
 
   Future<void> _onOtpVerified() async {
-    if (widget.onLoggedIn != null) {
-      await widget.onLoggedIn!();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final handle = prefs.getString('user_handle') ?? await AuthService.instance.getUserHandle() ?? '';
+      final userId = prefs.getString('user_id') ?? await AuthService.instance.getUserId() ?? '';
+      final phone = prefs.getString('phone_number') ?? await AuthService.instance.getPhoneNumber() ?? '';
+
+      final isNewUser = AuthService.isNewUserHandle(handle);
+      debugPrint('[LoginFlowPage] _onOtpVerified: handle="$handle", userId=$userId, isNewUser=$isNewUser');
+
+      if (isNewUser) {
+        if (mounted) {
+          final repo = widget.postRepository ?? PostRepository(LocationService());
+          debugPrint('[LoginFlowPage] Pushing CreateHandleScreen with Navigator.of(context)...');
+          await Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => CreateHandleScreen(
+                repository: repo,
+                userId: userId,
+                phoneNumber: phone,
+              ),
+            ),
+            (route) => false,
+          );
+        }
+      } else {
+        if (widget.onLoggedIn != null) {
+          await widget.onLoggedIn!();
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('[LoginFlowPage] Error in _onOtpVerified: $e\n$stack');
+      if (widget.onLoggedIn != null) {
+        await widget.onLoggedIn!();
+      }
     }
   }
 

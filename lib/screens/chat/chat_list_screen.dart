@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/chat_conversation_model.dart';
 import '../../models/friendship_model.dart';
 import '../../services/chat_preferences_service.dart';
+import '../../services/direct_chat_service.dart';
 import '../../services/friend_repository.dart';
 import 'personal_chat_screen.dart';
 
@@ -198,35 +197,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
     super.dispose();
   }
 
-  Stream<QuerySnapshot> _getChatsStream() {
-    final rawHandle = widget.currentUserHandle.trim();
-    final cleanHandle = rawHandle.replaceAll('@', '');
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
-
-    final handles = <String>{
-      rawHandle,
-      cleanHandle,
-      '@$cleanHandle',
-      rawHandle.toLowerCase(),
-      cleanHandle.toLowerCase(),
-      '@${cleanHandle.toLowerCase()}',
-      if (myUid != null && myUid.isNotEmpty) myUid,
-    }.where((h) => h.isNotEmpty).toList();
-
-    if (handles.isEmpty) {
-      if (myUid != null && myUid.isNotEmpty) {
-        return FirebaseFirestore.instance
-            .collection('chats')
-            .where('participantsUids', arrayContains: myUid)
-            .snapshots();
-      }
-      return const Stream.empty();
-    }
-
-    return FirebaseFirestore.instance
-        .collection('chats')
-        .where('participants', arrayContainsAny: handles)
-        .snapshots();
+  Stream<List<ChatConversation>> _getChatsStream() {
+    return DirectChatService.instance.pollChatsStream(widget.currentUserHandle);
   }
 
   String _formatTimestamp(DateTime? dateTime) {
@@ -713,11 +685,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
       if (shouldMarkAsRead) {
         _locallyReadChatIds.addAll(selectedIds);
         _locallyUnreadChatIds.removeAll(selectedIds);
-        // Reset in Firestore unreadCounts
         for (final id in selectedIds) {
-          FirebaseFirestore.instance.collection('chats').doc(id).set({
-            'unreadCounts': {_cleanMe: 0},
-          }, SetOptions(merge: true)).catchError((e) {
+          DirectChatService.instance.markChatRead(id, _cleanMe).catchError((e) {
             if (mounted) {
               setState(() {
                 _locallyReadChatIds.clear();
@@ -734,6 +703,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
                 );
             }
+            return false;
           });
         }
       } else {
@@ -1206,10 +1176,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
             // Messages Stream List with cacheExtent tuning
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
+              child: StreamBuilder<List<ChatConversation>>(
                 stream: _getChatsStream(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                  if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                     return _buildSkeletonLoading();
                   }
 
@@ -1218,16 +1188,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     return _buildErrorState(snapshot.error.toString());
                   }
 
-                  final rawDocs = snapshot.data?.docs ?? [];
+                  final rawDocs = snapshot.data ?? [];
                   final conversations = <ChatConversation>[];
-                  for (final doc in rawDocs) {
-                    try {
-                      final conv = ChatConversation.fromFirestore(doc);
-                      if (!_locallyDeletedChatIds.contains(conv.id)) {
-                        conversations.add(conv);
-                      }
-                    } catch (e) {
-                      debugPrint('Error parsing chat conversation: $e');
+                  for (final conv in rawDocs) {
+                    if (!_locallyDeletedChatIds.contains(conv.id)) {
+                      conversations.add(conv);
                     }
                   }
 

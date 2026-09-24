@@ -334,14 +334,12 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
       }
 
       final cityId = (_selectedGeoCity ?? widget.repository.locationService.city).id;
-      final areaId = (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id;
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.shop,
         cityId: cityId,
-        areaId: areaId,
         imageUrl: uploadedUrls.isNotEmpty ? uploadedUrls.first : null,
         shopTitle: title,
         shopPrice: price,

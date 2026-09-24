@@ -333,6 +333,9 @@ class AuthService {
             'photoUrl': photoUrl,
             'phoneNumber': phone,
             'userId': uid,
+            'reputation': user['reputation'] ?? 0,
+            'upvotes': user['upvotes'] ?? 0,
+            'friendCount': user['friendCount'] ?? 0,
           };
         }
       }

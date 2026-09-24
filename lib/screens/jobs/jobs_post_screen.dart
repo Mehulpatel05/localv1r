@@ -28,7 +28,6 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
   final _descController = TextEditingController();
   
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
   String _workMode = 'On-site'; // 'On-site', 'Remote', 'Hybrid'
   String _selectedEmployment = 'Full-time';
   File? _bannerImage;
@@ -190,16 +189,14 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
       setState(() => _uploadProgress = 0.85);
 
       final city = _selectedGeoCity ?? widget.repository.locationService.city;
-      final area = _selectedGeoArea ?? widget.repository.locationService.area ?? city.areas.first;
       final company = _companyController.text.trim().isEmpty ? 'Confidential Employer' : _companyController.text.trim();
-      final locationStr = '${area.name}, ${city.name} ($_workMode)';
+      final locationStr = '${city.name} ($_workMode)';
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: desc,
         category: PostCategory.jobs,
         cityId: city.id,
-        areaId: area.id,
         jobTitle: title,
         jobCompany: company,
         jobLocation: locationStr,
@@ -384,10 +381,9 @@ class _JobsPostScreenState extends State<JobsPostScreen> {
 
                     // Location Picker
                     LocationSelectorField(
-                      onLocationSelected: (city, area) {
+                      onLocationSelected: (city, _) {
                         setState(() {
                           _selectedGeoCity = city;
-                          _selectedGeoArea = area;
                         });
                       },
                     ),

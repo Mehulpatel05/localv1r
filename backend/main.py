@@ -26,6 +26,13 @@ from services.r2_service import R2Service
 from services.d1_service import D1Service
 from utils.moderation import validate_text_content
 from routes.auth import auth_router
+from routes.friends import friends_router
+from routes.communities import communities_router
+from routes.chats import router as chats_router
+from routes.calls import router as calls_router
+from routes.presence import router as presence_router
+from routes.notifications import router as notifications_router
+from routes.preferences import router as preferences_router
 
 is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
 
@@ -63,9 +70,23 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "nearhood-api", "timestamp": time.time()}
 
-# 🛡️ AUTHENTICATION ROUTERS
+# 🛡️ AUTHENTICATION, CHATS, CALLS, PRESENCE & COMMUNITY ROUTERS
 app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(friends_router)
+app.include_router(friends_router, prefix="/api/v1")
+app.include_router(communities_router)
+app.include_router(communities_router, prefix="/api/v1")
+app.include_router(chats_router)
+app.include_router(chats_router, prefix="/api/v1")
+app.include_router(calls_router)
+app.include_router(calls_router, prefix="/api/v1")
+app.include_router(presence_router)
+app.include_router(presence_router, prefix="/api/v1")
+app.include_router(notifications_router)
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(preferences_router)
+app.include_router(preferences_router, prefix="/api/v1")
 
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
 redis_client: Optional[redis.Redis] = None
@@ -331,35 +352,10 @@ import secrets
 
 def generate_session_token(installation_id: str, handle: str) -> str:
     auth_token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(auth_token.encode()).hexdigest()
-    
-    if db is not None:
-        db.collection("devices").document(installation_id).set({
-            "installationId": installation_id,
-            "handle": handle,
-            "otpVerified": True,
-            "tokenHash": token_hash,
-            "createdAt": firestore.SERVER_TIMESTAMP,
-            "lastSeenAt": firestore.SERVER_TIMESTAMP,
-            "revokedAt": None
-        })
     return auth_token
 
 def generate_refresh_token(installation_id: str, handle: str) -> str:
-    if db is None:
-        return ""
     token_str = secrets.token_hex(40)
-    token_hash = hashlib.sha256(token_str.encode()).hexdigest()
-    
-    expires_at = time.time() + (7 * 24 * 3600)
-    db.collection("refresh_tokens").document(token_hash).set({
-        "installationId": installation_id,
-        "handle": handle,
-        "tokenHash": token_hash,
-        "status": "active",
-        "createdAt": firestore.SERVER_TIMESTAMP,
-        "expiresAt": expires_at
-    })
     return token_str
 
 def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
@@ -379,58 +375,27 @@ def verify_session_token(authorization: Optional[str]) -> Tuple[str, str]:
         if payload.get("type") == "access":
             uid = payload.get("sub", "")
             handle = payload.get("handle", "")
-            if not handle and db is not None:
-                user_doc = db.collection("users").document(uid).get()
-                if user_doc.exists:
-                    handle = user_doc.to_dict().get("handle", f"Anon#{uid[:6]}")
+            if not handle:
+                user = D1Service.get_user_by_id(uid)
+                handle = user.get("handle") if user else f"Anon#{uid[:6]}"
             if not handle:
                 handle = f"Anon#{uid[:6]}"
                 
-            if db is not None:
-                banned_ref = db.collection("banned_users").document(handle).get()
-                if banned_ref.exists:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
             return uid, handle
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired. Please refresh token or log in again.")
-    except Exception:
-        # Fallback to Firebase token verification
-        pass
-
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-        
-    try:
-        from firebase_admin import auth as firebase_auth
-        decoded_token = firebase_auth.verify_id_token(raw_token)
-        uid = decoded_token['uid']
-        
-        user_doc = db.collection("users").document(uid).get()
-        if not user_doc.exists:
-            handle = f"Anon#{uid[:6]}" 
-        else:
-            handle = user_doc.to_dict().get("handle", f"Anon#{uid[:6]}")
-            
-        banned_ref = db.collection("banned_users").document(handle).get()
-        if banned_ref.exists:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been suspended for safety policy violations.")
-            
-        return uid, handle
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid session token: {e}")
+        print(f"[AUTH] JWT decode error: {e}")
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
 
 def verify_resource_owner(collection_name: str, resource_id: str, user_handle: str) -> dict:
-    if db is None:
-        raise HTTPException(status_code=500, detail="Database offline.")
-    doc = db.collection(collection_name).document(resource_id).get()
-    if not doc.exists:
+    post = D1Service.get_post_by_id(resource_id)
+    if not post:
         raise HTTPException(status_code=404, detail="Resource not found.")
-    data = doc.to_dict()
-    if data.get("authorHandle") != user_handle and data.get("reporterHandle") != user_handle:
+    if post.get("authorHandle") != user_handle:
         raise HTTPException(status_code=403, detail="Unauthorized: Resource ownership verification failed.")
-    return data
+    return post
 
 # 🛡️ DEVICE INTEGRITY ATTESTATION VALIDATION (Play Integrity)
 def verify_device_attestation(request_hash: str, attestation_token: str) -> str:
@@ -559,12 +524,6 @@ async def verify_moderator_session(token: Optional[str], required_role: str) -> 
         if required_role == "superadmin" and role != "superadmin":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin privileges required.")
             
-        # 5. Revocation checks (Database fallback persistence check)
-        if db is not None:
-            revoked_doc = db.collection("revoked_tokens").document(jti).get()
-            if revoked_doc.exists:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
-            
         # 6. Role Permissions hierarchy checks
         if ROLE_HIERARCHY.get(role, 0) < ROLE_HIERARCHY.get(required_role, 0):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Insufficient privileges.")
@@ -597,8 +556,8 @@ class PostCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
     category: PostCategory = Field(..., description="Post category")
     imageUrl: Optional[str] = Field(None, max_length=500)
-    cityId: str = Field(..., pattern=r"^[A-Z]{2}-[A-Z]{3}$")
-    areaId: str = Field(..., pattern=r"^[A-Z]{2}-[A-Z]{3}-[A-Z0-9_]+$")
+    cityId: str = Field(..., min_length=2, max_length=100)
+    areaId: Optional[str] = Field(None, max_length=100)
     roomTitle: Optional[str] = None
     roomArea: Optional[str] = None
     roomRent: Optional[str] = None
@@ -861,18 +820,6 @@ async def create_post(
     if not evaluate_request_risk(client_ip, client_vpn_flag=x_vpn_detected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="High risk request blocked by security policies.")
 
-    if db is not None:
-        device_doc = db.collection("devices").document(device_id).get()
-        if device_doc.exists:
-            device_data = device_doc.to_dict()
-            # OTP Check removed as per user request (device-based login only)
-            
-            # FUTURE: GPS/IP location check can be enforced here independently of OTP
-            # if not is_in_vadodara(ip_addr, gps_coords): raise location_error
-
-    if not request.areaId.startswith(request.cityId + "-"):
-        raise HTTPException(400, "areaId does not belong to cityId")
-
     error_msg = validate_text_content(request.content)
     if error_msg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
@@ -881,7 +828,7 @@ async def create_post(
         author_handle=user_handle,
         content=request.content,
         cityId=request.cityId,
-        areaId=request.areaId,
+        areaId=request.areaId or request.cityId,
         category=request.category,
         image_url=request.imageUrl,
         roomTitle=request.roomTitle,

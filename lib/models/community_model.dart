@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class CommunityModel {
   final String id;
   final String name;
@@ -8,7 +6,7 @@ class CommunityModel {
   final String adminHandle;
   final int memberCount;
   final DateTime createdAt;
-  final String? imageUrl; // Feature #7: community avatar
+  final String? imageUrl;
 
   CommunityModel({
     required this.id,
@@ -21,23 +19,33 @@ class CommunityModel {
     this.imageUrl,
   });
 
-  factory CommunityModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return CommunityModel.fromMap(data, doc.id);
-  }
-
   factory CommunityModel.fromMap(Map<String, dynamic> map, String id) {
+    DateTime parseDateTime(dynamic val) {
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is int) {
+        if (val > 10000000000) {
+          return DateTime.fromMillisecondsSinceEpoch(val);
+        } else {
+          return DateTime.fromMillisecondsSinceEpoch(val * 1000);
+        }
+      }
+      if (val != null) {
+        try {
+          return (val as dynamic).toDate();
+        } catch (_) {}
+      }
+      return DateTime.now();
+    }
+
     return CommunityModel(
       id: id,
-      name: map['name'] ?? '',
-      description: map['description'] ?? '',
-      isChannel: map['isChannel'] ?? false,
-      adminHandle: map['adminHandle'] ?? '',
-      memberCount: map['memberCount'] ?? 1,
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
-      imageUrl: map['imageUrl'] as String?,
+      name: (map['name'] ?? '').toString(),
+      description: (map['description'] ?? '').toString(),
+      isChannel: map['isChannel'] == true || map['is_channel'] == 1,
+      adminHandle: (map['adminHandle'] ?? map['admin_handle'] ?? '').toString().replaceAll('@', '').trim(),
+      memberCount: (map['memberCount'] ?? map['member_count'] as num?)?.toInt() ?? 1,
+      createdAt: parseDateTime(map['createdAt'] ?? map['created_at']),
+      imageUrl: (map['imageUrl'] ?? map['image_url']) as String?,
     );
   }
 
@@ -48,12 +56,11 @@ class CommunityModel {
       'isChannel': isChannel,
       'adminHandle': adminHandle,
       'memberCount': memberCount,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': createdAt.toIso8601String(),
       if (imageUrl != null) 'imageUrl': imageUrl,
     };
   }
 
-  // B5: copyWith to allow local state update after edit without Firestore re-fetch
   CommunityModel copyWith({
     String? name,
     String? description,
@@ -82,7 +89,7 @@ class CommunityMessage {
   final String? imageUrl;           // Single image message
   final List<String> mediaUrls;     // Multi-image album grouping
   final String type;                // "text", "image", "image_group"
-  final Map<String, List<String>> reactions; // Feature #9: emoji reactions
+  final Map<String, List<String>> reactions; // emoji reactions
 
   CommunityMessage({
     required this.id,
@@ -113,7 +120,7 @@ class CommunityMessage {
 
     // Safely parse mediaUrls
     final mediaUrls = <String>[];
-    final rawMedia = map['mediaUrls'];
+    final rawMedia = map['mediaUrls'] ?? map['media_urls'];
     if (rawMedia is List) {
       for (final item in rawMedia) {
         if (item != null && item.toString().isNotEmpty) {
@@ -125,16 +132,22 @@ class CommunityMessage {
     }
 
     DateTime parsedTimestamp = DateTime.now();
-    final rawTs = map['timestamp'];
-    if (rawTs is Timestamp) {
-      parsedTimestamp = rawTs.toDate();
-    } else if (rawTs is int) {
-      parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    final rawTs = map['timestamp'] ?? map['createdAt'] ?? map['created_at'];
+    if (rawTs is int) {
+      if (rawTs > 10000000000) {
+        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs);
+      } else {
+        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs * 1000);
+      }
     } else if (rawTs is String) {
       parsedTimestamp = DateTime.tryParse(rawTs) ?? DateTime.now();
+    } else if (rawTs != null) {
+      try {
+        parsedTimestamp = (rawTs as dynamic).toDate();
+      } catch (_) {}
     }
 
-    final singleImage = map['imageUrl'] as String?;
+    final singleImage = (map['imageUrl'] ?? map['image_url']) as String?;
     final determinedType = map['type'] as String? ??
         (mediaUrls.length > 1
             ? 'image_group'
@@ -142,8 +155,8 @@ class CommunityMessage {
 
     return CommunityMessage(
       id: id,
-      communityId: (map['communityId'] ?? '').toString(),
-      authorHandle: (map['authorHandle'] ?? 'Unknown').toString(),
+      communityId: (map['communityId'] ?? map['community_id'] ?? '').toString(),
+      authorHandle: (map['authorHandle'] ?? map['author_handle'] ?? 'Unknown').toString(),
       content: (map['content'] ?? '').toString(),
       timestamp: parsedTimestamp,
       imageUrl: singleImage ?? (mediaUrls.isNotEmpty ? mediaUrls.first : null),

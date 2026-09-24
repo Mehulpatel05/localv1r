@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import '../../core/motion.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
@@ -33,7 +31,7 @@ class CreateHandleScreen extends StatefulWidget {
   final PostRepository repository;
   final String userId;
   final String? phoneNumber;
-  final User? user;
+  final dynamic user;
 
   const CreateHandleScreen({
     super.key,

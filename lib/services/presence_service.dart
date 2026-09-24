@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class UserPresence {
   final bool isOnline;
@@ -27,14 +25,16 @@ class UserPresence {
     final isOnline = map['isOnline'] == true || map['state'] == 'online';
     DateTime? dt;
     final lastSeenRaw = map['lastSeen'] ??
+        map['last_seen_at'] ??
+        map['lastSeenAt'] ??
         map['last_changed'] ??
         map['lastActive'] ??
         map['updatedAt'] ??
         map['lastOnline'];
-    if (lastSeenRaw is Timestamp) {
-      dt = lastSeenRaw.toDate();
-    } else if (lastSeenRaw is int) {
-      dt = DateTime.fromMillisecondsSinceEpoch(lastSeenRaw);
+    if (lastSeenRaw is int) {
+      dt = lastSeenRaw > 1000000000000
+          ? DateTime.fromMillisecondsSinceEpoch(lastSeenRaw)
+          : DateTime.fromMillisecondsSinceEpoch(lastSeenRaw * 1000);
     } else if (lastSeenRaw is String) {
       dt = DateTime.tryParse(lastSeenRaw);
     }
@@ -50,7 +50,7 @@ class UserPresence {
   Map<String, dynamic> toMap() {
     return {
       'isOnline': isOnline,
-      'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
+      'lastSeen': lastSeen?.millisecondsSinceEpoch,
       'showLastSeen': showLastSeen,
     };
   }
@@ -60,11 +60,7 @@ class PresenceService with WidgetsBindingObserver {
   static final PresenceService instance = PresenceService._internal();
   PresenceService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
   String? _currentUserHandle;
-  String? _currentUid;
   bool _isInitialized = false;
   Timer? _heartbeatTimer;
   bool _hasInternet = true;
@@ -75,7 +71,6 @@ class PresenceService with WidgetsBindingObserver {
   void init(String? userHandle) {
     if (userHandle == null || userHandle.isEmpty) return;
     _currentUserHandle = userHandle.replaceAll('@', '').trim();
-    _currentUid = _auth.currentUser?.uid;
 
     if (!_isInitialized) {
       WidgetsBinding.instance.addObserver(this);
@@ -85,16 +80,15 @@ class PresenceService with WidgetsBindingObserver {
     _loadCacheFromStorage();
     setOnline();
 
-    // Start periodic heartbeat every 2 minutes while app is active
+    // Start periodic heartbeat every 30 seconds while app is active
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _checkInternetAndHeartbeat();
     });
   }
 
   void updateUserHandle(String userHandle) {
     _currentUserHandle = userHandle.replaceAll('@', '').trim();
-    _currentUid = _auth.currentUser?.uid;
     setOnline();
   }
 
@@ -128,17 +122,13 @@ class PresenceService with WidgetsBindingObserver {
     final now = DateTime.now();
 
     try {
-      // 1. Update Firestore profile doc
-      await _firestore.collection('profiles').doc(_currentUserHandle).set({
-        'isOnline': true,
-        'lastSeen': FieldValue.serverTimestamp(),
-        'ownerUid': _currentUid ?? _auth.currentUser?.uid,
-      }, SetOptions(merge: true));
+      final payload = {'handle': _currentUserHandle, 'isOnline': true};
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/presence/heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 5));
 
-      // 2. Sync to RTDB via REST if project exists
-      _syncRtdb(state: 'online');
-
-      // Update local memory cache
       _memoryCache[_currentUserHandle!] = UserPresence(
         isOnline: true,
         lastSeen: now,
@@ -153,16 +143,13 @@ class PresenceService with WidgetsBindingObserver {
     final now = DateTime.now();
 
     try {
-      // 1. Update Firestore profile doc
-      await _firestore.collection('profiles').doc(_currentUserHandle).set({
-        'isOnline': false,
-        'lastSeen': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      final payload = {'handle': _currentUserHandle, 'isOnline': false};
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/presence/heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 5));
 
-      // 2. Sync to RTDB
-      _syncRtdb(state: 'offline');
-
-      // Update local memory cache
       _memoryCache[_currentUserHandle!] = UserPresence(
         isOnline: false,
         lastSeen: now,
@@ -172,47 +159,37 @@ class PresenceService with WidgetsBindingObserver {
     }
   }
 
-  void _syncRtdb({required String state}) async {
-    final uid = _currentUid ?? _auth.currentUser?.uid;
-    if (uid == null) return;
-    try {
-      final uri = Uri.parse(
-          'https://local1-e61cb-default-rtdb.firebaseio.com/status/$uid.json');
-      await http.put(
-        uri,
-        body: jsonEncode({
-          'state': state,
-          'last_changed': {'.sv': 'timestamp'},
-          'handle': _currentUserHandle,
-        }),
-      ).timeout(const Duration(seconds: 4));
-    } catch (_) {
-      // Gracefully ignore RTDB REST timeout/absence
-    }
-  }
-
-  /// Live Stream of a partner's presence
-  Stream<UserPresence> getPresenceStream(String handle) {
+  /// Live Stream of a partner's presence via periodic REST polling
+  Stream<UserPresence> getPresenceStream(String handle) async* {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty) {
-      return Stream.value(const UserPresence(isOnline: false));
+      yield const UserPresence(isOnline: false);
+      return;
     }
 
-    return _firestore
-        .collection('profiles')
-        .doc(cleanHandle)
-        .snapshots()
-        .map((doc) {
-      if (!doc.exists) {
-        return _memoryCache[cleanHandle] ??
-            const UserPresence(isOnline: false);
-      }
-      final data = doc.data();
-      final presence = UserPresence.fromMap(data);
-      _memoryCache[cleanHandle] = presence;
-      _saveCacheToStorage(cleanHandle, presence);
-      return presence;
-    });
+    // Yield initial cached value
+    if (_memoryCache.containsKey(cleanHandle)) {
+      yield _memoryCache[cleanHandle]!;
+    }
+
+    while (true) {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/presence/$cleanHandle'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final presence = UserPresence.fromMap(data);
+          _memoryCache[cleanHandle] = presence;
+          _saveCacheToStorage(cleanHandle, presence);
+          yield presence;
+        }
+      } catch (_) {}
+
+      await Future.delayed(const Duration(seconds: 10));
+    }
   }
 
   /// Get cached presence synchronously for zero flicker

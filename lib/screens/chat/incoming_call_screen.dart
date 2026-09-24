@@ -1,10 +1,12 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../../core/widgets/user_avatar.dart';
 import '../../main.dart';
 import '../../models/call_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/webrtc_call_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/call_audio_tone_service.dart';
@@ -28,15 +30,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  StreamSubscription<DocumentSnapshot>? _callSubscription;
+  Timer? _statusPollingTimer;
   bool _isProcessing = false;
   bool _isDismissed = false;
 
   void _safeDismiss() {
     if (_isDismissed) return;
     _isDismissed = true;
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = null;
     CallAudioToneService.instance.stop();
     NotificationService().cancelCallNotification(widget.call.callId);
     if (mounted && Navigator.of(context).canPop()) {
@@ -56,40 +58,41 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Notify caller that receiver's phone is now ringing!
-    FirebaseFirestore.instance
-        .collection('calls')
-        .doc(widget.call.callId)
-        .update({
-      'status': 'ringing',
-      'ringingAt': FieldValue.serverTimestamp(),
-    }).catchError((_) {});
+    // Notify caller that receiver's phone is ringing
+    http.post(
+      Uri.parse('${AuthService.baseUrl}/calls/${widget.call.callId}/status'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'status': 'ringing'}),
+    ).catchError((_) => http.Response('', 500));
 
     // Start playing incoming ringtone + vibration on receiver's phone
     CallAudioToneService.instance.playIncomingRingtone();
 
-    // Listen to call doc in Firestore in case caller cancels or times out
-    _callSubscription = FirebaseFirestore.instance
-        .collection('calls')
-        .doc(widget.call.callId)
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists) {
-        _safeDismiss();
-        return;
-      }
-      final data = doc.data();
-      final status = (data?['status'] ?? '').toString().toLowerCase();
-      if (status == 'ended' || status == 'rejected' || status == 'missed') {
-        _safeDismiss();
-      }
+    // Poll call status in D1
+    _statusPollingTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/calls/${widget.call.callId}'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 2));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final status = (data['call']?['status'] ?? '').toString().toLowerCase();
+          if (status == 'ended' || status == 'rejected' || status == 'missed') {
+            _safeDismiss();
+          }
+        } else if (res.statusCode == 404) {
+          _safeDismiss();
+        }
+      } catch (_) {}
     });
   }
 
   @override
   void dispose() {
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = null;
     CallAudioToneService.instance.stop();
     NotificationService().cancelCallNotification(widget.call.callId);
     _pulseController.dispose();
@@ -99,14 +102,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   Future<void> _acceptCall() async {
     if (_isProcessing || _isDismissed) return;
     _isProcessing = true;
-    _callSubscription?.cancel();
-    _callSubscription = null;
+    _statusPollingTimer?.cancel();
+    _statusPollingTimer = null;
     HapticFeedback.heavyImpact();
     CallAudioToneService.instance.stop();
     NotificationService().cancelCallNotification(widget.call.callId);
 
     try {
-      // 1. Verify required camera/mic permissions before proceeding
       final hasPermissions = await WebRtcCallService.instance.requestPermissions(widget.call.callType);
       if (!hasPermissions) {
         if (mounted) {
@@ -122,10 +124,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         return;
       }
 
-      // 2. Launch answerCall
       final answerFuture = WebRtcCallService.instance.answerCall(widget.call);
 
-      // 3. Transition immediately into CallScreen without waiting for network latency
       if (mounted) {
         _isDismissed = true;
         Navigator.pushReplacement(
@@ -167,7 +167,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     HapticFeedback.mediumImpact();
     _safeDismiss();
 
-    // Process network rejectCall & cleanup in background
     WebRtcCallService.instance.rejectCall(widget.call);
   }
 
@@ -258,7 +257,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                   ],
                 ),
 
-                // Pulsing Avatar with Double Ripple Rings
+                // Pulsing Avatar
                 ScaleTransition(
                   scale: _pulseAnimation,
                   child: Stack(

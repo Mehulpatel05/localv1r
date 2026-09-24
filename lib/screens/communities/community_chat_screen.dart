@@ -1,9 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/media_attachment_picker.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
 import '../chat/widgets/image_group_bubble.dart';

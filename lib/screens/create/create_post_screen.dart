@@ -144,19 +144,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
       final locService = widget.repository.locationService;
       final effectiveCity = _selectedGeoCity ?? locService.city;
-      // Auto-assign citywide general area for general chat
-      final effectiveArea = effectiveCity.areas.firstWhere(
-        (a) => a.id.contains('GENERAL'),
-        orElse: () => effectiveCity.areas.isNotEmpty ? effectiveCity.areas.first : throw Exception('City has no areas configured.'),
-      );
-
       final String? firstImageUrl = uploadedMediaUrls.isNotEmpty ? uploadedMediaUrls.first : null;
 
       await widget.repository.addPost(
         authorHandle: widget.authorHandle,
         content: text,
         cityId: effectiveCity.id,
-        areaId: effectiveArea.id,
         category: PostCategory.general,
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,

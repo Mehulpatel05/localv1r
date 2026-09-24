@@ -1,8 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme.dart';
+import '../../../services/auth_service.dart';
 
 /// Modal bottom sheet allowing users to configure who can call them (Voice & Video).
 /// Options: 'everyone' (default), 'friends', 'nobody'.
@@ -35,9 +37,16 @@ class _CallPrivacySettingsSheetState extends State<CallPrivacySettingsSheet> {
 
     if (localVal == null && clean.isNotEmpty) {
       try {
-        final doc = await FirebaseFirestore.instance.collection('profiles').doc(clean).get();
-        if (doc.exists) {
-          localVal = doc.data()?['callPrivacy'] as String?;
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/preferences/$clean'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          localVal = data['preferences']?['callPrivacy'] as String?;
+          if (localVal != null) {
+            await prefs.setString('call_privacy', localVal);
+          }
         }
       } catch (_) {}
     }
@@ -62,12 +71,16 @@ class _CallPrivacySettingsSheetState extends State<CallPrivacySettingsSheet> {
     final clean = widget.userHandle.replaceAll('@', '').trim();
     if (clean.isNotEmpty) {
       try {
-        await FirebaseFirestore.instance.collection('profiles').doc(clean).set(
-          {'callPrivacy': option},
-          SetOptions(merge: true),
-        );
+        await http.post(
+          Uri.parse('${AuthService.baseUrl}/preferences'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'handle': clean,
+            'callPrivacy': option,
+          }),
+        ).timeout(const Duration(seconds: 5));
       } catch (e) {
-        debugPrint('Error updating call privacy in Firestore: $e');
+        debugPrint('Error updating call privacy in D1: $e');
       }
     }
   }

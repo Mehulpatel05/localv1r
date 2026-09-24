@@ -25,7 +25,6 @@ class FoodPostScreen extends StatefulWidget {
 
 class _FoodPostScreenState extends State<FoodPostScreen> {
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
 
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
@@ -194,7 +193,6 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
         authorHandle: widget.authorHandle,
         content: _descController.text.trim(),
         cityId: (_selectedGeoCity ?? widget.repository.locationService.city).id,
-        areaId: (_selectedGeoArea ?? widget.repository.locationService.area ?? (_selectedGeoCity ?? widget.repository.locationService.city).areas.first).id,
         category: PostCategory.food,
         foodTitle: _titleController.text.trim(),
         foodPrice: _priceController.text.trim(),
@@ -394,10 +392,9 @@ class _FoodPostScreenState extends State<FoodPostScreen> {
                     ),
                     const SizedBox(height: 8),
                     LocationSelectorField(
-                      onLocationSelected: (city, area) {
+                      onLocationSelected: (city, _) {
                         setState(() {
                           _selectedGeoCity = city;
-                          _selectedGeoArea = area;
                         });
                       },
                     ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'gujarat_data.dart';
 import 'location_service.dart';
-import '../../services/auth_service.dart';
 
 class CityPickerScreen extends StatelessWidget {
   const CityPickerScreen({super.key});

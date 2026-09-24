@@ -6,22 +6,10 @@ from unittest.mock import MagicMock, patch
 # Include parent directory in python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.firebase_service import FirebaseService
+from services.d1_service import D1Service
 
 
 class TestVotingLogic(unittest.TestCase):
-    def test_shard_distribution(self):
-        """Verify that user handles map across shards 0-19 deterministically."""
-        shards = set()
-        for i in range(100):
-            handle = f"user_{i}"
-            import hashlib
-            shard_id = int(hashlib.md5(handle.encode('utf-8')).hexdigest(), 16) % FirebaseService.NUM_SHARDS
-            self.assertTrue(0 <= shard_id < 20)
-            shards.add(shard_id)
-        # 100 random users should hit multiple shards
-        self.assertGreater(len(shards), 10)
-
     def test_toggle_logic_matrices(self):
         """
         Verify the mathematical correctness of the toggle logic:
@@ -72,42 +60,14 @@ class TestVotingLogic(unittest.TestCase):
         self.assertEqual(score_delta, -2)
         self.assertEqual(new_vote, -1)
 
-    def test_mock_shard_aggregation_and_concurrency(self):
-        """Simulate multiple votes across 20 shards and aggregate total."""
-        shards_data = {}
-        
-        # Simulate 50 users voting +1 or -1 or switching
-        votes = [
-            ("user_a", 1),
-            ("user_b", 1),
-            ("user_c", -1),
-            ("user_d", 1),
-            ("user_e", 1),
-            ("user_f", -1),
-            ("user_g", 1),
-            ("user_h", 1),
-        ]
-        
-        for user, direction in votes:
-            import hashlib
-            shard_id = str(int(hashlib.md5(user.encode('utf-8')).hexdigest(), 16) % FirebaseService.NUM_SHARDS)
-            if shard_id not in shards_data:
-                shards_data[shard_id] = {"score": 0, "upvotes": 0, "downvotes": 0}
-            
-            if direction == 1:
-                shards_data[shard_id]["score"] += 1
-                shards_data[shard_id]["upvotes"] += 1
-            else:
-                shards_data[shard_id]["score"] -= 1
-                shards_data[shard_id]["downvotes"] += 1
-
-        total_score = sum(s["score"] for s in shards_data.values())
-        total_upvotes = sum(s["upvotes"] for s in shards_data.values())
-        total_downvotes = sum(s["downvotes"] for s in shards_data.values())
-
-        self.assertEqual(total_upvotes, 6)
-        self.assertEqual(total_downvotes, 2)
-        self.assertEqual(total_score, 4)
+    def test_d1_vote_post_toggle(self):
+        """Verify D1Service.vote_post behavior using mocks."""
+        with patch.object(D1Service, 'query', return_value=[{"direction": 1}]), \
+             patch.object(D1Service, 'execute', return_value=True):
+            res = D1Service.vote_post("post-1", "alice", 1)
+            self.assertTrue(res["success"])
+            self.assertEqual(res["newVote"], 0) # Toggled off
+            self.assertEqual(res["scoreDelta"], -1)
 
 
 if __name__ == "__main__":

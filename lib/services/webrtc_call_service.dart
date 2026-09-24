@@ -1,19 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 import '../models/call_model.dart';
+import 'auth_service.dart';
 import 'notification_service.dart';
 
 class WebRtcCallService {
   static final WebRtcCallService instance = WebRtcCallService._internal();
   factory WebRtcCallService() => instance;
   WebRtcCallService._internal();
-
-  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
@@ -28,8 +27,7 @@ class WebRtcCallService {
   final ValueNotifier<bool> isReconnectingNotifier = ValueNotifier<bool>(false);
 
   CallModel? currentCall;
-  StreamSubscription<DocumentSnapshot>? _callDocSub;
-  StreamSubscription<QuerySnapshot>? _candidatesSub;
+  Timer? _pollingTimer;
 
   final List<RTCIceCandidate> _pendingIceCandidates = [];
   bool _isRemoteDescriptionSet = false;
@@ -106,21 +104,12 @@ class WebRtcCallService {
     return true;
   }
 
-  String _getChatId(String user1, String user2) {
-    final u1 = user1.replaceAll('@', '').trim().toLowerCase();
-    final u2 = user2.replaceAll('@', '').trim().toLowerCase();
-    final users = [u1, u2]..sort();
-    return users.join('_');
-  }
-
-  /// Optimizes SDP for ultra-low latency audio (Opus speech flags)
-  /// and crisp real-camera HD video with immediate packet recovery.
+  /// Optimizes SDP for ultra-low latency audio
   String _optimizeSdpForLowLatency(String sdp, {required bool isVideo}) {
     final lines = sdp.split('\r\n');
     final modifiedLines = <String>[];
     String? opusPayloadType;
 
-    // 1. Identify Opus payload type
     for (final line in lines) {
       if (line.startsWith('a=rtpmap:') && line.toLowerCase().contains('opus/48000')) {
         final match = RegExp(r'a=rtpmap:(\d+)\s+opus', caseSensitive: false).firstMatch(line);
@@ -135,11 +124,6 @@ class WebRtcCallService {
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i];
 
-      // Replace Opus fmtp line with ultra low-latency flags:
-      // minptime=10 (10ms packet time eliminates audio buffering delay)
-      // useinbandfec=1 (Forward Error Correction prevents retransmission delay)
-      // usedtx=1 (Discontinuous transmission prevents jitter buildup during silence)
-      // maxaveragebitrate=32000 (studio speech clarity with zero bufferbloat)
       if (opusPayloadType != null && line.startsWith('a=fmtp:$opusPayloadType')) {
         opusFmtpFound = true;
         modifiedLines.add(
@@ -148,7 +132,6 @@ class WebRtcCallService {
         continue;
       }
 
-      // Audio stream header
       if (line.startsWith('m=audio')) {
         modifiedLines.add(line);
         if (opusPayloadType != null && !opusFmtpFound) {
@@ -160,7 +143,6 @@ class WebRtcCallService {
         continue;
       }
 
-      // Video stream header: allocate 1.8 Mbps high clarity bitrate bandwidth
       if (line.startsWith('m=video')) {
         modifiedLines.add(line);
         modifiedLines.add('b=AS:1800');
@@ -174,7 +156,7 @@ class WebRtcCallService {
     return modifiedLines.join('\r\n');
   }
 
-  /// Boost video encoder bitrate on active senders with real-time framerate preservation
+  /// Boost video encoder bitrate
   Future<void> _boostVideoSenderBitrate() async {
     try {
       final senders = await _peerConnection?.getSenders();
@@ -184,8 +166,8 @@ class WebRtcCallService {
             final params = sender.parameters;
             if (params.encodings != null && params.encodings!.isNotEmpty) {
               for (final encoding in params.encodings!) {
-                encoding.maxBitrate = 1800000; // 1.8 Mbps crisp 720p HD
-                encoding.minBitrate = 400000;  // 400 kbps min
+                encoding.maxBitrate = 1800000;
+                encoding.minBitrate = 400000;
                 encoding.maxFramerate = 30;
                 encoding.scaleResolutionDownBy = 1.0;
               }
@@ -200,7 +182,7 @@ class WebRtcCallService {
     }
   }
 
-  /// Start an outgoing call (Audio or Video)
+  /// Start an outgoing call (Audio or Video) via D1 REST API
   Future<CallModel> makeCall({
     required String callerHandle,
     required String receiverHandle,
@@ -209,77 +191,19 @@ class WebRtcCallService {
   }) async {
     final cleanCaller = callerHandle.replaceAll('@', '').trim();
     final cleanReceiver = receiverHandle.replaceAll('@', '').trim();
-    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-    final callDoc = existingCallId != null && existingCallId.isNotEmpty
-        ? _firestore.collection('calls').doc(existingCallId)
-        : _firestore.collection('calls').doc();
-    final callId = callDoc.id;
-
-    // Parallel validation, permissions & renderer initialization
-    final profileFuture = _firestore.collection('profiles').doc(cleanReceiver).get().catchError((_) => null as dynamic);
-    final block1Future = _firestore.collection('blocks').doc('${cleanCaller}_$cleanReceiver').get().catchError((_) => null as dynamic);
-    final block2Future = _firestore.collection('blocks').doc('${cleanReceiver}_$cleanCaller').get().catchError((_) => null as dynamic);
     final permissionsFuture = requestPermissions(callType);
     final renderersFuture = initRenderers();
 
-    final results = await Future.wait([
-      profileFuture,
-      block1Future,
-      block2Future,
-      permissionsFuture,
-      renderersFuture,
-    ]);
-
-    final profileDoc = results[0] as DocumentSnapshot?;
-    final block1Doc = results[1] as DocumentSnapshot?;
-    final block2Doc = results[2] as DocumentSnapshot?;
-    final hasPermissions = results[3] as bool;
+    final results = await Future.wait([permissionsFuture, renderersFuture]);
+    final hasPermissions = results[0] as bool;
 
     if (!hasPermissions) {
       throw Exception('Camera or Microphone permissions not granted.');
     }
 
-    if ((block1Doc != null && block1Doc.exists) || (block2Doc != null && block2Doc.exists)) {
-      throw Exception('You cannot call this user.');
-    }
-
-    String receiverUid = '';
-    String callPrivacy = 'everyone';
-    if (profileDoc != null && profileDoc.exists && profileDoc.data() != null) {
-      final data = profileDoc.data() as Map<String, dynamic>;
-      receiverUid = (data['ownerUid'] ?? '').toString();
-      callPrivacy = (data['callPrivacy'] as String?)?.toLowerCase().trim() ?? 'everyone';
-    }
-
-    if (callPrivacy == 'nobody') {
-      throw Exception('@$cleanReceiver is not accepting calls.');
-    } else if (callPrivacy == 'friends') {
-      final sortedHandles = [cleanCaller, cleanReceiver]..sort();
-      final friendshipId = sortedHandles.join('_');
-      final friendshipDoc = await _firestore.collection('friendships').doc(friendshipId).get();
-      if (!friendshipDoc.exists) {
-        throw Exception('@$cleanReceiver only accepts calls from friends.');
-      }
-    }
-
     _pendingIceCandidates.clear();
     _isRemoteDescriptionSet = false;
-
-    final initialCall = CallModel(
-      callId: callId,
-      callerHandle: cleanCaller,
-      callerUid: myUid,
-      receiverHandle: cleanReceiver,
-      receiverUid: receiverUid,
-      callType: callType,
-      status: CallStatus.calling,
-      createdAt: DateTime.now(),
-    );
-
-    currentCall = initialCall;
-    _isCallActive = true;
-    callStatusNotifier.value = CallStatus.calling;
 
     // 1. Get user media with 48kHz Studio Audio & Real HD Camera DSP
     final mediaConstraints = <String, dynamic>{
@@ -289,16 +213,6 @@ class WebRtcCallService {
         'autoGainControl': true,
         'sampleRate': 48000,
         'channelCount': 1,
-        'googEchoCancellation': true,
-        'googEchoCancellation2': true,
-        'googDAEchoCancellation': true,
-        'googAutoGainControl': true,
-        'googAutoGainControl2': true,
-        'googNoiseSuppression': true,
-        'googNoiseSuppression2': true,
-        'googHighpassFilter': true,
-        'googTypingNoiseDetection': true,
-        'googAudioMirroring': false,
         'latency': 0,
       },
       'video': callType == CallType.video
@@ -309,14 +223,6 @@ class WebRtcCallService {
                 'minFrameRate': '30',
               },
               'facingMode': 'user',
-              'optional': [
-                {'minWidth': '1280'},
-                {'minHeight': '720'},
-                {'minFrameRate': '30'},
-                {'googCpuOveruseDetection': true},
-                {'googCpuUnderuseThreshold': 55},
-                {'googCpuOveruseThreshold': 85},
-              ],
             }
           : false,
     };
@@ -328,7 +234,7 @@ class WebRtcCallService {
     localRenderer.srcObject = _localStream;
     localStreamNotifier.value = _localStream;
 
-    // 2. Create peer connection with unified-plan and STUN servers
+    // 2. Create peer connection
     _peerConnection = await createPeerConnection(_iceServers);
     _setupConnectionStateListeners();
 
@@ -345,22 +251,7 @@ class WebRtcCallService {
       _peerConnection?.addTrack(track, _localStream!);
     });
 
-    // 3. ICE candidate handling for caller (queued until call doc is created)
-    final callerCandidatesCol = callDoc.collection('callerCandidates');
-    bool isCallDocCreated = false;
-    final List<Map<String, dynamic>> queuedCandidates = [];
-
-    _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
-      if (candidate.candidate != null) {
-        if (isCallDocCreated) {
-          callerCandidatesCol.add(candidate.toMap());
-        } else {
-          queuedCandidates.add(candidate.toMap());
-        }
-      }
-    };
-
-    // 4. Create WebRTC Offer with Low-Latency SDP
+    // 3. Create WebRTC Offer
     final offerConstraints = <String, dynamic>{
       'offerToReceiveAudio': 1,
       'offerToReceiveVideo': callType == CallType.video ? 1 : 0,
@@ -373,30 +264,57 @@ class WebRtcCallService {
     final optimizedOffer = RTCSessionDescription(optimizedSdp, offer.type);
     await _peerConnection!.setLocalDescription(optimizedOffer);
 
-    final callPayload = initialCall.toFirestore();
-    callPayload['offer'] = {
-      'type': optimizedOffer.type,
-      'sdp': optimizedOffer.sdp,
+    // 4. Send call offer to D1 REST API
+    final payload = {
+      'caller': cleanCaller,
+      'receiver': cleanReceiver,
+      'callType': callType.name,
+      'sdpOffer': optimizedSdp,
     };
 
-    await callDoc.set(callPayload).timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {
-        throw Exception('Network timeout. Please check your internet connection.');
-      },
+    final res = await http.post(
+      Uri.parse('${AuthService.baseUrl}/calls/initiate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    ).timeout(const Duration(seconds: 8));
+
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Failed to initiate call. Server returned ${res.statusCode}');
+    }
+
+    final data = jsonDecode(res.body);
+    final callId = data['callId'] as String;
+
+    final initialCall = CallModel(
+      callId: callId,
+      callerHandle: cleanCaller,
+      receiverHandle: cleanReceiver,
+      callType: callType,
+      status: CallStatus.calling,
+      createdAt: DateTime.now(),
     );
 
-    // Flush queued candidates safely now that callDoc exists
-    isCallDocCreated = true;
-    for (final cand in queuedCandidates) {
-      callerCandidatesCol.add(cand);
-    }
-    queuedCandidates.clear();
+    currentCall = initialCall;
+    _isCallActive = true;
+    callStatusNotifier.value = CallStatus.calling;
 
-    // Send push notification with high priority call channel
+    // 5. Setup ICE candidate callback to send to D1
+    _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
+      if (candidate.candidate != null) {
+        http.post(
+          Uri.parse('${AuthService.baseUrl}/calls/$callId/ice'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'handle': cleanCaller,
+            'candidate': candidate.toMap(),
+          }),
+        ).catchError((_) => http.Response('', 500));
+      }
+    };
+
+    // Send push notification
     NotificationService().sendNotification(
       targetHandle: cleanReceiver,
-      targetUid: receiverUid.isNotEmpty ? receiverUid : null,
       title: '@$cleanCaller is calling...',
       body: callType == CallType.video ? 'Incoming Video Call 📹' : 'Incoming Voice Call 📞',
       data: {
@@ -407,7 +325,6 @@ class WebRtcCallService {
       },
     );
 
-    // Audio routing
     if (callType == CallType.video) {
       await setSpeakerphone(true);
     } else {
@@ -421,7 +338,7 @@ class WebRtcCallService {
     return initialCall;
   }
 
-  /// Answer an incoming call with HD video and clear studio audio DSP
+  /// Answer an incoming call via D1 REST API
   Future<void> answerCall(CallModel call) async {
     final isOnline = await hasInternetConnection();
     if (!isOnline) {
@@ -441,9 +358,7 @@ class WebRtcCallService {
     _isCallActive = true;
     callStatusNotifier.value = CallStatus.connected;
 
-    final callDoc = _firestore.collection('calls').doc(call.callId);
-
-    // 1. Get user media with 48kHz Studio Audio & Real HD Camera DSP
+    // 1. Get user media
     final mediaConstraints = <String, dynamic>{
       'audio': {
         'echoCancellation': true,
@@ -451,16 +366,6 @@ class WebRtcCallService {
         'autoGainControl': true,
         'sampleRate': 48000,
         'channelCount': 1,
-        'googEchoCancellation': true,
-        'googEchoCancellation2': true,
-        'googDAEchoCancellation': true,
-        'googAutoGainControl': true,
-        'googAutoGainControl2': true,
-        'googNoiseSuppression': true,
-        'googNoiseSuppression2': true,
-        'googHighpassFilter': true,
-        'googTypingNoiseDetection': true,
-        'googAudioMirroring': false,
         'latency': 0,
       },
       'video': call.callType == CallType.video
@@ -471,14 +376,6 @@ class WebRtcCallService {
                 'minFrameRate': '30',
               },
               'facingMode': 'user',
-              'optional': [
-                {'minWidth': '1280'},
-                {'minHeight': '720'},
-                {'minFrameRate': '30'},
-                {'googCpuOveruseDetection': true},
-                {'googCpuUnderuseThreshold': 55},
-                {'googCpuOveruseThreshold': 85},
-              ],
             }
           : false,
     };
@@ -507,29 +404,39 @@ class WebRtcCallService {
       _peerConnection?.addTrack(track, _localStream!);
     });
 
-    // 3. ICE candidate handling for receiver
-    final receiverCandidatesCol = callDoc.collection('receiverCandidates');
+    // 3. ICE candidate sending for receiver
     _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
       if (candidate.candidate != null) {
-        receiverCandidatesCol.add(candidate.toMap());
+        http.post(
+          Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/ice'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'handle': call.receiverHandle,
+            'candidate': candidate.toMap(),
+          }),
+        ).catchError((_) => http.Response('', 500));
       }
     };
 
-    // 4. Retrieve fresh offer and set remote description
-    Map<String, dynamic>? offerMap = call.offer;
-    if (offerMap == null || offerMap['sdp'] == null) {
-      final freshSnapshot = await callDoc.get();
-      offerMap = freshSnapshot.data()?['offer'] as Map<String, dynamic>?;
+    // 4. Retrieve call details for offer
+    String? sdpOffer = call.offer?['sdp'];
+    if (sdpOffer == null) {
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/calls/${call.callId}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        sdpOffer = body['call']?['sdpOffer'] ?? body['call']?['sdp_offer'];
+      }
     }
 
-    if (offerMap != null && offerMap['sdp'] != null) {
-      final sdp = offerMap['sdp'] as String;
-      final type = (offerMap['type'] as String?) ?? 'offer';
+    if (sdpOffer != null) {
       final optimizedRemoteSdp = _optimizeSdpForLowLatency(
-        sdp,
+        sdpOffer,
         isVideo: call.callType == CallType.video,
       );
-      final rtcSessionDesc = RTCSessionDescription(optimizedRemoteSdp, type);
+      final rtcSessionDesc = RTCSessionDescription(optimizedRemoteSdp, 'offer');
       await _peerConnection!.setRemoteDescription(rtcSessionDesc);
       _isRemoteDescriptionSet = true;
       _drainPendingCandidates();
@@ -537,7 +444,7 @@ class WebRtcCallService {
       throw Exception('Call offer is missing or invalid.');
     }
 
-    // 5. Create WebRTC Answer with Low-Latency SDP
+    // 5. Create WebRTC Answer
     final answer = await _peerConnection!.createAnswer();
     final optimizedAnswerSdp = _optimizeSdpForLowLatency(
       answer.sdp ?? '',
@@ -546,44 +453,22 @@ class WebRtcCallService {
     final optimizedAnswer = RTCSessionDescription(optimizedAnswerSdp, answer.type);
     await _peerConnection!.setLocalDescription(optimizedAnswer);
 
-    // Boost video bitrate
     if (call.callType == CallType.video) {
       _boostVideoSenderBitrate();
     }
 
-    // Update call doc in Firestore to connected
-    await callDoc.update({
-      'status': 'connected',
-      'startedAt': FieldValue.serverTimestamp(),
-      'answer': {
-        'type': optimizedAnswer.type,
-        'sdp': optimizedAnswer.sdp,
-      },
-    }).timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {
-        throw Exception('Network timeout. Unable to establish connection.');
-      },
-    );
+    // Send answer to D1
+    await http.post(
+      Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/answer'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'receiver': call.receiverHandle,
+        'sdpAnswer': optimizedAnswerSdp,
+      }),
+    ).timeout(const Duration(seconds: 8));
 
-    // 6. Listen for caller's ICE candidates with queue protection
-    final callerCandidatesCol = callDoc.collection('callerCandidates');
-    _candidatesSub?.cancel();
-    _candidatesSub = callerCandidatesCol.snapshots().listen((snapshot) {
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data();
-          if (data != null) {
-            final candidate = RTCIceCandidate(
-              data['candidate'],
-              data['sdpMid'],
-              data['sdpMLineIndex'],
-            );
-            _addOrQueueCandidate(candidate);
-          }
-        }
-      }
-    });
+    // 6. Start polling for caller's ICE candidates and status
+    _startIcePolling(call.callId, isCaller: false);
 
     if (call.callType == CallType.video) {
       await setSpeakerphone(true);
@@ -596,58 +481,68 @@ class WebRtcCallService {
     _isFrontCamera = true;
   }
 
-  /// Listen for remote answer (used by caller) with safe ICE candidate queuing
+  /// Listen for remote answer & candidates via polling
   void listenForAnswerAndCandidates(String callId) {
-    final callDoc = _firestore.collection('calls').doc(callId);
+    _startIcePolling(callId, isCaller: true);
+  }
 
-    _callDocSub?.cancel();
-    _callDocSub = callDoc.snapshots().listen((snapshot) async {
-      if (!snapshot.exists || snapshot.data() == null) return;
-      final data = snapshot.data()!;
-      final status = data['status'] as String?;
+  final Set<String> _receivedIceHashes = {};
 
-      if (status == 'connected' && _peerConnection != null && !_isRemoteDescriptionSet) {
-        final answerMap = data['answer'] as Map<String, dynamic>?;
-        if (answerMap != null) {
-          final sdp = answerMap['sdp'] as String?;
-          final type = answerMap['type'] as String?;
-          if (sdp != null && type != null) {
-            final optimizedRemoteSdp = _optimizeSdpForLowLatency(
-              sdp,
-              isVideo: currentCall?.callType == CallType.video,
-            );
-            final desc = RTCSessionDescription(optimizedRemoteSdp, type);
+  void _startIcePolling(String callId, {required bool isCaller}) {
+    _pollingTimer?.cancel();
+    _receivedIceHashes.clear();
+
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+      try {
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/calls/$callId'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 2));
+
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          final callData = body['call'] as Map<String, dynamic>?;
+          if (callData == null) return;
+
+          final status = (callData['status'] ?? '').toString();
+          if (status == 'ended' || status == 'rejected' || status == 'busy') {
+            callStatusNotifier.value = CallStatus.ended;
+            cleanup();
+            return;
+          }
+
+          // If caller, check for sdpAnswer
+          if (isCaller && !_isRemoteDescriptionSet && (callData['sdpAnswer'] != null || callData['sdp_answer'] != null)) {
+            final sdp = (callData['sdpAnswer'] ?? callData['sdp_answer']) as String;
+            final desc = RTCSessionDescription(sdp, 'answer');
             await _peerConnection!.setRemoteDescription(desc);
             _isRemoteDescriptionSet = true;
             _drainPendingCandidates();
             callStatusNotifier.value = CallStatus.connected;
-
-            // Boost video bitrate once connected
             if (currentCall?.callType == CallType.video) {
               _boostVideoSenderBitrate();
             }
           }
-        }
-      }
-    });
 
-    // Listen for receiver's ICE candidates
-    _candidatesSub?.cancel();
-    final receiverCandidatesCol = callDoc.collection('receiverCandidates');
-    _candidatesSub = receiverCandidatesCol.snapshots().listen((snapshot) {
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data();
-          if (data != null) {
-            final candidate = RTCIceCandidate(
-              data['candidate'],
-              data['sdpMid'],
-              data['sdpMLineIndex'],
-            );
-            _addOrQueueCandidate(candidate);
+          // Process other party's ICE candidates
+          final candidatesKey = isCaller ? 'receiverIceCandidates' : 'callerIceCandidates';
+          final cands = (callData[candidatesKey] as List<dynamic>?) ?? [];
+          for (final c in cands) {
+            if (c is Map<String, dynamic>) {
+              final candStr = c['candidate']?.toString() ?? '';
+              if (candStr.isEmpty || _receivedIceHashes.contains(candStr)) continue;
+              _receivedIceHashes.add(candStr);
+
+              final candidate = RTCIceCandidate(
+                c['candidate'],
+                c['sdpMid'],
+                (c['sdpMLineIndex'] as num?)?.toInt() ?? 0,
+              );
+              _addOrQueueCandidate(candidate);
+            }
           }
         }
-      }
+      } catch (_) {}
     });
   }
 
@@ -676,37 +571,12 @@ class WebRtcCallService {
     if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
       _isMicMuted = !_isMicMuted;
 
-      // 1. Mute/Unmute tracks on local stream
       for (final track in _localStream!.getAudioTracks()) {
         track.enabled = !_isMicMuted;
       }
-
-      // 2. Mute/Unmute tracks on PeerConnection senders & local streams
-      if (_peerConnection != null) {
-        try {
-          final streams = _peerConnection!.getLocalStreams();
-          for (final stream in streams) {
-            if (stream != null) {
-              for (final track in stream.getAudioTracks()) {
-                track.enabled = !_isMicMuted;
-              }
-            }
-          }
-
-          _peerConnection!.getSenders().then((senders) {
-            for (final sender in senders) {
-              if (sender.track?.kind == 'audio') {
-                sender.track?.enabled = !_isMicMuted;
-              }
-            }
-          }).catchError((_) {});
-        } catch (_) {}
-      }
       return true;
-    } else {
-      debugPrint('Mute skipped: stream not ready yet');
-      return false;
     }
+    return false;
   }
 
   /// Toggle Camera On / Off
@@ -717,32 +587,9 @@ class WebRtcCallService {
       for (final track in _localStream!.getVideoTracks()) {
         track.enabled = !_isCameraOff;
       }
-
-      if (_peerConnection != null) {
-        try {
-          final streams = _peerConnection!.getLocalStreams();
-          for (final stream in streams) {
-            if (stream != null) {
-              for (final track in stream.getVideoTracks()) {
-                track.enabled = !_isCameraOff;
-              }
-            }
-          }
-
-          _peerConnection!.getSenders().then((senders) {
-            for (final sender in senders) {
-              if (sender.track?.kind == 'video') {
-                sender.track?.enabled = !_isCameraOff;
-              }
-            }
-          }).catchError((_) {});
-        } catch (_) {}
-      }
       return true;
-    } else {
-      debugPrint('Camera toggle skipped: stream not ready yet');
-      return false;
     }
+    return false;
   }
 
   /// Switch between Front and Back camera
@@ -769,8 +616,6 @@ class WebRtcCallService {
       await Helper.setSpeakerphoneOn(enable);
     } catch (_) {}
     try {
-      // Only route REMOTE incoming stream to speakerphone.
-      // NEVER route _localStream to speakerphone as it plays back your own mic and causes echo!
       _remoteStream?.getAudioTracks().forEach((track) {
         track.enableSpeakerphone(enable);
       });
@@ -780,16 +625,11 @@ class WebRtcCallService {
   /// Reject an incoming call
   Future<void> rejectCall(CallModel call) async {
     try {
-      await _firestore.collection('calls').doc(call.callId).update({
-        'status': 'rejected',
-        'endedAt': FieldValue.serverTimestamp(),
-      });
-      await _writeCallHistoryMessage(
-        call: call.copyWith(status: CallStatus.rejected),
-        finalStatus: 'declined',
-        durationSeconds: 0,
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'status': 'rejected'}),
       );
-      _cleanCallCandidates(call.callId);
     } catch (e) {
       debugPrint('Error rejecting call: $e');
     } finally {
@@ -804,28 +644,11 @@ class WebRtcCallService {
     int durationSeconds = 0,
   }) async {
     try {
-      await _firestore.collection('calls').doc(call.callId).update({
-        'status': endStatus.name,
-        'endedAt': FieldValue.serverTimestamp(),
-        'durationSeconds': durationSeconds,
-      });
-
-      String logStatus = 'ended';
-      if (endStatus == CallStatus.missed) {
-        logStatus = 'missed';
-      } else if (endStatus == CallStatus.rejected) {
-        logStatus = 'declined';
-      } else if (endStatus == CallStatus.busy) {
-        logStatus = 'busy';
-      }
-
-      await _writeCallHistoryMessage(
-        call: call,
-        finalStatus: logStatus,
-        durationSeconds: durationSeconds,
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'status': endStatus.name}),
       );
-
-      _cleanCallCandidates(call.callId);
     } catch (e) {
       debugPrint('Error ending call: $e');
     } finally {
@@ -833,106 +656,16 @@ class WebRtcCallService {
     }
   }
 
-  void _cleanCallCandidates(String callId) {
-    try {
-      final callRef = _firestore.collection('calls').doc(callId);
-      callRef.collection('callerCandidates').get().then((snap) {
-        for (final doc in snap.docs) {
-          doc.reference.delete().catchError((_) {});
-        }
-      }).catchError((_) {});
-      callRef.collection('receiverCandidates').get().then((snap) {
-        for (final doc in snap.docs) {
-          doc.reference.delete().catchError((_) {});
-        }
-      }).catchError((_) {});
-    } catch (_) {}
-  }
-
-  Future<void> _writeCallHistoryMessage({
-    required CallModel call,
-    required String finalStatus,
-    required int durationSeconds,
-  }) async {
-    try {
-      final chatId = _getChatId(call.callerHandle, call.receiverHandle);
-      final chatRef = _firestore.collection('chats').doc(chatId);
-      final messageRef = chatRef.collection('messages').doc('call_${call.callId}');
-
-      final isVideo = call.callType == CallType.video;
-      final typeLabel = isVideo ? 'Video call' : 'Voice call';
-      final icon = isVideo ? '📹' : '📞';
-
-      String summaryText;
-      if (finalStatus == 'missed') {
-        summaryText = '$icon Missed $typeLabel';
-      } else if (finalStatus == 'declined') {
-        summaryText = '$icon Declined $typeLabel';
-      } else if (finalStatus == 'busy') {
-        summaryText = '$icon Busy';
-      } else {
-        if (durationSeconds > 0) {
-          final minutes = durationSeconds ~/ 60;
-          final seconds = durationSeconds % 60;
-          final timeStr = minutes > 0 ? '${minutes}m ${seconds}s' : '${seconds}s';
-          summaryText = '$icon $typeLabel · $timeStr';
-        } else {
-          summaryText = '$icon $typeLabel ended';
-        }
-      }
-
-      final now = FieldValue.serverTimestamp();
-
-      await _firestore.runTransaction((transaction) async {
-        final existingSnap = await transaction.get(messageRef);
-        if (existingSnap.exists) {
-          final existingStatus = existingSnap.data()?['callStatus'] as String?;
-          // Don't overwrite an established 'ended' or 'declined' status with a late 'missed' status
-          if ((existingStatus == 'declined' || existingStatus == 'ended') &&
-              finalStatus == 'missed') {
-            return;
-          }
-        }
-
-        transaction.set(messageRef, {
-          'senderHandle': call.callerHandle,
-          'senderUid': call.callerUid,
-          'content': summaryText,
-          'type': 'call_log',
-          'callType': isVideo ? 'video' : 'audio',
-          'callStatus': finalStatus,
-          'durationSeconds': durationSeconds,
-          'timestamp': now,
-          'status': 'sent',
-          'isRead': false,
-        }, SetOptions(merge: true));
-
-        transaction.set(chatRef, {
-          'participants': [call.callerHandle, call.receiverHandle],
-          'lastMessage': summaryText,
-          'lastSenderHandle': call.callerHandle,
-          'updatedAt': now,
-        }, SetOptions(merge: true));
-      });
-    } catch (e) {
-      debugPrint('Error logging call in chat: $e');
-    }
-  }
-
   /// Clean up all WebRTC streams, peer connection, and subscriptions
   Future<void> cleanup() async {
-    // a. Set isCallActive flag to false FIRST
     _isCallActive = false;
 
-    _callDocSub?.cancel();
-    _callDocSub = null;
-    _candidatesSub?.cancel();
-    _candidatesSub = null;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
     _pendingIceCandidates.clear();
     _isRemoteDescriptionSet = false;
 
     try {
-      // b. Stop all tracks on local & remote streams
       _localStream?.getTracks().forEach((track) {
         try {
           track.stop();
@@ -945,7 +678,6 @@ class WebRtcCallService {
         } catch (_) {}
       });
 
-      // c. Detach renderers & dispose peer connection
       if (_renderersInitialized) {
         try {
           localRenderer.srcObject = null;
@@ -959,7 +691,6 @@ class WebRtcCallService {
       await _peerConnection?.dispose();
       _peerConnection = null;
 
-      // d. Dispose streams and set localStream = null LAST
       await _localStream?.dispose();
       await _remoteStream?.dispose();
 
@@ -1008,4 +739,3 @@ class WebRtcCallService {
     };
   }
 }
-
