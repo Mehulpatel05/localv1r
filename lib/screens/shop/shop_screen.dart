@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_service.dart';
+import '../../core/location/city_picker_screen.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import 'shop_detail_screen.dart';
@@ -97,112 +98,11 @@ class _ShopScreenState extends State<ShopScreen> {
     return list;
   }
 
-  void _openAreaPicker() {
-    final locService = context.read<LocationService>();
-    final city = locService.city;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const Text(
-                  'Explore Buy & Sell in Area',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.45,
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: city.areas.length + 1,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      if (i == 0) {
-                        final isSelected = locService.area == null;
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                          leading: Icon(
-                            Icons.location_city_rounded,
-                            color: isSelected ? const Color(0xFF00B074) : const Color(0xFF64748B),
-                          ),
-                          title: Text(
-                            'All ${city.name}',
-                            style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? const Color(0xFF00B074) : const Color(0xFF1E293B),
-                            ),
-                          ),
-                          trailing: isSelected
-                              ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00B074))
-                              : null,
-                          onTap: () {
-                            locService.setArea(null);
-                            Navigator.pop(ctx);
-                          },
-                        );
-                      }
-                      final area = city.areas[i - 1];
-                      final isSelected = locService.area?.id == area.id;
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                        leading: Icon(
-                          Icons.location_on_rounded,
-                          color: isSelected ? const Color(0xFF00B074) : const Color(0xFF64748B),
-                        ),
-                        title: Text(
-                          area.name,
-                          style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: isSelected ? const Color(0xFF00B074) : const Color(0xFF1E293B),
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00B074))
-                            : null,
-                        onTap: () {
-                          locService.setArea(area);
-                          Navigator.pop(ctx);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final locService = context.watch<LocationService>();
-    final areaLabel = locService.area?.name ?? locService.city.name;
+    final cityName = locService.city.name;
     final posts = _filteredPosts;
 
     return Scaffold(
@@ -238,11 +138,16 @@ class _ShopScreenState extends State<ShopScreen> {
           ],
         ),
         actions: [
-          // Area Selector Pill (Image 3 Header)
+          // City Selector Pill
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: InkWell(
-              onTap: _openAreaPicker,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+                );
+              },
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -261,7 +166,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      areaLabel,
+                      cityName,
                       style: TextStyle(
                         color: isDark ? Colors.white : Colors.black,
                         fontSize: 12,

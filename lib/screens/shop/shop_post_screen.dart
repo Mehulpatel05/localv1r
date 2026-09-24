@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_models.dart';
 import '../../core/location/location_service.dart';
+import '../../core/location/city_picker_screen.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
@@ -27,7 +28,6 @@ class ShopPostScreen extends StatefulWidget {
 
 class _ShopPostScreenState extends State<ShopPostScreen> {
   GeoCity? _selectedGeoCity;
-  GeoArea? _selectedGeoArea;
 
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
@@ -59,7 +59,6 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
     super.initState();
     final locService = context.read<LocationService>();
     _selectedGeoCity = locService.city;
-    _selectedGeoArea = locService.area;
     _descController.addListener(_validateLive);
   }
 
@@ -192,87 +191,11 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
     );
   }
 
-  // ── Area Selector Modal ───────────────────────────────────────────────────
+  // ── City Selector ──────────────────────────────────────────────────────────
   void _openLocationPicker() {
-    final locService = context.read<LocationService>();
-    final currentCity = _selectedGeoCity ?? locService.city;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      'Select Your Neighborhood Area',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.45,
-                      ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: currentCity.areas.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final area = currentCity.areas[i];
-                          final isSelected = _selectedGeoArea?.id == area.id;
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            leading: Icon(
-                              Icons.location_on_rounded,
-                              color: isSelected ? const Color(0xFF00B074) : const Color(0xFF94A3B8),
-                            ),
-                            title: Text(
-                              area.name,
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                color: isSelected ? const Color(0xFF00B074) : const Color(0xFF1E293B),
-                              ),
-                            ),
-                            trailing: isSelected
-                                ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00B074))
-                                : null,
-                            onTap: () {
-                              setState(() {
-                                _selectedGeoArea = area;
-                              });
-                              Navigator.pop(ctx);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CityPickerScreen()),
     );
   }
 
@@ -700,7 +623,7 @@ class _ShopPostScreenState extends State<ShopPostScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '${_selectedGeoCity?.name ?? 'Vadodara'}, ${_selectedGeoArea?.name ?? 'Gotri'}',
+                            _selectedGeoCity?.name ?? context.watch<LocationService>().city.name,
                             style: const TextStyle(
                               color: Color(0xFF0F172A),
                               fontSize: 14.5,

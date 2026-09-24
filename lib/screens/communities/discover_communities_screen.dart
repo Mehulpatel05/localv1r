@@ -504,28 +504,51 @@ class _DiscoverCommunitiesScreenState extends State<DiscoverCommunitiesScreen> {
                                 setState(() {
                                   _joiningCommunityIds.add(community.id);
                                 });
-                                await widget.repository
-                                    .joinCommunity(community.id);
-                                if (mounted) {
-                                  setState(() {
-                                    _joiningCommunityIds.remove(community.id);
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: const Color(0xFF10B981),
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      content: Text(
-                                        'Joined "${community.name}"! Added to My Communities.',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                try {
+                                  await widget.repository.joinCommunity(community.id);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        content: Text(
+                                          'Joined "${community.name}"! Added to My Communities.',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFEF4444),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        content: Text(
+                                          'Failed to join: ${e.toString().replaceAll("Exception:", "").trim()}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _joiningCommunityIds.remove(community.id);
+                                    });
+                                  }
                                 }
                               },
                         child: isJoining

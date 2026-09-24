@@ -140,6 +140,8 @@ class _JobsScreenState extends State<JobsScreen> {
           ),
         ),
         actions: [
+          const Center(child: LocationChip()),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'Refresh',
             icon: Icon(Icons.sync_rounded, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B), size: 22),
@@ -171,13 +173,7 @@ class _JobsScreenState extends State<JobsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // City Pill (Image 1)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: const LocationChip(),
-              ),
-
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               // Hero Headline & Intro (Image 1)
               Padding(

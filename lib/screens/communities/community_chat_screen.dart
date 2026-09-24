@@ -41,9 +41,12 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     super.initState();
     _community = widget.community; // B5: init from widget
     NotificationService().activeCommunityId = widget.community.id;
-    final isAdmin = widget.community.adminHandle == widget.repository.currentUserHandle;
-    _isMember = isAdmin;
-    _isLoading = !isAdmin;
+    final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
+    final adminHandle = widget.community.adminHandle.toLowerCase().replaceAll('@', '');
+    final isAdmin = adminHandle == currentHandle;
+    final isCachedMember = widget.repository.isMemberCached(widget.community.id);
+    _isMember = isAdmin || isCachedMember;
+    _isLoading = false;
     _checkMembership();
   }
 
@@ -58,32 +61,23 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   Future<void> _checkMembership() async {
-    final isAdmin = _community.adminHandle == widget.repository.currentUserHandle;
-    if (isAdmin) {
-      if (mounted) {
-        setState(() {
-          _isMember = true;
-          _isLoading = false;
-        });
+    final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
+    final adminHandle = _community.adminHandle.toLowerCase().replaceAll('@', '');
+    if (adminHandle == currentHandle) {
+      if (mounted && !_isMember) {
+        setState(() => _isMember = true);
       }
       return;
     }
     try {
       final isMember = await widget.repository.isMember(widget.community.id);
-      if (mounted) {
+      if (mounted && _isMember != isMember) {
         setState(() {
           _isMember = isMember;
-          _isLoading = false;
         });
       }
     } catch (e) {
       debugPrint('Error checking membership: $e');
-      if (mounted) {
-        setState(() {
-          _isMember = false;
-          _isLoading = false;
-        });
-      }
     }
   }
 
@@ -121,9 +115,17 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       ),
     );
     if (confirmed != true) return;
-    setState(() => _isLoading = true);
-    await widget.repository.leaveCommunity(widget.community.id);
-    if (mounted) Navigator.pop(context);
+    
+    // Instant optimistic state change & instant pop back
+    setState(() {
+      _isMember = false;
+      _isLoading = false;
+    });
+    
+    widget.repository.leaveCommunity(widget.community.id);
+    if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _deleteCommunity() async {

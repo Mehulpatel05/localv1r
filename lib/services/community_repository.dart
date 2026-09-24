@@ -326,42 +326,91 @@ class CommunityRepository {
     }
   }
 
+  bool isMemberCached(String communityId) {
+    return _cachedUserCommunities.any((c) => c.id == communityId);
+  }
+
   Future<void> joinCommunity(String communityId) async {
+    // 1. Optimistic instant cache update
+    final target = _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull ??
+                   _cachedAllCommunities.where((c) => c.id == communityId).firstOrNull;
+    if (target != null) {
+      if (!_cachedUserCommunities.any((c) => c.id == communityId)) {
+        _cachedUserCommunities.add(target);
+      }
+      _cachedDiscoverCommunities.removeWhere((c) => c.id == communityId);
+      _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+      _discoverCommunitiesCtrl.add(List.unmodifiable(_cachedDiscoverCommunities));
+      _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+    }
+
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/join');
     final headers = await _getAuthHeaders();
-    final res = await http.post(uri, headers: headers);
-    if (res.statusCode == 200) {
-      await fetchUserCommunities();
-      await fetchDiscoverCommunities();
+    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      await Future.wait([
+        fetchUserCommunities(),
+        fetchDiscoverCommunities(),
+        fetchAllCommunities(),
+      ]);
     } else {
-      final data = jsonDecode(res.body);
-      throw Exception(data['detail'] ?? 'Failed to join community');
+      String errMsg = 'Failed to join community';
+      try {
+        final data = jsonDecode(res.body);
+        errMsg = data['detail'] ?? errMsg;
+      } catch (_) {}
+      throw Exception(errMsg);
     }
   }
 
   Future<void> leaveCommunity(String communityId) async {
+    // 1. Optimistic instant cache update
+    _cachedUserCommunities.removeWhere((c) => c.id == communityId);
+    _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+    _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/leave');
-    final headers = await _getAuthHeaders();
-    final res = await http.post(uri, headers: headers);
-    if (res.statusCode == 200) {
-      await fetchUserCommunities();
-      await fetchDiscoverCommunities();
+    try {
+      final headers = await _getAuthHeaders();
+      final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        await Future.wait([
+          fetchUserCommunities(),
+          fetchDiscoverCommunities(),
+          fetchAllCommunities(),
+        ]);
+      }
+    } catch (e) {
+      debugPrint('[CommunityRepository] leaveCommunity error: $e');
     }
   }
 
   Future<void> deleteCommunity(String communityId) async {
+    _cachedUserCommunities.removeWhere((c) => c.id == communityId);
+    _cachedAllCommunities.removeWhere((c) => c.id == communityId);
+    _cachedDiscoverCommunities.removeWhere((c) => c.id == communityId);
+    _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+    _allCommunitiesCtrl.add(List.unmodifiable(_cachedAllCommunities));
+    _discoverCommunitiesCtrl.add(List.unmodifiable(_cachedDiscoverCommunities));
+    _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
     final headers = await _getAuthHeaders();
-    await http.delete(uri, headers: headers);
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
     await fetchUserCommunities();
     await fetchAllCommunities();
   }
 
   Future<CommunityModel?> getCommunityById(String communityId) async {
+    final cached = _cachedAllCommunities.where((c) => c.id == communityId).firstOrNull ??
+                   _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
+                   _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
+    if (cached != null) return cached;
+
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
     try {
       final headers = await _getAuthHeaders();
-      final res = await http.get(uri, headers: headers);
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final comm = data['community'] as Map<String, dynamic>?;
@@ -376,6 +425,9 @@ class CommunityRepository {
   }
 
   Future<bool> isMember(String communityId) async {
+    if (_cachedUserCommunities.any((c) => c.id == communityId)) {
+      return true;
+    }
     final comms = await fetchUserCommunities();
     return comms.any((c) => c.id == communityId);
   }

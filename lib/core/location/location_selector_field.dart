@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'location_service.dart';
 import 'location_models.dart';
+import 'city_picker_screen.dart';
 
 class LocationSelectorField extends StatefulWidget {
   final void Function(GeoCity city, GeoArea area) onLocationSelected;
@@ -16,7 +17,6 @@ class LocationSelectorField extends StatefulWidget {
 }
 
 class _LocationSelectorFieldState extends State<LocationSelectorField> {
-  GeoArea? _selectedArea;
   bool _initialized = false;
 
   @override
@@ -24,66 +24,83 @@ class _LocationSelectorFieldState extends State<LocationSelectorField> {
     final locationService = context.watch<LocationService>();
     final city = locationService.city;
 
-    if (!_initialized || (_selectedArea != null && _selectedArea!.cityId != city.id)) {
-      final generalArea = city.areas.where((a) => a.id.contains('GENERAL') || a.name.toLowerCase().contains('general')).firstOrNull;
-      _selectedArea = locationService.area ?? generalArea ?? (city.areas.isNotEmpty ? city.areas.first : null);
+    if (!_initialized) {
       _initialized = true;
-      if (_selectedArea != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _selectedArea != null) {
-            widget.onLocationSelected(city, _selectedArea!);
-          }
-        });
-      }
+      final defaultArea = GeoArea(
+        id: '${city.id}_GENERAL',
+        cityId: city.id,
+        name: 'All ${city.name}',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onLocationSelected(city, defaultArea);
+        }
+      });
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Read-only City Field
-        TextFormField(
-          key: ValueKey(city.id),
-          initialValue: city.name,
-          readOnly: true,
-          decoration: const InputDecoration(
-            labelText: 'City',
-            border: OutlineInputBorder(),
-            filled: true,
-            fillColor: Color(0xFFF3F4F6), // light gray to indicate read-only
-          ),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        const SizedBox(height: 16),
-        // Dropdown Area Field
-        DropdownButtonFormField<GeoArea>(
-          decoration: const InputDecoration(
-            labelText: 'Area *',
-            border: OutlineInputBorder(),
-          ),
-          initialValue: _selectedArea,
-          items: city.areas.map((area) {
-            final isGeneral = area.id.contains('GENERAL') || area.name.toLowerCase().contains('general');
-            return DropdownMenuItem<GeoArea>(
-              value: area,
-              child: Text(
-                isGeneral ? 'General / All ${city.name} (Whole City)' : area.name,
-                style: TextStyle(
-                  fontWeight: isGeneral ? FontWeight.bold : FontWeight.normal,
-                  color: isGeneral ? const Color(0xFF3B82F6) : Colors.black87,
-                ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
               ),
-            );
-          }).toList(),
-          onChanged: (area) {
-            setState(() {
-              _selectedArea = area;
-            });
-            if (area != null) {
-              widget.onLocationSelected(city, area);
-            }
-          },
-          validator: (value) => value == null ? 'Please select an area' : null,
+              child: const Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFF3B82F6),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'City',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    city.name,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_right_rounded,
+              color: Color(0xFF94A3B8),
+              size: 20,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
+

@@ -1220,11 +1220,9 @@ class D1Service:
     @classmethod
     def leave_community(cls, community_id: str, user_handle: str) -> bool:
         clean_user = user_handle.replace("@", "").strip().lower()
-        member_id = f"{community_id}_{clean_user}"
-        if cls.execute("DELETE FROM community_members WHERE id = ?;", [member_id]):
-            cls.execute("UPDATE communities SET member_count = MAX(1, member_count - 1) WHERE id = ?;", [community_id])
-            return True
-        return False
+        cls.execute("DELETE FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_user])
+        cls.execute("UPDATE communities SET member_count = MAX(1, member_count - 1) WHERE id = ?;", [community_id])
+        return True
 
     @classmethod
     def get_community_members(cls, community_id: str) -> List[Dict[str, Any]]:

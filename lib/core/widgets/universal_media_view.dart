@@ -181,14 +181,14 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
       return Image.file(
         widget.file!,
         fit: widget.fit,
-        errorBuilder: (_, __, ___) => _buildErrorPlaceholder(),
+        errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
       );
     }
 
     return Image.network(
       widget.url!,
       fit: widget.fit,
-      loadingBuilder: (_, child, progress) {
+      loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         return Container(
           color: Colors.black12,
@@ -201,7 +201,7 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
           ),
         );
       },
-      errorBuilder: (_, __, ___) => _buildErrorPlaceholder(),
+      errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
     );
   }
 
@@ -358,7 +358,6 @@ class FullscreenVideoPlayerModal extends StatefulWidget {
 class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
-  bool _showControls = true;
 
   @override
   void initState() {

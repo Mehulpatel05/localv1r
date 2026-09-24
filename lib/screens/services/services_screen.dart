@@ -30,7 +30,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   String _searchQuery = '';
   String _selectedCategory = ''; // '' = All
   String _selectedPriceRange = 'All'; // 'All', 'Under ₹300', '₹300–₹1000', 'Above ₹1000'
-  String _selectedArea = 'All Areas';
 
   final List<Map<String, dynamic>> _categoriesRow1 = [
     {'name': 'Plumbing', 'icon': Icons.build_rounded},
@@ -101,12 +100,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         }
       }
 
-      // 3. Area Filter
-      if (_selectedArea != 'All Areas') {
-        if (!area.contains(_selectedArea.toLowerCase())) return false;
-      }
-
-      // 4. Price Filter
+      // 3. Price Filter
       if (_selectedPriceRange == 'Under ₹300') {
         if (priceVal > 300) return false;
       } else if (_selectedPriceRange == '₹300–₹1000') {
@@ -217,43 +211,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
                 const SizedBox(height: 16),
 
-                // Area Filter
-                const Text(
-                  'Area',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ['All Areas', 'Alkapuri', 'Fatehgunj', 'Sayajigunj'].map((a) {
-                    final isSel = _selectedArea == a;
-                    return ChoiceChip(
-                      label: Text(a),
-                      selected: isSel,
-                      onSelected: (val) {
-                        setModalState(() {
-                          _selectedArea = a;
-                        });
-                        setState(() {});
-                      },
-                      backgroundColor: Colors.white,
-                      selectedColor: const Color(0xFFEFF6FF),
-                      labelStyle: TextStyle(
-                        color: isSel ? const Color(0xFF2563EB) : const Color(0xFF475569),
-                        fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: isSel ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 16),
-
                 // Price Filter
                 const Text(
                   'Price',
@@ -299,7 +256,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       onPressed: () {
                         setModalState(() {
                           _selectedCategory = '';
-                          _selectedArea = 'All Areas';
                           _selectedPriceRange = 'All';
                         });
                         setState(() {});

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/constants/areas_and_categories.dart';
+import '../../core/location/location_service.dart';
+import '../../core/location/city_picker_screen.dart';
 import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/vote_capsule.dart';
@@ -74,37 +77,52 @@ class _FeedScreenState extends State<FeedScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
-                  width: 1,
+        title: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  color: isDark ? Colors.white : Colors.black,
+                  size: 18,
                 ),
               ),
-              child: Icon(
-                Icons.location_on_outlined,
-                color: isDark ? Colors.white : Colors.black,
-                size: 18,
+              const SizedBox(width: 10),
+              Text(
+                context.watch<LocationService>().city.name,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Vadodara',
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
+              const SizedBox(width: 4),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: isDark ? Colors.white70 : Colors.black87,
+                size: 20,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           // Notification bell icon & unread count
