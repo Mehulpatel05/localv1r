@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'post_repository.dart';
 
@@ -20,12 +19,7 @@ class AudioUploadService {
         return null;
       }
 
-      final jwtToken = await AuthService.instance.getAccessToken();
-      final user = FirebaseAuth.instance.currentUser;
-      String? sessionToken =
-          (jwtToken != null && jwtToken.isNotEmpty)
-              ? jwtToken
-              : (user != null ? await user.getIdToken() : null);
+      String? sessionToken = await AuthService.instance.getAccessToken();
 
       final bytes = await file.readAsBytes();
       final ext = file.path.split('.').last.toLowerCase();
@@ -59,11 +53,8 @@ class AudioUploadService {
         final refreshed = await AuthService.instance.refreshToken();
         if (refreshed != null && refreshed.isNotEmpty) {
           sessionToken = refreshed;
-        } else if (FirebaseAuth.instance.currentUser != null) {
-          sessionToken =
-              await FirebaseAuth.instance.currentUser?.getIdToken(true);
+          response = await sendUpload(sessionToken);
         }
-        response = await sendUpload(sessionToken);
       }
 
       if (response.statusCode == 200) {

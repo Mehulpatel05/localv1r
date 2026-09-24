@@ -1,10 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'avatar_cache_service.dart';
 
 class AuthService {
@@ -61,6 +60,16 @@ class AuthService {
     }
   }
 
+  /// Robust check to determine if a handle belongs to a new/unconfigured account
+  static bool isNewUserHandle(String? handle) {
+    if (handle == null) return true;
+    final h = handle.trim().toLowerCase();
+    if (h.isEmpty || h == 'guest' || h.startsWith('anon#')) {
+      return true;
+    }
+    return false;
+  }
+
   /// Verifies OTP with backend, stores tokens securely, and authenticates session
   Future<Map<String, dynamic>> verifyOtp({
     required String requestId,
@@ -77,28 +86,38 @@ class AuthService {
         payload['phone_number'] = phoneNumber;
       }
 
+      debugPrint('[AuthService] Posting OTP verification to $uri with requestId=$requestId');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      );
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint('[AuthService] verifyOtp response status: ${response.statusCode}, body: ${response.body}');
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        final accessToken = body['access_token'] as String;
-        final refreshToken = body['refresh_token'] as String;
+        final accessToken = (body['access_token'] as String?) ?? '';
+        final refreshToken = (body['refresh_token'] as String?) ?? '';
         final user = body['user'] as Map<String, dynamic>? ?? {};
-        final userId = user['userId'] as String? ?? '';
-        final phone = user['phoneNumber'] as String? ?? '';
-        final handle = user['handle'] as String? ?? '';
-        final isNewUser = user['isNewUser'] == true || handle.isEmpty;
-        final customFirebaseToken = body['firebase_custom_token'] as String?;
+        final userId = (user['userId'] as String?) ?? '';
+        final phone = (user['phoneNumber'] as String?) ?? (phoneNumber ?? '');
+        final handle = (user['handle'] as String?) ?? '';
+        final isNewUser = user['isNewUser'] == true || isNewUserHandle(handle);
 
         // 1. Secure storage write
-        await _secureStorage.write(key: _kAccessTokenKey, value: accessToken);
-        await _secureStorage.write(key: _kRefreshTokenKey, value: refreshToken);
-        await _secureStorage.write(key: _kUserIdKey, value: userId);
-        await _secureStorage.write(key: _kPhoneKey, value: phone);
+        if (accessToken.isNotEmpty) {
+          await _secureStorage.write(key: _kAccessTokenKey, value: accessToken);
+        }
+        if (refreshToken.isNotEmpty) {
+          await _secureStorage.write(key: _kRefreshTokenKey, value: refreshToken);
+        }
+        if (userId.isNotEmpty) {
+          await _secureStorage.write(key: _kUserIdKey, value: userId);
+        }
+        if (phone.isNotEmpty) {
+          await _secureStorage.write(key: _kPhoneKey, value: phone);
+        }
         if (handle.isNotEmpty) {
           await _secureStorage.write(key: _kHandleKey, value: handle);
         }
@@ -106,20 +125,11 @@ class AuthService {
         // 2. SharedPreferences cache for instant synchronous state lookups
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('is_logged_in', 'true');
-        await prefs.setString('user_id', userId);
-        await prefs.setString('phone_number', phone);
-        if (handle.isNotEmpty) {
-          await prefs.setString('user_handle', handle);
-        }
+        if (userId.isNotEmpty) await prefs.setString('user_id', userId);
+        if (phone.isNotEmpty) await prefs.setString('phone_number', phone);
+        if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
 
-        // 3. Connect to Firebase Auth via Custom Token if available
-        if (customFirebaseToken != null && customFirebaseToken.isNotEmpty) {
-          try {
-            await FirebaseAuth.instance.signInWithCustomToken(customFirebaseToken);
-          } catch (e) {
-            debugPrint('[AuthService] Firebase custom token login note: $e');
-          }
-        }
+        debugPrint('[AuthService] Login session saved. userId=$userId, handle=$handle, isNewUser=$isNewUser');
 
         return {
           'success': true,
@@ -130,16 +140,24 @@ class AuthService {
         };
       } else {
         final errorMsg = body['error']?['message'] ?? body['detail'] ?? 'Verification failed.';
+        debugPrint('[AuthService] Verification failed: $errorMsg (status: ${response.statusCode})');
         return {
           'success': false,
           'error': errorMsg,
           'statusCode': response.statusCode,
         };
       }
-    } catch (e) {
+    } on TimeoutException {
+      debugPrint('[AuthService] OTP verification request timed out after 15s');
       return {
         'success': false,
-        'error': 'Network connection error during verification.',
+        'error': 'Network timeout. Please check your connection and tap Verify again.',
+      };
+    } catch (e, stack) {
+      debugPrint('[AuthService] verifyOtp unexpected exception: $e\n$stack');
+      return {
+        'success': false,
+        'error': 'Network connection error during verification ($e).',
       };
     }
   }
@@ -187,89 +205,136 @@ class AuthService {
     return await _secureStorage.read(key: _kHandleKey);
   }
 
-  Future<void> saveUserHandle(String handle, {String? userId, String? phone}) async {
-    await _secureStorage.write(key: _kHandleKey, value: handle);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_handle', handle);
-    await prefs.setString('is_logged_in', 'true');
-
-    // Sync to Firestore users and profiles collections for multi-device cross-login
+  /// Checks if handle is available via backend D1
+  Future<bool> checkHandleAvailable(String handle) async {
     try {
-      final effectiveUid = userId ?? await getUserId() ?? FirebaseAuth.instance.currentUser?.uid;
-      final effectivePhone = phone ?? await getPhoneNumber();
-
-      if (effectiveUid != null && effectiveUid.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(effectiveUid).set({
-          'handle': handle,
-          'userId': effectiveUid,
-          if (effectivePhone != null && effectivePhone.isNotEmpty) 'phoneNumber': effectivePhone,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-
       final clean = handle.replaceAll('@', '').trim();
-      if (clean.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
-          'handle': clean,
-          if (effectiveUid != null && effectiveUid.isNotEmpty) 'ownerUid': effectiveUid,
-          if (effectivePhone != null && effectivePhone.isNotEmpty) 'phoneNumber': effectivePhone,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      final uri = Uri.parse('$baseUrl/auth/check-handle?handle=${Uri.encodeComponent(clean)}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      debugPrint('[AuthService] checkHandleAvailable ($uri): status=${res.statusCode}, body=${res.body}');
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['available'] == true;
       }
     } catch (e) {
-      debugPrint('[AuthService] Firestore handle sync note: $e');
+      debugPrint('[AuthService] checkHandleAvailable error: $e');
+    }
+    return true;
+  }
+
+  /// Updates user handle in Cloudflare D1
+  Future<Map<String, dynamic>> saveUserHandle(String handle, {String? userId, String? phone}) async {
+    final clean = handle.replaceAll('@', '').trim();
+
+    try {
+      String? token = await getAccessToken();
+      token ??= await refreshToken();
+      debugPrint('[AuthService] saveUserHandle: clean=$clean, tokenAvailable=${token != null && token.isNotEmpty}');
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('$baseUrl/auth/profile/handle');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'handle': clean}),
+        ).timeout(const Duration(seconds: 15));
+
+        debugPrint('[AuthService] saveUserHandle response ($uri): status=${response.statusCode}, body=${response.body}');
+
+        final body = jsonDecode(response.body);
+        if (response.statusCode == 200) {
+          await _secureStorage.write(key: _kHandleKey, value: clean);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_handle', clean);
+          await prefs.setString('is_logged_in', 'true');
+
+          if (body['access_token'] != null) {
+            await _secureStorage.write(key: _kAccessTokenKey, value: body['access_token']);
+          }
+          if (body['refresh_token'] != null) {
+            await _secureStorage.write(key: _kRefreshTokenKey, value: body['refresh_token']);
+          }
+          return {'success': true};
+        } else {
+          final errorMsg = body['detail'] ?? body['error']?['message'] ?? 'Failed to update username.';
+          return {
+            'success': false,
+            'statusCode': response.statusCode,
+            'isTaken': response.statusCode == 409,
+            'error': errorMsg,
+          };
+        }
+      } else {
+        return {
+          'success': false,
+          'statusCode': 401,
+          'error': 'Session expired. Please sign in again.',
+        };
+      }
+    } on TimeoutException {
+      return {
+        'success': false,
+        'error': 'Connection timed out. Please tap Continue again.',
+      };
+    } catch (e, stack) {
+      debugPrint('[AuthService] D1 handle sync error: $e\n$stack');
+      return {
+        'success': false,
+        'error': 'Network connection error during handle save ($e).',
+      };
     }
   }
 
-  /// Restores user profile, handle, and avatar from cloud for seamless multi-device login
+  /// Restores user profile, handle, and avatar from Cloudflare D1
   Future<Map<String, dynamic>?> syncCloudProfile() async {
     try {
-      final userId = await getUserId() ?? FirebaseAuth.instance.currentUser?.uid;
-      final phone = await getPhoneNumber();
+      String? token = await getAccessToken();
+      token ??= await refreshToken();
+      if (token == null) return null;
 
-      String? resolvedHandle;
-      String? resolvedPhoto;
+      final uri = Uri.parse('$baseUrl/auth/profile');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
 
-      if (userId != null && userId.isNotEmpty) {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-        if (doc.exists) {
-          final data = doc.data();
-          if (data != null) {
-            final h = data['handle'] ?? data['userHandle'];
-            if (h != null && h.toString().trim().isNotEmpty) {
-              resolvedHandle = h.toString().trim();
-            }
-            resolvedPhoto = data['photoUrl']?.toString();
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final user = body['user'] as Map<String, dynamic>?;
+        if (user != null) {
+          final handle = user['handle'] as String?;
+          final photoUrl = user['avatarUrl'] as String?;
+          final phone = user['phoneNumber'] as String?;
+          final uid = user['userId'] as String?;
+
+          if (handle != null && handle.isNotEmpty) {
+            await _secureStorage.write(key: _kHandleKey, value: handle);
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_handle', handle);
           }
-        }
-      }
-
-      if ((resolvedHandle == null || resolvedHandle.isEmpty) && phone != null && phone.isNotEmpty) {
-        final q = await FirebaseFirestore.instance
-            .collection('users')
-            .where('phoneNumber', isEqualTo: phone)
-            .limit(1)
-            .get();
-        if (q.docs.isNotEmpty) {
-          final data = q.docs.first.data();
-          final h = data['handle'] ?? data['userHandle'];
-          if (h != null && h.toString().trim().isNotEmpty) {
-            resolvedHandle = h.toString().trim();
+          if (phone != null && phone.isNotEmpty) {
+            await _secureStorage.write(key: _kPhoneKey, value: phone);
           }
-          resolvedPhoto = data['photoUrl']?.toString();
-        }
-      }
+          if (uid != null && uid.isNotEmpty) {
+            await _secureStorage.write(key: _kUserIdKey, value: uid);
+          }
+          if (photoUrl != null && photoUrl.isNotEmpty) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('profile_photo_url', photoUrl);
+          }
 
-      if (resolvedHandle != null && resolvedHandle.isNotEmpty) {
-        await saveUserHandle(resolvedHandle, userId: userId, phone: phone);
-        if (resolvedPhoto != null && resolvedPhoto.isNotEmpty) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('profile_photo_url', resolvedPhoto);
+          return {
+            'handle': handle,
+            'photoUrl': photoUrl,
+            'phoneNumber': phone,
+            'userId': uid,
+          };
         }
-        return {
-          'handle': resolvedHandle,
-          'photoUrl': resolvedPhoto,
-        };
       }
     } catch (e) {
       debugPrint('[AuthService] syncCloudProfile warning: $e');
@@ -282,15 +347,10 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Delete Account permanently via Backend Admin SDK
+  /// Delete Account permanently via Backend D1
   Future<Map<String, dynamic>> deleteAccount() async {
     String? token = await getAccessToken();
     token ??= await refreshToken();
-    if (token == null) {
-      try {
-        token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      } catch (_) {}
-    }
 
     final uri = Uri.parse('$baseUrl/auth/account');
     try {
@@ -313,6 +373,7 @@ class AuthService {
       }
 
       if (response.statusCode == 200) {
+        await signOut();
         return {'success': true};
       } else {
         try {
@@ -329,89 +390,59 @@ class AuthService {
     }
   }
 
+  /// Updates user profile image in Cloudflare D1
   Future<void> updateUserProfileImage(String photoUrl) async {
-    final user = FirebaseAuth.instance.currentUser;
     final handle = await getUserHandle();
-    final uid = user?.uid ?? await getUserId();
-
-    // 1. Firebase Auth photoURL
-    if (user != null) {
-      try {
-        await user.updatePhotoURL(photoUrl);
-      } catch (e) {
-        debugPrint('[AuthService] Update Firebase photoURL warning: $e');
+    try {
+      String? token = await getAccessToken();
+      token ??= await refreshToken();
+      if (token != null) {
+        final uri = Uri.parse('$baseUrl/auth/profile/avatar');
+        await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'avatar_url': photoUrl}),
+        );
       }
+    } catch (e) {
+      debugPrint('[AuthService] Update avatar error: $e');
     }
 
-    // 2. Firestore users/{uid}
-    if (uid != null && uid.isNotEmpty) {
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'photoUrl': photoUrl,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('[AuthService] Update users photoUrl warning: $e');
-      }
-    }
-
-    // 3. Firestore profiles/{handle}
     if (handle != null && handle.isNotEmpty) {
       final clean = handle.replaceAll('@', '').trim().toLowerCase();
-      try {
-        await FirebaseFirestore.instance.collection('profiles').doc(clean).set({
-          'photoUrl': photoUrl,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('[AuthService] Update profiles photoUrl warning: $e');
-      }
       AvatarCacheService.instance.setCachedUrl(clean, photoUrl);
     }
-
-    // 4. Local storage
     await AvatarCacheService.instance.saveMyPhotoUrlLocally(photoUrl);
   }
 
+  /// Removes user profile image in Cloudflare D1
   Future<void> removeUserProfileImage() async {
-    final user = FirebaseAuth.instance.currentUser;
     final handle = await getUserHandle();
-    final uid = user?.uid ?? await getUserId();
-
-    // 1. Firebase Auth
-    if (user != null) {
-      try {
-        await user.updatePhotoURL(null);
-      } catch (e) {
-        debugPrint('[AuthService] Clear Firebase photoURL warning: $e');
+    try {
+      String? token = await getAccessToken();
+      token ??= await refreshToken();
+      if (token != null) {
+        final uri = Uri.parse('$baseUrl/auth/profile/avatar');
+        await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'avatar_url': ''}),
+        );
       }
+    } catch (e) {
+      debugPrint('[AuthService] Remove avatar error: $e');
     }
 
-    // 2. Firestore users/{uid}
-    if (uid != null && uid.isNotEmpty) {
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(uid).update({
-          'photoUrl': FieldValue.delete(),
-        });
-      } catch (e) {
-        debugPrint('[AuthService] Delete users photoUrl warning: $e');
-      }
-    }
-
-    // 3. Firestore profiles/{handle}
     if (handle != null && handle.isNotEmpty) {
       final clean = handle.replaceAll('@', '').trim().toLowerCase();
-      try {
-        await FirebaseFirestore.instance.collection('profiles').doc(clean).update({
-          'photoUrl': FieldValue.delete(),
-        });
-      } catch (e) {
-        debugPrint('[AuthService] Delete profiles photoUrl warning: $e');
-      }
       AvatarCacheService.instance.setCachedUrl(clean, null);
     }
-
-    // 4. Local storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_photo_url');
   }
@@ -422,9 +453,9 @@ class AuthService {
       await _secureStorage.deleteAll();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      await FirebaseAuth.instance.signOut();
     } catch (e) {
       debugPrint('[AuthService] Sign out error: $e');
     }
   }
 }
+

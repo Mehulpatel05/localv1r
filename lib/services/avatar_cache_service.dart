@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AvatarCacheService extends ChangeNotifier {
@@ -9,6 +10,8 @@ class AvatarCacheService extends ChangeNotifier {
   static AvatarCacheService get instance => _instance;
 
   AvatarCacheService._internal();
+
+  static const String baseUrl = 'https://localv1r.onrender.com/api/v1';
 
   final Map<String, String?> _cache = {};
   final Set<String> _inFlightFetches = {};
@@ -48,7 +51,7 @@ class AvatarCacheService extends ChangeNotifier {
     }
   }
 
-  /// Fetches avatar URL from Firestore `profiles/{handle}` collection if not already cached
+  /// Fetches avatar URL from Backend D1 `profiles/{handle}` if not already cached
   Future<String?> fetchAvatarUrl(String handle) async {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
@@ -70,15 +73,13 @@ class AvatarCacheService extends ChangeNotifier {
     _inFlightFetches.add(clean);
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('profiles')
-          .doc(clean)
-          .get()
-          .timeout(const Duration(seconds: 5));
+      final uri = Uri.parse('$baseUrl/auth/profile/${Uri.encodeComponent(clean)}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
 
-      if (doc.exists) {
-        final data = doc.data();
-        final photoUrl = (data?['photoUrl'] as String?)?.trim();
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final user = data['user'] as Map<String, dynamic>?;
+        final photoUrl = (user?['avatarUrl'] as String?)?.trim();
         _cache[clean] = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
       } else {
         _cache[clean] = null;

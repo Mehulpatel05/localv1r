@@ -2,8 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
@@ -62,59 +60,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final storedUserId = await AuthService.instance.getUserId();
-      final effectiveUid = storedUserId ?? user?.uid;
       final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+      final cloudProfile = await AuthService.instance.syncCloudProfile();
 
-      Map<String, dynamic> data = {};
-      if (effectiveUid != null && effectiveUid.isNotEmpty) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(effectiveUid)
-            .get();
-        if (doc.exists && doc.data() != null) {
-          data = doc.data()!;
-        }
-      }
-
-      // If document wasn't found by UID, check profiles or query users collection
-      if (data.isEmpty && cleanHandle.isNotEmpty) {
-        final pdoc = await FirebaseFirestore.instance
-            .collection('profiles')
-            .doc(cleanHandle)
-            .get();
-        if (pdoc.exists && pdoc.data() != null) {
-          data = pdoc.data()!;
-        } else {
-          final uq = await FirebaseFirestore.instance
-              .collection('users')
-              .where('handle', isEqualTo: cleanHandle)
-              .limit(1)
-              .get();
-          if (uq.docs.isNotEmpty) {
-            data = uq.docs.first.data();
-          }
-        }
-      }
-
-      final resolvedHandle = (data['handle'] ?? data['userHandle'] ?? widget.currentUserHandle).toString().trim();
-      String? photoUrl = (data['photoUrl'] as String?)?.trim();
+      String? photoUrl = cloudProfile?['photoUrl'] as String?;
+      photoUrl ??= AvatarCacheService.instance.getCachedUrl(cleanHandle);
       if (photoUrl == null || photoUrl.isEmpty) {
-        photoUrl = user?.photoURL;
+        photoUrl = await AvatarCacheService.instance.fetchAvatarUrl(cleanHandle);
       }
-      if (photoUrl == null || photoUrl.isEmpty) {
-        photoUrl = AvatarCacheService.instance.getCachedUrl(cleanHandle);
-      }
-      final rawPhone = data['phoneNumber'] ?? data['phone'] ?? user?.phoneNumber ?? (await AuthService.instance.getPhoneNumber()) ?? '';
+
+      final rawPhone = cloudProfile?['phoneNumber'] ?? (await AuthService.instance.getPhoneNumber()) ?? '';
+      final resolvedHandle = (cloudProfile?['handle'] ?? widget.currentUserHandle).toString().trim();
+
       _userData = {
         'handle': resolvedHandle,
         'phone': rawPhone,
-        'email': data['email'] ?? user?.email ?? '',
-        'bio': (data['bio'] as String?)?.trim() ?? '',
+        'email': '',
+        'bio': '',
         'photoUrl': photoUrl,
-        'createdAt': data['createdAt'] ?? user?.metadata.creationTime,
+        'createdAt': DateTime.now(),
       };
+
       if (photoUrl != null && photoUrl.isNotEmpty) {
         AvatarCacheService.instance.setCachedUrl(cleanHandle, photoUrl);
       }
@@ -137,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showChangeProfilePhotoSheet() {
     final handle = _userData?['handle'] ?? widget.currentUserHandle;
-    final currentPhoto = (_userData?['photoUrl'] as String?) ?? FirebaseAuth.instance.currentUser?.photoURL;
+    final currentPhoto = _userData?['photoUrl'] as String?;
     final hasPhoto = currentPhoto != null && currentPhoto.trim().isNotEmpty;
 
     showModalBottomSheet(
@@ -379,27 +345,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveBio() async {
     setState(() => _isSavingBio = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
-          'bio': _bioController.text.trim(),
-        });
-        setState(() {
-          _userData!['bio'] = _bioController.text.trim();
-        });
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              content: Text('Bio saved successfully!'),
-            ),
-          );
-        }
+      final bioText = _bioController.text.trim();
+      setState(() {
+        _userData!['bio'] = bioText;
+      });
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            content: Text('Bio saved successfully!'),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -494,8 +452,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _getJoinedYear() {
     final raw = _userData?['createdAt'];
-    if (raw is Timestamp) {
-      return '${raw.toDate().year}';
+    if (raw is DateTime) {
+      return '${raw.year}';
+    } else if (raw is String) {
+      final dt = DateTime.tryParse(raw);
+      if (dt != null) return '${dt.year}';
+    } else if (raw is int) {
+      final dt = raw > 1000000000000
+          ? DateTime.fromMillisecondsSinceEpoch(raw)
+          : DateTime.fromMillisecondsSinceEpoch(raw * 1000);
+      return '${dt.year}';
     }
     return '${DateTime.now().year}';
   }
@@ -576,10 +542,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final email = _userData?['email'] as String?;
                   DateTime? joinedDate;
                   final rawCreated = _userData?['createdAt'];
-                  if (rawCreated is Timestamp) {
-                    joinedDate = rawCreated.toDate();
-                  } else if (rawCreated is DateTime) {
+                  if (rawCreated is DateTime) {
                     joinedDate = rawCreated;
+                  } else if (rawCreated is String) {
+                    joinedDate = DateTime.tryParse(rawCreated);
+                  } else if (rawCreated is int) {
+                    joinedDate = rawCreated > 1000000000000
+                        ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
+                        : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
                   }
                   final profile = UserProfile(
                     handle: handle.replaceAll('@', '').trim(),

@@ -187,10 +187,19 @@ class Post {
   factory Post.fromMap(Map<String, dynamic> json, String id) {
     DateTime parsedDate = DateTime.now();
     if (json['createdAt'] != null) {
-      if (json['createdAt'] is Timestamp) {
-        parsedDate = (json['createdAt'] as Timestamp).toDate();
-      } else if (json['createdAt'] is String) {
-        parsedDate = DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now();
+      final c = json['createdAt'];
+      if (c is DateTime) {
+        parsedDate = c;
+      } else if (c is String) {
+        parsedDate = DateTime.tryParse(c) ?? DateTime.now();
+      } else if (c is int) {
+        parsedDate = c > 1000000000000
+            ? DateTime.fromMillisecondsSinceEpoch(c)
+            : DateTime.fromMillisecondsSinceEpoch(c * 1000);
+      } else if (c.runtimeType.toString().contains('Timestamp')) {
+        try {
+          parsedDate = (c as dynamic).toDate();
+        } catch (_) {}
       }
     }
 

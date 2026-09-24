@@ -96,7 +96,7 @@ class ServiceCardWidget extends StatelessWidget {
                             ),
                     ),
 
-                    // Top Left Soft-Tint Category Badge (Image 4 Group 2)
+                    // Top Left Soft-Tint Category Badge
                     Positioned(
                       top: 8,
                       left: 8,
@@ -124,6 +124,13 @@ class ServiceCardWidget extends StatelessWidget {
                                 color: style['color'] as Color,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     // Top Right Video Indicator Badge
                     if (hasImage && R2StorageService.isVideoFile(post.imageUrl!))
                       Positioned(

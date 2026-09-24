@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
@@ -28,9 +27,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Future<void> _loadBlockedUsers() async {
     setState(() => _isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final storedUid = await AuthService.instance.getUserId();
-      final effectiveUid = user?.uid ?? storedUid;
+      final effectiveUid = await AuthService.instance.getUserId();
       final rawHandle = await AuthService.instance.getUserHandle();
       final cleanHandle = (rawHandle ?? '').replaceAll('@', '').trim();
 

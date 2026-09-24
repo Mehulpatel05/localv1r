@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'gujarat_data.dart';
 import 'location_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/auth_service.dart';
 
 class CityPickerScreen extends StatelessWidget {
   const CityPickerScreen({super.key});
@@ -63,15 +62,6 @@ class CityPickerScreen extends StatelessWidget {
   }
 
   void _joinWaitlist(BuildContext context, String cityId, String cityName) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance.collection('city_waitlist').doc('${cityId}_${user.uid}').set({
-        'cityId': cityId,
-        'uid': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Joined waitlist for $cityName! We will notify you when we launch.')),

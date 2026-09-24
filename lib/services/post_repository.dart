@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -264,9 +263,9 @@ class PostRepository extends ChangeNotifier {
       final queryParams = <String, String>{
         'limit': '50',
         'cityId': cityId,
-        'cursor': ?_nextCursor,
-        'areaId': ?effectiveAreaId,
-        'category': ?categoryStr,
+        if (_nextCursor != null) 'cursor': _nextCursor!,
+        if (effectiveAreaId != null) 'areaId': effectiveAreaId,
+        if (categoryStr != null) 'category': categoryStr,
       };
       
       uri = uri.replace(queryParameters: queryParams);
@@ -466,13 +465,9 @@ class PostRepository extends ChangeNotifier {
 
   Future<Map<String, String>> _getAuthHeaders() async {
     final token = await AuthService.instance.getAccessToken();
-    final user = FirebaseAuth.instance.currentUser;
-    final fallbackToken = user != null ? await user.getIdToken() : '';
-    final finalToken = (token != null && token.isNotEmpty) ? token : fallbackToken;
-    
     return {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $finalToken',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -552,7 +547,7 @@ class PostRepository extends ChangeNotifier {
           if (shopPrice != null) 'shopPrice': _cleanOptional(shopPrice, maxLen: 30),
           if (shopCategory != null) 'shopCategory': _cleanOptional(shopCategory, maxLen: 50),
           if (foodTitle != null) 'foodTitle': _cleanOptional(foodTitle),
-          'foodRating': ?foodRating,
+          if (foodRating != null) 'foodRating': foodRating,
           if (foodPrice != null) 'foodPrice': _cleanOptional(foodPrice, maxLen: 30),
           if (eventTitle != null) 'eventTitle': _cleanOptional(eventTitle),
           if (eventDate != null) 'eventDate': _cleanOptional(eventDate, maxLen: 50),
@@ -700,12 +695,10 @@ class PostRepository extends ChangeNotifier {
       // If unauthorized (401), attempt token refresh & retry once
       if (response.statusCode == 401) {
         final refreshedToken = await AuthService.instance.refreshToken();
-        final freshFirebaseToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
-        final retryToken = refreshedToken ?? freshFirebaseToken;
-        if (retryToken != null && retryToken.isNotEmpty) {
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
           headers = {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer $retryToken',
+            'Authorization': 'Bearer $refreshedToken',
           };
           response = await _httpClient.post(
             Uri.parse('$backendBaseUrl/posts/$postId/vote'),
@@ -780,26 +773,10 @@ class PostRepository extends ChangeNotifier {
     }
 
     if (results.isEmpty) {
-      try {
-        final query = await FirebaseFirestore.instance
-            .collection('posts')
-            .where('authorHandle', isEqualTo: handle)
-            .limit(50)
-            .get();
-        if (query.docs.isNotEmpty) {
-          results = query.docs.map((doc) {
-            final d = doc.data();
-            d['id'] = doc.id;
-            return Post.fromJson(d);
-          }).toList();
-        }
-      } catch (e) {
-        debugPrint('Firestore fallback error for fetchPostsByUser: $e');
-      }
-    }
-
-    if (results.isEmpty) {
       results = _posts.where((p) => p.authorHandle == handle).toList();
+      if (results.isEmpty) {
+        results = _postsRegistry.values.where((p) => p.authorHandle == handle).toList();
+      }
     }
 
     for (final p in results) {

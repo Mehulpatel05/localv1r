@@ -111,8 +111,9 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       final authData = results[0] as Map<String, dynamic>;
       final isLoggedIn = authData['isLoggedIn'] == true;
       final handle = (authData['userHandle'] as String?) ?? 'Guest';
+      final isNewUser = handle.isEmpty || handle == 'Guest' || handle.startsWith('Anon#');
 
-      if (isLoggedIn && handle.isNotEmpty) {
+      if (isLoggedIn && !isNewUser) {
         postRepository.currentUserHandle = handle;
         _isLoggedIn = true;
         _userHandle = handle;
@@ -205,32 +206,47 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                       key: const ValueKey('login_flow_view'),
                       authRepository: BackendAuthRepository(),
                       onLoggedIn: () async {
-                        final cloudProfile = await AuthService.instance.syncCloudProfile();
-                        final handle = cloudProfile?['handle'] ?? await AuthService.instance.getUserHandle() ?? '';
-                        final userId = await AuthService.instance.getUserId() ?? '';
-                        final phone = await AuthService.instance.getPhoneNumber() ?? '';
+                        try {
+                          debugPrint('[MainFlow] onLoggedIn callback triggered.');
+                          final prefs = await SharedPreferences.getInstance();
+                          final handle = prefs.getString('user_handle') ?? await AuthService.instance.getUserHandle() ?? '';
+                          final userId = prefs.getString('user_id') ?? await AuthService.instance.getUserId() ?? '';
+                          final phone = prefs.getString('phone_number') ?? await AuthService.instance.getPhoneNumber() ?? '';
 
-                        if (handle.isEmpty || handle == 'Guest') {
-                          navigatorKey.currentState?.pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => CreateHandleScreen(
-                                repository: postRepository,
-                                userId: userId,
-                                phoneNumber: phone,
-                              ),
-                            ),
-                          );
-                        } else {
-                          postRepository.currentUserHandle = handle;
-                          NotificationService().initialize();
-                          PresenceService.instance.init(handle);
-                          CallListenerService.instance.startListening(handle);
-                          if (mounted) {
-                            setState(() {
-                              _isLoggedIn = true;
-                              _userHandle = handle;
-                            });
+                          final isNewUser = AuthService.isNewUserHandle(handle);
+                          debugPrint('[MainFlow] Auth evaluation: userId=$userId, phone=$phone, handle="$handle", isNewUser=$isNewUser');
+
+                          if (isNewUser) {
+                            debugPrint('[MainFlow] Navigating new user to CreateHandleScreen...');
+                            if (navigatorKey.currentState != null) {
+                              await navigatorKey.currentState!.push(
+                                MaterialPageRoute(
+                                  builder: (_) => CreateHandleScreen(
+                                    repository: postRepository,
+                                    userId: userId,
+                                    phoneNumber: phone,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              debugPrint('[MainFlow] WARNING: navigatorKey.currentState was null during navigation.');
+                            }
+                          } else {
+                            debugPrint('[MainFlow] Existing user detected. Activating main session for $handle...');
+                            postRepository.currentUserHandle = handle;
+                            NotificationService().initialize();
+                            PresenceService.instance.init(handle);
+                            CallListenerService.instance.startListening(handle);
+                            if (mounted) {
+                              setState(() {
+                                _isLoggedIn = true;
+                                _userHandle = handle;
+                              });
+                            }
                           }
+                        } catch (e, stack) {
+                          debugPrint('[MainFlow] ERROR in onLoggedIn: $e\n$stack');
+                          rethrow;
                         }
                       },
                     ),

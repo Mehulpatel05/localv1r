@@ -101,11 +101,7 @@ class BackendAuthRepository implements AuthRepository {
       phoneNumber: e164,
     );
     _lastAuthResult = res;
-    if (res['success'] == true) {
-      await _authService.syncCloudProfile();
-      return true;
-    }
-    return false;
+    return res['success'] == true;
   }
 
   @override

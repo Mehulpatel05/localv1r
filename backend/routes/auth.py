@@ -3,8 +3,9 @@ import re
 import time
 import uuid
 import hashlib
+import asyncio
 import jwt
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Header, Request, status
 from pydantic import BaseModel, Field
@@ -20,6 +21,22 @@ E164_REGEX = re.compile(r"^\+[1-9]\d{6,14}$")
 
 # 🛡️ OTP Request In-Memory Cache
 _otp_requests: Dict[str, Dict[str, Any]] = {}
+_verify_locks: Dict[str, asyncio.Lock] = {}
+_global_verify_lock = asyncio.Lock()
+
+async def _get_verify_lock(request_id: str) -> asyncio.Lock:
+    async with _global_verify_lock:
+        if request_id not in _verify_locks:
+            _verify_locks[request_id] = asyncio.Lock()
+        return _verify_locks[request_id]
+
+def _check_is_new_user(handle: Optional[str]) -> bool:
+    if handle is None:
+        return True
+    h = str(handle).strip().lower()
+    if not h or h == "guest" or h.startswith("anon#"):
+        return True
+    return False
 
 # 🛡️ Rate Limiting Data Structures (Phone & IP)
 _phone_send_rl = defaultdict(list)
@@ -166,119 +183,122 @@ async def send_otp(req: OtpSendRequest, request: Request):
 @auth_router.post("/otp/verify")
 async def verify_otp(req: OtpVerifyRequest, request: Request):
     """
-    Verifies user-submitted OTP with rate-limiting, lockout on 5 failed attempts, and single-use enforcement.
-    On success, looks up or creates user in Cloudflare D1 and issues JWT session tokens.
+    Verifies user-submitted OTP with rate-limiting, lockout on 5 failed attempts, single-use enforcement,
+    and atomic concurrency locks to prevent race conditions during duplicate or delayed retries.
     """
-    try:
-        request_id = req.request_id.strip()
-        otp_code = req.otp.strip()
+    request_id = req.request_id.strip()
+    otp_code = req.otp.strip()
 
-        context = _otp_requests.get(request_id)
-        now = time.time()
+    lock = await _get_verify_lock(request_id)
+    async with lock:
+        try:
+            context = _otp_requests.get(request_id)
+            now = time.time()
 
-        if not context:
-            if req.phone_number and E164_REGEX.match(req.phone_number.strip()):
-                context = {
-                    "phone": req.phone_number.strip(),
-                    "attempts": 0,
-                    "locked_until": 0,
-                    "expires_at": now + 600,
-                    "verified": False,
-                    "created_at": now,
-                }
-                _otp_requests[request_id] = context
-            else:
+            if not context:
+                if req.phone_number and E164_REGEX.match(req.phone_number.strip()):
+                    context = {
+                        "phone": req.phone_number.strip(),
+                        "attempts": 0,
+                        "locked_until": 0,
+                        "expires_at": now + 600,
+                        "verified": False,
+                        "created_at": now,
+                    }
+                    _otp_requests[request_id] = context
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid or expired OTP session. Please request a new OTP."
+                    )
+
+            # Check if already verified (idempotency support for retries & concurrent taps)
+            if context.get("verified") and context.get("cached_response"):
+                return context["cached_response"]
+
+            # Check expiration
+            if now > context["expires_at"]:
+                _otp_requests.pop(request_id, None)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid or expired OTP session. Please request a new OTP."
+                    detail="OTP has expired. Please request a new code."
                 )
 
-        # Check expiration
-        if now > context["expires_at"]:
-            _otp_requests.pop(request_id, None)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OTP has expired. Please request a new code."
-            )
-
-        # Check single-use
-        if context["verified"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This OTP has already been verified. Please request a new code."
-            )
-
-        # Check lockout
-        if now < context["locked_until"]:
-            remaining_lock = int(context["locked_until"] - now)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many failed attempts. Verification locked for {remaining_lock} seconds."
-            )
-
-        # Increment attempts
-        context["attempts"] += 1
-
-        if context["attempts"] > 5:
-            context["locked_until"] = now + 900 # 15 minutes lockout
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Maximum verification attempts exceeded. Verification temporarily locked for 15 minutes."
-            )
-
-        # Verify code via Wakit
-        phone_number = context["phone"]
-        is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
-
-        if not is_valid:
-            remaining_attempts = max(0, 5 - context["attempts"])
-            if remaining_attempts == 0:
-                context["locked_until"] = now + 900
+            # Check lockout
+            if now < context["locked_until"]:
+                remaining_lock = int(context["locked_until"] - now)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Incorrect OTP code. Maximum attempts reached. Locked for 15 minutes."
+                    detail=f"Too many failed attempts. Verification locked for {remaining_lock} seconds."
                 )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Incorrect OTP code. {remaining_attempts} attempt(s) remaining."
-            )
 
-        # Mark as verified immediately to prevent replay attacks
-        context["verified"] = True
+            # Increment attempts
+            context["attempts"] += 1
 
-        # User Resolution / Provisioning in Cloudflare D1
-        phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
-        anon_handle = f"Anon#{phone_hash[:6].upper()}"
-        
-        user_record = D1Service.get_or_create_user(phone=phone_number, handle=anon_handle)
-        user_id = user_record.get("id", phone_hash)
-        handle = user_record.get("handle", anon_handle)
-        photo_url = user_record.get("avatar_url", "")
-        is_new_user = (user_record.get("handle") == "" or user_record.get("handle") is None)
+            if context["attempts"] > 5:
+                context["locked_until"] = now + 900 # 15 minutes lockout
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Maximum verification attempts exceeded. Verification temporarily locked for 15 minutes."
+                )
 
-        tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
+            # Verify code via Wakit
+            phone_number = context["phone"]
+            is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
 
-        return {
-            "status": "success",
-            "message": "Phone number verified successfully.",
-            **tokens,
-            "user": {
-                "userId": user_id,
-                "phoneNumber": phone_number,
-                "handle": handle,
-                "photoUrl": photo_url,
-                "isNewUser": is_new_user,
+            if not is_valid:
+                remaining_attempts = max(0, 5 - context["attempts"])
+                if remaining_attempts == 0:
+                    context["locked_until"] = now + 900
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Incorrect OTP code. Maximum attempts reached. Locked for 15 minutes."
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Incorrect OTP code. {remaining_attempts} attempt(s) remaining."
+                )
+
+            # User Resolution / Provisioning in Cloudflare D1
+            phone_hash = hashlib.sha256(phone_number.encode()).hexdigest()
+            anon_handle = f"Anon#{phone_hash[:6].upper()}"
+            
+            user_record = D1Service.get_or_create_user(phone=phone_number, handle=anon_handle)
+            user_id = user_record.get("id", phone_hash)
+            handle = user_record.get("handle") or anon_handle
+            photo_url = user_record.get("avatar_url", "")
+            is_new_user = _check_is_new_user(handle)
+
+            tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
+
+            res_payload = {
+                "status": "success",
+                "message": "Phone number verified successfully.",
+                **tokens,
+                "user": {
+                    "userId": user_id,
+                    "phoneNumber": phone_number,
+                    "handle": handle,
+                    "photoUrl": photo_url,
+                    "isNewUser": is_new_user,
+                }
             }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Verification error: {str(e)}"
-        )
+
+            # Mark as verified and cache response with extended TTL (15 minutes) for idempotent duplicate submissions
+            context["verified"] = True
+            context["expires_at"] = now + 900
+            context["cached_response"] = res_payload
+
+            return res_payload
+        except HTTPException:
+            raise
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Verification error: {str(e)}"
+            )
 
 
 @auth_router.post("/refresh")
@@ -368,3 +388,118 @@ async def delete_account(
         "status": "success",
         "message": "User account and associated content successfully deleted."
     }
+
+
+class UpdateHandleRequest(BaseModel):
+    handle: str = Field(..., min_length=3, max_length=30)
+
+class UpdateAvatarRequest(BaseModel):
+    avatar_url: str = Field(...)
+
+
+def _extract_user(authorization: Optional[str], x_session_token: Optional[str]) -> Tuple[str, str]:
+    token = authorization or (f"Bearer {x_session_token}" if x_session_token else None)
+    if not token or not token.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authorization header.")
+    raw_token = token.split("Bearer ")[1].strip()
+    try:
+        payload = jwt.decode(raw_token, Config.JWT_SECRET, algorithms=["HS256"], issuer="nearhood-backend")
+        return payload.get("sub", ""), payload.get("handle", "")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
+
+
+@auth_router.get("/profile")
+async def get_my_profile(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token")
+):
+    user_id, _ = _extract_user(authorization, x_session_token)
+    user = D1Service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return {
+        "status": "success",
+        "user": {
+            "userId": user["id"],
+            "handle": user["handle"],
+            "phoneNumber": user.get("phone", ""),
+            "avatarUrl": user.get("avatar_url", ""),
+            "reputation": user.get("reputation", 0),
+            "createdAt": user.get("created_at"),
+        }
+    }
+
+
+@auth_router.get("/check-handle")
+async def check_handle(handle: str):
+    clean = handle.replace("@", "").strip().lower()
+    if len(clean) < 3 or len(clean) > 30 or not re.match(r"^[a-zA-Z0-9_.]+$", clean):
+        return {"available": False, "reason": "Invalid handle format."}
+    is_avail = D1Service.is_handle_available(clean)
+    return {"available": is_avail, "handle": clean}
+
+
+@auth_router.post("/profile/handle")
+async def update_handle(
+    req: UpdateHandleRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token")
+):
+    user_id, _ = _extract_user(authorization, x_session_token)
+    clean = req.handle.replace("@", "").strip()
+    if len(clean) < 3 or len(clean) > 30 or not re.match(r"^[a-zA-Z0-9_.]+$", clean):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Handle must be 3-30 alphanumeric characters.")
+
+    if not D1Service.is_handle_available(clean, exclude_user_id=user_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This handle is already taken.")
+
+    ok = D1Service.update_user_handle(user_id, clean)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update handle.")
+
+    user = D1Service.get_user_by_id(user_id)
+    phone = user.get("phone", "") if user else ""
+    tokens = _mint_tokens(user_id=user_id, phone_number=phone, handle=clean)
+
+    return {
+        "status": "success",
+        "handle": clean,
+        **tokens
+    }
+
+
+@auth_router.post("/profile/avatar")
+async def update_avatar(
+    req: UpdateAvatarRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token")
+):
+    user_id, _ = _extract_user(authorization, x_session_token)
+    avatar_url = req.avatar_url.strip()
+    ok = D1Service.update_user_avatar(user_id, avatar_url)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update avatar.")
+
+    return {
+        "status": "success",
+        "avatarUrl": avatar_url
+    }
+
+
+@auth_router.get("/profile/{handle}")
+async def get_public_profile(handle: str):
+    clean = handle.replace("@", "").strip().lower()
+    user = D1Service.get_user_by_handle(clean)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return {
+        "status": "success",
+        "user": {
+            "handle": user["handle"],
+            "avatarUrl": user.get("avatar_url", ""),
+            "reputation": user.get("reputation", 0),
+            "createdAt": user.get("created_at"),
+        }
+    }
+

@@ -17,7 +17,7 @@ class OtpStep extends StatefulWidget {
   final String phone;
   final AuthRepository authRepository;
   final VoidCallback onChangeNumber;
-  final VoidCallback onVerified;
+  final FutureOr<void> Function() onVerified;
 
   const OtpStep({
     super.key,
@@ -180,25 +180,47 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
     });
 
     final otpCode = _currentOtp;
-    final success = await widget.authRepository.verifyOtp(widget.phone, otpCode);
+    try {
+      debugPrint('[OtpStep] Starting OTP verification for ${widget.phone}...');
+      final success = await widget.authRepository.verifyOtp(widget.phone, otpCode);
+      debugPrint('[OtpStep] verifyOtp returned success=$success');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (success) {
-      setState(() {
-        _isLoading = false;
-      });
-      widget.onVerified();
-    } else {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-      });
+      if (success) {
+        debugPrint('[OtpStep] Invoking onVerified() callback...');
+        await widget.onVerified();
+        debugPrint('[OtpStep] onVerified() completed.');
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
 
-      final disableAnimations =
-          MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-      if (!disableAnimations) {
-        _shakeController.forward(from: 0.0);
+        final disableAnimations =
+            MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+        if (!disableAnimations) {
+          _shakeController.forward(from: 0.0);
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('[OtpStep] FATAL error in _verifyOtp: $e\n$stack');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Verification error: $e'),
+            backgroundColor: context.nearhoodColors.danger,
+          ),
+        );
       }
     }
   }

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/avatar_cache_service.dart';
 import '../../services/presence_service.dart';
 
@@ -371,19 +370,6 @@ class _UserAvatarState extends State<UserAvatar> {
         String? resolvedUrl = widget.photoUrl;
         if (resolvedUrl == null || resolvedUrl.trim().isEmpty) {
           resolvedUrl = AvatarCacheService.instance.getCachedUrl(cleanHandle);
-        }
-
-        final currentUser = FirebaseAuth.instance.currentUser;
-        if ((resolvedUrl == null || resolvedUrl.isEmpty) &&
-            currentUser != null &&
-            cleanHandle.isNotEmpty) {
-          final myPhoto = currentUser.photoURL;
-          if (myPhoto != null && myPhoto.isNotEmpty) {
-            final myCachedUrl = AvatarCacheService.instance.getCachedUrl(cleanHandle);
-            if (myCachedUrl != null && myCachedUrl.isNotEmpty) {
-              resolvedUrl = myCachedUrl;
-            }
-          }
         }
 
         // Compute inner image size when ring is applied

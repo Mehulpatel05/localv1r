@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/auth_repository.dart';
 import '../../core/theme.dart';
@@ -10,7 +11,7 @@ enum AuthStep { phone, otp }
 /// Production-quality Login Flow matching the exact Nearhood Black & White design.
 class LoginFlowPage extends StatefulWidget {
   final AuthRepository authRepository;
-  final VoidCallback? onLoggedIn;
+  final FutureOr<void> Function()? onLoggedIn;
 
   const LoginFlowPage({
     super.key,
@@ -39,9 +40,9 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
     });
   }
 
-  void _onOtpVerified() {
+  Future<void> _onOtpVerified() async {
     if (widget.onLoggedIn != null) {
-      widget.onLoggedIn!();
+      await widget.onLoggedIn!();
     }
   }
 

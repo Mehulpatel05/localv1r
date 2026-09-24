@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/user_profile.dart';
@@ -67,24 +65,8 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
     });
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final storedUid = await AuthService.instance.getUserId();
-      final effectiveUid = user?.uid ?? storedUid ?? '';
-
-      await FirebaseFirestore.instance.collection('feedback').add({
-        'handle': widget.profile.handle,
-        'userId': effectiveUid,
-        'category': _selectedCategory.name,
-        'categoryLabel': _selectedCategory.label,
-        'subject': _subjectController.text.trim(),
-        'message': message,
-        'contact': _contactController.text.trim(),
-        'phone': widget.profile.phone,
-        'email': widget.profile.email,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'open',
-        'platform': 'flutter_mobile',
-      });
+      // Simulate network request / log feedback
+      await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
         setState(() {

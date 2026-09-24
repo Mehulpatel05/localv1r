@@ -606,6 +606,53 @@ class D1Service:
         return cls.execute(sql, [jti])
 
     @classmethod
+    def get_user_by_id(cls, user_id: str) -> Optional[Dict[str, Any]]:
+        sql = "SELECT * FROM users WHERE id = ? LIMIT 1;"
+        rows = cls.query(sql, [user_id])
+        if rows and len(rows) > 0:
+            return rows[0]
+        return None
+
+    @classmethod
+    def get_user_by_handle(cls, handle: str) -> Optional[Dict[str, Any]]:
+        sql = "SELECT * FROM users WHERE LOWER(handle) = LOWER(?) LIMIT 1;"
+        rows = cls.query(sql, [handle])
+        if rows and len(rows) > 0:
+            return rows[0]
+        return None
+
+    @classmethod
+    def get_user_by_phone(cls, phone: str) -> Optional[Dict[str, Any]]:
+        sql = "SELECT * FROM users WHERE phone = ? LIMIT 1;"
+        rows = cls.query(sql, [phone])
+        if rows and len(rows) > 0:
+            return rows[0]
+        return None
+
+    @classmethod
+    def is_handle_available(cls, handle: str, exclude_user_id: Optional[str] = None) -> bool:
+        clean = handle.replace("@", "").strip().lower()
+        if exclude_user_id:
+            sql = "SELECT id FROM users WHERE LOWER(REPLACE(handle, '@', '')) = ? AND id != ? LIMIT 1;"
+            rows = cls.query(sql, [clean, exclude_user_id])
+        else:
+            sql = "SELECT id FROM users WHERE LOWER(REPLACE(handle, '@', '')) = ? LIMIT 1;"
+            rows = cls.query(sql, [clean])
+        return not bool(rows and len(rows) > 0)
+
+    @classmethod
+    def update_user_handle(cls, user_id: str, new_handle: str) -> bool:
+        now_ts = int(time.time())
+        sql = "UPDATE users SET handle = ?, updated_at = ? WHERE id = ?;"
+        return cls.execute(sql, [new_handle, now_ts, user_id])
+
+    @classmethod
+    def update_user_avatar(cls, user_id: str, avatar_url: str) -> bool:
+        now_ts = int(time.time())
+        sql = "UPDATE users SET avatar_url = ?, updated_at = ? WHERE id = ?;"
+        return cls.execute(sql, [avatar_url, now_ts, user_id])
+
+    @classmethod
     def get_or_create_user(cls, phone: str, handle: str, installation_id: Optional[str] = None) -> Dict[str, Any]:
         existing = cls.query("SELECT * FROM users WHERE phone = ? OR handle = ? LIMIT 1;", [phone, handle])
         now_ts = int(time.time())
@@ -616,3 +663,4 @@ class D1Service:
         sql = "INSERT INTO users (id, handle, phone, installation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);"
         cls.execute(sql, [user_id, handle, phone, installation_id, now_ts, now_ts])
         return {"id": user_id, "handle": handle, "phone": phone, "installation_id": installation_id}
+

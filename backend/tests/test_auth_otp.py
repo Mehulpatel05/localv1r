@@ -96,10 +96,10 @@ def test_verify_otp_success_and_replay_prevention():
     assert "refresh_token" in data
     assert data["user"]["phoneNumber"] == phone
 
-    # Replay attack prevention: Same request_id cannot be reused
+    # Idempotent retry support: Same request_id returns the active cached session response
     res_replay = client.post("/auth/otp/verify", json={"request_id": request_id, "otp": "123456"})
-    assert res_replay.status_code == 400
-    assert "already been verified" in _get_err_message(res_replay)
+    assert res_replay.status_code == 200
+    assert res_replay.json()["access_token"] == data["access_token"]
 
 def test_refresh_token_endpoint():
     phone = "+919988112233"

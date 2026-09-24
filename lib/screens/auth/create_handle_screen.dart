@@ -335,26 +335,25 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   Future<void> _checkAvailability(String handle) async {
     // Check if session exists
-    if (widget.userId.isEmpty && FirebaseAuth.instance.currentUser == null) {
-      setState(() {
-        _state = UsernameState.invalid;
-        _customErrorMessage = 'Session expired. Please sign in again.';
-      });
-      return;
+    if (widget.userId.isEmpty) {
+      final loggedIn = await AuthService.instance.isLoggedIn();
+      if (!loggedIn) {
+        setState(() {
+          _state = UsernameState.invalid;
+          _customErrorMessage = 'Session expired. Please sign in again.';
+        });
+        return;
+      }
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('profiles')
-          .doc(handle)
-          .get();
+      final isAvailable = await AuthService.instance.checkHandleAvailable(handle);
 
       // Guard if user has changed text while query was in-flight
       if (!mounted || _handleController.text.trim().toLowerCase() != handle) {
         return;
       }
 
-      final isAvailable = !doc.exists;
       _availabilityCache[handle] = isAvailable;
 
       setState(() {
@@ -390,14 +389,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     // Security Gate 2: Auth Verification
     final effectiveUid = widget.userId.isNotEmpty
         ? widget.userId
-        : (FirebaseAuth.instance.currentUser?.uid ?? widget.user?.uid ?? '');
-
-    if (effectiveUid.isEmpty) {
-      setState(() {
-        _customErrorMessage = 'Authentication error. Please re-login.';
-      });
-      return;
-    }
+        : (await AuthService.instance.getUserId() ?? '');
 
     setState(() {
       _isSubmitting = true;
@@ -405,65 +397,28 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     });
 
     try {
-      final handleRef =
-          FirebaseFirestore.instance.collection('profiles').doc(handle);
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(effectiveUid);
+      debugPrint('[CreateHandleScreen] Submitting handle "$handle" for uid: $effectiveUid');
+      final result = await AuthService.instance.saveUserHandle(
+        handle,
+        userId: effectiveUid,
+        phone: widget.phoneNumber,
+      );
 
-      // Security Gate 3: Atomic Multi-Document Transaction (Prevents TOCTOU & Orphaned Profiles)
-      final isSuccess =
-          await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final profileDoc = await transaction.get(handleRef);
-        if (profileDoc.exists) {
-          return false;
+      if (result['success'] != true) {
+        final isTaken = result['isTaken'] == true;
+        final errorMsg = result['error'] as String? ?? 'Failed to update username.';
+        
+        if (isTaken) {
+          _availabilityCache[handle] = false;
         }
 
-        final userDoc = await transaction.get(userRef);
-        // If user document already has a handle, preserve safety
-        if (userDoc.exists && userDoc.data()?.containsKey('handle') == true) {
-          final existing = userDoc.data()?['handle'];
-          if (existing != null && existing.toString().isNotEmpty) {
-            // Already claimed
-            return true;
-          }
-        }
-
-        // 1. Create Public Profile
-        transaction.set(handleRef, {
-          'handle': handle,
-          'ownerUid': effectiveUid,
-          'friendCount': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        // 2. Create/Update Private User Document atomically
-        transaction.set(
-          userRef,
-          {
-            'handle': handle,
-            'phoneNumber': widget.phoneNumber,
-            'uid': effectiveUid,
-            'userId': effectiveUid,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-
-        return true;
-      });
-
-      if (!isSuccess) {
-        _availabilityCache[handle] = false;
         setState(() {
-          _state = UsernameState.taken;
+          _state = isTaken ? UsernameState.taken : UsernameState.available;
           _isSubmitting = false;
+          _customErrorMessage = errorMsg;
         });
         return;
       }
-
-      // Save locally in SecureStorage and SharedPreferences
-      await AuthService.instance.saveUserHandle(handle);
 
       // If user selected a profile image, upload and sync
       if (_pickedProfileImage != null) {
@@ -679,8 +634,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 96,
-            height: 96,
+            width: 100,
+            height: 100,
             padding: EdgeInsets.all(_pickedProfileImage != null ? 3.0 : 0),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -698,7 +653,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               ],
             ),
             child: Container(
-              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : EdgeInsets.zero,
+              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : const EdgeInsets.all(14),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
@@ -712,40 +667,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         fit: BoxFit.cover,
                         alignment: Alignment.center,
                       )
-                    : Center(
-                        child: SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned(
-                                top: 2,
-                                left: 6,
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFF3B82F6),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 2,
-                                right: 6,
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFF334155),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    : Image.asset(
+                        'assets/images/nearhood_logo.png',
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.person_rounded,
+                            size: 44,
+                            color: Color(0xFF64748B),
+                          );
+                        },
                       ),
               ),
             ),
@@ -754,23 +687,24 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             bottom: 0,
             right: 0,
             child: Container(
-              width: 30,
-              height: 30,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6),
+                color: const Color(0xFF0F172A),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2.5),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 15,
+                size: 16,
               ),
             ),
           ),

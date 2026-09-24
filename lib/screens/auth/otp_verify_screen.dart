@@ -98,7 +98,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
 
     if (result['success'] == true) {
       final handle = result['handle'] as String? ?? '';
-      final isNewUser = result['isNewUser'] == true || handle.isEmpty;
+      final isNewUser = result['isNewUser'] == true || handle.isEmpty || handle.startsWith('Anon#');
       final userId = result['userId'] as String? ?? '';
 
       if (isNewUser) {
