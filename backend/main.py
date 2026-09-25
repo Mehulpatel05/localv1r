@@ -94,10 +94,17 @@ app.include_router(actions_router, prefix="/api/v1")
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
 redis_client: Optional[redis.Redis] = None
 
+# 🛡️ RATE LIMITING MASTER SWITCH
+# By default, rate limits on app API operations (chat, feed, communities, media) are completely UNLIMITED.
+# Can be toggled on via environment variable ENABLE_RATE_LIMIT=true if desired in the future.
+ENABLE_RATE_LIMIT = os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true"
+
 # 🛡️ IN-MEMORY SLIDING-WINDOW RATE LIMITER (Active fallback when Redis is absent)
 _in_memory_rl = defaultdict(list)
 
 def _enforce_in_memory_rate_limit(key: str, max_requests: int, window: float = 60.0):
+    if not ENABLE_RATE_LIMIT:
+        return
     now = time.time()
     _in_memory_rl[key] = [t for t in _in_memory_rl[key] if now - t < window]
     if len(_in_memory_rl[key]) >= max_requests:
@@ -131,6 +138,8 @@ async def enforce_ip_rate_limit(ip: str, max_requests: int, window: float = 60.0
     """
     🛡️ Enforces per-IP rate limiting (mitigates registration spam and brute-force).
     """
+    if not ENABLE_RATE_LIMIT:
+        return
     if not redis_client:
         _enforce_in_memory_rate_limit(f"ip:{ip}", max_requests, window)
         return
@@ -153,6 +162,8 @@ async def enforce_route_rate_limit(route: str, key: str, max_requests: int, wind
     🛡️ Enforces per-route, per-session rate limiting using Redis sliding window log.
     Mitigates: scripted vote-manipulation, spam comments, and CDN storage floods.
     """
+    if not ENABLE_RATE_LIMIT:
+        return
     if not redis_client:
         _enforce_in_memory_rate_limit(f"route:{route}:{key}", max_requests, window)
         if ip:
@@ -262,7 +273,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
         or path.startswith("/media/")
     )
 
-    if not is_exempt:
+    if ENABLE_RATE_LIMIT and not is_exempt:
         # Separate rate limiting buckets for authenticated users vs anonymous IPs.
         # This guarantees 1000+ mobile users sharing a public cellular CGNAT IP (e.g. Jio/Airtel) or campus Wi-Fi
         # will NEVER collide or rate-limit each other!
