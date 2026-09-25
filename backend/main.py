@@ -253,11 +253,32 @@ def get_client_ip(request: Request) -> str:
 # 🛡️ SECURITY HEADERS & BURST RATE LIMITER MIDDLEWARE
 @app.middleware("http")
 async def security_and_rate_limit_middleware(request: Request, call_next):
-    # 1. Burst Rate Limiter check (skip /health, preflight OPTIONS)
-    if request.method != "OPTIONS" and request.url.path != "/health":
-        ip = get_client_ip(request)
+    # 1. Skip burst limiting for static/cached media assets, health check, and preflight OPTIONS
+    path = request.url.path
+    is_exempt = (
+        request.method == "OPTIONS"
+        or path == "/health"
+        or path.startswith("/api/v1/media/")
+        or path.startswith("/media/")
+    )
+
+    if not is_exempt:
+        # Separate rate limiting buckets for authenticated users vs anonymous IPs.
+        # This guarantees 1000+ mobile users sharing a public cellular CGNAT IP (e.g. Jio/Airtel) or campus Wi-Fi
+        # will NEVER collide or rate-limit each other!
+        auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            raw_token = auth_header.split("Bearer ")[1].strip()
+            token_fingerprint = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()[:16]
+            rate_key = f"burst_user:{token_fingerprint}"
+            max_burst = 600  # High limit for active chat messaging, scrolling, and sync polling
+        else:
+            ip = get_client_ip(request)
+            rate_key = f"burst_ip:{ip}"
+            max_burst = 300  # Generous limit for anonymous browsing without bot floods
+
         try:
-            _enforce_in_memory_rate_limit(f"burst_ip:{ip}", max_requests=80, window=60.0)
+            _enforce_in_memory_rate_limit(rate_key, max_requests=max_burst, window=60.0)
         except HTTPException as e:
             return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
