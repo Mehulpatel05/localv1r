@@ -42,7 +42,12 @@ class CommunityRepository {
   List<CommunityModel> _cachedDiscoverCommunities = [];
   final Map<String, List<CommunityMessage>> _cachedMessages = {};
 
+  List<CommunityModel> get cachedUserCommunities => List.unmodifiable(_cachedUserCommunities);
   Set<String> get joinedCommunityIds => _cachedUserCommunities.map((c) => c.id).toSet();
+
+  bool isMemberCached(String communityId) {
+    return _cachedUserCommunities.any((c) => c.id == communityId);
+  }
 
   // ── Stream Controllers ──
   final _userCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
@@ -217,6 +222,15 @@ class CommunityRepository {
   }
 
   Future<void> markAsRead(String communityId) async {
+    final index = _cachedUserCommunities.indexWhere((c) => c.id == communityId);
+    if (index != -1) {
+      final old = _cachedUserCommunities[index];
+      if (old.unreadCount > 0) {
+        _cachedUserCommunities[index] = old.copyWith(unreadCount: 0);
+        _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+      }
+    }
+
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId/read');
     try {
       final headers = await _getAuthHeaders();
@@ -318,11 +332,35 @@ class CommunityRepository {
 
     if (res.statusCode == 201) {
       final data = jsonDecode(res.body);
-      await fetchUserCommunities();
-      return data['communityId']?.toString() ?? '';
+      final newId = data['communityId']?.toString() ?? '';
+
+      // Eagerly add to cache as Owner
+      final newModel = CommunityModel(
+        id: newId,
+        name: name.trim(),
+        description: description.trim(),
+        isChannel: isChannel,
+        adminHandle: currentUserHandle,
+        ownerHandle: currentUserHandle,
+        visibility: visibility,
+        username: (username != null && username.isNotEmpty) ? username.trim().replaceAll('@', '') : null,
+        inviteLink: inviteLink,
+        settings: settings ?? {},
+        memberCount: 1 + (initialMembers?.length ?? 0),
+        imageUrl: imageUrl,
+        myRole: 'owner',
+        unreadCount: 0,
+        createdAt: DateTime.now(),
+      );
+      _cachedUserCommunities.removeWhere((c) => c.id == newId);
+      _cachedUserCommunities.insert(0, newModel);
+      _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+      _joinedIdsCtrl.add(_cachedUserCommunities.map((c) => c.id).toSet());
+
+      fetchUserCommunities();
+      return newId;
     } else {
-      final data = jsonDecode(res.body);
-      throw Exception(data['detail'] ?? 'Failed to create community');
+      throw Exception(_extractErrorMessage(res.body, 'Failed to create community'));
     }
   }
 
@@ -757,10 +795,6 @@ class CommunityRepository {
         fetchCommunityMessages(communityId);
       }
     } catch (_) {}
-  }
-
-  bool isMemberCached(String communityId) {
-    return _cachedUserCommunities.any((c) => c.id == communityId);
   }
 
   Future<bool> isMember(String communityId) async {

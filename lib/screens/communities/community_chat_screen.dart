@@ -41,9 +41,9 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     NotificationService().activeCommunityId = widget.community.id;
     final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
     final adminHandle = widget.community.adminHandle.toLowerCase().replaceAll('@', '');
-    final isAdmin = adminHandle == currentHandle;
+    final isAdmin = adminHandle.isNotEmpty && adminHandle == currentHandle;
     final isCachedMember = widget.repository.isMemberCached(widget.community.id);
-    _isMember = isAdmin || isCachedMember;
+    _isMember = isAdmin || isCachedMember || widget.community.isMember;
     _isLoading = false;
     _checkMembership();
     _refreshCommunity();
@@ -64,6 +64,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     if (updated != null && mounted) {
       setState(() {
         _community = updated;
+        if (updated.isMember) _isMember = true;
       });
     }
   }
@@ -71,7 +72,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   Future<void> _checkMembership() async {
     final currentHandle = widget.repository.currentUserHandle.toLowerCase().replaceAll('@', '');
     final adminHandle = _community.adminHandle.toLowerCase().replaceAll('@', '');
-    if (adminHandle == currentHandle) {
+    if (adminHandle.isNotEmpty && adminHandle == currentHandle) {
       if (mounted && !_isMember) {
         setState(() => _isMember = true);
       }
@@ -88,20 +89,31 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   Future<void> _joinCommunity() async {
     setState(() => _isLoading = true);
     try {
-      final res = await widget.repository.joinCommunity(widget.community.id);
+      final res = await widget.repository.joinCommunity(_community.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message)),
-        );
-        if (res.status == JoinStatus.joined) {
-          setState(() => _isMember = true);
+        if (res.status == JoinStatus.pending) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Join request submitted for admin review!')),
+          );
+        } else if (res.status == JoinStatus.joined) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Joined ${_community.name}!')),
+          );
+          setState(() {
+            _isMember = true;
+            _community = _community.copyWith(myRole: 'member');
+          });
           _refreshCommunity();
+        } else if (res.status == JoinStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res.message.isNotEmpty ? res.message : 'Failed to join community')),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to join: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -337,14 +349,17 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+    final localA = a.toLocal();
+    final localB = b.toLocal();
+    return localA.year == localB.year && localA.month == localB.month && localA.day == localB.day;
   }
 
   String _formatDateSeparator(DateTime dt) {
+    final localDt = dt.toLocal();
     final now = DateTime.now();
-    if (_isSameDay(dt, now)) return 'Today';
-    if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) return 'Yesterday';
-    return DateFormat('MMMM d, y').format(dt);
+    if (_isSameDay(localDt, now)) return 'Today';
+    if (_isSameDay(localDt, now.subtract(const Duration(days: 1)))) return 'Yesterday';
+    return DateFormat('MMMM d, y').format(localDt);
   }
 
   @override
@@ -397,9 +412,32 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                           color: textColor,
                         ),
                       ),
-                      Text(
-                        '${_community.isChannel ? 'Channel' : 'Group'} · ${_community.memberCount} ${_community.isChannel ? 'subscribers' : 'members'}',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      Row(
+                        children: [
+                          if (!_isMember) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'PREVIEW',
+                                style: TextStyle(
+                                  color: Color(0xFFB45309),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+                          ],
+                          Text(
+                            '${_community.isChannel ? 'Channel' : 'Group'} · ${_community.memberCount} ${_community.isChannel ? 'subscribers' : 'members'}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -730,7 +768,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
                     const SizedBox(width: 4),
                   ],
                   Text(
-                    DateFormat('h:mm a').format(msg.timestamp),
+                    DateFormat('h:mm a').format(msg.timestamp.toLocal()),
                     style: TextStyle(
                       fontSize: 10,
                       color: isMe ? Colors.white70 : const Color(0xFF94A3B8),
@@ -793,26 +831,46 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   // ── Bottom Input Area ──
   Widget _buildBottomInputArea(bool canPost, Color cardBg, Color textColor, bool isDark) {
     if (!_isMember) {
+      final isChannel = _community.isChannel;
+      final btnLabel = _community.approveNewMembers
+          ? 'Request to Join'
+          : (isChannel ? 'JOIN CHANNEL' : 'JOIN GROUP');
+
       return Container(
-        color: cardBg,
-        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          boxShadow: [
+            const BoxShadow(
+              color: Color(0x0F000000),
+              offset: Offset(0, -3),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: SafeArea(
           child: SizedBox(
             height: 48,
             width: double.infinity,
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: _isLoading ? null : _joinCommunity,
-              child: _isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(
-                      _community.approveNewMembers ? 'Request to Join' : 'Join Community',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.group_add_rounded, color: Colors.white, size: 20),
+              label: Text(
+                _isLoading ? 'Joining...' : btnLabel,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+              ),
             ),
           ),
         ),

@@ -43,20 +43,23 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   String _formatTimestamp(DateTime? dt) {
     if (dt == null) return '';
+    final localDt = dt.toLocal();
     final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inDays == 0) {
-      final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-      final period = dt.hour >= 12 ? 'PM' : 'AM';
-      final min = dt.minute.toString().padLeft(2, '0');
+    final today = DateTime(now.year, now.month, now.day);
+    final itemDate = DateTime(localDt.year, localDt.month, localDt.day);
+    final diffDays = today.difference(itemDate).inDays;
+    if (diffDays == 0) {
+      final hour = localDt.hour % 12 == 0 ? 12 : localDt.hour % 12;
+      final period = localDt.hour >= 12 ? 'PM' : 'AM';
+      final min = localDt.minute.toString().padLeft(2, '0');
       return '$hour:$min $period';
-    } else if (diff.inDays == 1) {
+    } else if (diffDays == 1) {
       return 'Yesterday';
-    } else if (diff.inDays < 7) {
+    } else if (diffDays < 7 && diffDays > 0) {
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[dt.weekday - 1];
+      return days[localDt.weekday - 1];
     } else {
-      return '${dt.day}/${dt.month}';
+      return '${localDt.day}/${localDt.month}';
     }
   }
 
@@ -251,6 +254,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   Widget _buildJoinedList(bool isDark) {
     return StreamBuilder<List<CommunityModel>>(
       stream: widget.repository.getUserCommunities(),
+      initialData: widget.repository.cachedUserCommunities,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());

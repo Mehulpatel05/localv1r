@@ -579,7 +579,9 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'MEMBERS · ${_community.memberCount}',
+              _community.isChannel
+                  ? 'SUBSCRIBERS · ${_community.memberCount}'
+                  : 'MEMBERS · ${_community.memberCount}',
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
@@ -599,7 +601,12 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
                 );
               }
 
-              final members = snapshot.data ?? [];
+              final rawMembers = snapshot.data ?? [];
+              // For channels, non-admins only see owner & admins
+              final members = (_community.isChannel && !_community.isAdmin)
+                  ? rawMembers.where((m) => (m['role'] == 'owner' || m['role'] == 'admin')).toList()
+                  : rawMembers;
+
               if (members.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.all(16.0),

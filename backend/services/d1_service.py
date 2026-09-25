@@ -1237,13 +1237,13 @@ class D1Service:
                 return []
             sql = """
             SELECT c.*, m.role as my_role, m.muted_until as my_muted_until, m.is_archived as my_is_archived, m.last_read_at as my_last_read_at,
-                   (SELECT COUNT(*) FROM community_messages msg WHERE msg.community_id = c.id AND msg.created_at > COALESCE(m.last_read_at, 0) AND msg.deleted_at IS NULL AND LOWER(msg.author_handle) != ?) as unread_count,
+                   (SELECT COUNT(*) FROM community_messages msg WHERE msg.community_id = c.id AND msg.created_at > COALESCE(m.last_read_at, 0) AND msg.deleted_at IS NULL AND msg.is_system = 0 AND LOWER(REPLACE(msg.author_handle, '@', '')) != ?) as unread_count,
                    (SELECT content FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_message,
                    (SELECT created_at FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_message_at,
                    (SELECT author_handle FROM community_messages msg WHERE msg.community_id = c.id AND msg.deleted_at IS NULL ORDER BY msg.created_at DESC LIMIT 1) as last_sender_handle
             FROM communities c
             INNER JOIN community_members m ON c.id = m.community_id
-            WHERE LOWER(m.user_handle) = ?
+            WHERE LOWER(REPLACE(m.user_handle, '@', '')) = ?
             """
             params: List[Any] = [clean_user, clean_user]
             if type_filter == "group":
@@ -1821,6 +1821,8 @@ class D1Service:
         is_sys_int = 1 if message_type == "system" else 0
         if cls.execute(sql, [msg_id, community_id, clean_author, content, image_url, media_json, message_type, is_sys_int, now_ts]):
             cls.execute("UPDATE communities SET updated_at = ? WHERE id = ?;", [now_ts, community_id])
+            if message_type != "system":
+                cls.execute("UPDATE community_members SET last_read_at = ? WHERE community_id = ? AND LOWER(REPLACE(user_handle, '@', '')) = ?;", [now_ts, community_id, clean_author.lower()])
             return msg_id
         return None
 
@@ -2039,7 +2041,7 @@ class D1Service:
         clean_user = user_handle.replace("@", "").strip().lower()
         member_id = f"{community_id}_{clean_user}"
         now_ts = int(time.time())
-        return cls.execute("UPDATE community_members SET last_read_at = ? WHERE id = ?;", [now_ts, member_id])
+        return cls.execute("UPDATE community_members SET last_read_at = ? WHERE id = ? OR (community_id = ? AND LOWER(REPLACE(user_handle, '@', '')) = ?);", [now_ts, member_id, community_id, clean_user])
 
     # ==========================================
     # 💬 1-ON-1 DIRECT CHAT & MESSAGING

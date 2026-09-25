@@ -76,17 +76,20 @@ class CommunityModel {
 
   factory CommunityModel.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDateTime(dynamic val) {
-      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is String) {
+        final parsed = DateTime.tryParse(val);
+        return (parsed ?? DateTime.now()).toLocal();
+      }
       if (val is int) {
         if (val > 10000000000) {
-          return DateTime.fromMillisecondsSinceEpoch(val);
+          return DateTime.fromMillisecondsSinceEpoch(val, isUtc: true).toLocal();
         } else {
-          return DateTime.fromMillisecondsSinceEpoch(val * 1000);
+          return DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true).toLocal();
         }
       }
       if (val != null) {
         try {
-          return (val as dynamic).toDate();
+          return (val as dynamic).toDate().toLocal();
         } catch (_) {}
       }
       return DateTime.now();
@@ -94,12 +97,14 @@ class CommunityModel {
 
     DateTime? parseNullableDateTime(dynamic val) {
       if (val == null) return null;
-      if (val is String) return DateTime.tryParse(val);
+      if (val is String) {
+        return DateTime.tryParse(val)?.toLocal();
+      }
       if (val is int) {
         if (val > 10000000000) {
-          return DateTime.fromMillisecondsSinceEpoch(val);
+          return DateTime.fromMillisecondsSinceEpoch(val, isUtc: true).toLocal();
         } else {
-          return DateTime.fromMillisecondsSinceEpoch(val * 1000);
+          return DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true).toLocal();
         }
       }
       return null;
@@ -286,25 +291,27 @@ class CommunityMessage {
     final rawTs = map['timestamp'] ?? map['createdAt'] ?? map['created_at'];
     if (rawTs is int) {
       if (rawTs > 10000000000) {
-        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs);
+        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs, isUtc: true).toLocal();
       } else {
-        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs * 1000);
+        parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTs * 1000, isUtc: true).toLocal();
       }
     } else if (rawTs is String) {
-      parsedTimestamp = DateTime.tryParse(rawTs) ?? DateTime.now();
+      final dt = DateTime.tryParse(rawTs);
+      parsedTimestamp = (dt ?? DateTime.now()).toLocal();
     } else if (rawTs != null) {
       try {
-        parsedTimestamp = (rawTs as dynamic).toDate();
+        parsedTimestamp = (rawTs as dynamic).toDate().toLocal();
       } catch (_) {}
     }
 
     DateTime? parsedEditedAt;
     final rawEdited = map['editedAt'] ?? map['edited_at'];
     if (rawEdited is String) {
-      parsedEditedAt = DateTime.tryParse(rawEdited);
+      parsedEditedAt = DateTime.tryParse(rawEdited)?.toLocal();
     } else if (rawEdited is int) {
       parsedEditedAt = DateTime.fromMillisecondsSinceEpoch(
-          rawEdited > 10000000000 ? rawEdited : rawEdited * 1000);
+          rawEdited > 10000000000 ? rawEdited : rawEdited * 1000,
+          isUtc: true).toLocal();
     }
 
     final singleImage = (map['imageUrl'] ?? map['image_url']) as String?;

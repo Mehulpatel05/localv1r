@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../models/community_model.dart';
 import '../../services/community_repository.dart';
 import 'community_chat_screen.dart';
-import 'community_info_screen.dart';
 
 class ExploreCommunitiesScreen extends StatefulWidget {
   final CommunityRepository repository;
@@ -257,29 +256,17 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
 
     return InkWell(
       onTap: () async {
-        if (isJoined) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CommunityChatScreen(
-                community: comm,
-                repository: widget.repository,
-              ),
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CommunityChatScreen(
+              community: comm,
+              repository: widget.repository,
             ),
-          );
-        } else {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CommunityInfoScreen(
-                community: comm,
-                repository: widget.repository,
-              ),
-            ),
-          );
-        }
+          ),
+        );
         if (mounted) {
-          setState(() {});
+          _loadDirectory();
         }
       },
       child: Padding(
