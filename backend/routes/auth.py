@@ -242,9 +242,15 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
                     detail="Maximum verification attempts exceeded. Verification temporarily locked for 15 minutes."
                 )
 
-            # Verify code via Wakit
+            # Verify code directly via Wakit Gateway
             phone_number = context["phone"]
-            is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
+            try:
+                is_valid = WakitService.verify_otp(request_id, otp_code, phone_number=phone_number)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Provider verification service error: {str(e)}"
+                )
 
             if not is_valid:
                 remaining_attempts = max(0, 5 - context["attempts"])

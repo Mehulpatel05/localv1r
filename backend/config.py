@@ -33,13 +33,11 @@ class Config:
     _FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode('utf-8'))
     crypto = Fernet(_FERNET_KEY.encode('utf-8'))
     
-    # Wakit OTP Gateway Configuration
+    # Wakit Real OTP Gateway Configuration
     WAKIT_API_KEY = os.getenv("WAKIT_API_KEY", "")
     WAKIT_BASE_URL = os.getenv("WAKIT_BASE_URL", "https://wakit.in/api/v1")
-    WAKIT_TIMEOUT_SECONDS = int(os.getenv("WAKIT_TIMEOUT_SECONDS", "8"))
-    WAKIT_MAX_RETRIES = int(os.getenv("WAKIT_MAX_RETRIES", "1"))
-    OTP_FALLBACK_SIMULATION = os.getenv("OTP_FALLBACK_SIMULATION", "true").lower() in ("true", "1", "yes")
-    DEFAULT_TEST_OTP = os.getenv("DEFAULT_TEST_OTP", "123456")
+    WAKIT_TIMEOUT_SECONDS = int(os.getenv("WAKIT_TIMEOUT_SECONDS", "15"))
+    WAKIT_MAX_RETRIES = int(os.getenv("WAKIT_MAX_RETRIES", "2"))
     
     # JWT Expiration settings
     JWT_ACCESS_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "30"))
