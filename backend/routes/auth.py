@@ -89,15 +89,39 @@ class TokenRefreshRequest(BaseModel):
     refresh_token: Optional[str] = Field(None, description="Active refresh token")
 
 
-def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]:
+def _mint_tokens(
+    user_id: str,
+    phone_number: str,
+    handle: str,
+    role: str = "user",
+    city_id: str = "surat_gujarat",
+    verified: bool = True,
+    plan_tier: str = "free",
+    banned: bool = False,
+    token_version: int = 1,
+    device_id: Optional[str] = None
+) -> Dict[str, Any]:
     now = int(time.time())
     access_exp = now + (Config.JWT_ACCESS_EXPIRE_MINUTES * 60)
     refresh_exp = now + (Config.JWT_REFRESH_EXPIRE_DAYS * 86400)
 
+    # 🚀 Phase 1 JWT Identity & Decision Layer:
+    # Full business logic claims allow 0ms instantaneous client & server decisions with ZERO database lookups.
     access_payload = {
+        "uid": user_id,
         "sub": user_id,
         "phone": phone_number,
         "handle": handle,
+        "role": role,
+        "cityId": city_id,
+        "city_id": city_id,
+        "verified": verified,
+        "planTier": plan_tier,
+        "plan_tier": plan_tier,
+        "banned": banned,
+        "tokenVersion": token_version,
+        "token_version": token_version,
+        "device_id": device_id or "trusted_device",
         "type": "access",
         "iss": "nearhood-backend",
         "iat": now,
@@ -108,9 +132,17 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
 
     refresh_jti = uuid.uuid4().hex
     refresh_payload = {
+        "uid": user_id,
         "sub": user_id,
         "phone": phone_number,
         "handle": handle,
+        "role": role,
+        "cityId": city_id,
+        "city_id": city_id,
+        "verified": verified,
+        "planTier": plan_tier,
+        "banned": banned,
+        "tokenVersion": token_version,
         "type": "refresh",
         "jti": refresh_jti,
         "iss": "nearhood-backend",
@@ -131,6 +163,16 @@ def _mint_tokens(user_id: str, phone_number: str, handle: str) -> Dict[str, Any]
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": Config.JWT_ACCESS_EXPIRE_MINUTES * 60,
+        "claims": {
+            "uid": user_id,
+            "role": role,
+            "cityId": city_id,
+            "verified": verified,
+            "handle": handle,
+            "planTier": plan_tier,
+            "banned": banned,
+            "tokenVersion": token_version,
+        }
     }
 
 
@@ -275,7 +317,17 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
             photo_url = user_record.get("avatar_url", "")
             is_new_user = _check_is_new_user(handle)
 
-            tokens = _mint_tokens(user_id=user_id, phone_number=phone_number, handle=handle)
+            tokens = _mint_tokens(
+                user_id=user_id,
+                phone_number=phone_number,
+                handle=handle,
+                role=user_record.get("role", "user"),
+                city_id=user_record.get("city_id", "surat_gujarat"),
+                verified=bool(user_record.get("verified", 1)),
+                plan_tier=user_record.get("plan_tier", "free"),
+                banned=bool(user_record.get("banned", 0)),
+                token_version=int(user_record.get("token_version", 1))
+            )
 
             res_payload = {
                 "status": "success",
@@ -286,6 +338,12 @@ async def verify_otp(req: OtpVerifyRequest, request: Request):
                     "phoneNumber": phone_number,
                     "handle": handle,
                     "photoUrl": photo_url,
+                    "role": user_record.get("role", "user"),
+                    "cityId": user_record.get("city_id", "surat_gujarat"),
+                    "verified": bool(user_record.get("verified", 1)),
+                    "planTier": user_record.get("plan_tier", "free"),
+                    "banned": bool(user_record.get("banned", 0)),
+                    "tokenVersion": int(user_record.get("token_version", 1)),
                     "isNewUser": is_new_user,
                 }
             }
@@ -327,26 +385,97 @@ async def refresh_token(
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type.")
 
-        user_id = payload.get("sub")
+        user_id = payload.get("uid") or payload.get("sub")
         phone = payload.get("phone", "")
         handle = payload.get("handle", "")
         jti = payload.get("jti")
 
+        # Check D1 status if jti exists
         # Check D1 status if jti exists
         if jti:
             t_doc = D1Service.get_refresh_token(jti)
             if not t_doc or t_doc.get("status") != "active":
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is revoked or expired.")
 
-        tokens = _mint_tokens(user_id=user_id, phone_number=phone, handle=handle)
+        # Pull updated user record to validate session freshness against Cloudflare D1
+        user_record = D1Service.get_user_by_id(user_id) if user_id else None
+        if not user_record:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account not found.")
+
+        # If user was banned since token issuance, revoke refresh token and reject
+        if bool(user_record.get("banned", 0)):
+            if jti:
+                D1Service.revoke_refresh_token(jti)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account has been suspended by administration.")
+
+        # Check token version revocation
+        current_db_version = int(user_record.get("token_version", 1))
+        claim_version = int(payload.get("tokenVersion") or payload.get("token_version") or 1)
+        if claim_version < current_db_version:
+            if jti:
+                D1Service.revoke_refresh_token(jti)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has been revoked due to security/role updates. Please log in again."
+            )
+
+        u_role = user_record.get("role", "user")
+        u_city = user_record.get("city_id", "surat_gujarat")
+        u_ver = bool(user_record.get("verified", 1))
+        u_tier = user_record.get("plan_tier", "free")
+        u_banned = False
+        u_tver = current_db_version
+
+        tokens = _mint_tokens(
+            user_id=user_id,
+            phone_number=phone or user_record.get("phone", ""),
+            handle=handle or user_record.get("handle", ""),
+            role=u_role,
+            city_id=u_city,
+            verified=u_ver,
+            plan_tier=u_tier,
+            banned=u_banned,
+            token_version=u_tver,
+            device_id=payload.get("device_id")
+        )
         return {
             "status": "success",
             **tokens,
         }
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired. Please login again.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
+
+
+def verify_jwt_claims_fast(token: str) -> Dict[str, Any]:
+    """
+    ⚡ 0ms Zero-DB Hit Fast Decision Helper.
+    Validates token signature, expiration, type, and banned status without touching D1.
+    """
+    raw_token = token.replace("Bearer ", "").strip()
+    try:
+        payload = jwt.decode(
+            raw_token,
+            Config.JWT_SECRET,
+            algorithms=["HS256"],
+            issuer="nearhood-backend"
+        )
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type.")
+        if payload.get("banned") is True:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended.")
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired.")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
+
+
 
 
 @auth_router.delete("/account")

@@ -33,6 +33,7 @@ from routes.calls import router as calls_router
 from routes.presence import router as presence_router
 from routes.notifications import router as notifications_router
 from routes.preferences import router as preferences_router
+from routes.actions import actions_router
 
 is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
 
@@ -70,7 +71,7 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "nearhood-api", "timestamp": time.time()}
 
-# 🛡️ AUTHENTICATION, CHATS, CALLS, PRESENCE & COMMUNITY ROUTERS
+# 🛡️ AUTHENTICATION, CHATS, CALLS, PRESENCE, COMMUNITY & PHASE 0 ACTION STATES ROUTERS
 app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(friends_router)
@@ -87,6 +88,8 @@ app.include_router(notifications_router)
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(preferences_router)
 app.include_router(preferences_router, prefix="/api/v1")
+app.include_router(actions_router)
+app.include_router(actions_router, prefix="/api/v1")
 
 # 🛡️ DUAL-KEY MULTI-ROUTE RATE LIMITER CACHES
 redis_client: Optional[redis.Redis] = None
@@ -1274,6 +1277,60 @@ async def upload_media(
     if idempotency_key:
         await save_idempotent_response(idempotency_key, "upload_image", user_handle if "user_handle" in locals() else (mod_email if "mod_email" in locals() else "default"), res)
     return res
+
+
+# ⚡ PHASE 5: DIRECT R2 PRESIGNED UPLOAD & CDN PRE-WARMING
+class PresignedUrlRequest(BaseModel):
+    cityId: str = "general"
+    moduleType: str = "posts" # 'posts', 'rooms', 'jobs', 'shops', 'avatars', 'audio'
+    listingId: str = "generic"
+    filename: str
+    contentType: str = "image/jpeg"
+    fileSize: Optional[int] = None
+
+class PrewarmCdnRequest(BaseModel):
+    mediaUrls: List[str]
+
+@app.post("/api/v1/storage/presigned-url")
+async def get_presigned_upload_url(
+    req: PresignedUrlRequest,
+    authorization: Optional[str] = Header(None, description="Bearer token")
+):
+    """
+    ⚡ Phase 5: Generates a presigned Cloudflare R2 upload URL for direct client-to-R2 upload.
+    Bandwidth optimization: Server never proxies the media file bytes.
+    Naming convention: {cityId}/{moduleType}/{listingId}/{filename}
+    """
+    device_id, user_handle = verify_session_token(authorization)
+    
+    allowed_extensions = (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".3gp", ".m4a", ".aac", ".mp3")
+    ext = os.path.splitext(req.filename)[1].lower()
+    if not ext or ext not in allowed_extensions:
+        req.filename = f"{req.filename}.jpg"
+
+    res = R2Service.generate_presigned_upload_url(
+        city_id=req.cityId,
+        module_type=req.moduleType,
+        listing_id=req.listingId,
+        filename=req.filename,
+        content_type=req.contentType
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Failed to generate presigned upload URL."))
+    
+    return res
+
+@app.post("/api/v1/storage/cdn-prewarm")
+async def prewarm_cdn_cache_endpoint(
+    req: PrewarmCdnRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    ⚡ Phase 5: Cloudflare CDN Edge Cache Pre-Warming.
+    """
+    background_tasks.add_task(R2Service.prewarm_cdn_cache, req.mediaUrls)
+    return {"status": "success", "count": len(req.mediaUrls)}
+
 
 
 # 🛡️ IN-MEMORY BANDWIDTH DOS & CACHE LAYER

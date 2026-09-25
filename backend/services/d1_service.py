@@ -95,6 +95,12 @@ class D1Service:
                 phone TEXT,
                 device_id TEXT,
                 avatar_url TEXT,
+                role TEXT DEFAULT 'user',
+                city_id TEXT DEFAULT 'surat_gujarat',
+                verified INTEGER DEFAULT 1,
+                plan_tier TEXT DEFAULT 'free',
+                banned INTEGER DEFAULT 0,
+                token_version INTEGER DEFAULT 1,
                 reputation INTEGER DEFAULT 0,
                 created_at INTEGER DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))
@@ -133,6 +139,12 @@ class D1Service:
                 updated_at INTEGER DEFAULT (strftime('%s', 'now')),
                 deleted_at INTEGER
             );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_posts_city_cat_created ON posts(city_id, category, created_at DESC);
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_posts_city_created ON posts(city_id, created_at DESC);
             """,
             """
             CREATE TABLE IF NOT EXISTS comments (
@@ -407,6 +419,44 @@ class D1Service:
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_cmd_user ON community_message_deletions(user_handle);
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS user_action_states (
+                user_handle TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_type TEXT NOT NULL DEFAULT 'post',
+                is_liked INTEGER DEFAULT 0,
+                is_saved INTEGER DEFAULT 0,
+                is_applied INTEGER DEFAULT 0,
+                is_reported INTEGER DEFAULT 0,
+                is_blocked INTEGER DEFAULT 0,
+                vote_direction INTEGER DEFAULT 0,
+                updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+                PRIMARY KEY (user_handle, target_id)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_uas_user ON user_action_states(user_handle);
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS user_counters (
+                user_handle TEXT PRIMARY KEY,
+                unread_messages INTEGER DEFAULT 0,
+                unread_notifications INTEGER DEFAULT 0,
+                pending_friend_requests INTEGER DEFAULT 0,
+                pending_community_invites INTEGER DEFAULT 0,
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS listing_counter_shards (
+                target_id TEXT NOT NULL,
+                target_type TEXT NOT NULL DEFAULT 'listing',
+                shard_id INTEGER NOT NULL,
+                count INTEGER DEFAULT 0,
+                updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+                PRIMARY KEY (target_id, shard_id)
+            );
             """
         ]
 
@@ -432,6 +482,12 @@ class D1Service:
             "ALTER TABLE community_messages ADD COLUMN edited_at INTEGER;",
             "ALTER TABLE community_messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;",
             "ALTER TABLE community_messages ADD COLUMN deleted_by TEXT;",
+            "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';",
+            "ALTER TABLE users ADD COLUMN city_id TEXT DEFAULT 'surat_gujarat';",
+            "ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 1;",
+            "ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'free';",
+            "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0;",
+            "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;",
         ]
         for m in migrations:
             cls.execute(m.strip())
@@ -878,16 +934,97 @@ class D1Service:
         return cls.execute(sql, [avatar_url, now_ts, user_id])
 
     @classmethod
-    def get_or_create_user(cls, phone: str, handle: str, installation_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_or_create_user(
+        cls,
+        phone: str,
+        handle: str,
+        installation_id: Optional[str] = None,
+        city_id: str = "surat_gujarat"
+    ) -> Dict[str, Any]:
         existing = cls.query("SELECT * FROM users WHERE phone = ? OR handle = ? LIMIT 1;", [phone, handle])
         now_ts = int(time.time())
         if existing and len(existing) > 0:
             return existing[0]
 
         user_id = str(uuid.uuid4())
-        sql = "INSERT INTO users (id, handle, phone, installation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);"
-        cls.execute(sql, [user_id, handle, phone, installation_id, now_ts, now_ts])
-        return {"id": user_id, "handle": handle, "phone": phone, "installation_id": installation_id}
+        sql = """
+        INSERT INTO users (id, handle, phone, installation_id, role, city_id, verified, plan_tier, banned, token_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'user', ?, 1, 'free', 0, 1, ?, ?);
+        """
+        cls.execute(sql, [user_id, handle, phone, installation_id, city_id, now_ts, now_ts])
+        return {
+            "id": user_id,
+            "handle": handle,
+            "phone": phone,
+            "installation_id": installation_id,
+            "role": "user",
+            "city_id": city_id,
+            "verified": 1,
+            "plan_tier": "free",
+            "banned": 0,
+            "token_version": 1
+        }
+
+    @classmethod
+    def increment_user_token_version(cls, user_id_or_handle: str) -> int:
+        """
+        ⚡ Instant Session Revocation:
+        Increments token_version in D1. Outdated client JWTs become invalid on critical checks.
+        """
+        now_ts = int(time.time())
+        clean = user_id_or_handle.replace("@", "").strip().lower()
+        sql = """
+        UPDATE users
+        SET token_version = COALESCE(token_version, 1) + 1, updated_at = ?
+        WHERE id = ? OR LOWER(handle) = ?;
+        """
+        cls.execute(sql, [now_ts, user_id_or_handle, clean])
+        
+        # Read back new version
+        rows = cls.query("SELECT token_version FROM users WHERE id = ? OR LOWER(handle) = ? LIMIT 1;", [user_id_or_handle, clean])
+        if rows and len(rows) > 0:
+            return rows[0].get("token_version", 1)
+        return 1
+
+    @classmethod
+    def get_user_token_version(cls, user_id_or_handle: str) -> int:
+        clean = user_id_or_handle.replace("@", "").strip().lower()
+        rows = cls.query("SELECT token_version FROM users WHERE id = ? OR LOWER(handle) = ? LIMIT 1;", [user_id_or_handle, clean])
+        if rows and len(rows) > 0:
+            return rows[0].get("token_version", 1)
+        return 1
+
+    @classmethod
+    def update_user_security_profile(
+        cls,
+        user_id_or_handle: str,
+        role: Optional[str] = None,
+        city_id: Optional[str] = None,
+        verified: Optional[bool] = None,
+        plan_tier: Optional[str] = None,
+        banned: Optional[bool] = None,
+    ) -> bool:
+        """
+        Updates role/tier/ban status and automatically increments token_version to force refresh.
+        """
+        user = cls.get_user_by_id(user_id_or_handle) or cls.get_user_by_handle(user_id_or_handle)
+        if not user:
+            return False
+
+        user_id = user["id"]
+        u_role = role or user.get("role", "user")
+        u_city = city_id or user.get("city_id", "surat_gujarat")
+        u_ver = int(verified) if verified is not None else user.get("verified", 1)
+        u_tier = plan_tier or user.get("plan_tier", "free")
+        u_banned = int(banned) if banned is not None else user.get("banned", 0)
+        now_ts = int(time.time())
+
+        sql = """
+        UPDATE users
+        SET role = ?, city_id = ?, verified = ?, plan_tier = ?, banned = ?, token_version = COALESCE(token_version, 1) + 1, updated_at = ?
+        WHERE id = ?;
+        """
+        return cls.execute(sql, [u_role, u_city, u_ver, u_tier, u_banned, now_ts, user_id])
 
     # ==========================================
     # 🤝 FRIENDSHIPS, REQUESTS & BLOCKS
@@ -1571,13 +1708,29 @@ class D1Service:
     @classmethod
     def get_join_requests(cls, community_id: str, admin_handle: str) -> List[Dict[str, Any]]:
         clean_admin = admin_handle.replace("@", "").strip().lower()
-        comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
-        if not comm:
+
+        # Fast single permission check
+        admin_check_sql = """
+        SELECT c.owner_handle, c.admin_handle, m.role, m.admin_permissions_json
+        FROM communities c
+        LEFT JOIN community_members m ON c.id = m.community_id AND LOWER(m.user_handle) = ?
+        WHERE c.id = ? LIMIT 1;
+        """
+        admin_rows = cls.query(admin_check_sql, [clean_admin, community_id])
+        if not admin_rows or len(admin_rows) == 0:
             return []
-        role = (comm.get("myRole") or "").lower()
-        perms = comm.get("myPermissions", {})
-        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").replace("@", "").strip().lower()
+
+        row = admin_rows[0]
+        role = (row.get("role") or "").lower()
+        owner_handle = (row.get("owner_handle") or row.get("admin_handle") or "").replace("@", "").strip().lower()
         is_owner = (role == "owner") or (clean_admin == owner_handle)
+        
+        perms = {}
+        if row.get("admin_permissions_json"):
+            try:
+                perms = json.loads(row["admin_permissions_json"])
+            except:
+                pass
         is_admin_with_perm = (role == "admin" and perms.get("can_add_members", True))
 
         if not is_owner and not is_admin_with_perm:
@@ -2554,5 +2707,263 @@ class D1Service:
             prefs["callPrivacy"] = r.get("call_privacy", "everyone")
             return prefs
         return {"callPrivacy": "everyone"}
+
+    # ==========================================
+    # ⚡ PHASE 0: PRECOMPUTED USER ACTION STATES & COUNTERS
+    # ==========================================
+
+    @classmethod
+    def get_user_action_states(cls, handle: str, target_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        ⚡ 0ms O(1) Bulk Action States Lookup.
+        Returns cached states (liked, saved, applied, reported, blocked, voteDirection)
+        for a list of post/listing/comment IDs in a single query.
+        """
+        if not target_ids:
+            return {}
+        clean = handle.replace("@", "").strip().lower()
+        placeholders = ",".join(["?"] * len(target_ids))
+        sql = f"SELECT * FROM user_action_states WHERE LOWER(user_handle) = ? AND target_id IN ({placeholders});"
+        params = [clean] + list(target_ids)
+        rows = cls.query(sql, params) or []
+        
+        result = {}
+        for r in rows:
+            result[r["target_id"]] = {
+                "isLiked": bool(r.get("is_liked", 0)),
+                "is_liked": bool(r.get("is_liked", 0)),
+                "isSaved": bool(r.get("is_saved", 0)),
+                "is_saved": bool(r.get("is_saved", 0)),
+                "isApplied": bool(r.get("is_applied", 0)),
+                "is_applied": bool(r.get("is_applied", 0)),
+                "isReported": bool(r.get("is_reported", 0)),
+                "is_reported": bool(r.get("is_reported", 0)),
+                "isBlocked": bool(r.get("is_blocked", 0)),
+                "is_blocked": bool(r.get("is_blocked", 0)),
+                "voteDirection": r.get("vote_direction", 0),
+                "vote_direction": r.get("vote_direction", 0),
+                "updatedAt": r.get("updated_at"),
+                "updated_at": r.get("updated_at"),
+            }
+        return result
+
+    @classmethod
+    def set_user_action_state(
+        cls,
+        handle: str,
+        target_id: str,
+        target_type: str = "post",
+        is_liked: Optional[bool] = None,
+        is_saved: Optional[bool] = None,
+        is_applied: Optional[bool] = None,
+        is_reported: Optional[bool] = None,
+        is_blocked: Optional[bool] = None,
+        vote_direction: Optional[int] = None,
+    ) -> bool:
+        """
+        Precomputes / updates button state for a specific user and target.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        now_ts = int(time.time())
+
+        # Check existing state
+        existing = cls.query(
+            "SELECT * FROM user_action_states WHERE LOWER(user_handle) = ? AND target_id = ? LIMIT 1;",
+            [clean, target_id]
+        )
+        if existing and len(existing) > 0:
+            current = existing[0]
+            u_liked = int(is_liked) if is_liked is not None else current.get("is_liked", 0)
+            u_saved = int(is_saved) if is_saved is not None else current.get("is_saved", 0)
+            u_applied = int(is_applied) if is_applied is not None else current.get("is_applied", 0)
+            u_reported = int(is_reported) if is_reported is not None else current.get("is_reported", 0)
+            u_blocked = int(is_blocked) if is_blocked is not None else current.get("is_blocked", 0)
+            u_vote = vote_direction if vote_direction is not None else current.get("vote_direction", 0)
+
+            sql = """
+            UPDATE user_action_states
+            SET is_liked = ?, is_saved = ?, is_applied = ?, is_reported = ?, is_blocked = ?, vote_direction = ?, updated_at = ?
+            WHERE LOWER(user_handle) = ? AND target_id = ?;
+            """
+            return cls.execute(sql, [u_liked, u_saved, u_applied, u_reported, u_blocked, u_vote, now_ts, clean, target_id])
+        else:
+            u_liked = int(is_liked) if is_liked is not None else 0
+            u_saved = int(is_saved) if is_saved is not None else 0
+            u_applied = int(is_applied) if is_applied is not None else 0
+            u_reported = int(is_reported) if is_reported is not None else 0
+            u_blocked = int(is_blocked) if is_blocked is not None else 0
+            u_vote = vote_direction if vote_direction is not None else 0
+
+            sql = """
+            INSERT INTO user_action_states (user_handle, target_id, target_type, is_liked, is_saved, is_applied, is_reported, is_blocked, vote_direction, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            return cls.execute(sql, [clean, target_id, target_type, u_liked, u_saved, u_applied, u_reported, u_blocked, u_vote, now_ts])
+
+    @classmethod
+    def get_user_counters(cls, handle: str) -> Dict[str, int]:
+        """
+        ⚡ 0ms O(1) Precomputed Badges & Counter Fetch.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        rows = cls.query("SELECT * FROM user_counters WHERE LOWER(user_handle) = ? LIMIT 1;", [clean])
+        if rows and len(rows) > 0:
+            r = rows[0]
+            return {
+                "unreadMessages": r.get("unread_messages", 0),
+                "unreadNotifications": r.get("unread_notifications", 0),
+                "pendingFriendRequests": r.get("pending_friend_requests", 0),
+                "pendingCommunityInvites": r.get("pending_community_invites", 0),
+            }
+        return {
+            "unreadMessages": 0,
+            "unreadNotifications": 0,
+            "pendingFriendRequests": 0,
+            "pendingCommunityInvites": 0,
+        }
+
+    @classmethod
+    def increment_user_counter(cls, handle: str, counter_field: str, delta: int = 1) -> bool:
+        """
+        Atomic Write-time fan-out increment of user counter shards.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        valid_fields = {
+            "unread_messages",
+            "unread_notifications",
+            "pending_friend_requests",
+            "pending_community_invites"
+        }
+        if counter_field not in valid_fields:
+            return False
+        
+        now_ts = int(time.time())
+        sql = f"""
+        INSERT INTO user_counters (user_handle, {counter_field}, updated_at)
+        VALUES (?, MAX(0, ?), ?)
+        ON CONFLICT(user_handle) DO UPDATE SET
+            {counter_field} = MAX(0, user_counters.{counter_field} + ?),
+            updated_at = ?;
+        """
+        return cls.execute(sql, [clean, delta, now_ts, delta, now_ts])
+
+    @classmethod
+    def reset_user_counter(cls, handle: str, counter_field: str) -> bool:
+        """
+        Resets counter to 0 upon user read / ack.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        valid_fields = {
+            "unread_messages",
+            "unread_notifications",
+            "pending_friend_requests",
+            "pending_community_invites"
+        }
+        if counter_field not in valid_fields:
+            return False
+        
+        now_ts = int(time.time())
+        sql = f"""
+        INSERT INTO user_counters (user_handle, {counter_field}, updated_at)
+        VALUES (?, 0, ?)
+        ON CONFLICT(user_handle) DO UPDATE SET
+            {counter_field} = 0,
+            updated_at = ?;
+        """
+        return cls.execute(sql, [clean, now_ts, now_ts])
+
+    @classmethod
+    def get_user_precomputed_action_document(cls, handle: str, limit: int = 500) -> Dict[str, Any]:
+        """
+        ⚡ Phase 3: Returns full precomputed action state document in a single read.
+        Hot set threshold: up to `limit` (default 500 items) per category.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        sql = """
+        SELECT target_id, target_type, is_liked, is_saved, is_applied, is_reported, is_blocked, vote_direction, updated_at
+        FROM user_action_states
+        WHERE LOWER(user_handle) = ?
+        ORDER BY updated_at DESC
+        LIMIT 2000;
+        """
+        rows = cls.query(sql, [clean])
+        saved_listing_ids = []
+        applied_job_ids = []
+        liked_post_ids = []
+        blocked_user_ids = []
+        reported_ids = []
+        votes = {}
+        last_updated = 0
+
+        for r in rows:
+            tid = r["target_id"]
+            ts = r.get("updated_at") or 0
+            if ts > last_updated:
+                last_updated = ts
+            
+            if r.get("is_saved") and len(saved_listing_ids) < limit:
+                saved_listing_ids.append(tid)
+            if r.get("is_applied") and len(applied_job_ids) < limit:
+                applied_job_ids.append(tid)
+            if r.get("is_liked") and len(liked_post_ids) < limit:
+                liked_post_ids.append(tid)
+            if r.get("is_blocked") and len(blocked_user_ids) < limit:
+                blocked_user_ids.append(tid)
+            if r.get("is_reported") and len(reported_ids) < limit:
+                reported_ids.append(tid)
+            if r.get("vote_direction"):
+                votes[tid] = r["vote_direction"]
+
+        following_rows = cls.query(
+            "SELECT receiver_handle FROM friend_requests WHERE LOWER(sender_handle) = ? AND status = 'accepted' LIMIT ?;",
+            [clean, limit]
+        )
+        following_user_ids = [f.get("receiver_handle", "") for f in following_rows if f.get("receiver_handle")]
+
+        return {
+            "savedListingIds": saved_listing_ids,
+            "appliedJobIds": applied_job_ids,
+            "likedPostIds": liked_post_ids,
+            "blockedUserIds": blocked_user_ids,
+            "followingUserIds": following_user_ids,
+            "reportedIds": reported_ids,
+            "votes": votes,
+            "lastUpdated": last_updated or int(time.time()),
+        }
+
+    # ==========================================
+    # ⚡ PHASE 6: DISTRIBUTED COUNTER SHARDS (Contention Avoidance)
+    # ==========================================
+
+    @classmethod
+    def increment_sharded_counter(cls, target_id: str, target_type: str = "listing", delta: int = 1, num_shards: int = 10) -> bool:
+        """
+        ⚡ Phase 6: Distributed Counter Sharding (Contention Avoidance for Viral Listings).
+        Randomly picks a shard (0..9) to distribute high-concurrency writes across multiple rows.
+        """
+        import random
+        shard_id = random.randint(0, max(1, num_shards - 1))
+        now_ts = int(time.time())
+        sql = """
+        INSERT INTO listing_counter_shards (target_id, target_type, shard_id, count, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(target_id, shard_id) DO UPDATE SET
+            count = listing_counter_shards.count + ?,
+            updated_at = ?;
+        """
+        return cls.execute(sql, [target_id, target_type, shard_id, delta, now_ts, delta, now_ts])
+
+    @classmethod
+    def get_sharded_counter_total(cls, target_id: str) -> int:
+        """
+        ⚡ Phase 6: Computes total count by aggregating all 10 shards in <1ms via indexed SUM.
+        """
+        sql = "SELECT SUM(count) as total FROM listing_counter_shards WHERE target_id = ?;"
+        rows = cls.query(sql, [target_id])
+        if rows and len(rows) > 0 and rows[0].get("total") is not None:
+            return int(rows[0]["total"])
+        return 0
+
+
 
 

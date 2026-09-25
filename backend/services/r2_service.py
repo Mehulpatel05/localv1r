@@ -2,7 +2,7 @@ import io
 import os
 import boto3
 from botocore.client import Config as BotoConfig
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from config import Config
 
 class R2Service:
@@ -44,7 +44,8 @@ class R2Service:
                 Bucket=Config.R2_BUCKET_NAME,
                 Key=key,
                 Body=file_bytes,
-                ContentType=content_type
+                ContentType=content_type,
+                CacheControl="public, max-age=31536000, immutable"
             )
             return key
         except Exception as e:
@@ -106,3 +107,74 @@ class R2Service:
         except Exception as e:
             print(f"[R2Service] Delete error for key '{object_key}': {e}")
             return False
+
+    @classmethod
+    def generate_presigned_upload_url(
+        cls,
+        city_id: str,
+        module_type: str,
+        listing_id: str,
+        filename: str,
+        content_type: str = "image/jpeg",
+        expires_in: int = 300
+    ) -> Dict[str, Any]:
+        """
+        ⚡ Phase 5: Cloudflare R2 Presigned Upload URL Generator.
+        Naming convention: {cityId}/{moduleType}/{listingId}/{filename}
+        Allows client to upload directly to R2 without routing heavy file bytes through backend.
+        """
+        clean_city = (city_id or "general").replace("@", "").strip().lower()
+        clean_module = (module_type or "posts").strip().lower()
+        clean_listing = (listing_id or "generic").strip().lower()
+        clean_filename = filename.strip().replace(" ", "_")
+        
+        object_key = f"{clean_city}/{clean_module}/{clean_listing}/{clean_filename}"
+        
+        try:
+            s3 = cls.get_client()
+            upload_url = s3.generate_presigned_url(
+                ClientMethod='put_object',
+                Params={
+                    'Bucket': Config.R2_BUCKET_NAME,
+                    'Key': object_key,
+                    'ContentType': content_type,
+                },
+                ExpiresIn=expires_in
+            )
+            
+            base_url = os.environ.get("PRODUCTION_URL", "https://localv1r.onrender.com").rstrip("/")
+            public_url = f"{base_url}/api/v1/media/{object_key}"
+            
+            return {
+                "success": True,
+                "uploadUrl": upload_url,
+                "publicUrl": public_url,
+                "objectKey": object_key,
+                "expiresIn": expires_in,
+                "contentType": content_type
+            }
+        except Exception as e:
+            print(f"[R2Service] Error generating presigned URL for {object_key}: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @classmethod
+    def prewarm_cdn_cache(cls, media_urls: List[str]):
+        """
+        ⚡ Phase 5: Cloudflare Edge CDN Pre-Warming.
+        Executes lightweight HTTP HEAD requests to pop edge cache for trending/popular listing media.
+        """
+        if not media_urls:
+            return
+        
+        import requests
+        for url in media_urls[:20]:
+            if not url or not url.startswith("http"):
+                continue
+            try:
+                requests.head(url, timeout=3)
+            except Exception as e:
+                print(f"[R2Service] CDN pre-warm non-critical notice for {url}: {e}")
+

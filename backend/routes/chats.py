@@ -1,9 +1,30 @@
-from fastapi import APIRouter, HTTPException, Query
+import jwt
+from fastapi import APIRouter, HTTPException, Query, Header, status
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
+from config import Config
 from services.d1_service import D1Service
 
 router = APIRouter(prefix="/chats", tags=["1-on-1 Direct Chats"])
+
+def _get_optional_auth_user(authorization: Optional[str]) -> Optional[Tuple[str, str]]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    raw_token = authorization.split("Bearer ")[1].strip()
+    try:
+        payload = jwt.decode(
+            raw_token,
+            Config.JWT_SECRET,
+            algorithms=["HS256"],
+            issuer="nearhood-backend"
+        )
+        if payload.get("type") == "access":
+            uid = payload.get("sub", "")
+            handle = payload.get("handle", "")
+            return uid, handle
+    except Exception:
+        pass
+    return None
 
 class SendDirectMessageRequest(BaseModel):
     sender: str
@@ -20,10 +41,19 @@ class DeleteMessageRequest(BaseModel):
     user_handle: str
 
 @router.get("")
-def get_user_chats(handle: str = Query(..., description="User handle")):
+def get_user_chats(
+    handle: str = Query(..., description="User handle"),
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Get all direct chat conversations for a given user.
     """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle and auth_handle.replace("@", "").lower() != handle.replace("@", "").lower():
+            # Defense-in-depth: enforce token handle
+            handle = auth_handle
     chats = D1Service.get_user_direct_chats(handle)
     return {"chats": chats}
 
@@ -40,10 +70,19 @@ def get_direct_messages(
     return {"messages": messages}
 
 @router.post("/message")
-def send_direct_message(req: SendDirectMessageRequest):
+def send_direct_message(
+    req: SendDirectMessageRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Send a direct 1-on-1 message.
     """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle and auth_handle.replace("@", "").lower() != req.sender.replace("@", "").lower():
+            req.sender = auth_handle
+
     if not req.sender or not req.receiver:
         raise HTTPException(status_code=400, detail="Sender and receiver are required")
     if not req.content and not req.imageUrl and not req.mediaUrls:
@@ -70,18 +109,38 @@ def send_direct_message(req: SendDirectMessageRequest):
     }
 
 @router.post("/{chat_id}/read")
-def mark_direct_chat_read(chat_id: str, req: MarkReadRequest):
+def mark_direct_chat_read(
+    chat_id: str,
+    req: MarkReadRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Mark all unread messages in direct chat as read for this user.
     """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle:
+            req.user_handle = auth_handle
+
     ok = D1Service.mark_direct_chat_read(chat_id, req.user_handle)
     return {"success": ok}
 
 @router.delete("/message/{message_id}")
-def delete_direct_message(message_id: str, req: DeleteMessageRequest):
+def delete_direct_message(
+    message_id: str,
+    req: DeleteMessageRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Soft-delete a direct message sent by user.
     """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle:
+            req.user_handle = auth_handle
+
     ok = D1Service.delete_direct_message(message_id, req.user_handle)
     if not ok:
         raise HTTPException(status_code=400, detail="Unable to delete message")
