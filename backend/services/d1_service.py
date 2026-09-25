@@ -1632,6 +1632,16 @@ class D1Service:
     ) -> bool:
         clean_admin = admin_handle.replace("@", "").strip().lower()
         clean_target = target_handle.replace("@", "").strip().lower()
+        clean_role = role.strip().lower()
+
+        # SECURITY: Strictly reject setting role to 'owner' or anything other than 'admin' or 'member'
+        if clean_role not in ("admin", "member"):
+            return False
+
+        # Cannot modify own role/permissions via this endpoint
+        if clean_admin == clean_target:
+            return False
+
         comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
         if not comm:
             return False
@@ -1641,10 +1651,20 @@ class D1Service:
         if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_manage_admins", False)):
             return False
 
-        if clean_target == (comm.get("ownerHandle") or "").lower():
+        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").lower()
+        if clean_target == owner_handle:
             return False
 
-        clean_role = "admin" if role.lower() == "admin" else "member"
+        # Check target's existing role in database
+        target_rows = cls.query(
+            "SELECT role FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ? LIMIT 1;",
+            [community_id, clean_target]
+        )
+        if not target_rows or len(target_rows) == 0:
+            return False
+        if (target_rows[0].get("role") or "").lower() == "owner":
+            return False
+
         perms_json = json.dumps(permissions) if permissions else ("{}" if clean_role == "member" else json.dumps({
             "can_add_members": True,
             "can_remove_members": True,
@@ -1690,11 +1710,30 @@ class D1Service:
 
         my_role = comm.get("myRole")
         my_perms = comm.get("myPermissions", {})
-        if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_remove_members", True)):
+
+        # Find target member's role
+        target_rows = cls.query(
+            "SELECT role FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ? LIMIT 1;",
+            [community_id, clean_target.lower()]
+        )
+        if not target_rows or len(target_rows) == 0:
+            return False
+        target_role = (target_rows[0].get("role") or "member").lower()
+
+        # Cannot remove the owner under any circumstances
+        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").lower()
+        if target_role == "owner" or clean_target.lower() == owner_handle:
             return False
 
-        if clean_target.lower() == (comm.get("ownerHandle") or "").lower():
-            return False
+        # Admin-vs-Admin removal: ONLY Owner OR Admin with can_manage_admins can remove another Admin
+        if target_role == "admin":
+            if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_manage_admins", False)):
+                return False
+
+        # Regular member removal: Owner OR Admin with can_remove_members
+        if target_role == "member":
+            if my_role != "owner" and not (my_role == "admin" and my_perms.get("can_remove_members", True)):
+                return False
 
         cls.execute("DELETE FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_target.lower()])
         cls.execute("UPDATE communities SET member_count = MAX(1, member_count - 1) WHERE id = ?;", [community_id])

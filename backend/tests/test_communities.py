@@ -144,3 +144,58 @@ def test_update_member_role_and_transfer_ownership(auth_headers):
             "newOwnerHandle": "bob"
         }, headers=auth_headers)
         assert res_transfer.status_code == 200
+
+def test_reject_promoting_to_owner_via_role_endpoint(auth_headers):
+    # API schema rejects role="owner" (only admin | member allowed)
+    res = client.put("/api/v1/communities/comm-1/members/bob/role", json={
+        "role": "owner"
+    }, headers=auth_headers)
+    assert res.status_code in (400, 422)  # Validation error (schema regex rejects 'owner')
+
+    # D1Service logic also rejects owner directly
+    assert D1Service.update_member_role_and_permissions("comm-1", "alice", "bob", "owner") == False
+
+def test_admin_cannot_kick_another_admin_without_can_manage_admins():
+    # Mock community where Charlie is an admin with ONLY can_remove_members (can_manage_admins is False)
+    mock_comm = {
+        "id": "comm-1",
+        "name": "Test Group",
+        "ownerHandle": "alice",
+        "myRole": "admin",
+        "myPermissions": {"can_remove_members": True, "can_manage_admins": False}
+    }
+    
+    with patch.object(D1Service, 'get_community_by_id', return_value=mock_comm), \
+         patch.object(D1Service, 'query', return_value=[{"role": "admin"}]):
+        # Charlie tries to kick Bob (who is also an admin) -> Must FAIL
+        can_kick_admin = D1Service.remove_community_member("comm-1", "charlie", "bob")
+        assert can_kick_admin == False
+
+    with patch.object(D1Service, 'get_community_by_id', return_value=mock_comm), \
+         patch.object(D1Service, 'query', return_value=[{"role": "member"}]), \
+         patch.object(D1Service, 'execute', return_value=True), \
+         patch.object(D1Service, 'send_community_message', return_value="sys-1"):
+        # Charlie tries to kick Dave (who is a regular member) -> Must SUCCEED
+        can_kick_member = D1Service.remove_community_member("comm-1", "charlie", "dave")
+        assert can_kick_member == True
+
+def test_owner_cannot_self_demote_via_role_endpoint(auth_headers):
+    # Alice is Owner of comm-1. Alice tries to PUT .../members/alice/role to demote herself to 'member' or 'admin'
+    res = client.put("/api/v1/communities/comm-1/members/alice/role", json={
+        "role": "member"
+    }, headers=auth_headers)
+    assert res.status_code == 403
+
+    # D1Service directly rejects owner self-demotion
+    mock_comm = {
+        "id": "comm-1",
+        "name": "Test Group",
+        "ownerHandle": "alice",
+        "myRole": "owner",
+        "myPermissions": {}
+    }
+    with patch.object(D1Service, 'get_community_by_id', return_value=mock_comm):
+        # 1. Self-modification blocked
+        assert D1Service.update_member_role_and_permissions("comm-1", "alice", "alice", "member") == False
+        # 2. Modifying owner handle by another admin blocked
+        assert D1Service.update_member_role_and_permissions("comm-1", "bob", "alice", "member") == False

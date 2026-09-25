@@ -42,6 +42,8 @@ class CommunityRepository {
   List<CommunityModel> _cachedDiscoverCommunities = [];
   final Map<String, List<CommunityMessage>> _cachedMessages = {};
 
+  Set<String> get joinedCommunityIds => _cachedUserCommunities.map((c) => c.id).toSet();
+
   // ── Stream Controllers ──
   final _userCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
   final _discoverCommunitiesCtrl = StreamController<List<CommunityModel>>.broadcast();
@@ -282,10 +284,10 @@ class CommunityRepository {
         'isChannel': isChannel,
         'visibility': visibility,
         if (username != null && username.isNotEmpty) 'username': username.trim().replaceAll('@', ''),
-        if (inviteLink != null) 'inviteLink': inviteLink,
-        if (settings != null) 'settings': settings,
+        'inviteLink': ?inviteLink,
+        'settings': ?settings,
         'imageUrl': imageUrl,
-        if (initialMembers != null) 'initialMembers': initialMembers,
+        'initialMembers': ?initialMembers,
       }),
     );
 
@@ -319,10 +321,10 @@ class CommunityRepository {
     final payload = <String, dynamic>{
       if (name != null) 'name': name.trim(),
       if (description != null) 'description': description.trim(),
-      if (imageUrl != null) 'imageUrl': imageUrl,
-      if (visibility != null) 'visibility': visibility,
-      if (username != null) 'username': username.trim().replaceAll('@', ''),
-      if (settings != null) 'settings': settings,
+      'imageUrl': ?imageUrl,
+      'visibility': ?visibility,
+      if (username != null && username.isNotEmpty) 'username': username.trim().replaceAll('@', ''),
+      'settings': ?settings,
     };
 
     final res = await http.put(
@@ -497,7 +499,7 @@ class CommunityRepository {
       headers: headers,
       body: jsonEncode({
         'role': role,
-        if (permissions != null) 'permissions': permissions,
+        'permissions': ?permissions,
       }),
     );
     if (res.statusCode != 200) {

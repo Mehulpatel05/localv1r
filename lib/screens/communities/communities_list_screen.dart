@@ -1,10 +1,10 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/community_repository.dart';
 import '../../models/community_model.dart';
 import 'community_chat_screen.dart';
 import 'community_info_screen.dart';
 import 'create_community_screen.dart';
+import 'explore_communities_screen.dart';
 
 class CommunitiesListScreen extends StatefulWidget {
   final CommunityRepository repository;
@@ -17,17 +17,10 @@ class CommunitiesListScreen extends StatefulWidget {
 
 class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
   int _selectedFilter = 0; // 0: All, 1: Groups, 2: Channels
-  bool _isSearching = false;
   bool _showArchived = false;
-
-  Map<String, List<CommunityModel>> _searchResults = {
-    'joined': [],
-    'public': [],
-  };
-  final Set<String> _joiningIds = {};
 
   @override
   void initState() {
@@ -37,32 +30,14 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
-      final clean = query.trim();
-      setState(() {
-        _searchQuery = clean;
-        _isSearching = clean.length >= 2;
-      });
-
-      if (_isSearching) {
-        String? typeFilter;
-        if (_selectedFilter == 1) typeFilter = 'group';
-        if (_selectedFilter == 2) typeFilter = 'channel';
-
-        final results = await widget.repository.searchCommunities(clean, typeFilter: typeFilter);
-        if (mounted) {
-          setState(() {
-            _searchResults = results;
-          });
-        }
-      }
+    setState(() {
+      _searchQuery = query.trim().toLowerCase();
     });
   }
 
@@ -117,41 +92,46 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
           ),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () async {
-                final created = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateCommunityScreen(repository: widget.repository),
-                  ),
-                );
-                if (created == true && mounted) {
-                  widget.repository.fetchUserCommunities();
-                }
-              },
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF3B82F6),
-                  shape: BoxShape.circle,
+          IconButton(
+            icon: const Icon(Icons.travel_explore_rounded),
+            color: textColor,
+            iconSize: 26,
+            tooltip: 'Explore Public Channels & Groups',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExploreCommunitiesScreen(repository: widget.repository),
                 ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-            ),
+              );
+            },
           ),
+          const SizedBox(width: 6),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'create_community_fab',
+        backgroundColor: const Color(0xFF3B82F6),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        shape: const CircleBorder(),
+        tooltip: 'Create Group or Channel',
+        onPressed: () async {
+          final created = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreateCommunityScreen(repository: widget.repository),
+            ),
+          );
+          if (created == true && mounted) {
+            widget.repository.fetchUserCommunities();
+          }
+        },
+        child: const Icon(Icons.add_rounded, size: 28),
       ),
       body: Column(
         children: [
-          // ── Always Visible Persistent Search Bar ──
+          // ── Always Visible Persistent Search Bar for Joined Communities ──
           Container(
             color: cardBg,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -175,6 +155,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                       Expanded(
                         child: TextField(
                           controller: _searchController,
+                          focusNode: _searchFocusNode,
                           onChanged: _onSearchChanged,
                           style: TextStyle(
                             color: textColor,
@@ -182,7 +163,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                           decoration: const InputDecoration(
-                            hintText: 'Search groups & channels',
+                            hintText: 'Search joined channels & groups',
                             hintStyle: TextStyle(
                               color: Color(0xFF94A3B8),
                               fontSize: 14,
@@ -227,7 +208,7 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
           // ── Main Content ──
           Expanded(
-            child: _isSearching ? _buildSearchResults(isDark) : _buildJoinedList(isDark),
+            child: _buildJoinedList(isDark),
           ),
         ],
       ),
@@ -243,9 +224,6 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         setState(() {
           _selectedFilter = index;
         });
-        if (_isSearching) {
-          _onSearchChanged(_searchQuery);
-        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
@@ -280,8 +258,18 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
 
         final allJoined = snapshot.data ?? [];
 
-        // Filter by Groups / Channels chip
+        // Filter by search query if user typed in joined search bar
         var filtered = allJoined;
+        if (_searchQuery.isNotEmpty) {
+          filtered = filtered.where((c) {
+            final nameMatch = c.name.toLowerCase().contains(_searchQuery);
+            final userMatch = c.username != null && c.username!.toLowerCase().contains(_searchQuery);
+            final descMatch = c.description.toLowerCase().contains(_searchQuery);
+            return nameMatch || userMatch || descMatch;
+          }).toList();
+        }
+
+        // Filter by Groups / Channels chip
         if (_selectedFilter == 1) {
           filtered = filtered.where((c) => !c.isChannel).toList();
         } else if (_selectedFilter == 2) {
@@ -292,6 +280,9 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
         final archived = filtered.where((c) => c.isArchived).toList();
 
         if (unarchived.isEmpty && archived.isEmpty) {
+          if (_searchQuery.isNotEmpty) {
+            return _buildSearchJoinedEmptyState(isDark);
+          }
           return _buildEmptyState(isDark);
         }
 
@@ -520,20 +511,18 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     );
   }
 
-  // ── Search Results (Joined + Public Directory) ──
-  Widget _buildSearchResults(bool isDark) {
-    final joined = _searchResults['joined'] ?? [];
-    final publicDirectory = _searchResults['public'] ?? [];
-
-    if (joined.isEmpty && publicDirectory.isEmpty) {
-      return Center(
+  // ── Search Joined Empty State ──
+  Widget _buildSearchJoinedEmptyState(bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.search_off_rounded, size: 48, color: Color(0xFF94A3B8)),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
-              'No results for "$_searchQuery"',
+              'No joined chats match "$_searchQuery"',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -542,154 +531,30 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Try another keyword or create a new community',
+              'Looking for a new channel or group to join?',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF3B82F6)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              icon: const Icon(Icons.travel_explore_rounded, color: Color(0xFF3B82F6), size: 18),
+              label: const Text('Explore Public Directory', style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExploreCommunitiesScreen(repository: widget.repository),
+                  ),
+                );
+              },
             ),
           ],
         ),
-      );
-    }
-
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        if (joined.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-            child: Text(
-              'JOINED COMMUNITIES',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-              ),
-            ),
-          ),
-          ...joined.map((c) => _buildCommunityRow(c, isDark)),
-        ],
-
-        if (publicDirectory.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-            child: Text(
-              'PUBLIC DIRECTORY',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-              ),
-            ),
-          ),
-          ...publicDirectory.map((c) => _buildPublicDirectoryRow(c, isDark)),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPublicDirectoryRow(CommunityModel community, bool isDark) {
-    final typeStr = community.isChannel ? 'Channel' : 'Group';
-    final memberStr = '${_formatMemberCount(community.memberCount)} ${community.isChannel ? 'subscribers' : 'members'}';
-    final subtitle = '$typeStr · $memberStr · Public';
-    final isJoining = _joiningIds.contains(community.id);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          _buildCommunityLogo(community, size: 52),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  community.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  community.description.isNotEmpty ? community.description : subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            height: 32,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-              ),
-              onPressed: isJoining
-                  ? null
-                  : () async {
-                      setState(() {
-                        _joiningIds.add(community.id);
-                      });
-                      try {
-                        final res = await widget.repository.joinCommunity(community.id);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(res.message)),
-                          );
-                          if (res.status == JoinStatus.joined) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => CommunityChatScreen(
-                                  community: community,
-                                  repository: widget.repository,
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('$e')),
-                          );
-                        }
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _joiningIds.remove(community.id);
-                          });
-                        }
-                      }
-                    },
-              child: isJoining
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text(
-                      'Join',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                    ),
-            ),
-          ),
-        ],
       ),
     );
   }

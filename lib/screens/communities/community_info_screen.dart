@@ -661,6 +661,12 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
     final isTargetOwner = role == 'owner';
     final isTargetAdmin = role == 'admin';
 
+    final myRole = _community.myRole.toLowerCase();
+    final myPerms = _community.myPermissions;
+    final canManageAdmins = myRole == 'owner' || (myRole == 'admin' && (myPerms['can_manage_admins'] == true));
+    final canRemoveMembers = myRole == 'owner' || (myRole == 'admin' && (myPerms['can_remove_members'] == true));
+    final canKickTarget = isTargetAdmin ? canManageAdmins : canRemoveMembers;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -680,7 +686,7 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
             const Divider(height: 1),
 
             if (!isTargetOwner) ...[
-              if (isTargetAdmin) ...[
+              if (isTargetAdmin && canManageAdmins) ...[
                 ListTile(
                   leading: const Icon(Icons.security_rounded),
                   title: const Text('Edit Admin Permissions'),
@@ -708,7 +714,7 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
                     _refreshCommunityDetails();
                   },
                 ),
-              ] else ...[
+              ] else if (!isTargetAdmin && canManageAdmins) ...[
                 ListTile(
                   leading: const Icon(Icons.arrow_upward_rounded, color: Color(0xFF16A34A)),
                   title: const Text('Promote to Admin'),
@@ -730,15 +736,16 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
                   },
                 ),
 
-              ListTile(
-                leading: const Icon(Icons.person_remove_rounded, color: Colors.red),
-                title: const Text('Remove from Community', style: TextStyle(color: Colors.red)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await widget.repository.removeMember(_community.id, handle);
-                  _refreshCommunityDetails();
-                },
-              ),
+              if (canKickTarget)
+                ListTile(
+                  leading: const Icon(Icons.person_remove_rounded, color: Colors.red),
+                  title: const Text('Remove from Community', style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await widget.repository.removeMember(_community.id, handle);
+                    _refreshCommunityDetails();
+                  },
+                ),
             ],
           ],
         ),
