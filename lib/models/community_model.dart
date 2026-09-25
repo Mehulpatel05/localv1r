@@ -154,18 +154,29 @@ class CommunityModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'description': description,
       'isChannel': isChannel,
       'adminHandle': adminHandle,
       'ownerHandle': ownerHandle,
       'visibility': visibility,
-      if (username != null) 'username': username,
-      if (inviteLink != null) 'inviteLink': inviteLink,
+      'username': username,
+      'inviteLink': inviteLink,
       'settings': settings,
       'memberCount': memberCount,
-      if (imageUrl != null) 'imageUrl': imageUrl,
+      'imageUrl': imageUrl,
+      'myRole': myRole,
+      'myPermissions': myPermissions,
+      'isMuted': isMuted,
+      'mutedUntil': mutedUntil,
+      'isArchived': isArchived,
+      'unreadCount': unreadCount,
+      'lastMessage': lastMessage,
+      'lastMessageAt': lastMessageAt?.toIso8601String(),
+      'lastSenderHandle': lastSenderHandle,
       'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 

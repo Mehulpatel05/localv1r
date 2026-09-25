@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'avatar_cache_service.dart';
+import 'community_repository.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -453,6 +454,7 @@ class AuthService {
   /// Complete Sign Out
   Future<void> signOut() async {
     try {
+      CommunityRepository().clearLocalCache();
       await _secureStorage.deleteAll();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
