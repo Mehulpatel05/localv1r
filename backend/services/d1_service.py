@@ -1482,9 +1482,49 @@ class D1Service:
 
         # If approval is required, create pending join request
         if approve_required:
-            req_id = str(uuid.uuid4())
-            sql = "INSERT INTO join_requests (id, community_id, user_handle, status, created_at) VALUES (?, ?, ?, 'pending', ?);"
+            req_id = f"{community_id}_{clean_user.lower()}"
+            existing_req = cls.query(
+                "SELECT id FROM join_requests WHERE (id = ? OR (community_id = ? AND LOWER(user_handle) = ?)) AND status = 'pending' LIMIT 1;",
+                [req_id, community_id, clean_user.lower()]
+            )
+            if existing_req and len(existing_req) > 0:
+                return {"success": True, "status": "pending", "message": "Join request submitted for admin review."}
+
+            # Delete any stale/duplicate records for this user
+            cls.execute("DELETE FROM join_requests WHERE community_id = ? AND LOWER(user_handle) = ?;", [community_id, clean_user.lower()])
+
+            sql = "INSERT OR REPLACE INTO join_requests (id, community_id, user_handle, status, created_at) VALUES (?, ?, ?, 'pending', ?);"
             if cls.execute(sql, [req_id, community_id, clean_user, now_ts]):
+                comm_name = comm.get("name", "the community")
+                comm_type = "channel" if comm.get("isChannel") else "group"
+
+                # Find all admins and owner to notify
+                admin_rows = cls.query(
+                    "SELECT user_handle FROM community_members WHERE community_id = ? AND (role = 'owner' OR role = 'admin');",
+                    [community_id]
+                ) or []
+                admin_handles = {r["user_handle"].replace("@", "").strip() for r in admin_rows if r.get("user_handle")}
+                owner = (comm.get("ownerHandle") or comm.get("adminHandle") or "").replace("@", "").strip()
+                if owner:
+                    admin_handles.add(owner)
+
+                for admin_h in admin_handles:
+                    if admin_h.lower() != clean_user.lower():
+                        cls.create_notification(
+                            target_handle=admin_h,
+                            title="New Join Request",
+                            body=f"@{clean_user} requested to join your {comm_type} '{comm_name}'",
+                            type="community_join_request",
+                            sender_handle=clean_user,
+                            data={
+                                "type": "community_join_request",
+                                "communityId": community_id,
+                                "communityName": comm_name,
+                                "senderHandle": clean_user,
+                                "isChannel": comm.get("isChannel", False)
+                            }
+                        )
+
                 return {"success": True, "status": "pending", "message": "Join request submitted for admin review."}
             return {"success": False, "error": "Failed to submit join request"}
 
@@ -1534,17 +1574,22 @@ class D1Service:
         comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
         if not comm:
             return []
-        role = comm.get("myRole")
+        role = (comm.get("myRole") or "").lower()
         perms = comm.get("myPermissions", {})
-        if role != "owner" and not (role == "admin" and perms.get("can_add_members", True)):
+        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").replace("@", "").strip().lower()
+        is_owner = (role == "owner") or (clean_admin == owner_handle)
+        is_admin_with_perm = (role == "admin" and perms.get("can_add_members", True))
+
+        if not is_owner and not is_admin_with_perm:
             return []
 
         sql = """
-        SELECT r.id, r.community_id, r.user_handle, r.status, r.created_at, u.avatar_url, u.reputation
+        SELECT r.id, r.community_id, r.user_handle, r.status, MAX(r.created_at) as created_at, u.avatar_url, u.reputation
         FROM join_requests r
         LEFT JOIN users u ON LOWER(r.user_handle) = LOWER(u.handle)
         WHERE r.community_id = ? AND r.status = 'pending'
-        ORDER BY r.created_at ASC;
+        GROUP BY LOWER(r.user_handle)
+        ORDER BY created_at DESC;
         """
         rows = cls.query(sql, [community_id]) or []
         res = []
@@ -1566,31 +1611,64 @@ class D1Service:
         comm = cls.get_community_by_id(community_id, user_handle=clean_admin)
         if not comm:
             return False
-        role = comm.get("myRole")
+        role = (comm.get("myRole") or "").lower()
         perms = comm.get("myPermissions", {})
-        if role != "owner" and not (role == "admin" and perms.get("can_add_members", True)):
+        owner_handle = (comm.get("ownerHandle") or comm.get("adminHandle") or "").replace("@", "").strip().lower()
+        is_owner = (role == "owner") or (clean_admin == owner_handle)
+        is_admin_with_perm = (role == "admin" and perms.get("can_add_members", True))
+
+        if not is_owner and not is_admin_with_perm:
             return False
 
-        req_rows = cls.query("SELECT user_handle FROM join_requests WHERE id = ? AND community_id = ? AND status = 'pending' LIMIT 1;", [request_id, community_id])
+        req_rows = cls.query("SELECT user_handle FROM join_requests WHERE (id = ? OR (community_id = ? AND status = 'pending')) LIMIT 1;", [request_id, community_id])
         if not req_rows or len(req_rows) == 0:
             return False
         target_handle = req_rows[0]["user_handle"]
         now_ts = int(time.time())
+        comm_name = comm.get("name", "the community")
+        comm_type = "channel" if comm.get("isChannel") else "group"
+
+        # Update all pending join requests for this user in this community
+        cls.execute("UPDATE join_requests SET status = ? WHERE community_id = ? AND LOWER(user_handle) = ?;", ['approved' if approve else 'declined', community_id, target_handle.lower()])
 
         if approve:
-            cls.execute("UPDATE join_requests SET status = 'approved' WHERE id = ?;", [request_id])
             member_id = f"{community_id}_{target_handle.lower()}"
             cls.execute("INSERT OR REPLACE INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);", [member_id, community_id, target_handle, now_ts, now_ts])
-            cls.execute("UPDATE communities SET member_count = member_count + 1 WHERE id = ?;", [community_id])
-            comm_type = "channel" if comm.get("isChannel") else "group"
+            cls.execute("UPDATE communities SET member_count = (SELECT COUNT(*) FROM community_members WHERE community_id = ?) WHERE id = ?;", [community_id, community_id])
             cls.send_community_message(
                 community_id=community_id,
                 author_handle="System",
                 content=f"{target_handle} was approved to join the {comm_type}",
                 message_type="system"
             )
+            cls.create_notification(
+                target_handle=target_handle,
+                title="Join Request Approved",
+                body=f"Your request to join {comm_type} '{comm_name}' has been approved!",
+                type="community_request_response",
+                sender_handle=clean_admin,
+                data={
+                    "type": "community",
+                    "communityId": community_id,
+                    "communityName": comm_name,
+                    "approved": True
+                }
+            )
         else:
             cls.execute("UPDATE join_requests SET status = 'declined' WHERE id = ?;", [request_id])
+            cls.create_notification(
+                target_handle=target_handle,
+                title="Join Request Declined",
+                body=f"Your request to join {comm_type} '{comm_name}' was not approved.",
+                type="community_request_response",
+                sender_handle=clean_admin,
+                data={
+                    "type": "community_request_response",
+                    "communityId": community_id,
+                    "communityName": comm_name,
+                    "approved": False
+                }
+            )
         return True
 
     @classmethod

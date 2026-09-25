@@ -787,10 +787,12 @@ class CommunityRepository {
     }
   }
 
-  Future<CommunityModel?> getCommunityById(String communityId) async {
-    final cached = _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
-                   _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
-    if (cached != null) return cached;
+  Future<CommunityModel?> getCommunityById(String communityId, {bool forceRefresh = false}) async {
+    if (!forceRefresh) {
+      final cached = _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
+                     _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
+      if (cached != null) return cached;
+    }
 
     final uri = Uri.parse('${AuthService.baseUrl}/communities/$communityId');
     final res = await _authedGet(uri, timeout: const Duration(seconds: 10));
@@ -799,13 +801,20 @@ class CommunityRepository {
         final data = jsonDecode(res.body);
         final comm = data['community'] as Map<String, dynamic>?;
         if (comm != null) {
-          return CommunityModel.fromMap(comm, comm['id']?.toString() ?? communityId);
+          final model = CommunityModel.fromMap(comm, comm['id']?.toString() ?? communityId);
+          final userIdx = _cachedUserCommunities.indexWhere((c) => c.id == communityId);
+          if (userIdx != -1) {
+            _cachedUserCommunities[userIdx] = model;
+            _userCommunitiesCtrl.add(List.unmodifiable(_cachedUserCommunities));
+          }
+          return model;
         }
       } catch (e) {
         debugPrint('[CommunityRepository] getCommunityById error: $e');
       }
     }
-    return null;
+    return _cachedUserCommunities.where((c) => c.id == communityId).firstOrNull ??
+           _cachedDiscoverCommunities.where((c) => c.id == communityId).firstOrNull;
   }
 
   // ── Compatibility Helpers ──

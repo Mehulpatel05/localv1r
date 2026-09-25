@@ -23,6 +23,7 @@ class CommunityInfoScreen extends StatefulWidget {
 
 class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
   late CommunityModel _community;
+  bool _isPendingRequested = false;
 
   @override
   void initState() {
@@ -32,7 +33,7 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
   }
 
   Future<void> _refreshCommunityDetails() async {
-    final updated = await widget.repository.getCommunityById(_community.id);
+    final updated = await widget.repository.getCommunityById(_community.id, forceRefresh: true);
     if (updated != null && mounted) {
       setState(() {
         _community = updated;
@@ -211,8 +212,8 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
               _buildQuickActionsRow(cardBg, textColor, isDark),
               const SizedBox(height: 20),
 
-              // ── Join Requests Tile (If Admin/Owner and approveNewMembers) ──
-              if (_community.isAdmin && _community.approveNewMembers) ...[
+              // ── Join Requests Tile (If Admin/Owner) ──
+              if (_community.isAdmin) ...[
                 _buildJoinRequestsBanner(cardBg, textColor, isDark),
                 const SizedBox(height: 16),
               ],
@@ -228,50 +229,70 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
               SizedBox(
                 width: double.infinity,
                 height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.group_add_rounded, color: Colors.white),
-                  label: Text(
-                    'Join ${_community.isChannel ? 'Channel' : 'Group'}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final nav = Navigator.of(context);
-                    try {
-                      final res = await widget.repository.joinCommunity(_community.id);
-                      if (res.status == JoinStatus.pending) {
-                        messenger.showSnackBar(
-                          const SnackBar(content: Text('Join request submitted for review!')),
-                        );
-                      } else if (res.status == JoinStatus.joined) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Joined ${_community.name}!')),
-                        );
-                        nav.pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => CommunityChatScreen(
-                              community: _community.copyWith(myRole: 'member'),
-                              repository: widget.repository,
-                            ),
-                          ),
-                        );
-                      } else if (res.status == JoinStatus.error) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text(res.message.isNotEmpty ? res.message : 'Failed to join community')),
-                        );
-                      }
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Failed to join: $e')),
-                      );
-                    }
-                  },
-                ),
+                child: _isPendingRequested
+                    ? OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD97706), width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706)),
+                        label: const Text(
+                          'Join Request Pending Review',
+                          style: TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.w700, fontSize: 15),
+                        ),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Join request already submitted. Awaiting admin approval.')),
+                          );
+                        },
+                      )
+                    : ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.group_add_rounded, color: Colors.white),
+                        label: Text(
+                          'Join ${_community.isChannel ? 'Channel' : 'Group'}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                        ),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final nav = Navigator.of(context);
+                          try {
+                            final res = await widget.repository.joinCommunity(_community.id);
+                            if (res.status == JoinStatus.pending) {
+                              if (mounted) {
+                                setState(() => _isPendingRequested = true);
+                              }
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Join request submitted for review!')),
+                              );
+                            } else if (res.status == JoinStatus.joined) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Joined ${_community.name}!')),
+                              );
+                              nav.pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => CommunityChatScreen(
+                                    community: _community.copyWith(myRole: 'member'),
+                                    repository: widget.repository,
+                                  ),
+                                ),
+                              );
+                            } else if (res.status == JoinStatus.error) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(res.message.isNotEmpty ? res.message : 'Failed to join community')),
+                              );
+                            }
+                          } catch (e) {
+                            messenger.showSnackBar(
+                              SnackBar(content: Text('Failed to join: $e')),
+                            );
+                          }
+                        },
+                      ),
               ),
               const SizedBox(height: 20),
             ],

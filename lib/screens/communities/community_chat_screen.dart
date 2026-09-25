@@ -30,6 +30,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
   bool _isMember = false;
   bool _isLoading = true;
   bool _isSendingImage = false;
+  bool _isPendingRequested = false;
   late CommunityModel _community;
 
   static const List<String> _quickEmojis = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
@@ -92,6 +93,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       final res = await widget.repository.joinCommunity(_community.id);
       if (mounted) {
         if (res.status == JoinStatus.pending) {
+          setState(() => _isPendingRequested = true);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Join request submitted for admin review!')),
           );
@@ -852,26 +854,43 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
           child: SizedBox(
             height: 48,
             width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              onPressed: _isLoading ? null : _joinCommunity,
-              icon: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.group_add_rounded, color: Colors.white, size: 20),
-              label: Text(
-                _isLoading ? 'Joining...' : btnLabel,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3),
-              ),
-            ),
+            child: _isPendingRequested
+                ? OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFD97706), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Join request already submitted. Awaiting admin approval.')),
+                      );
+                    },
+                    icon: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
+                    label: const Text(
+                      'Request Pending Review',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _isLoading ? null : _joinCommunity,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.group_add_rounded, color: Colors.white, size: 20),
+                    label: Text(
+                      _isLoading ? 'Joining...' : btnLabel,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                    ),
+                  ),
           ),
         ),
       );

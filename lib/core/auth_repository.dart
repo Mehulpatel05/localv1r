@@ -1,4 +1,4 @@
-import '../../services/auth_service.dart';
+import '../services/auth_service.dart';
 
 /// Abstract repository contract for authentication operations.
 ///

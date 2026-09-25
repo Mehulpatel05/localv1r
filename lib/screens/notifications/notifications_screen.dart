@@ -468,7 +468,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         } else if (_selectedFilter == NotificationFilter.comments) {
           return type == 'post_comment' || type == 'mention';
         } else if (_selectedFilter == NotificationFilter.requests) {
-          return type == 'friend_request' || type == 'friend_accepted';
+          return type == 'friend_request' || type == 'friend_accepted' || type == 'community_join_request' || type == 'community_request_response';
         } else if (_selectedFilter == NotificationFilter.uploads) {
           return type == 'post_upload' || type == 'post' || type == 'new_post';
         }
@@ -745,6 +745,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return 'sent you a friend request.';
     } else if (type == 'friend_accepted') {
       return 'accepted your friend request.';
+    } else if (type == 'community_join_request') {
+      if (sender != null && body.startsWith('@$sender ')) {
+        return body.replaceFirst('@$sender ', '');
+      }
+      return body.isNotEmpty ? body : 'requested to join your community.';
+    } else if (type == 'community_request_response') {
+      return body;
     } else if (type == 'post_upload') {
       return 'Your post was published successfully.';
     } else if (type == 'mention') {
@@ -758,6 +765,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == 'post_comment') return const Color(0xFF3B82F6);
     if (type == 'friend_request') return const Color(0xFF8B5CF6);
     if (type == 'friend_accepted') return const Color(0xFF10B981);
+    if (type == 'community_join_request') return const Color(0xFFD97706);
+    if (type == 'community_request_response') return const Color(0xFF10B981);
     if (type == 'post_upload') return const Color(0xFF10B981);
     if (type == 'mention') return const Color(0xFFF59E0B);
     return const Color(0xFF0F172A);
@@ -768,6 +777,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == 'post_comment') return Icons.chat_bubble_rounded;
     if (type == 'friend_request') return Icons.person_add_rounded;
     if (type == 'friend_accepted') return Icons.how_to_reg_rounded;
+    if (type == 'community_join_request') return Icons.group_add_rounded;
+    if (type == 'community_request_response') return Icons.verified_user_rounded;
     if (type == 'post_upload') return Icons.check_circle_rounded;
     if (type == 'mention') return Icons.alternate_email_rounded;
     return Icons.notifications_rounded;

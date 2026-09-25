@@ -17,6 +17,7 @@ import 'core/auth_repository.dart';
 import 'features/auth/login_flow_page.dart';
 import 'features/auth/widgets/animated_splash_screen.dart';
 import 'services/call_listener_service.dart';
+import 'core/widgets/user_avatar.dart';
 
 import 'screens/auth/create_handle_screen.dart';
 
@@ -88,9 +89,11 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       // 1. Start parallel async initialization tasks
       final authFuture = _checkAuthStatus();
       final locationFuture = locationService.load();
+      final avatarFuture = AvatarCacheService.instance.ensureInitialized();
       final results = await Future.wait([
         authFuture,
         locationFuture,
+        avatarFuture,
       ]);
 
       final authData = results[0] as Map<String, dynamic>;

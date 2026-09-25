@@ -10,6 +10,7 @@ import '../main.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/personal_chat_screen.dart';
 import '../screens/communities/community_chat_screen.dart';
+import '../screens/communities/join_requests_screen.dart';
 import '../screens/detail/post_detail_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../services/auth_service.dart';
@@ -132,7 +133,7 @@ class NotificationService {
       return prefs.getBool('notif_chat_enabled') ?? true;
     } else if (type == 'friend_request') {
       return prefs.getBool('notif_friends_enabled') ?? true;
-    } else if (type == 'community_message' || type == 'community') {
+    } else if (type == 'community_message' || type == 'community' || type == 'community_join_request' || type == 'community_request_response') {
       return prefs.getBool('notif_communities_enabled') ?? true;
     } else if (type == 'post' || type == 'new_post') {
       return prefs.getBool('notif_posts_enabled') ?? true;
@@ -457,7 +458,7 @@ class NotificationService {
       if (communityId != null && communityId.isNotEmpty) {
         try {
           final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
-          final community = await commRepo.getCommunityById(communityId);
+          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
           if (community != null && context.mounted) {
             await Navigator.of(context).push(
               MaterialPageRoute<void>(
@@ -471,6 +472,53 @@ class NotificationService {
           }
         } catch (e) {
           debugPrint('Error navigating to community chat: $e');
+        }
+      }
+    }
+    // ── 5. Community Join Request ──
+    else if (type == 'community_join_request') {
+      final communityId = data['communityId'] as String?;
+      if (communityId != null && communityId.isNotEmpty) {
+        try {
+          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
+          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
+          if (community != null && context.mounted) {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => JoinRequestsScreen(
+                  community: community,
+                  repository: commRepo,
+                ),
+              ),
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint('Error navigating to join requests: $e');
+        }
+      }
+    }
+    // ── 6. Community Request Response ──
+    else if (type == 'community_request_response') {
+      final communityId = data['communityId'] as String?;
+      final approved = data['approved'] == true;
+      if (communityId != null && communityId.isNotEmpty && approved) {
+        try {
+          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
+          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
+          if (community != null && context.mounted) {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CommunityChatScreen(
+                  repository: commRepo,
+                  community: community,
+                ),
+              ),
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint('Error navigating to community: $e');
         }
       }
     }

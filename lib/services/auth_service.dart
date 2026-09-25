@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'avatar_cache_service.dart';
+import '../core/widgets/user_avatar.dart';
 import 'community_repository.dart';
 
 class AuthService {
@@ -327,6 +327,10 @@ class AuthService {
           if (photoUrl != null && photoUrl.isNotEmpty) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('profile_photo_url', photoUrl);
+            await prefs.setString('user_photo_url', photoUrl);
+            if (handle != null && handle.isNotEmpty) {
+              AvatarCacheService.instance.setCachedUrl(handle, photoUrl);
+            }
           }
 
           return {

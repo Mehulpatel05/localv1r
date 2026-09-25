@@ -1,9 +1,195 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../services/avatar_cache_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/presence_service.dart';
+
+/// Multi-tier high-performance Avatar Cache Service
+/// - In-memory synchronous 0ms lookups
+/// - Persistent disk caching via SharedPreferences
+/// - Seamless background cloud synchronization
+class AvatarCacheService extends ChangeNotifier {
+  static final AvatarCacheService _instance = AvatarCacheService._internal();
+  factory AvatarCacheService() => _instance;
+  static AvatarCacheService get instance => _instance;
+
+  AvatarCacheService._internal() {
+    _initPersistence();
+  }
+
+  static const String baseUrl = 'https://localv1r.onrender.com/api/v1';
+
+  final Map<String, String?> _cache = {};
+  final Set<String> _inFlightFetches = {};
+  SharedPreferences? _prefs;
+  bool _initialized = false;
+
+  /// Loads locally stored avatars into memory on app launch
+  Future<void> _initPersistence() async {
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      _initialized = true;
+
+      // 1. Preload own photo URL if available
+      final myPhoto = _prefs?.getString('user_photo_url') ?? _prefs?.getString('profile_photo_url');
+      final myHandle = _prefs?.getString('user_handle');
+      if (myHandle != null && myHandle.isNotEmpty && myPhoto != null && myPhoto.isNotEmpty) {
+        final clean = myHandle.replaceAll('@', '').trim().toLowerCase();
+        _cache[clean] = myPhoto;
+      }
+
+      // 2. Preload all cached avatar keys
+      final keys = _prefs?.getKeys() ?? {};
+      for (final k in keys) {
+        if (k.startsWith('avatar_cache_')) {
+          final handle = k.substring('avatar_cache_'.length);
+          final url = _prefs?.getString(k);
+          if (handle.isNotEmpty && url != null && url.isNotEmpty) {
+            _cache[handle.toLowerCase()] = url;
+          }
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AvatarCacheService] Error initializing persistent cache: $e');
+    }
+  }
+
+  /// Ensure persistent cache is ready
+  Future<void> ensureInitialized() async {
+    if (!_initialized) {
+      await _initPersistence();
+    }
+  }
+
+  /// Retrieves cached avatar URL synchronously if present in memory, else null
+  String? getCachedUrl(String handle) {
+    final clean = handle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return null;
+    return _cache[clean];
+  }
+
+  /// Sets or updates the cached avatar URL for a handle, persists to disk, and notifies listeners
+  void setCachedUrl(String handle, String? photoUrl, {bool persist = true}) {
+    final clean = handle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return;
+    final val = (photoUrl != null && photoUrl.trim().isNotEmpty) ? photoUrl.trim() : null;
+    
+    if (_cache[clean] != val) {
+      _cache[clean] = val;
+      notifyListeners();
+    }
+
+    if (persist) {
+      _persistHandleUrl(clean, val);
+    }
+  }
+
+  Future<void> _persistHandleUrl(String cleanHandle, String? url) async {
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      final key = 'avatar_cache_$cleanHandle';
+      if (url != null && url.isNotEmpty) {
+        await _prefs?.setString(key, url);
+      } else {
+        await _prefs?.remove(key);
+      }
+    } catch (_) {}
+  }
+
+  /// Bulk prime cache (e.g. from feed posts or friend lists)
+  void primeCache(Map<String, String?> entries) {
+    bool hasChanged = false;
+    entries.forEach((handle, url) {
+      final clean = handle.replaceAll('@', '').trim().toLowerCase();
+      if (clean.isNotEmpty) {
+        final val = (url != null && url.trim().isNotEmpty) ? url.trim() : null;
+        if (_cache[clean] != val) {
+          _cache[clean] = val;
+          hasChanged = true;
+          if (val != null) {
+            _persistHandleUrl(clean, val);
+          }
+        }
+      }
+    });
+    if (hasChanged) {
+      notifyListeners();
+    }
+  }
+
+  /// Fetches avatar URL from Backend D1 `profiles/{handle}` if not already cached
+  Future<String?> fetchAvatarUrl(String handle, {bool forceRefresh = false}) async {
+    final clean = handle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return null;
+
+    if (!forceRefresh && _cache.containsKey(clean) && _cache[clean] != null) {
+      return _cache[clean];
+    }
+
+    if (_inFlightFetches.contains(clean)) {
+      int wait = 0;
+      while (_inFlightFetches.contains(clean) && wait < 15) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        wait++;
+      }
+      return _cache[clean];
+    }
+
+    _inFlightFetches.add(clean);
+
+    try {
+      final uri = Uri.parse('$baseUrl/auth/profile/${Uri.encodeComponent(clean)}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final user = data['user'] as Map<String, dynamic>?;
+        final photoUrl = (user?['avatarUrl'] as String?)?.trim();
+        final validUrl = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
+        _cache[clean] = validUrl;
+        _persistHandleUrl(clean, validUrl);
+      } else if (res.statusCode == 404) {
+        _cache[clean] = null;
+      }
+    } catch (e) {
+      debugPrint('[AvatarCacheService] Error fetching avatar for @$clean: $e');
+    } finally {
+      _inFlightFetches.remove(clean);
+      notifyListeners();
+    }
+
+    return _cache[clean];
+  }
+
+  /// Saves current user's photoUrl into SharedPreferences cache for instant cold starts
+  Future<void> saveMyPhotoUrlLocally(String photoUrl) async {
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      await _prefs?.setString('user_photo_url', photoUrl);
+      await _prefs?.setString('profile_photo_url', photoUrl);
+
+      final myHandle = _prefs?.getString('user_handle');
+      if (myHandle != null && myHandle.isNotEmpty) {
+        setCachedUrl(myHandle, photoUrl);
+      }
+    } catch (_) {}
+  }
+
+  /// Loads current user's locally cached photoUrl
+  Future<String?> getMyPhotoUrlLocally() async {
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      return _prefs?.getString('user_photo_url') ?? _prefs?.getString('profile_photo_url');
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 /// Universal Instagram-Grade User Avatar Widget
 /// - Perfect 1:1 circular fit with BoxFit.cover (never stretched or squashed)
@@ -315,10 +501,6 @@ class _UserAvatarState extends State<UserAvatar> {
         filterQuality: FilterQuality.medium,
         cacheWidth: cacheDimension,
         cacheHeight: cacheDimension,
-        headers: const {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        },
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return _buildInitialsPlaceholder(cleanHandle, imageSize, effectiveFontSize);

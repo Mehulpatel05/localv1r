@@ -23,6 +23,7 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
 
   List<CommunityModel> _publicCommunities = [];
   final Set<String> _joiningIds = {};
+  final Set<String> _pendingRequestedIds = {};
 
   @override
   void initState() {
@@ -328,7 +329,7 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
             ),
             const SizedBox(width: 10),
 
-            // ── Join / View Button ──
+            // ── Join / View / Requested Button ──
             if (isJoined)
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
@@ -353,6 +354,21 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
                 },
                 child: const Text('View', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF3B82F6))),
               )
+            else if (_pendingRequestedIds.contains(comm.id))
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  minimumSize: const Size(76, 32),
+                  side: const BorderSide(color: Color(0xFFD97706)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Join request already submitted. Awaiting admin approval.')),
+                  );
+                },
+                child: const Text('Requested', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
+              )
             else
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -370,6 +386,9 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
                           final res = await widget.repository.joinCommunity(comm.id);
                           if (mounted) {
                             if (res.status == JoinStatus.pending) {
+                              setState(() {
+                                _pendingRequestedIds.add(comm.id);
+                              });
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Join request submitted for review!')),
                               );

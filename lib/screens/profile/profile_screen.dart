@@ -12,7 +12,6 @@ import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/r2_storage_service.dart';
-import '../../services/avatar_cache_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
 import '../friends/friends_screen.dart';
@@ -48,6 +47,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _bioController = TextEditingController();
     _friendRepository = FriendRepository()
       ..currentUserHandle = widget.currentUserHandle;
+
+    // ⚡ Instant 0ms initial state from local cache
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    final cachedPhoto = AvatarCacheService.instance.getCachedUrl(cleanHandle);
+    _userData = {
+      'handle': widget.currentUserHandle,
+      'phone': '',
+      'email': '',
+      'bio': '',
+      'photoUrl': cachedPhoto,
+      'reputation': 0,
+      'upvotes': 0,
+      'friendCount': 0,
+      'createdAt': DateTime.now(),
+    };
+
+    // Pre-populate posts from in-memory repository cache
+    _userPosts = widget.repository.posts
+        .where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == cleanHandle.toLowerCase())
+        .toList();
+    _isLoading = _userPosts.isEmpty && cachedPhoto == null;
+
     _loadProfileData();
   }
 
@@ -58,9 +79,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfileData() async {
-    setState(() => _isLoading = true);
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+
+    // 1. Fast local check if photo was missing in memory cache
+    if (_userData?['photoUrl'] == null) {
+      final localPhoto = await AvatarCacheService.instance.getMyPhotoUrlLocally();
+      if (localPhoto != null && localPhoto.isNotEmpty && mounted) {
+        setState(() {
+          _userData?['photoUrl'] = localPhoto;
+        });
+        AvatarCacheService.instance.setCachedUrl(cleanHandle, localPhoto);
+      }
+    }
+
     try {
-      final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+      // 2. Background cloud profile sync
       final cloudProfile = await AuthService.instance.syncCloudProfile();
 
       String? photoUrl = cloudProfile?['photoUrl'] as String?;
@@ -72,31 +105,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final rawPhone = cloudProfile?['phoneNumber'] ?? (await AuthService.instance.getPhoneNumber()) ?? '';
       final resolvedHandle = (cloudProfile?['handle'] ?? widget.currentUserHandle).toString().trim();
 
-      _userData = {
-        'handle': resolvedHandle,
-        'phone': rawPhone,
-        'email': '',
-        'bio': '',
-        'photoUrl': photoUrl,
-        'reputation': cloudProfile?['reputation'] ?? 0,
-        'upvotes': cloudProfile?['upvotes'] ?? 0,
-        'friendCount': cloudProfile?['friendCount'] ?? 0,
-        'createdAt': DateTime.now(),
-      };
+      if (mounted) {
+        setState(() {
+          _userData = {
+            'handle': resolvedHandle,
+            'phone': rawPhone,
+            'email': '',
+            'bio': cloudProfile?['bio'] ?? _userData?['bio'] ?? '',
+            'photoUrl': photoUrl,
+            'reputation': cloudProfile?['reputation'] ?? _userData?['reputation'] ?? 0,
+            'upvotes': cloudProfile?['upvotes'] ?? _userData?['upvotes'] ?? 0,
+            'friendCount': cloudProfile?['friendCount'] ?? _userData?['friendCount'] ?? 0,
+            'createdAt': DateTime.now(),
+          };
+          _bioController.text = _userData!['bio'] as String;
+        });
+      }
 
       if (photoUrl != null && photoUrl.isNotEmpty) {
         AvatarCacheService.instance.setCachedUrl(cleanHandle, photoUrl);
       }
-      _bioController.text = _userData!['bio'] as String;
 
-      int waited = 0;
-      while (widget.repository.isLoading && waited < 30) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        waited++;
+      final freshPosts = await widget.repository.fetchPostsByUser(widget.currentUserHandle);
+      if (mounted) {
+        setState(() {
+          _userPosts = freshPosts;
+        });
       }
-
-      _userPosts =
-          await widget.repository.fetchPostsByUser(widget.currentUserHandle);
     } catch (e) {
       debugPrint('Error loading profile: $e');
     } finally {

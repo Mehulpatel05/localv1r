@@ -48,6 +48,9 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
         setState(() {
           _requests.removeWhere((r) => r['id'] == requestId);
         });
+        if (approve) {
+          widget.repository.fetchUserCommunities();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(approve ? 'Request approved.' : 'Request declined.'),
@@ -80,93 +83,105 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
         title: const Text('Join Requests', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _requests.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+      body: RefreshIndicator(
+        onRefresh: _loadRequests,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _requests.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      const Icon(Icons.how_to_reg_outlined, size: 56, color: Color(0xFF94A3B8)),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'No pending join requests',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'When users ask to join, they will appear here.',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.65,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.how_to_reg_outlined, size: 56, color: Color(0xFF94A3B8)),
+                              SizedBox(height: 12),
+                              Text(
+                                'No pending join requests',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'When users ask to join, they will appear here.',
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _requests.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final req = _requests[index];
-                    final reqId = req['id']?.toString() ?? '';
-                    final userHandle = req['userHandle']?.toString() ?? 'User';
-                    final isProcessing = _processingIds.contains(reqId);
+                  )
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _requests.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final req = _requests[index];
+                      final reqId = req['id']?.toString() ?? '';
+                      final userHandle = req['userHandle']?.toString() ?? 'User';
+                      final isProcessing = _processingIds.contains(reqId);
 
-                    return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: const Color(0xFF3B82F6),
-                            child: Text(
-                              userHandle.isNotEmpty ? userHandle[0].toUpperCase() : 'U',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 22,
+                              backgroundColor: const Color(0xFF3B82F6),
+                              child: Text(
+                                userHandle.isNotEmpty ? userHandle[0].toUpperCase() : 'U',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '@$userHandle',
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Requested ${req['createdAt'] ?? 'recently'}',
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                ),
-                              ],
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '@$userHandle',
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Requested ${req['createdAt'] ?? 'recently'}',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          if (isProcessing)
-                            const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          else
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.close_rounded, color: Colors.red),
-                                  tooltip: 'Decline',
-                                  onPressed: () => _handleResponse(reqId, false),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.check_rounded, color: Color(0xFF16A34A)),
-                                  tooltip: 'Approve',
-                                  onPressed: () => _handleResponse(reqId, true),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                            if (isProcessing)
+                              const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded, color: Colors.red),
+                                    tooltip: 'Decline',
+                                    onPressed: () => _handleResponse(reqId, false),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.check_rounded, color: Color(0xFF16A34A)),
+                                    tooltip: 'Approve',
+                                    onPressed: () => _handleResponse(reqId, true),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+      ),
     );
   }
 }
