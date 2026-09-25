@@ -58,7 +58,7 @@ class UpdateCommunityModel(BaseModel):
     settings: Optional[Dict[str, Any]] = None
 
 class SendMessageModel(BaseModel):
-    content: str = Field(..., min_length=1, max_length=4000)
+    content: Optional[str] = Field(default="", max_length=4000)
     imageUrl: Optional[str] = None
     mediaUrls: Optional[List[str]] = None
     type: str = "text"
@@ -428,10 +428,15 @@ async def send_message(
     authorization: Optional[str] = Header(None)
 ):
     _, handle = _get_auth_user(authorization)
+    text_content = (body.content or "").strip()
+    has_media = bool(body.imageUrl or (body.mediaUrls and len(body.mediaUrls) > 0))
+    if not text_content and not has_media:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message content or media is required.")
+
     msg_id = D1Service.send_community_message(
         community_id=community_id,
         author_handle=handle,
-        content=body.content,
+        content=body.content or "",
         image_url=body.imageUrl,
         media_urls=body.mediaUrls,
         message_type=body.type

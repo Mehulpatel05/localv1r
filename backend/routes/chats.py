@@ -29,7 +29,7 @@ def _get_optional_auth_user(authorization: Optional[str]) -> Optional[Tuple[str,
 class SendDirectMessageRequest(BaseModel):
     sender: str
     receiver: str
-    content: str
+    content: Optional[str] = Field(default="", max_length=4000)
     imageUrl: Optional[str] = None
     mediaUrls: Optional[List[str]] = None
     messageType: str = "text"
@@ -85,13 +85,13 @@ def send_direct_message(
 
     if not req.sender or not req.receiver:
         raise HTTPException(status_code=400, detail="Sender and receiver are required")
-    if not req.content and not req.imageUrl and not req.mediaUrls:
+    if not (req.content or "").strip() and not req.imageUrl and not req.mediaUrls:
         raise HTTPException(status_code=400, detail="Message content or media is required")
 
     msg_id = D1Service.send_direct_message(
         sender=req.sender,
         receiver=req.receiver,
-        content=req.content,
+        content=req.content or "",
         image_url=req.imageUrl,
         media_urls=req.mediaUrls,
         message_type=req.messageType

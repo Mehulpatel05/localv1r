@@ -225,9 +225,16 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_details = []
+    for err in exc.errors():
+        loc = " -> ".join(str(l) for l in err.get("loc", []))
+        msg = err.get("msg", "Invalid field")
+        error_details.append(f"{loc}: {msg}")
+    error_msg = "; ".join(error_details) if error_details else "Request payload format is invalid."
+    print(f"[VALIDATION ERROR] {request.method} {request.url.path}: {error_msg}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": "Request payload format is invalid."}
+        content={"detail": f"Request payload format is invalid: {error_msg}"}
     )
 
 
@@ -556,17 +563,19 @@ class DeviceRegisterRequest(BaseModel):
     attestationToken: str = Field(..., min_length=10, max_length=5000)
 
 class PostCreateRequest(BaseModel):
-    content: str = Field(..., min_length=1, max_length=5000)
+    content: Optional[str] = Field(default="", max_length=5000)
     category: PostCategory = Field(..., description="Post category")
     imageUrl: Optional[str] = Field(None, max_length=500)
     cityId: str = Field(..., min_length=2, max_length=100)
     areaId: Optional[str] = Field(None, max_length=100)
+    authorHandle: Optional[str] = None
     roomTitle: Optional[str] = None
     roomArea: Optional[str] = None
     roomRent: Optional[str] = None
     mediaUrls: Optional[list[str]] = None
     shopTitle: Optional[str] = None
     shopPrice: Optional[str] = None
+    shopCategory: Optional[str] = None
     foodTitle: Optional[str] = None
     foodRating: Optional[float] = None
     foodPrice: Optional[str] = None
@@ -823,13 +832,25 @@ async def create_post(
     if not evaluate_request_risk(client_ip, client_vpn_flag=x_vpn_detected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="High risk request blocked by security policies.")
 
-    error_msg = validate_text_content(request.content)
+    effective_content = (request.content or "").strip()
+    if not effective_content:
+        effective_content = (
+            request.roomTitle or
+            request.shopTitle or
+            request.jobTitle or
+            request.foodTitle or
+            request.serviceTitle or
+            request.eventTitle or
+            ("Photo" if (request.imageUrl or request.mediaUrls) else f"{str(request.category).title()} listing")
+        )
+
+    error_msg = validate_text_content(effective_content)
     if error_msg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         
     post_id = D1Service.create_post(
         author_handle=user_handle,
-        content=request.content,
+        content=effective_content,
         cityId=request.cityId,
         areaId=request.areaId or request.cityId,
         category=request.category,
@@ -840,6 +861,7 @@ async def create_post(
         mediaUrls=request.mediaUrls,
         shopTitle=request.shopTitle,
         shopPrice=request.shopPrice,
+        shopCategory=request.shopCategory,
         foodTitle=request.foodTitle,
         foodRating=request.foodRating,
         foodPrice=request.foodPrice,
@@ -1358,7 +1380,7 @@ MEDIA_TYPE_CACHE: Dict[str, str] = {}
 
 
 # 10. Secure Media Proxy Endpoint (High-Performance Cached CDN Gateway & Video Range Streaming)
-@app.get("/api/v1/media/{media_id}")
+@app.get("/api/v1/media/{media_id:path}")
 async def serve_media(media_id: str, request: Request):
     # Support HTTP 304 Not Modified
     if_none_match = request.headers.get("if-none-match")
@@ -1371,8 +1393,9 @@ async def serve_media(media_id: str, request: Request):
     # 1. Try RAM Cache
     cached_bytes = MEDIA_CACHE.get(media_id)
     
-    # 2. Try Disk Cache
-    cache_file_path = os.path.join(MEDIA_CACHE_DIR, f"{media_id}.bin")
+    # 2. Try Disk Cache (using hashed filename to safely support slash paths)
+    cache_safe_id = hashlib.md5(media_id.encode('utf-8')).hexdigest()
+    cache_file_path = os.path.join(MEDIA_CACHE_DIR, f"{cache_safe_id}.bin")
     if not cached_bytes and os.path.exists(cache_file_path):
         try:
             with open(cache_file_path, "rb") as f:
@@ -1385,14 +1408,44 @@ async def serve_media(media_id: str, request: Request):
     # 3. If not in cache, fetch from Cloudflare R2
     if not cached_bytes:
         def _fetch_media_sync():
+            # A. Try D1 media registry
             media_record = D1Service.get_media_by_id(media_id)
-            if not media_record or media_record.get("deletedAt") is not None:
+            if media_record and media_record.get("deletedAt") is not None:
                 return None, None
             
-            object_key = media_record.get("objectKey") or f"media/{media_id}.{media_record.get('mimeType', 'image/jpeg').split('/')[-1]}"
-            file_bytes = R2Service.get_media_bytes(object_key)
-            m_type = media_record.get("mimeType", "image/jpeg")
-            return file_bytes, m_type
+            if media_record:
+                object_key = media_record.get("objectKey") or f"media/{media_id}.{media_record.get('mimeType', 'image/jpeg').split('/')[-1]}"
+                file_bytes = R2Service.get_media_bytes(object_key)
+                m_type = media_record.get("mimeType", "image/jpeg")
+                if file_bytes is not None:
+                    return file_bytes, m_type
+
+            # B. Direct R2 lookup fallback (for presigned uploads or path-based keys)
+            clean_key = media_id.lstrip("/")
+            file_bytes = R2Service.get_media_bytes(clean_key)
+            if file_bytes is None and not clean_key.startswith("media/"):
+                file_bytes = R2Service.get_media_bytes(f"media/{clean_key}")
+
+            if file_bytes is not None:
+                # Deduce MIME type from path extension
+                ext = clean_key.split(".")[-1].lower() if "." in clean_key else ""
+                ext_map = {
+                    "jpg": "image/jpeg",
+                    "jpeg": "image/jpeg",
+                    "png": "image/png",
+                    "webp": "image/webp",
+                    "gif": "image/gif",
+                    "mp4": "video/mp4",
+                    "mov": "video/quicktime",
+                    "webm": "video/webm",
+                    "m4a": "audio/mp4",
+                    "aac": "audio/aac",
+                    "mp3": "audio/mpeg"
+                }
+                m_type = ext_map.get(ext, "image/jpeg")
+                return file_bytes, m_type
+
+            return None, None
 
         cached_bytes, mime_type = await anyio.to_thread.run_sync(_fetch_media_sync)
         
