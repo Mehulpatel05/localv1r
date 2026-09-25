@@ -1460,14 +1460,20 @@ class D1Service:
     @classmethod
     def join_community(cls, community_id: str, user_handle: str, invite_code: Optional[str] = None) -> Dict[str, Any]:
         clean_user = user_handle.replace("@", "").strip()
+        if not clean_user:
+            return {"success": False, "error": "Invalid user handle."}
+
         comm = cls.get_community_by_id(community_id)
         if not comm:
             return {"success": False, "error": "Community not found"}
 
         member_id = f"{community_id}_{clean_user.lower()}"
-        existing = cls.query("SELECT id FROM community_members WHERE id = ? LIMIT 1;", [member_id])
+        existing = cls.query(
+            "SELECT id FROM community_members WHERE id = ? OR (community_id = ? AND LOWER(user_handle) = ?) LIMIT 1;",
+            [member_id, community_id, clean_user.lower()]
+        )
         if existing and len(existing) > 0:
-            return {"success": True, "status": "already_member", "message": "Already a member"}
+            return {"success": True, "status": "joined", "message": "Already a member"}
 
         settings = comm.get("settings", {})
         approve_required = settings.get("approve_new_members", False)
@@ -1483,9 +1489,9 @@ class D1Service:
             return {"success": False, "error": "Failed to submit join request"}
 
         # Instant join
-        sql = "INSERT INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);"
+        sql = "INSERT OR REPLACE INTO community_members (id, community_id, user_handle, role, admin_permissions_json, muted_until, is_archived, last_read_at, joined_at) VALUES (?, ?, ?, 'member', '{}', 0, 0, ?, ?);"
         if cls.execute(sql, [member_id, community_id, clean_user, now_ts, now_ts]):
-            cls.execute("UPDATE communities SET member_count = member_count + 1 WHERE id = ?;", [community_id])
+            cls.execute("UPDATE communities SET member_count = (SELECT COUNT(*) FROM community_members WHERE community_id = ?) WHERE id = ?;", [community_id, community_id])
             
             # System message
             comm_type = "channel" if comm.get("isChannel") else "group"
@@ -1828,7 +1834,7 @@ class D1Service:
         if not rows or len(rows) == 0:
             return False
         msg = rows[0]
-        if msg.get("deleted_at") or LOWER(msg.get("author_handle", "")) != clean_author:
+        if msg.get("deleted_at") or (msg.get("author_handle") or "").lower() != clean_author:
             return False
         created_at = msg.get("created_at") or 0
         if (now_ts - created_at) > 172800:

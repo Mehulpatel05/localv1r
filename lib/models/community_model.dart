@@ -36,7 +36,7 @@ class CommunityModel {
     this.settings = const {},
     required this.memberCount,
     this.imageUrl,
-    this.myRole = 'member',
+    this.myRole = '',
     this.myPermissions = const {},
     this.isMuted = false,
     this.mutedUntil = 0,
@@ -49,6 +49,7 @@ class CommunityModel {
     this.updatedAt,
   }) : ownerHandle = ownerHandle ?? adminHandle;
 
+  bool get isMember => myRole == 'owner' || myRole == 'admin' || myRole == 'member';
   bool get isOwner => myRole == 'owner';
   bool get isAdmin => myRole == 'owner' || myRole == 'admin';
   bool get isPrivate => visibility.toLowerCase() == 'private';
@@ -132,7 +133,7 @@ class CommunityModel {
       settings: parsedSettings,
       memberCount: (map['memberCount'] ?? map['member_count'] as num?)?.toInt() ?? 1,
       imageUrl: (map['imageUrl'] ?? map['image_url']) as String?,
-      myRole: (map['myRole'] ?? map['role'] ?? 'member').toString(),
+      myRole: (map['myRole'] ?? map['role'] ?? '').toString(),
       myPermissions: parsedPermissions,
       isMuted: map['isMuted'] == true || map['is_muted'] == true,
       mutedUntil: (map['mutedUntil'] ?? map['muted_until'] as num?)?.toInt() ?? 0,

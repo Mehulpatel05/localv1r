@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../models/community_model.dart';
 import '../../services/community_repository.dart';
 import 'admin_permissions_sheet.dart';
+import 'community_chat_screen.dart';
 import 'edit_community_screen.dart';
 import 'join_requests_screen.dart';
 
@@ -205,24 +206,75 @@ class _CommunityInfoScreenState extends State<CommunityInfoScreen> {
 
             const SizedBox(height: 22),
 
-            // ── 4 Quick Actions Row (Mute, Archive, Search, Leave) ──
-            _buildQuickActionsRow(cardBg, textColor, isDark),
+            // ── Quick Actions / Join Button ──
+            if (widget.repository.isMemberCached(_community.id) || _community.isMember) ...[
+              _buildQuickActionsRow(cardBg, textColor, isDark),
+              const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+              // ── Join Requests Tile (If Admin/Owner and approveNewMembers) ──
+              if (_community.isAdmin && _community.approveNewMembers) ...[
+                _buildJoinRequestsBanner(cardBg, textColor, isDark),
+                const SizedBox(height: 16),
+              ],
 
-            // ── Join Requests Tile (If Admin/Owner and approveNewMembers) ──
-            if (_community.isAdmin && _community.approveNewMembers) ...[
-              _buildJoinRequestsBanner(cardBg, textColor, isDark),
-              const SizedBox(height: 16),
+              // ── PERMISSIONS Card (Matching Image 1) ──
+              _buildPermissionsCard(cardBg, textColor, isDark),
+
+              const SizedBox(height: 20),
+
+              // ── MEMBERS List (Matching Image 1) ──
+              _buildMembersSection(cardBg, textColor, isDark),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.group_add_rounded, color: Colors.white),
+                  label: Text(
+                    'Join ${_community.isChannel ? 'Channel' : 'Group'}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(context);
+                    try {
+                      final res = await widget.repository.joinCommunity(_community.id);
+                      if (res.status == JoinStatus.pending) {
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Join request submitted for review!')),
+                        );
+                      } else if (res.status == JoinStatus.joined) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Joined ${_community.name}!')),
+                        );
+                        nav.pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => CommunityChatScreen(
+                              community: _community.copyWith(myRole: 'member'),
+                              repository: widget.repository,
+                            ),
+                          ),
+                        );
+                      } else if (res.status == JoinStatus.error) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(res.message.isNotEmpty ? res.message : 'Failed to join community')),
+                        );
+                      }
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Failed to join: $e')),
+                      );
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
-
-            // ── PERMISSIONS Card (Matching Image 1) ──
-            _buildPermissionsCard(cardBg, textColor, isDark),
-
-            const SizedBox(height: 20),
-
-            // ── MEMBERS List (Matching Image 1) ──
-            _buildMembersSection(cardBg, textColor, isDark),
 
             if (_community.isOwner) ...[
               const SizedBox(height: 24),

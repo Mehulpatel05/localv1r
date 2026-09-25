@@ -394,7 +394,7 @@ class _ExploreCommunitiesScreenState extends State<ExploreCommunitiesScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => CommunityChatScreen(
-                                    community: comm,
+                                    community: comm.copyWith(myRole: 'member'),
                                     repository: widget.repository,
                                   ),
                                 ),
