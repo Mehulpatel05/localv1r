@@ -119,7 +119,10 @@ async def list_communities(
     authorization: Optional[str] = Header(None)
 ):
     user_handle = None
-    if authorization and authorization.startswith("Bearer "):
+    if filter == "joined":
+        # Authentication is required for joined list. Raises 401 if token is expired/invalid.
+        _, user_handle = _get_auth_user(authorization)
+    elif authorization and authorization.startswith("Bearer "):
         try:
             _, user_handle = _get_auth_user(authorization)
         except:

@@ -288,6 +288,9 @@ class D1Service:
             CREATE INDEX IF NOT EXISTS idx_cm_comm ON community_members(community_id);
             """,
             """
+            CREATE INDEX IF NOT EXISTS idx_cm_user_comm ON community_members(user_handle, community_id);
+            """,
+            """
             CREATE TABLE IF NOT EXISTS community_messages (
                 id TEXT PRIMARY KEY,
                 community_id TEXT NOT NULL,
