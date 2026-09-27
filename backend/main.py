@@ -52,8 +52,12 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 # 🛡️ RESTRICTED CORS
 ALLOWED_ORIGINS = [
     "https://localv1r.onrender.com",
+    "http://13.203.224.239",
+    "http://13.203.224.239:8000",
     "http://localhost",
     "http://localhost:8000",
+    "http://localhost:5173",
+    "http://localhost:3000",
     "http://10.0.2.2:8000",
 ]
 

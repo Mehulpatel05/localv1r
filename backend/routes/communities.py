@@ -415,6 +415,12 @@ async def get_messages(
             pass
 
     messages = D1Service.get_community_messages(community_id, user_handle=user_handle, limit=limit, before_ts=before)
+    if user_handle and not before:
+        try:
+            D1Service.mark_community_read(community_id, user_handle)
+        except Exception as e:
+            print(f"[COMMUNITIES] auto mark_read on get_messages error: {e}")
+
     return {
         "status": "success",
         "messages": messages
