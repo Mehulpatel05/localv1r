@@ -34,7 +34,15 @@ class Config:
     SERVER_SALT = os.getenv("SERVER_SALT", "nearhood_salt_2026_vadodara_secure")
     JWT_SECRET = os.getenv("JWT_SECRET", "nearhood_jwt_super_secret_key_2026")
     
-    _FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode('utf-8'))
+    # Deterministic 32-byte Fernet key: Uses FERNET_KEY if set, else derives securely from JWT_SECRET & SERVER_SALT
+    _raw_fernet = os.getenv("FERNET_KEY")
+    if _raw_fernet and len(_raw_fernet) == 44:
+        _FERNET_KEY = _raw_fernet
+    else:
+        import hashlib, base64
+        _seed = f"{JWT_SECRET}:{SERVER_SALT}:nearhood_e2e_field_encryption_2026"
+        _derived = hashlib.sha256(_seed.encode('utf-8')).digest()
+        _FERNET_KEY = base64.urlsafe_b64encode(_derived).decode('utf-8')
     crypto = Fernet(_FERNET_KEY.encode('utf-8'))
     
     # Wakit Real OTP Gateway Configuration

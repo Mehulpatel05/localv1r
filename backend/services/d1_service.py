@@ -2340,7 +2340,7 @@ class D1Service:
                 "id": r["id"],
                 "partnerHandle": partner_handle or partner,
                 "partnerAvatarUrl": partner_avatar or "",
-                "lastMessage": r.get("last_message", ""),
+                "lastMessage": cls._decrypt_field(r.get("last_message", "")),
                 "lastSenderHandle": r.get("last_sender_handle", ""),
                 "lastMessageAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["last_message_at"])) if r.get("last_message_at") else None,
                 "unreadCount": unread or 0,
@@ -2372,7 +2372,8 @@ class D1Service:
                 raw_cipher = text[4:]
                 return Config.crypto.decrypt(raw_cipher.encode('utf-8')).decode('utf-8')
             except Exception:
-                return text
+                # If key changed or invalid token, return clean placeholder rather than raw cipher
+                return "[Encrypted message]"
         return text
 
     @classmethod
