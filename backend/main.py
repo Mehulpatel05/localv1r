@@ -13,7 +13,7 @@ from typing import Optional, Dict, List, Tuple, Literal
 from collections import defaultdict
 import anyio
 from fastapi import FastAPI, Header, HTTPException, File, UploadFile, status, Request, Response, Query, BackgroundTasks
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -1270,16 +1270,18 @@ async def upload_media(
             raise HTTPException(status_code=400, detail="Image metadata sanitization failed.")
         
     base_url = os.environ.get("PRODUCTION_URL", "https://localv1r.onrender.com").rstrip("/")
+    cdn_prefix = Config.R2_PUBLIC_URL_PREFIX.rstrip("/") if Config.R2_PUBLIC_URL_PREFIX else ""
 
     content_hash = hashlib.sha256(sanitized_content).hexdigest()
     existing_media = D1Service.get_media_by_hash(content_hash)
     if existing_media:
-        public_proxy_url = f"{base_url}/api/v1/media/{existing_media['mediaId']}"
+        obj_key = existing_media.get("objectKey") or f"media/{existing_media['mediaId']}"
+        public_url = f"{cdn_prefix}/{obj_key}" if cdn_prefix else f"{base_url}/api/v1/media/{existing_media['mediaId']}"
         res = {
             "status": "success",
             "mediaId": existing_media['mediaId'],
-            "imageUrl": public_proxy_url,
-            "mediaUrl": public_proxy_url,
+            "imageUrl": public_url,
+            "mediaUrl": public_url,
             "mediaType": existing_media.get("mediaType", media_type)
         }
         if idempotency_key:
@@ -1324,12 +1326,12 @@ async def upload_media(
     except Exception as cache_err:
         print(f"[WARN] Local disk cache write error: {cache_err}")
         
-    public_proxy_url = f"{base_url}/api/v1/media/{media_id}"
+    public_url = f"{cdn_prefix}/{uploaded_key}" if cdn_prefix else f"{base_url}/api/v1/media/{media_id}"
     res = {
         "status": "success",
         "mediaId": media_id,
-        "imageUrl": public_proxy_url,
-        "mediaUrl": public_proxy_url,
+        "imageUrl": public_url,
+        "mediaUrl": public_url,
         "mediaType": media_type
     }
     if idempotency_key:
@@ -1418,13 +1420,24 @@ MEDIA_TYPE_CACHE: Dict[str, str] = {}
 # 10. Secure Media Proxy Endpoint (High-Performance Cached CDN Gateway & Video Range Streaming)
 @app.get("/api/v1/media/{media_id:path}")
 async def serve_media(media_id: str, request: Request):
+    # If direct public CDN is configured and no byte-range is requested, redirect to CDN edge immediately
+    range_header = request.headers.get("range")
+    if Config.R2_PUBLIC_URL_PREFIX and not range_header:
+        clean_key = media_id.lstrip("/")
+        if not clean_key.startswith("media/") and "/" not in clean_key:
+            clean_key = f"media/{clean_key}"
+        return RedirectResponse(
+            url=f"{Config.R2_PUBLIC_URL_PREFIX.rstrip('/')}/{clean_key}",
+            status_code=302,
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+
     # Support HTTP 304 Not Modified
     if_none_match = request.headers.get("if-none-match")
     if if_none_match and if_none_match.strip('"') == media_id:
         return Response(status_code=304)
 
     mime_type = MEDIA_TYPE_CACHE.get(media_id, "image/jpeg")
-    range_header = request.headers.get("range")
     
     # 1. Try RAM Cache
     cached_bytes = MEDIA_CACHE.get(media_id)

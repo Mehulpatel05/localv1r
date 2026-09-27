@@ -3,7 +3,11 @@ from dotenv import load_dotenv
 from cryptography.fernet import Fernet
 
 # Load environment variables from .env file
-load_dotenv()
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(dotenv_path=_env_path)
+else:
+    load_dotenv()
 
 class Config:
     # ⚠️ WARNING: In production, configure these variables in a .env file.
