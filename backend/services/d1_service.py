@@ -1492,10 +1492,13 @@ class D1Service:
 
         if user_handle:
             clean_u = user_handle.replace("@", "").strip().lower()
+            owner_h = (r.get("owner_handle") or r.get("admin_handle") or "").replace("@", "").strip().lower()
+            if clean_u == owner_h:
+                my_role = "owner"
             m_rows = cls.query("SELECT role, admin_permissions_json, muted_until, is_archived FROM community_members WHERE community_id = ? AND LOWER(user_handle) = ? LIMIT 1;", [community_id, clean_u])
             if m_rows and len(m_rows) > 0:
                 mr = m_rows[0]
-                my_role = mr.get("role")
+                my_role = mr.get("role") or my_role or "member"
                 my_muted_until = mr.get("muted_until") or 0
                 my_is_archived = bool(mr.get("is_archived", 0))
                 if mr.get("admin_permissions_json"):
