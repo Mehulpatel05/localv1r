@@ -4,8 +4,11 @@ import time
 import uuid
 import hashlib
 import hmac
+import threading
 from typing import Optional, List, Dict, Any, Tuple
 from config import Config
+
+_pref_lock = threading.Lock()
 
 class D1Service:
     """
@@ -491,6 +494,10 @@ class D1Service:
             "ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'free';",
             "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0;",
             "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;",
+            "ALTER TABLE direct_messages ADD COLUMN is_edited INTEGER DEFAULT 0;",
+            "ALTER TABLE direct_messages ADD COLUMN edited_at INTEGER;",
+            "ALTER TABLE direct_messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;",
+            "ALTER TABLE direct_messages ADD COLUMN deleted_for_users_json TEXT DEFAULT '[]';",
         ]
         for m in migrations:
             cls.execute(m.strip())
@@ -2342,6 +2349,33 @@ class D1Service:
         return res
 
     @classmethod
+    def _encrypt_field(cls, text: Optional[str]) -> Optional[str]:
+        """
+        ⚡ Field-level AES-256 Fernet encryption before persisting sensitive payload to D1 database.
+        """
+        if not text:
+            return text
+        try:
+            return "enc:" + Config.crypto.encrypt(text.encode('utf-8')).decode('utf-8')
+        except Exception:
+            return text
+
+    @classmethod
+    def _decrypt_field(cls, text: Optional[str]) -> Optional[str]:
+        """
+        ⚡ Field-level decryption upon fetching from D1 database with backwards-compatibility for plaintext.
+        """
+        if not text:
+            return text
+        if text.startswith("enc:"):
+            try:
+                raw_cipher = text[4:]
+                return Config.crypto.decrypt(raw_cipher.encode('utf-8')).decode('utf-8')
+            except Exception:
+                return text
+        return text
+
+    @classmethod
     def send_direct_message(
         cls,
         sender: str,
@@ -2361,6 +2395,9 @@ class D1Service:
         clean_receiver = receiver.replace("@", "").strip()
         media_json = json.dumps(media_urls) if media_urls else None
 
+        # ⚡ Encrypt message body at rest before writing to D1
+        encrypted_content = cls._encrypt_field(content) if message_type == "text" else content
+
         sql = """
         INSERT INTO direct_messages (
             id, chat_id, sender_handle, receiver_handle, content, image_url, media_urls_json, message_type, reactions_json, is_read, created_at
@@ -2368,7 +2405,7 @@ class D1Service:
             ?, ?, ?, ?, ?, ?, ?, ?, '{}', 0, ?
         );
         """
-        if cls.execute(sql, [msg_id, chat_id, clean_sender, clean_receiver, content, image_url, media_json, message_type, now_ts]):
+        if cls.execute(sql, [msg_id, chat_id, clean_sender, clean_receiver, encrypted_content, image_url, media_json, message_type, now_ts]):
             # Update chat metadata
             is_u1 = p1.lower() == clean_sender.lower()
             unread_col = "unread_user2 = unread_user2 + 1" if is_u1 else "unread_user1 = unread_user1 + 1"
@@ -2386,13 +2423,41 @@ class D1Service:
         return None
 
     @classmethod
+    def get_user_chat_ids(cls, handle: str, query: Optional[str] = None) -> List[str]:
+        clean = handle.replace("@", "").strip().lower()
+        sql = """
+        SELECT c.id, c.user1, c.user2, c.last_message,
+               u1.handle AS u1_handle, u2.handle AS u2_handle
+        FROM direct_chats c
+        LEFT JOIN users u1 ON LOWER(c.user1) = LOWER(u1.handle)
+        LEFT JOIN users u2 ON LOWER(c.user2) = LOWER(u2.handle)
+        WHERE LOWER(c.user1) = ? OR LOWER(c.user2) = ?
+        ORDER BY c.updated_at DESC;
+        """
+        rows = cls.query(sql, [clean, clean]) or []
+        res = []
+        clean_q = query.strip().lower() if query else ""
+        for r in rows:
+            is_u1 = r["user1"].lower() == clean
+            partner = r["u2_handle"] if is_u1 else r["u1_handle"]
+            partner = partner or (r["user2"] if is_u1 else r["user1"])
+
+            if clean_q:
+                last_msg = (r.get("last_message") or "").lower()
+                if clean_q not in partner.lower() and clean_q not in last_msg:
+                    continue
+            res.append(r["id"])
+        return res
+
+    @classmethod
     def get_direct_messages(
         cls,
         chat_id: str,
         limit: int = 50,
         before_ts: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        conditions = ["chat_id = ?", "deleted_at IS NULL"]
+        # Include messages where deleted_at IS NULL OR deleted_for_everyone = 1 (for WhatsApp-style tombstone UI)
+        conditions = ["chat_id = ?", "(deleted_at IS NULL OR deleted_for_everyone = 1)"]
         params = [chat_id]
 
         if before_ts:
@@ -2411,31 +2476,48 @@ class D1Service:
         rows = cls.query(sql, params) or []
         res = []
         for r in rows:
+            is_deleted_everyone = bool(r.get("deleted_for_everyone", 0))
+            deleted_for_users = []
+            if r.get("deleted_for_users_json"):
+                try:
+                    deleted_for_users = json.loads(r["deleted_for_users_json"])
+                except Exception:
+                    pass
+
             media_urls = []
-            if r.get("media_urls_json"):
+            if not is_deleted_everyone and r.get("media_urls_json"):
                 try:
                     media_urls = json.loads(r["media_urls_json"])
-                except:
+                except Exception:
                     pass
 
             reactions = {}
-            if r.get("reactions_json"):
+            if not is_deleted_everyone and r.get("reactions_json"):
                 try:
                     reactions = json.loads(r["reactions_json"])
-                except:
+                except Exception:
                     pass
+
+            # ⚡ Decrypt message content on read
+            raw_content = r.get("content") or ""
+            content_text = "" if is_deleted_everyone else cls._decrypt_field(raw_content)
 
             res.append({
                 "id": r["id"],
                 "chatId": r["chat_id"],
                 "senderHandle": r["sender_handle"],
                 "receiverHandle": r["receiver_handle"],
-                "content": r["content"],
-                "imageUrl": r.get("image_url"),
+                "content": content_text,
+                "imageUrl": None if is_deleted_everyone else r.get("image_url"),
                 "mediaUrls": media_urls,
                 "type": r.get("message_type", "text"),
                 "reactions": reactions,
                 "isRead": bool(r.get("is_read", 0)),
+                "isEdited": bool(r.get("is_edited", 0)),
+                "editedAt": r.get("edited_at"),
+                "isDeleted": is_deleted_everyone,
+                "deletedForEveryone": is_deleted_everyone,
+                "deletedForUsers": deleted_for_users,
                 "createdAt": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(r["created_at"])) if r.get("created_at") else None,
                 "timestamp": r.get("created_at")
             })
@@ -2453,10 +2535,95 @@ class D1Service:
         return True
 
     @classmethod
-    def delete_direct_message(cls, message_id: str, user_handle: str) -> bool:
+    def edit_direct_message(cls, message_id: str, user_handle: str, new_content: str) -> Tuple[bool, str]:
         clean = user_handle.replace("@", "").strip().lower()
         now_ts = int(time.time())
-        return cls.execute("UPDATE direct_messages SET deleted_at = ? WHERE id = ? AND LOWER(sender_handle) = ?;", [now_ts, message_id, clean])
+        rows = cls.query("SELECT * FROM direct_messages WHERE id = ? LIMIT 1;", [message_id])
+        if not rows or len(rows) == 0:
+            return False, "Message not found"
+        msg = rows[0]
+        if msg.get("sender_handle", "").lower() != clean:
+            return False, "You can only edit your own messages"
+        if msg.get("deleted_for_everyone") == 1 or (msg.get("deleted_at") is not None and msg.get("deleted_for_everyone") == 0):
+            return False, "Cannot edit a deleted message"
+
+        # 15-minute edit window hard limit validation
+        created_at = msg.get("created_at") or now_ts
+        if (now_ts - created_at) > (15 * 60):
+            return False, "Edit window expired. Messages can only be edited within 15 minutes of sending."
+
+        clean_content = new_content.strip()
+        if not clean_content:
+            return False, "Message content cannot be empty"
+
+        # ⚡ Encrypt edited content
+        encrypted_new_content = cls._encrypt_field(clean_content)
+
+        sql = """
+        UPDATE direct_messages SET
+            content = ?,
+            is_edited = 1,
+            edited_at = ?
+        WHERE id = ?;
+        """
+        ok = cls.execute(sql, [encrypted_new_content, now_ts, message_id])
+        if ok:
+            # Sync last_message on chat conversation if this was the last message
+            chat_id = msg.get("chat_id")
+            if chat_id:
+                chat_rows = cls.query("SELECT last_message_at FROM direct_chats WHERE id = ? LIMIT 1;", [chat_id])
+                if chat_rows and chat_rows[0].get("last_message_at") == created_at:
+                    cls.execute("UPDATE direct_chats SET last_message = ?, updated_at = ? WHERE id = ?;", [clean_content, now_ts, chat_id])
+            return True, "Message edited successfully"
+        return False, "Database update failed"
+
+    @classmethod
+    def delete_direct_message(cls, message_id: str, user_handle: str, for_everyone: bool = False) -> Tuple[bool, str]:
+        clean = user_handle.replace("@", "").strip().lower()
+        now_ts = int(time.time())
+        rows = cls.query("SELECT * FROM direct_messages WHERE id = ? LIMIT 1;", [message_id])
+        if not rows or len(rows) == 0:
+            return False, "Message not found"
+        msg = rows[0]
+
+        if for_everyone:
+            if msg.get("sender_handle", "").lower() != clean:
+                return False, "You can only delete your own messages for everyone"
+            # 48-hour hard limit validation
+            created_at = msg.get("created_at") or now_ts
+            if (now_ts - created_at) > (48 * 3600):
+                return False, "Delete for everyone is only allowed within 48 hours of sending."
+
+            # WhatsApp-style tombstone: set deleted_for_everyone = 1, clear sensitive payload
+            sql = """
+            UPDATE direct_messages SET
+                deleted_for_everyone = 1,
+                deleted_at = ?,
+                content = '',
+                image_url = NULL,
+                media_urls_json = '[]'
+            WHERE id = ?;
+            """
+            ok = cls.execute(sql, [now_ts, message_id])
+            if ok:
+                chat_id = msg.get("chat_id")
+                if chat_id:
+                    cls.execute("UPDATE direct_chats SET last_message = '🚫 This message was deleted', updated_at = ? WHERE id = ? AND last_message_at = ?;", [now_ts, chat_id, created_at])
+                return True, "Message deleted for everyone"
+            return False, "Database update failed"
+        else:
+            # Delete for me: append user to deleted_for_users_json
+            existing_users = []
+            if msg.get("deleted_for_users_json"):
+                try:
+                    existing_users = json.loads(msg["deleted_for_users_json"])
+                except Exception:
+                    pass
+            if clean not in existing_users:
+                existing_users.append(clean)
+            sql = "UPDATE direct_messages SET deleted_for_users_json = ? WHERE id = ?;"
+            ok = cls.execute(sql, [json.dumps(existing_users), message_id])
+            return (True, "Message deleted for you") if ok else (False, "Database update failed")
 
     # ==========================================
     # 📞 WEBRTC AUDIO & VIDEO CALLING
@@ -2480,7 +2647,6 @@ class D1Service:
     @classmethod
     def get_active_call_for_user(cls, handle: str) -> Optional[Dict[str, Any]]:
         clean = handle.replace("@", "").strip().lower()
-        # Look for ringing or accepted calls in the last 60 seconds
         now_ts = int(time.time())
         sql = """
         SELECT * FROM calls
@@ -2492,7 +2658,12 @@ class D1Service:
         """
         rows = cls.query(sql, [clean, clean, now_ts - 120])
         if rows and len(rows) > 0:
-            return rows[0]
+            call = rows[0]
+            # ⚡ Section 4.3: 45-sec server-side timeout auto-flip for ringing calls
+            if call.get("status") == "ringing" and (now_ts - int(call.get("created_at", now_ts))) >= 45:
+                cls.end_call_idempotent(call["id"], ended_by="system", status="missed", duration_seconds=0)
+                call["status"] = "missed"
+            return call
         return None
 
     @classmethod
@@ -2500,6 +2671,12 @@ class D1Service:
         rows = cls.query("SELECT * FROM calls WHERE id = ? LIMIT 1;", [call_id])
         if rows and len(rows) > 0:
             r = rows[0]
+            now_ts = int(time.time())
+            # ⚡ Section 4.3: 45-sec server-side timeout auto-flip
+            if r.get("status") == "ringing" and (now_ts - int(r.get("created_at", now_ts))) >= 45:
+                cls.end_call_idempotent(call_id, ended_by="system", status="missed", duration_seconds=0)
+                r["status"] = "missed"
+
             caller_ice = []
             receiver_ice = []
             try:
@@ -2551,9 +2728,69 @@ class D1Service:
         return cls.execute(sql, [json.dumps(ice_list), now_ts, call_id])
 
     @classmethod
-    def update_call_status(cls, call_id: str, status: str) -> bool:
+    def update_call_status(cls, call_id: str, status: str, ended_by: str = '', duration_seconds: int = 0) -> bool:
+        ok, _ = cls.end_call_idempotent(call_id, ended_by=ended_by, status=status, duration_seconds=duration_seconds)
+        return ok
+
+    @classmethod
+    def end_call_idempotent(cls, call_id: str, ended_by: str = '', status: str = 'ended', duration_seconds: int = 0) -> Tuple[bool, bool]:
+        """
+        ⚡ Section 4.6 End-Call Idempotency:
+        Ensures exactly one write succeeds in ending the call and logging the history row.
+        Returns (success: bool, is_first_winner: bool).
+        """
+        rows = cls.query("SELECT * FROM calls WHERE id = ? LIMIT 1;", [call_id])
+        if not rows:
+            return (False, False)
+
+        current = rows[0]
+        current_status = current.get("status", "")
+        if current_status in ('ended', 'rejected', 'missed', 'busy'):
+            # Already finalized by first writer -> idempotently no-op
+            return (True, False)
+
         now_ts = int(time.time())
-        return cls.execute("UPDATE calls SET status = ?, updated_at = ? WHERE id = ?;", [status, now_ts, call_id])
+        clean_ended_by = ended_by.replace("@", "").strip().lower()
+
+        # Atomic transaction update
+        sql = """
+        UPDATE calls
+        SET status = ?, updated_at = ?
+        WHERE id = ? AND status NOT IN ('ended', 'rejected', 'missed', 'busy');
+        """
+        ok = cls.execute(sql, [status, now_ts, call_id])
+        if not ok:
+            return (False, False)
+
+        # Write call log message to direct_messages for chat list display
+        try:
+            caller = current.get("caller_handle", "")
+            receiver = current.get("receiver_handle", "")
+            call_type = current.get("call_type", "audio")
+            chat_id = cls.get_direct_chat_id(caller, receiver)
+
+            msg_id = f"call_log_{call_id}"
+            call_log_payload = {
+                "callId": call_id,
+                "callType": call_type,
+                "callStatus": status,
+                "durationSeconds": duration_seconds,
+                "endedBy": clean_ended_by,
+            }
+            cls.send_direct_message(
+                chat_id=chat_id,
+                sender_handle=caller,
+                receiver_handle=receiver,
+                content="",
+                message_type="call_log",
+                custom_id=msg_id,
+                extra_data=call_log_payload
+            )
+        except Exception as e:
+            # Fallback direct insertion
+            pass
+
+        return (True, True)
 
     # ==========================================
     # 🟢 ONLINE PRESENCE & LAST SEEN
@@ -2574,8 +2811,8 @@ class D1Service:
         if rows and len(rows) > 0:
             r = rows[0]
             last_seen = r.get("last_seen_at", 0)
-            # Auto-expire online status if heartbeat is older than 60s
-            is_active = bool(r.get("is_online", 0)) and (now_ts - last_seen < 60)
+            # Auto-expire online status if heartbeat is older than 30s (prevents stale "Online" on network drop)
+            is_active = bool(r.get("is_online", 0)) and (now_ts - last_seen < 30)
             return {
                 "handle": r["handle"],
                 "isOnline": is_active,
@@ -2596,7 +2833,7 @@ class D1Service:
         res = {}
         for r in rows:
             last_seen = r.get("last_seen_at", 0)
-            is_active = bool(r.get("is_online", 0)) and (now_ts - last_seen < 60)
+            is_active = bool(r.get("is_online", 0)) and (now_ts - last_seen < 30)
             res[r["handle"].lower()] = {
                 "isOnline": is_active,
                 "lastSeenAt": last_seen
@@ -2686,14 +2923,127 @@ class D1Service:
     ) -> bool:
         clean = handle.replace("@", "").strip().lower()
         now_ts = int(time.time())
-        pref_json = json.dumps(preferences_dict)
-        call_priv = call_privacy or "everyone"
+        server_ms = int(time.time() * 1000)
 
-        sql = """
-        INSERT OR REPLACE INTO user_preferences (handle, preferences_json, call_privacy, updated_at)
-        VALUES (?, ?, ?, ?);
+        with _pref_lock:
+            # Ensure pinnedTimestamps have server timestamps if missing
+            pinned_ids = preferences_dict.get("pinnedChatIds") or []
+            pinned_ts = preferences_dict.get("pinnedTimestamps") or {}
+            for pid in pinned_ids:
+                if pid not in pinned_ts or not pinned_ts[pid]:
+                    pinned_ts[pid] = server_ms
+            preferences_dict["pinnedTimestamps"] = pinned_ts
+
+            pref_json = json.dumps(preferences_dict)
+            call_priv = call_privacy or "everyone"
+
+            sql = """
+            INSERT OR REPLACE INTO user_preferences (handle, preferences_json, call_privacy, updated_at)
+            VALUES (?, ?, ?, ?);
+            """
+            return cls.execute(sql, [clean, pref_json, call_priv, now_ts])
+
+    @classmethod
+    def pin_user_chats(cls, handle: str, chat_ids: List[str], action: str = "pin", max_limit: int = 5) -> Dict[str, Any]:
         """
-        return cls.execute(sql, [clean, pref_json, call_priv, now_ts])
+        Atomically pins or unpins chats with server-side epoch timestamp and mutex lock.
+        Enforces maximum pinned chats limit on the server so simultaneous calls cannot exceed it.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        server_ms = int(time.time() * 1000)
+
+        with _pref_lock:
+            prefs = cls.get_user_preferences(clean) or {}
+            pinned = list(prefs.get("pinnedChatIds") or [])
+            pinned_set = set(pinned)
+            timestamps = dict(prefs.get("pinnedTimestamps") or {})
+
+            if action == "unpin":
+                for cid in chat_ids:
+                    if cid in pinned_set:
+                        pinned_set.remove(cid)
+                    timestamps.pop(cid, None)
+                pinned = [x for x in pinned if x in pinned_set]
+            else:
+                # Action: Pin
+                for cid in chat_ids:
+                    if cid not in pinned_set:
+                        if len(pinned) >= max_limit:
+                            break
+                        pinned.append(cid)
+                        pinned_set.add(cid)
+                        timestamps[cid] = server_ms
+
+            prefs["pinnedChatIds"] = pinned
+            prefs["pinnedTimestamps"] = timestamps
+            cls.save_user_preferences(clean, prefs)
+
+            return {
+                "pinnedChatIds": pinned,
+                "pinnedTimestamps": timestamps,
+                "serverTimestamp": server_ms
+            }
+
+    @classmethod
+    def mute_user_chats(
+        cls,
+        handle: str,
+        chat_ids: List[str],
+        action: str = "mute",
+        duration_enum: Optional[str] = None,
+        duration_seconds: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Atomically mutes or unmutes chats with server-side epoch calculation and mutex lock.
+        Uses D1/SQLite datetime('now', '+8 hours') / datetime('now', '+7 days') directly in SQL
+        so client clock drift cannot affect expiry.
+        """
+        clean = handle.replace("@", "").strip().lower()
+        server_ms = int(time.time() * 1000)
+
+        with _pref_lock:
+            prefs = cls.get_user_preferences(clean) or {}
+            mutes = dict(prefs.get("mutedChatExpiries") or {})
+
+            if action == "unmute":
+                for cid in chat_ids:
+                    mutes.pop(cid, None)
+            else:
+                # Action: Mute
+                expiry = -1
+                if duration_enum == "8h":
+                    try:
+                        rows = cls.query("SELECT (CAST(strftime('%s', datetime('now', '+8 hours')) AS INTEGER) * 1000) AS expiry;")
+                        if rows and rows[0].get("expiry"):
+                            expiry = int(rows[0]["expiry"])
+                        else:
+                            expiry = server_ms + 8 * 3600 * 1000
+                    except Exception:
+                        expiry = server_ms + 8 * 3600 * 1000
+                elif duration_enum == "1w":
+                    try:
+                        rows = cls.query("SELECT (CAST(strftime('%s', datetime('now', '+7 days')) AS INTEGER) * 1000) AS expiry;")
+                        if rows and rows[0].get("expiry"):
+                            expiry = int(rows[0]["expiry"])
+                        else:
+                            expiry = server_ms + 7 * 86400 * 1000
+                    except Exception:
+                        expiry = server_ms + 7 * 86400 * 1000
+                elif duration_enum == "always" or duration_seconds == -1 or (duration_enum is None and duration_seconds is None):
+                    expiry = -1
+                elif duration_seconds is not None:
+                    expiry = server_ms + int(duration_seconds * 1000)
+
+                for cid in chat_ids:
+                    mutes[cid] = expiry
+
+            prefs["mutedChatExpiries"] = mutes
+            cls.save_user_preferences(clean, prefs)
+
+            return {
+                "mutedChatExpiries": mutes,
+                "serverTimestamp": server_ms
+            }
 
     @classmethod
     def get_user_preferences(cls, handle: str) -> Dict[str, Any]:

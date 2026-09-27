@@ -48,3 +48,7 @@ class Config:
         "FIREBASE_CREDENTIALS_PATH",
         os.path.join(os.path.dirname(__file__), "service-account.json")
     )
+
+    # Optional Redis URL for multi-worker signaling Pub/Sub relay
+    REDIS_URL = os.getenv("REDIS_URL", "")
+

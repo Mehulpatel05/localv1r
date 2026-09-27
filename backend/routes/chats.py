@@ -37,8 +37,13 @@ class SendDirectMessageRequest(BaseModel):
 class MarkReadRequest(BaseModel):
     user_handle: str
 
+class EditMessageRequest(BaseModel):
+    user_handle: str
+    content: str = Field(..., min_length=1, max_length=4000)
+
 class DeleteMessageRequest(BaseModel):
     user_handle: str
+    for_everyone: bool = False
 
 @router.get("")
 def get_user_chats(
@@ -56,6 +61,23 @@ def get_user_chats(
             handle = auth_handle
     chats = D1Service.get_user_direct_chats(handle)
     return {"chats": chats}
+
+@router.get("/ids")
+def get_user_chat_ids(
+    handle: str = Query(..., description="User handle"),
+    query: Optional[str] = Query(None, description="Optional search query filter"),
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """
+    ⚡ Backend query-bound select-all: fetch all conversation IDs matching active query/filters.
+    """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle and auth_handle.replace("@", "").lower() != handle.replace("@", "").lower():
+            handle = auth_handle
+    chat_ids = D1Service.get_user_chat_ids(handle, query=query)
+    return {"chatIds": chat_ids, "total": len(chat_ids)}
 
 @router.get("/{chat_id}/messages")
 def get_direct_messages(
@@ -108,6 +130,26 @@ def send_direct_message(
         "chatId": chat_id
     }
 
+@router.put("/message/{message_id}")
+def edit_direct_message(
+    message_id: str,
+    req: EditMessageRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """
+    Edit a direct message sent by user. Enforces 15-minute hard limit.
+    """
+    auth = _get_optional_auth_user(authorization)
+    if auth:
+        _, auth_handle = auth
+        if auth_handle:
+            req.user_handle = auth_handle
+
+    ok, reason = D1Service.edit_direct_message(message_id, req.user_handle, req.content)
+    if not ok:
+        raise HTTPException(status_code=400, detail=reason)
+    return {"success": True, "detail": reason, "messageId": message_id}
+
 @router.post("/{chat_id}/read")
 def mark_direct_chat_read(
     chat_id: str,
@@ -133,7 +175,7 @@ def delete_direct_message(
     authorization: Optional[str] = Header(None, alias="Authorization")
 ):
     """
-    Soft-delete a direct message sent by user.
+    Delete a direct message. Supports 'delete for me' and 'delete for everyone' (with 48-hr limit and tombstone).
     """
     auth = _get_optional_auth_user(authorization)
     if auth:
@@ -141,7 +183,7 @@ def delete_direct_message(
         if auth_handle:
             req.user_handle = auth_handle
 
-    ok = D1Service.delete_direct_message(message_id, req.user_handle)
+    ok, reason = D1Service.delete_direct_message(message_id, req.user_handle, for_everyone=req.for_everyone)
     if not ok:
-        raise HTTPException(status_code=400, detail="Unable to delete message")
-    return {"success": True}
+        raise HTTPException(status_code=400, detail=reason)
+    return {"success": True, "detail": reason}
