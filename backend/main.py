@@ -1250,18 +1250,29 @@ async def upload_media(
             raise HTTPException(status_code=400, detail="Invalid image file format. Image decoding failed.")
             
         try:
+            from PIL import ImageOps
             image = Image.open(io.BytesIO(file_content))
-            max_resolution = 4096
+            image = ImageOps.exif_transpose(image)
+            
+            # Auto-bound maximum resolution to 2048px with high quality Lanczos resampling
+            max_resolution = 2048
             if image.width > max_resolution or image.height > max_resolution:
-                raise HTTPException(status_code=400, detail=f"Image resolution exceeds the limit of {max_resolution}x{max_resolution}.")
+                image.thumbnail((max_resolution, max_resolution), Image.Resampling.LANCZOS)
                 
             output_bytes = io.BytesIO()
             img_format = image.format if image.format in ("JPEG", "PNG", "WEBP") else verified_format
             
-            if img_format == "JPEG" and image.mode in ("RGBA", "LA", "P"):
-                image = image.convert("RGB")
+            if img_format == "JPEG" or img_format == "JPG":
+                if image.mode in ("RGBA", "LA", "P"):
+                    image = image.convert("RGB")
+                image.save(output_bytes, format="JPEG", quality=88, optimize=True, progressive=True)
+            elif img_format == "WEBP":
+                image.save(output_bytes, format="WEBP", quality=88, method=6)
+            elif img_format == "PNG":
+                image.save(output_bytes, format="PNG", optimize=True)
+            else:
+                image.save(output_bytes, format=img_format)
                 
-            image.save(output_bytes, format=img_format)
             sanitized_content = output_bytes.getvalue()
         except HTTPException:
             raise
