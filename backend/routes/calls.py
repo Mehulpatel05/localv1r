@@ -191,25 +191,41 @@ def get_call_by_id(call_id: str):
     return {"call": call}
 
 @router.post("/{call_id}/answer")
-def answer_call(call_id: str, req: AnswerCallRequest):
+async def answer_call(call_id: str, req: AnswerCallRequest):
     """
     Accept an incoming call and attach SDP answer.
     """
     ok = D1Service.answer_call(call_id, req.receiver, req.sdpAnswer)
     if not ok:
         raise HTTPException(status_code=400, detail="Failed to answer call")
+    try:
+        await hub.relay(call_id, json.dumps({
+            "type": "answer",
+            "receiver": req.receiver,
+            "sdp": req.sdpAnswer
+        }))
+    except Exception:
+        pass
     return {"success": True}
 
 @router.post("/{call_id}/ice")
-def add_ice_candidate(call_id: str, req: AddIceCandidateRequest):
+async def add_ice_candidate(call_id: str, req: AddIceCandidateRequest):
     """
     Add a WebRTC ICE candidate to call in D1.
     """
     ok = D1Service.add_call_ice_candidate(call_id, req.handle, req.candidate)
+    try:
+        await hub.relay(call_id, json.dumps({
+            "type": "candidate",
+            "handle": req.handle,
+            "candidate": req.candidate
+        }))
+    except Exception:
+        pass
     return {"success": ok}
 
 @router.post("/{call_id}/status")
-def update_call_status(call_id: str, req: UpdateCallStatusRequest):
+async def update_call_status(call_id: str, req: UpdateCallStatusRequest):
     """
     Update call status (e.g., 'ended', 'rejected', 'busy', 'declined') with idempotency.
     """
@@ -219,4 +235,13 @@ def update_call_status(call_id: str, req: UpdateCallStatusRequest):
         ended_by=req.endedBy or "",
         duration_seconds=req.durationSeconds or 0
     )
+    try:
+        await hub.relay(call_id, json.dumps({
+            "type": "status",
+            "status": req.status,
+            "endedBy": req.endedBy or "",
+            "durationSeconds": req.durationSeconds or 0
+        }))
+    except Exception:
+        pass
     return {"success": ok}

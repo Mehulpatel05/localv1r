@@ -2661,9 +2661,15 @@ class D1Service:
         if rows and len(rows) > 0:
             call = rows[0]
             # ⚡ Section 4.3: 45-sec server-side timeout auto-flip for ringing calls
-            if call.get("status") == "ringing" and (now_ts - int(call.get("created_at", now_ts))) >= 45:
-                cls.end_call_idempotent(call["id"], ended_by="system", status="missed", duration_seconds=0)
-                call["status"] = "missed"
+            raw_created = call.get("created_at")
+            if call.get("status") == "ringing" and raw_created:
+                try:
+                    c_ts = int(raw_created)
+                    if c_ts > 0 and (now_ts - c_ts) >= 45:
+                        cls.end_call_idempotent(call["id"], ended_by="system", status="missed", duration_seconds=0)
+                        call["status"] = "missed"
+                except Exception:
+                    pass
             return call
         return None
 
@@ -2674,9 +2680,15 @@ class D1Service:
             r = rows[0]
             now_ts = int(time.time())
             # ⚡ Section 4.3: 45-sec server-side timeout auto-flip
-            if r.get("status") == "ringing" and (now_ts - int(r.get("created_at", now_ts))) >= 45:
-                cls.end_call_idempotent(call_id, ended_by="system", status="missed", duration_seconds=0)
-                r["status"] = "missed"
+            raw_created = r.get("created_at")
+            if r.get("status") == "ringing" and raw_created:
+                try:
+                    c_ts = int(raw_created)
+                    if c_ts > 0 and (now_ts - c_ts) >= 45:
+                        cls.end_call_idempotent(call_id, ended_by="system", status="missed", duration_seconds=0)
+                        r["status"] = "missed"
+                except Exception:
+                    pass
 
             caller_ice = []
             receiver_ice = []
