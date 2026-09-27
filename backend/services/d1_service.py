@@ -3333,6 +3333,29 @@ class D1Service:
             return int(rows[0]["total"])
         return 0
 
+    @classmethod
+    def save_user_fcm_token(cls, handle: str, fcm_token: str) -> bool:
+        """Save or update device FCM push token for user handle."""
+        clean_handle = handle.replace("@", "").strip().lower()
+        if not clean_handle or not fcm_token:
+            return False
+        sql = "UPDATE users SET fcm_token = ? WHERE LOWER(handle) = ?"
+        res = cls.execute(sql, [fcm_token, clean_handle])
+        return res is not None
+
+    @classmethod
+    def get_user_fcm_token(cls, handle: str) -> Optional[str]:
+        """Get FCM push token for user handle."""
+        clean_handle = handle.replace("@", "").strip().lower()
+        if not clean_handle:
+            return None
+        sql = "SELECT fcm_token FROM users WHERE LOWER(handle) = ? LIMIT 1"
+        rows = cls.query(sql, [clean_handle])
+        if rows and len(rows) > 0:
+            return rows[0].get("fcm_token")
+        return None
+
+
 
 
 

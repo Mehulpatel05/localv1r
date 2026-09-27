@@ -658,6 +658,22 @@ class AddModRequest(BaseModel):
     role: Literal["moderator", "admin", "superadmin"] = Field("moderator")
 
 
+# FCM Token Registration Endpoints
+@app.post("/api/v1/users/fcm-token")
+@app.post("/users/fcm-token")
+@app.post("/api/v1/fcm-token")
+@app.post("/fcm-token")
+async def register_users_fcm_token(request: Request):
+    try:
+        data = await request.json()
+        handle = data.get("handle", "").replace("@", "").strip().lower()
+        fcm_token = data.get("fcm_token", "").strip()
+        if handle and fcm_token:
+            D1Service.save_user_fcm_token(handle, fcm_token)
+    except Exception as e:
+        pass
+    return {"success": True}
+
 # Endpoints
 
 # 1. Device Registration

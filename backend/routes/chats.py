@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Tuple
 from config import Config
 from services.d1_service import D1Service
+from services.fcm_service import send_push_to_token
 
 router = APIRouter(prefix="/chats", tags=["1-on-1 Direct Chats"])
 
@@ -123,6 +124,26 @@ def send_direct_message(
 
     p1, p2 = D1Service.canonical_pair(req.sender, req.receiver)
     chat_id = f"{p1}_{p2}"
+
+    # 🚀 INSTANT BACKGROUND PUSH: Send FCM Push Notification to Receiver Phone!
+    try:
+        receiver_token = D1Service.get_user_fcm_token(req.receiver)
+        if receiver_token:
+            sender_clean = req.sender.replace("@", "").strip()
+            body_text = (req.content or "").strip() or ("[Image]" if (req.imageUrl or req.mediaUrls) else "New message")
+            send_push_to_token(
+                receiver_token,
+                title=f"@{sender_clean}",
+                body=body_text,
+                data_payload={
+                    "type": "chat",
+                    "senderHandle": sender_clean,
+                    "partnerHandle": sender_clean,
+                    "chatId": chat_id
+                }
+            )
+    except Exception as e:
+        print(f"[Chat Push Notice] {e}")
 
     return {
         "success": True,

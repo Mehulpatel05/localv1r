@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from services.d1_service import D1Service
+from services.fcm_service import send_push_to_token
 
 router = APIRouter(prefix="/notifications", tags=["In-App Notifications"])
 
@@ -12,6 +13,20 @@ class CreateNotificationRequest(BaseModel):
     type: str
     sender_handle: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
+
+class FCMTokenRequest(BaseModel):
+    handle: str
+    fcm_token: str
+
+@router.post("/fcm-token")
+def register_fcm_token(req: FCMTokenRequest):
+    """
+    Save or update device FCM push token for user handle.
+    """
+    clean_handle = req.handle.replace("@", "").strip().lower()
+    if clean_handle and req.fcm_token:
+        D1Service.save_user_fcm_token(clean_handle, req.fcm_token)
+    return {"success": True}
 
 @router.get("")
 def get_notifications(
@@ -27,7 +42,7 @@ def get_notifications(
 @router.post("")
 def create_notification(req: CreateNotificationRequest):
     """
-    Create a new in-app notification.
+    Create a new in-app notification & send instant FCM push to target device!
     """
     notif_id = D1Service.create_notification(
         target_handle=req.target_handle,
@@ -39,6 +54,19 @@ def create_notification(req: CreateNotificationRequest):
     )
     if not notif_id:
         raise HTTPException(status_code=500, detail="Failed to create notification")
+
+    # 🚀 INSTANT BACKGROUND PUSH: Send Google FCM Push to target user's device!
+    try:
+        fcm_token = D1Service.get_user_fcm_token(req.target_handle)
+        if fcm_token:
+            payload = req.data or {}
+            payload["type"] = req.type
+            if req.sender_handle:
+                payload["senderHandle"] = req.sender_handle
+            send_push_to_token(fcm_token, req.title, req.body, payload)
+    except Exception as e:
+        print(f"[FCM Push Notice] {e}")
+
     return {"success": True, "notificationId": notif_id}
 
 @router.post("/{notification_id}/read")
