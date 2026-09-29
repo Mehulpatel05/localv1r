@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'multi_image_gallery_viewer.dart';
 import '../../../services/r2_storage_service.dart';
+import '../../../core/widgets/safe_image.dart';
 
 class ImageGroupBubble extends StatelessWidget {
   final List<String> mediaUrls;
@@ -27,12 +28,18 @@ class ImageGroupBubble extends StatelessWidget {
   void _openGallery(BuildContext context, int initialIndex) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => MultiImageGalleryViewer(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, animation, secondaryAnimation) => MultiImageGalleryViewer(
           imageUrls: mediaUrls,
           initialIndex: initialIndex,
           caption: caption,
           heroTagPrefix: messageId,
+        ),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: child,
         ),
       ),
     );
@@ -63,27 +70,12 @@ class ImageGroupBubble extends StatelessWidget {
               children: [
                 Hero(
                   tag: '${messageId}_$index',
-                  child: Image.network(
-                    url,
-                    cacheWidth: 400,
-                    cacheHeight: 400,
+                  child: SafeImage(
+                    imageUrl: url,
                     fit: BoxFit.cover,
-                    loadingBuilder: (_, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: isMe ? Colors.white12 : Colors.black12,
-                        child: const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      );
-                    },
-                    errorBuilder: (_, _, _) => Container(
-                      color: isMe ? Colors.white12 : Colors.black12,
-                      child: const Center(
-                        child: Icon(Icons.broken_image_rounded,
-                            color: Colors.black38),
-                      ),
-                    ),
+                    width: double.infinity,
+                    height: double.infinity,
+                    backgroundColor: isMe ? Colors.white12 : Colors.black12,
                   ),
                 ),
                 if (R2StorageService.isVideoFile(url))
@@ -296,7 +288,19 @@ class ImageGroupBubble extends StatelessWidget {
 
   Widget _buildStatusIcon({Color? readColor, Color? defaultColor}) {
     if (!isMe) return const SizedBox.shrink();
-    if (isRead || status == 'read') {
+    if (status == 'failed') {
+      return const Icon(
+        Icons.error_outline_rounded,
+        size: 14,
+        color: Color(0xFFEF4444),
+      );
+    } else if (status == 'sending') {
+      return Icon(
+        Icons.access_time_rounded,
+        size: 12,
+        color: defaultColor ?? Colors.white70,
+      );
+    } else if (isRead || status == 'read') {
       return Icon(
         Icons.done_all_rounded,
         size: 14,
@@ -319,6 +323,7 @@ class ImageGroupBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasCaption = caption != null && caption!.trim().isNotEmpty;
 
     return Column(
@@ -379,7 +384,9 @@ class ImageGroupBubble extends StatelessWidget {
                 Text(
                   caption!,
                   style: TextStyle(
-                    color: isMe ? Colors.white : const Color(0xFF0F172A),
+                    color: isMe
+                        ? Colors.white
+                        : (isDark ? Colors.white : const Color(0xFF0F172A)),
                     fontSize: 14.5,
                     height: 1.35,
                   ),

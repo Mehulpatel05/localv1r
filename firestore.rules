@@ -21,7 +21,10 @@ service cloud.firestore {
     match /profiles/{handle} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.ownerUid == myUid();
-      allow update: if signedIn();
+      allow update: if signedIn() && (
+        resource.data.ownerUid == myUid() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendCount'])
+      );
       allow delete: if signedIn() && resource.data.ownerUid == myUid();
 
       match /preferences/{prefDoc} {
@@ -41,7 +44,7 @@ service cloud.firestore {
     match /friendships/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && myUid() in request.resource.data.usersUids;
-      allow update, delete: if signedIn();
+      allow update, delete: if signedIn() && myUid() in resource.data.usersUids;
     }
 
     // Chats: participants can query/read; only participants can update

@@ -19,6 +19,8 @@ class Post {
   final String? cityId;
   final String? areaId;
   final String? areaName;
+  final double? lat;
+  final double? lng;
 
   // 🏠 Room-specific fields (only for PostCategory.rooms)
   final String? roomTitle;
@@ -52,6 +54,22 @@ class Post {
   final String? serviceTitle;
   final String? serviceCategoryText;
   final String? servicePrice;
+  final bool isRecommended;
+
+  // 🛍️ Phase 2 Shop Enhancements
+  final bool isSold;
+  final String? itemCondition; // New, Like New, Used, Free
+
+  // 🏠 Phase 2 Rooms Enhancements
+  final String? roomFurnishing; // Furnished, Semi-Furnished, Unfurnished
+  final String? roomTenantPreference; // Bachelors, Family, Any
+
+  // 💼 Phase 2 Jobs Enhancements
+  final String? jobWorkMode; // On-site, Remote, Hybrid
+
+  // 🎉 Phase 2 Events Enhancements
+  final int eventRsvpCount;
+  final bool isUserRsvped;
 
   Post({
     required this.id,
@@ -64,6 +82,8 @@ class Post {
     this.cityId,
     this.areaId,
     this.areaName,
+    this.lat,
+    this.lng,
     this.upvotes = 0,
     this.downvotes = 0,
     this.commentCount = 0,
@@ -92,9 +112,19 @@ class Post {
     this.serviceTitle,
     this.serviceCategoryText,
     this.servicePrice,
+    this.isRecommended = false,
+    this.isSold = false,
+    this.itemCondition,
+    this.roomFurnishing,
+    this.roomTenantPreference,
+    this.jobWorkMode,
+    this.eventRsvpCount = 0,
+    this.isUserRsvped = false,
   });
 
   int get score => upvotes - downvotes;
+  int get likes => upvotes > 0 ? upvotes : 0;
+  bool get isLiked => userVote == 1;
 
   Map<String, dynamic> toJson() {
     return {
@@ -108,6 +138,8 @@ class Post {
       'cityId': cityId,
       'areaId': areaId,
       'areaName': areaName,
+      'lat': lat,
+      'lng': lng,
       'upvotes': upvotes,
       'downvotes': downvotes,
       'commentCount': commentCount,
@@ -136,6 +168,14 @@ class Post {
       'serviceTitle': serviceTitle,
       'serviceCategoryText': serviceCategoryText,
       'servicePrice': servicePrice,
+      'isRecommended': isRecommended,
+      'isSold': isSold,
+      'itemCondition': itemCondition,
+      'roomFurnishing': roomFurnishing,
+      'roomTenantPreference': roomTenantPreference,
+      'jobWorkMode': jobWorkMode,
+      'eventRsvpCount': eventRsvpCount,
+      'isUserRsvped': isUserRsvped,
     };
   }
 
@@ -175,6 +215,14 @@ class Post {
       serviceTitle: json['serviceTitle'] as String?,
       serviceCategoryText: json['serviceCategoryText'] as String?,
       servicePrice: json['servicePrice'] as String?,
+      isRecommended: json['isRecommended'] as bool? ?? false,
+      isSold: json['isSold'] as bool? ?? false,
+      itemCondition: json['itemCondition'] as String?,
+      roomFurnishing: json['roomFurnishing'] as String?,
+      roomTenantPreference: json['roomTenantPreference'] as String?,
+      jobWorkMode: json['jobWorkMode'] as String?,
+      eventRsvpCount: json['eventRsvpCount'] as int? ?? 0,
+      isUserRsvped: json['isUserRsvped'] as bool? ?? false,
     );
   }
 
@@ -225,6 +273,8 @@ class Post {
       cityId: json['cityId'] as String?,
       areaId: json['areaId'] as String?,
       areaName: json['areaName'] as String?,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
       roomTitle: json['roomTitle'] as String?,
       roomArea: json['roomArea'] as String?,
       roomRent: json['roomRent'] as String?,
@@ -246,6 +296,14 @@ class Post {
       serviceTitle: json['serviceTitle'] as String?,
       serviceCategoryText: json['serviceCategoryText'] as String?,
       servicePrice: json['servicePrice'] as String?,
+      isRecommended: json['isRecommended'] as bool? ?? false,
+      isSold: json['isSold'] as bool? ?? false,
+      itemCondition: json['itemCondition'] as String?,
+      roomFurnishing: json['roomFurnishing'] as String?,
+      roomTenantPreference: json['roomTenantPreference'] as String?,
+      jobWorkMode: json['jobWorkMode'] as String?,
+      eventRsvpCount: json['eventRsvpCount'] as int? ?? 0,
+      isUserRsvped: json['isUserRsvped'] as bool? ?? false,
     );
   }
 
@@ -288,6 +346,14 @@ class Post {
     String? serviceTitle,
     String? serviceCategoryText,
     String? servicePrice,
+    bool? isRecommended,
+    bool? isSold,
+    String? itemCondition,
+    String? roomFurnishing,
+    String? roomTenantPreference,
+    String? jobWorkMode,
+    int? eventRsvpCount,
+    bool? isUserRsvped,
   }) {
     return Post(
       id: id ?? this.id,
@@ -328,6 +394,14 @@ class Post {
       serviceTitle: serviceTitle ?? this.serviceTitle,
       serviceCategoryText: serviceCategoryText ?? this.serviceCategoryText,
       servicePrice: servicePrice ?? this.servicePrice,
+      isRecommended: isRecommended ?? this.isRecommended,
+      isSold: isSold ?? this.isSold,
+      itemCondition: itemCondition ?? this.itemCondition,
+      roomFurnishing: roomFurnishing ?? this.roomFurnishing,
+      roomTenantPreference: roomTenantPreference ?? this.roomTenantPreference,
+      jobWorkMode: jobWorkMode ?? this.jobWorkMode,
+      eventRsvpCount: eventRsvpCount ?? this.eventRsvpCount,
+      isUserRsvped: isUserRsvped ?? this.isUserRsvped,
     );
   }
 }

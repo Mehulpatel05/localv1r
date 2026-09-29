@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 
 /// Pure logic helpers for mixed-selection rules and limit calculations
@@ -187,24 +186,30 @@ class ChatSelectionLogic {
   }
 }
 
-/// Service handling persistent D1 SQL single source of truth + SharedPreferences local cache
+/// Service handling persistent Cloudflare D1 SQL single source of truth + in-memory cache
 class ChatPreferencesService {
   static final ChatPreferencesService _instance = ChatPreferencesService._internal();
   factory ChatPreferencesService() => _instance;
   static ChatPreferencesService get instance => _instance;
   ChatPreferencesService._internal();
 
+  final Map<String, Map<String, dynamic>> _inMemoryCache = {};
+
   /// Loads preferences with Cloudflare D1 REST single source of truth (Server wins).
   Future<Map<String, dynamic>> loadPreferences(String userHandle) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return _emptyPreferences();
 
-    Map<String, dynamic> localData = await _loadFromCache(clean);
+    Map<String, dynamic> localData = _inMemoryCache[clean] ?? _emptyPreferences();
 
     try {
+      final token = await AuthService.instance.getAccessToken();
       final res = await http.get(
         Uri.parse('${AuthService.baseUrl}/preferences/$clean'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
       ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
@@ -221,7 +226,7 @@ class ChatPreferencesService {
         final hasExpired = activeMutes.length != resolved['mutedChatExpiries'].length;
         resolved['mutedChatExpiries'] = activeMutes;
 
-        await _saveToCache(clean, resolved);
+        _inMemoryCache[clean] = resolved;
 
         if (hasExpired) {
           unawaited(savePreferences(clean, resolved));
@@ -238,16 +243,17 @@ class ChatPreferencesService {
     return localData;
   }
 
-  /// Writes preferences to D1 REST API (source of truth) and updates local cache.
+  /// Writes preferences to D1 REST API (source of truth) and updates in-memory cache.
   Future<bool> savePreferences(String userHandle, Map<String, dynamic> data) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return false;
 
-    // 1. Optimistic write to local cache (guaranteed offline resilience)
-    await _saveToCache(clean, data);
+    // 1. Optimistic write to in-memory cache
+    _inMemoryCache[clean] = data;
 
     // 2. Write to Cloudflare D1 via backend
     try {
+      final token = await AuthService.instance.getAccessToken();
       final payload = {
         'handle': clean,
         'preferences': {
@@ -263,17 +269,103 @@ class ChatPreferencesService {
         },
       };
 
-      await http.post(
+      final res = await http.post(
         Uri.parse('${AuthService.baseUrl}/preferences'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
 
-      return true;
+      return res.statusCode == 200;
     } catch (e) {
-      debugPrint('D1 savePreferences note (saved to local cache): $e');
-      return true;
+      debugPrint('D1 savePreferences error: $e');
+      return false;
     }
+  }
+
+  /// Atomically pins or unpins chats on the server with server-calculated timestamps & lock
+  Future<Map<String, dynamic>?> pinChats(
+    String userHandle,
+    List<String> chatIds, {
+    required bool pin,
+  }) async {
+    final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return null;
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final res = await http.post(
+        Uri.parse('${AuthService.baseUrl}/preferences/pin'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'handle': clean,
+          'chat_ids': chatIds,
+          'action': pin ? 'pin' : 'unpin',
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final current = _inMemoryCache[clean] ?? _emptyPreferences();
+        current['pinnedChatIds'] = Set<String>.from((body['pinnedChatIds'] as List? ?? []).map((e) => e.toString()));
+        current['pinnedTimestamps'] = Map<String, int>.from(
+          (body['pinnedTimestamps'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num).toInt())),
+        );
+        _inMemoryCache[clean] = current;
+        return body;
+      }
+    } catch (e) {
+      debugPrint('[ChatPreferencesService] pinChats error: $e');
+    }
+    return null;
+  }
+
+  /// Atomically mutes or unmutes chats on the server with server-calculated expiry & lock
+  Future<Map<String, dynamic>?> muteChats(
+    String userHandle,
+    List<String> chatIds, {
+    required bool mute,
+    Duration? duration,
+    String? durationEnum,
+  }) async {
+    final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return null;
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final res = await http.post(
+        Uri.parse('${AuthService.baseUrl}/preferences/mute'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'handle': clean,
+          'chat_ids': chatIds,
+          'action': mute ? 'mute' : 'unmute',
+          'duration_enum': durationEnum,
+          'duration_seconds': duration != null ? duration.inSeconds : -1,
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final current = _inMemoryCache[clean] ?? _emptyPreferences();
+        current['mutedChatExpiries'] = Map<String, int?>.from(
+          (body['mutedChatExpiries'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num?)?.toInt())),
+        );
+        _inMemoryCache[clean] = current;
+        return body;
+      }
+    } catch (e) {
+      debugPrint('[ChatPreferencesService] muteChats error: $e');
+    }
+    return null;
   }
 
   /// Checks if a chat is currently muted for a specific user.
@@ -338,33 +430,8 @@ class ChatPreferencesService {
     };
   }
 
-  Future<Map<String, dynamic>> _loadFromCache(String cleanHandle) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('chat_prefs_v2_$cleanHandle');
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw) as Map<String, dynamic>;
-        return _parsePreferencesData(decoded);
-      }
-    } catch (_) {}
-    return _emptyPreferences();
-  }
-
-  Future<void> _saveToCache(String cleanHandle, Map<String, dynamic> data) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheMap = {
-        'pinnedChatIds': (data['pinnedChatIds'] as Set<String>?)?.toList() ?? (data['pinnedChatIds'] as List<dynamic>?) ?? [],
-        'pinnedTimestamps': data['pinnedTimestamps'] ?? {},
-        'mutedChatExpiries': data['mutedChatExpiries'] ?? {},
-        'archivedChatIds': (data['archivedChatIds'] as Set<String>?)?.toList() ?? (data['archivedChatIds'] as List<dynamic>?) ?? [],
-        'archivedTimestamps': data['archivedTimestamps'] ?? {},
-        'keepChatsArchived': data['keepChatsArchived'] ?? false,
-        'favouriteChatIds': (data['favouriteChatIds'] as Set<String>?)?.toList() ?? (data['favouriteChatIds'] as List<dynamic>?) ?? [],
-        'lockedChatIds': (data['lockedChatIds'] as Set<String>?)?.toList() ?? (data['lockedChatIds'] as List<dynamic>?) ?? [],
-        'deletedChatIds': (data['deletedChatIds'] as Set<String>?)?.toList() ?? (data['deletedChatIds'] as List<dynamic>?) ?? [],
-      };
-      await prefs.setString('chat_prefs_v2_$cleanHandle', jsonEncode(cacheMap));
-    } catch (_) {}
+  /// Clear in-memory preferences cache on logout
+  void clearCache() {
+    _inMemoryCache.clear();
   }
 }

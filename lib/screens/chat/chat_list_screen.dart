@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/chat_conversation_model.dart';
 import '../../models/friendship_model.dart';
@@ -39,8 +39,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   bool get _isSelectionMode => _selectedChatIds.isNotEmpty;
 
-  // Animation tracking sets (for smooth zero-lag card exit animations)
+  // Animation tracking sets & state
   final Set<String> _animatingDismissIds = {};
+  final Map<String, String> _dismissDirections = {}; // 'left' (delete) or 'right' (archive)
+  int _pinBounceTrigger = 0; // pin icon drop bounce
+  bool _isNewChatSheetOpen = false; // friend picker sheet open
+  bool _isFabPressed = false; // FAB 0.9 press scale
+  Map<String, int> _staggerDelays = {}; // Select-all 30ms staggered delays
+  String? _scalingTileId; // Tile currently scaling to 0.97 on long-press
+  double _archivedTransitionDirection = 1.0; // 1.0 for forward (slide from right), -1.0 for back (slide to right)
+  bool _lastTransitionWasArchived = false;
 
   // Single Source of Truth / Cache Sets (Pins, Timestamps, Mutes, Archives, Favourites, Locked, Deleted)
   Set<String> _pinnedChatIds = {};
@@ -54,12 +62,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Set<String> _locallyDeletedChatIds = {};
   final Set<String> _locallyReadChatIds = {};
   final Set<String> _locallyUnreadChatIds = {};
+  late final Stream<List<ChatConversation>> _chatsStream;
 
   String get _cleanMe => widget.currentUserHandle.replaceAll('@', '').trim();
 
   @override
   void initState() {
     super.initState();
+    _chatsStream = DirectChatService.instance.pollChatsStream(widget.currentUserHandle);
     _friendRepo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
     _searchController.addListener(_onSearchChanged);
     _loadPreferences();
@@ -179,9 +189,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return ChatSelectionLogic.isChatMuted(_mutedChatExpiries, chatId);
   }
 
+  // ⚡ Fix 8: 5-sec typing indicator stuck-true auto-timeout tracker
+  final Map<String, int> _partnerTypingTimestamps = {};
+
+  bool _isPartnerTypingFresh(ChatConversation conv) {
+    final isTyping = conv.isPartnerTyping(widget.currentUserHandle);
+    if (!isTyping) {
+      _partnerTypingTimestamps.remove(conv.id);
+      return false;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastSeen = _partnerTypingTimestamps[conv.id];
+    if (lastSeen == null) {
+      _partnerTypingTimestamps[conv.id] = now;
+      return true;
+    }
+    if (now - lastSeen > 5000) {
+      return false;
+    }
+    return true;
+  }
+
   void _onSearchChanged() {
     _searchDebounceTimer?.cancel();
-    _searchDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+    // ⚡ Fix 1: 300ms search debounce
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() {
           _searchQuery = _searchController.text.trim().toLowerCase();
@@ -198,22 +230,29 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Stream<List<ChatConversation>> _getChatsStream() {
-    return DirectChatService.instance.pollChatsStream(widget.currentUserHandle);
+    return _chatsStream;
   }
 
   String _formatTimestamp(DateTime? dateTime) {
     if (dateTime == null) return '';
+    final localDt = dateTime.isUtc ? dateTime.toLocal() : dateTime;
     final now = DateTime.now();
-    final difference = now.difference(dateTime);
 
-    if (difference.inDays == 0 && now.day == dateTime.day) {
-      return DateFormat('hh:mm a').format(dateTime);
-    } else if (difference.inDays == 1 || (difference.inDays == 0 && now.day != dateTime.day)) {
+    final isSameDay = now.year == localDt.year && now.month == localDt.month && now.day == localDt.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = yesterday.year == localDt.year && yesterday.month == localDt.month && yesterday.day == localDt.day;
+
+    if (isSameDay) {
+      return DateFormat('hh:mm a').format(localDt);
+    } else if (isYesterday) {
       return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return DateFormat('E').format(dateTime); // e.g. Mon, Tue
     } else {
-      return DateFormat('d MMM').format(dateTime); // e.g. 14 Sep
+      final difference = now.difference(localDt);
+      if (difference.inDays < 7) {
+        return DateFormat('E').format(localDt); // e.g. Mon, Tue
+      } else {
+        return DateFormat('d MMM').format(localDt); // e.g. 14 Sep
+      }
     }
   }
 
@@ -279,7 +318,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         pinnedIds: _pinnedChatIds,
       );
 
-  void _handlePinSelected() {
+  void _handlePinSelected() async {
     HapticFeedback.mediumImpact();
     final selectedCount = _selectedChatIds.length;
     final rollback = _clonePreferencesMap();
@@ -294,15 +333,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
       });
       _clearSelection();
-      _syncPreferencesToFirestore(rollbackSnapshot: rollback);
-
       _showUndoSnackBar(
         selectedCount == 1 ? 'Chat unpinned' : '$selectedCount chats unpinned',
         rollbackSnapshot: rollback,
       );
+
+      // ⚡ Fix 2 & 4: Server timestamp and transaction lock based pin/unpin
+      final res = await ChatPreferencesService.instance.pinChats(_cleanMe, selectedIds.toList(), pin: false);
+      if (res != null && mounted) {
+        setState(() {
+          _pinnedChatIds = Set<String>.from((res['pinnedChatIds'] as List? ?? []).map((e) => e.toString()));
+          _pinnedTimestamps = Map<String, int>.from(
+            (res['pinnedTimestamps'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num).toInt())),
+          );
+        });
+      }
     } else {
       // At least one selected chat is NOT pinned -> Action: PIN ALL
-      // Pin limit formula: count ONLY the chats in selection that are NOT already pinned
       final alreadyPinnedInSelection = selectedIds.where(_pinnedChatIds.contains).length;
       final newChatsToBePinned = selectedIds.where((id) => !_pinnedChatIds.contains(id)).length;
 
@@ -333,20 +380,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
         return;
       }
 
-      final now = DateTime.now().millisecondsSinceEpoch;
+      // Optimistic client update (<10ms UI)
+      final optimisticNow = DateTime.now().millisecondsSinceEpoch;
       setState(() {
         for (final id in selectedIds) {
           _pinnedChatIds.add(id);
-          _pinnedTimestamps[id] = now;
+          _pinnedTimestamps[id] = optimisticNow;
         }
       });
       _clearSelection();
-      _syncPreferencesToFirestore(rollbackSnapshot: rollback);
-
       _showUndoSnackBar(
         selectedCount == 1 ? 'Chat pinned' : '$selectedCount chats pinned',
         rollbackSnapshot: rollback,
       );
+
+      // ⚡ Fix 2 & 4: Server timestamp and transaction lock based pin
+      final res = await ChatPreferencesService.instance.pinChats(_cleanMe, selectedIds.toList(), pin: true);
+      if (res != null && mounted) {
+        setState(() {
+          _pinnedChatIds = Set<String>.from((res['pinnedChatIds'] as List? ?? []).map((e) => e.toString()));
+          _pinnedTimestamps = Map<String, int>.from(
+            (res['pinnedTimestamps'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num).toInt())),
+          );
+        });
+      }
     }
   }
 
@@ -355,7 +412,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         mutedExpiries: _mutedChatExpiries,
       );
 
-  void _handleMuteSelected() {
+  void _handleMuteSelected() async {
     HapticFeedback.selectionClick();
     final selectedCount = _selectedChatIds.length;
     final selectedIds = Set<String>.from(_selectedChatIds);
@@ -369,12 +426,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
       });
       _clearSelection();
-      _syncPreferencesToFirestore(rollbackSnapshot: rollback);
-
       _showUndoSnackBar(
         selectedCount == 1 ? 'Chat unmuted' : '$selectedCount chats unmuted',
         rollbackSnapshot: rollback,
       );
+
+      // ⚡ Fix 2 & 4: Server timestamp and transaction lock based unmute
+      final res = await ChatPreferencesService.instance.muteChats(_cleanMe, selectedIds.toList(), mute: false);
+      if (res != null && mounted) {
+        setState(() {
+          _mutedChatExpiries = Map<String, int?>.from(
+            (res['mutedChatExpiries'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num?)?.toInt())),
+          );
+        });
+      }
     } else {
       // At least one selected chat is NOT muted -> Action: MUTE ALL
       _showMuteDurationPickerSheet(selectedIds, selectedCount, rollback);
@@ -386,6 +451,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (ctx) {
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -431,6 +500,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 _buildMuteOptionTile(
                   title: '8 hours',
                   duration: const Duration(hours: 8),
+                  durationEnum: '8h',
                   selectedIds: selectedIds,
                   selectedCount: selectedCount,
                   rollback: rollback,
@@ -439,6 +509,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 _buildMuteOptionTile(
                   title: '1 week',
                   duration: const Duration(days: 7),
+                  durationEnum: '1w',
                   selectedIds: selectedIds,
                   selectedCount: selectedCount,
                   rollback: rollback,
@@ -447,6 +518,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 _buildMuteOptionTile(
                   title: 'Always',
                   duration: null,
+                  durationEnum: 'always',
                   selectedIds: selectedIds,
                   selectedCount: selectedCount,
                   rollback: rollback,
@@ -463,6 +535,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _buildMuteOptionTile({
     required String title,
     required Duration? duration,
+    required String durationEnum,
     required Set<String> selectedIds,
     required int selectedCount,
     required Map<String, dynamic> rollback,
@@ -470,25 +543,39 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
-      onTap: () {
+      onTap: () async {
         HapticFeedback.selectionClick();
         Navigator.pop(ctx);
-        final expiry = duration == null
+        final optimisticExpiry = duration == null
             ? -1
             : DateTime.now().toUtc().add(duration).millisecondsSinceEpoch;
 
         setState(() {
           for (final id in selectedIds) {
-            _mutedChatExpiries[id] = expiry;
+            _mutedChatExpiries[id] = optimisticExpiry;
           }
         });
         _clearSelection();
-        _syncPreferencesToFirestore(rollbackSnapshot: rollback);
-
         _showUndoSnackBar(
           selectedCount == 1 ? 'Chat muted' : '$selectedCount chats muted',
           rollbackSnapshot: rollback,
         );
+
+        // ⚡ Fix 2 & 4: Server timestamp and transaction lock based mute using SQL datetime()
+        final res = await ChatPreferencesService.instance.muteChats(
+          _cleanMe,
+          selectedIds.toList(),
+          mute: true,
+          duration: duration,
+          durationEnum: durationEnum,
+        );
+        if (res != null && mounted) {
+          setState(() {
+            _mutedChatExpiries = Map<String, int?>.from(
+              (res['mutedChatExpiries'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, (v as num?)?.toInt())),
+            );
+          });
+        }
       },
       borderRadius: BorderRadius.circular(12),
       child: Padding(
@@ -526,8 +613,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final rollback = _clonePreferencesMap();
     _clearSelection();
 
-    // Trigger smooth 250ms simultaneous fade & height collapse
+    // ⚡ Image Spec: Tile slides right off-screen (250ms ease-in)
     setState(() {
+      for (final id in selectedIds) {
+        _dismissDirections[id] = 'right';
+      }
       _animatingDismissIds.addAll(selectedIds);
     });
 
@@ -543,6 +633,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         _archivedChatIds.removeAll(selectedIds);
         for (final id in selectedIds) {
           _archivedTimestamps.remove(id);
+          _dismissDirections.remove(id);
         }
         _animatingDismissIds.removeAll(selectedIds);
       });
@@ -558,6 +649,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         _archivedChatIds.addAll(selectedIds);
         for (final id in selectedIds) {
           _archivedTimestamps[id] = now;
+          _dismissDirections.remove(id);
         }
         _animatingDismissIds.removeAll(selectedIds);
       });
@@ -574,10 +666,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final selectedCount = _selectedChatIds.length;
     final selectedIds = Set<String>.from(_selectedChatIds);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final rollback = _clonePreferencesMap();
 
-    showDialog(
+    // ⚡ Image Spec: Dialog scale-in (150ms)
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      barrierDismissible: true,
+      barrierLabel: 'Delete Dialog',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 150),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (ctx, anim, secondaryAnim) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
@@ -618,8 +726,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
               Navigator.pop(ctx);
               _clearSelection();
 
-              // Trigger smooth 250ms fade + collapse animation
+              // ⚡ Image Spec: Tile slide-out-left + fade on confirm (250ms)
               setState(() {
+                for (final id in selectedIds) {
+                  _dismissDirections[id] = 'left';
+                }
                 _animatingDismissIds.addAll(selectedIds);
               });
 
@@ -631,24 +742,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   _pinnedChatIds.removeAll(selectedIds);
                   _archivedChatIds.removeAll(selectedIds);
                   _animatingDismissIds.removeAll(selectedIds);
+                  for (final id in selectedIds) {
+                    _dismissDirections.remove(id);
+                  }
                 });
-                _syncPreferencesToFirestore();
+                _syncPreferencesToFirestore(rollbackSnapshot: rollback);
 
-                ScaffoldMessenger.of(context)
-                  ..clearSnackBars()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        selectedCount == 1 ? 'Chat deleted' : '$selectedCount chats deleted',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                      backgroundColor: const Color(0xFF1E293B),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      duration: const Duration(seconds: 3),
-                      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
-                    ),
-                  );
+                // ⚡ Image Spec: Undo SnackBar slides up from bottom (200ms)
+                _showUndoSnackBar(
+                  selectedCount == 1 ? 'Chat deleted' : '$selectedCount chats deleted',
+                  rollbackSnapshot: rollback,
+                );
               }
             },
             child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -715,14 +819,56 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _clearSelection();
   }
 
-  void _handleSelectAll(List<ChatConversation> visibleConversations) {
+  void _handleSelectAll(List<ChatConversation> visibleConversations) async {
     HapticFeedback.mediumImpact();
+    // 1. Assign 30ms staggered delay per visible item for animation
+    final delays = <String, int>{};
+    for (int i = 0; i < visibleConversations.length; i++) {
+      delays[visibleConversations[i].id] = i * 30;
+    }
+
     setState(() {
+      _staggerDelays = delays;
       for (final conv in visibleConversations) {
         _selectedChatIds.add(conv.id);
         _selectedConversations[conv.id] = conv;
       }
     });
+
+    // Reset stagger map after animation finishes
+    final totalStaggerMs = (visibleConversations.length * 30) + 250;
+    Future.delayed(Duration(milliseconds: totalStaggerMs), () {
+      if (mounted) {
+        setState(() {
+          _staggerDelays.clear();
+        });
+      }
+    });
+
+    // 2. ⚡ Fix 3: Backend query-bound select-all (fetches all chat IDs matching active query/filter from server)
+    try {
+      final allIds = await DirectChatService.instance.getChatIds(
+        userHandle: _cleanMe,
+        query: _searchQuery.isNotEmpty ? _searchQuery : null,
+      );
+      if (allIds.isNotEmpty && mounted) {
+        final priorCount = _selectedChatIds.length;
+        setState(() {
+          _selectedChatIds.addAll(allIds);
+        });
+        if (_selectedChatIds.length > priorCount && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Selected all ${_selectedChatIds.length} conversations'),
+              duration: const Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatListScreen] Query-bound select all error: $e');
+    }
   }
 
   bool get _shouldLockMixed => ChatSelectionLogic.shouldLock(
@@ -990,87 +1136,115 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   void _showHelpDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
+    showGeneralDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF141414) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      barrierDismissible: true,
+      barrierLabel: 'Help Dialog',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 150),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (ctx, anim, secondaryAnim) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded, color: Color(0xFF3B82F6), size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Neighborhood Messaging',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
         ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF262626) : const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Icon(Icons.lock_outline_rounded, color: Color(0xFF3B82F6), size: 22),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Neighborhood Messaging',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '• Messages are strictly private between you and your neighbor.\n• You can message any friend or neighbor directly.\n• Be respectful and follow community safety guidelines.\n• You can block or report any user at any time from their profile.\n• Long press any chat to select, pin, mute, archive or batch manage.',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF475569),
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.white : Colors.black,
-                    foregroundColor: isDark ? Colors.black : Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+        content: Text(
+          '• Messages are strictly private between you and your neighbor.\n• You can message any friend or neighbor directly.\n• Be respectful and follow community safety guidelines.\n• You can block or report any user at any time from their profile.\n• Long press any chat to select, pin, mute, archive or batch manage.',
+          style: TextStyle(
+            color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF475569),
+            fontSize: 14,
+            height: 1.5,
           ),
         ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.white : Colors.black,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }
 
-  void _showNewChatPicker() {
-    showModalBottomSheet(
+  Future<void> _showNewChatPicker() async {
+    setState(() => _isNewChatSheetOpen = true);
+    final selectedHandle = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 250),
+        reverseDuration: Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
       builder: (ctx) => _NewChatFriendPickerSheet(
         currentUserHandle: widget.currentUserHandle,
         friendRepo: _friendRepo,
       ),
     );
+
+    if (mounted) {
+      setState(() => _isNewChatSheetOpen = false);
+    }
+
+    if (selectedHandle != null && mounted) {
+      // ⚡ Spec Section 2: Friend tile tap: sheet slides down (200ms) -> then
+      // PersonalChatScreen pushes with fade-through transition (not hero, since no shared avatar in this flow) (250ms).
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 250),
+          reverseTransitionDuration: const Duration(milliseconds: 250),
+          pageBuilder: (context, animation, secondaryAnimation) => HeroMode(
+            enabled: false,
+            child: PersonalChatScreen(
+              currentUserHandle: widget.currentUserHandle,
+              partnerHandle: selectedHandle,
+            ),
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+            final scale = Tween<double>(begin: 0.96, end: 1.0).animate(curved);
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: scale,
+                child: child,
+              ),
+            );
+          },
+        ),
+      );
+    }
   }
 
   // ── Build Method ──
@@ -1086,11 +1260,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
         if (_isSelectionMode) {
           _clearSelection();
         } else if (_showArchivedView) {
-          setState(() => _showArchivedView = false);
+          setState(() {
+            _archivedTransitionDirection = -1.0;
+            _lastTransitionWasArchived = true;
+            _showArchivedView = false;
+            _clearSelection();
+          });
         }
       },
       child: Scaffold(
-        backgroundColor: isDark ? Colors.black : Colors.white,
+        backgroundColor: Colors.black,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: AnimatedSwitcher(
@@ -1107,14 +1286,39 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
         ),
         floatingActionButton: !_isSelectionMode && !_showArchivedView
-            ? PressableScale(
-                onTap: _showNewChatPicker,
+            ? AnimatedScale(
+                scale: _isFabPressed ? 0.90 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
                 child: FloatingActionButton(
-                  backgroundColor: isDark ? Colors.white : Colors.black,
+                  backgroundColor: const Color(0xFF072E33),
                   elevation: 3,
                   shape: const CircleBorder(),
-                  onPressed: _showNewChatPicker,
-                  child: Icon(Icons.edit_rounded, color: isDark ? Colors.black : Colors.white, size: 22),
+                  onPressed: () {
+                    setState(() => _isFabPressed = true);
+                    Future.delayed(const Duration(milliseconds: 150), () {
+                      if (mounted) setState(() => _isFabPressed = false);
+                    });
+                    if (_isNewChatSheetOpen) {
+                      Navigator.pop(context);
+                    } else {
+                      _showNewChatPicker();
+                    }
+                  },
+                  child: AnimatedRotation(
+                    turns: _isNewChatSheetOpen ? 0.25 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        _isNewChatSheetOpen ? Icons.close_rounded : Icons.edit_rounded,
+                        key: ValueKey('fab_icon_$_isNewChatSheetOpen'),
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
                 ),
               )
             : null,
@@ -1126,30 +1330,43 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
+                    color: const Color(0xFF072E33),
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFF0E4B52), width: 1.0),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 14.5),
+                    style: const TextStyle(color: Colors.white, fontSize: 14.5),
                     decoration: InputDecoration(
                       hintText: 'Search conversations',
-                      hintStyle: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8),
+                      hintStyle: const TextStyle(
+                        color: Color(0xFF90B4B6),
                         fontSize: 14.5,
                         fontWeight: FontWeight.w400,
                       ),
-                      prefixIcon: Icon(
+                      prefixIcon: const Icon(
                         Icons.search_rounded,
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8),
+                        color: Color(0xFF90B4B6),
                         size: 20,
                       ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.close_rounded, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8), size: 18),
-                              onPressed: () => _searchController.clear(),
-                            )
-                          : null,
+                      suffixIcon: AnimatedOpacity(
+                        opacity: _searchController.text.isNotEmpty ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 100),
+                        child: IgnorePointer(
+                          ignoring: _searchController.text.isEmpty,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF90B4B6),
+                              size: 18,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
+                        ),
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
@@ -1176,121 +1393,147 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
             // Messages Stream List with cacheExtent tuning
             Expanded(
-              child: StreamBuilder<List<ChatConversation>>(
-                stream: _getChatsStream(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                    return _buildSkeletonLoading();
-                  }
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) {
+                  final isArchivedNav = _lastTransitionWasArchived;
+                  final slideOffset = isArchivedNav
+                      ? Offset(_archivedTransitionDirection * 0.3, 0.0)
+                      : const Offset(0.0, 0.03);
 
-                  if (snapshot.hasError) {
-                    debugPrint('Chat stream error: ${snapshot.error}');
-                    return _buildErrorState(snapshot.error.toString());
-                  }
-
-                  final rawDocs = snapshot.data ?? [];
-                  final conversations = <ChatConversation>[];
-                  for (final conv in rawDocs) {
-                    if (!_locallyDeletedChatIds.contains(conv.id)) {
-                      conversations.add(conv);
-                    }
-                  }
-
-                  // 1. Sort conversations (Pinned first, sorted by pinnedTimestamp descending, then updatedAt descending)
-                  conversations.sort((a, b) {
-                    final aPinned = _pinnedChatIds.contains(a.id);
-                    final bPinned = _pinnedChatIds.contains(b.id);
-                    if (aPinned && !bPinned) return -1;
-                    if (!aPinned && bPinned) return 1;
-                    if (aPinned && bPinned) {
-                      final aPinTime = _pinnedTimestamps[a.id] ?? 0;
-                      final bPinTime = _pinnedTimestamps[b.id] ?? 0;
-                      if (aPinTime != bPinTime) return bPinTime.compareTo(aPinTime);
-                    }
-
-                    final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-                    final bTime = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-                    return bTime.compareTo(aTime);
-                  });
-
-                  // 2. Filter by Archived state
-                  var displayList = conversations.where((conv) {
-                    final isArchived = _archivedChatIds.contains(conv.id);
-                    return _showArchivedView ? isArchived : !isArchived;
-                  }).toList();
-
-                  // 3. Filter by Category tab
-                  if (!_showArchivedView && _selectedFilter != ChatFilter.all) {
-                    displayList = displayList.where((conv) {
-                      if (_selectedFilter == ChatFilter.unread) {
-                        if (_locallyUnreadChatIds.contains(conv.id)) return true;
-                        if (_locallyReadChatIds.contains(conv.id)) return false;
-                        return conv.getUnreadCount(widget.currentUserHandle) > 0;
-                      } else if (_selectedFilter == ChatFilter.favourites) {
-                        return _favouriteChatIds.contains(conv.id);
-                      }
-                      return true;
-                    }).toList();
-                  }
-
-                  // 4. Filter by Search Query
-                  if (_searchQuery.isNotEmpty) {
-                    displayList = displayList.where((conv) {
-                      final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
-                      final snippet = conv.lastMessage.toLowerCase();
-                      return partner.contains(_searchQuery) || snippet.contains(_searchQuery);
-                    }).toList();
-                  }
-
-                  _latestVisibleConversations = displayList;
-
-                  _checkAutoUnarchive(conversations);
-
-                  if (conversations.isEmpty) {
-                    return _buildEmptyState();
-                  }
-
-                  if (displayList.isEmpty && _searchQuery.isNotEmpty) {
-                    return _buildSearchEmptyState();
-                  }
-
-                  if (displayList.isEmpty && _showArchivedView) {
-                    return _buildArchivedEmptyState(isDark);
-                  }
-
-                  final showArchivedRow = !_showArchivedView && _archivedChatIds.isNotEmpty && _searchQuery.isEmpty;
-
-                  if (displayList.isEmpty && !showArchivedRow) {
-                    return _buildEmptyFilterState(isDark);
-                  }
-
-                  // Count how many pinned chats are in displayList to place Archived row directly below them
-                  final pinnedCount = displayList.where((c) => _pinnedChatIds.contains(c.id)).length;
-                  final archivedRowIndex = pinnedCount; // below pinned chats, above regular chats
-                  final totalItemCount = displayList.length + (showArchivedRow ? 1 : 0);
-
-                  return ListView.separated(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: totalItemCount,
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF1F5F9),
-                      indent: 80,
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: slideOffset,
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                    child: FadeTransition(
+                      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                      child: child,
                     ),
-                    itemBuilder: (context, index) {
-                      // Archived Header row below pinned chats and above regular chats
-                      if (showArchivedRow && index == archivedRowIndex) {
-                        return _buildArchivedRow(isDark);
-                      }
-
-                      final actualIndex = (showArchivedRow && index > archivedRowIndex) ? index - 1 : index;
-                      final conv = displayList[actualIndex];
-                      return _buildConversationTile(conv);
-                    },
                   );
                 },
+                child: KeyedSubtree(
+                  key: ValueKey('list_filter_${_selectedFilter}_archived_${_showArchivedView}'),
+                  child: StreamBuilder<List<ChatConversation>>(
+                    stream: _getChatsStream(),
+                    initialData: DirectChatService.instance.lastKnownChats,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                        return _buildSkeletonLoading();
+                      }
+
+                      if (snapshot.hasError) {
+                        debugPrint('Chat stream error: ${snapshot.error}');
+                        return _buildErrorState(snapshot.error.toString());
+                      }
+
+                      final rawDocs = snapshot.data ?? [];
+                      final conversations = <ChatConversation>[];
+                      for (final conv in rawDocs) {
+                        if (!_locallyDeletedChatIds.contains(conv.id)) {
+                          conversations.add(conv);
+                        }
+                      }
+
+                      // 1. Sort conversations (Pinned first, sorted by pinnedTimestamp descending, then updatedAt descending)
+                      conversations.sort((a, b) {
+                        final aPinned = _pinnedChatIds.contains(a.id);
+                        final bPinned = _pinnedChatIds.contains(b.id);
+                        if (aPinned && !bPinned) return -1;
+                        if (!aPinned && bPinned) return 1;
+                        if (aPinned && bPinned) {
+                          final aPinTime = _pinnedTimestamps[a.id] ?? 0;
+                          final bPinTime = _pinnedTimestamps[b.id] ?? 0;
+                          if (aPinTime != bPinTime) return bPinTime.compareTo(aPinTime);
+                        }
+
+                        final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                        final bTime = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                        return bTime.compareTo(aTime);
+                      });
+
+                      // 2. Filter by Archived state
+                      var displayList = conversations.where((conv) {
+                        final isArchived = _archivedChatIds.contains(conv.id);
+                        return _showArchivedView ? isArchived : !isArchived;
+                      }).toList();
+
+                      // 3. Filter by Category tab
+                      if (!_showArchivedView && _selectedFilter != ChatFilter.all) {
+                        displayList = displayList.where((conv) {
+                          if (_selectedFilter == ChatFilter.unread) {
+                            if (_locallyUnreadChatIds.contains(conv.id)) return true;
+                            if (_locallyReadChatIds.contains(conv.id)) return false;
+                            return conv.getUnreadCount(widget.currentUserHandle) > 0;
+                          } else if (_selectedFilter == ChatFilter.favourites) {
+                            return _favouriteChatIds.contains(conv.id);
+                          }
+                          return true;
+                        }).toList();
+                      }
+
+                      // 4. Filter by Search Query
+                      if (_searchQuery.isNotEmpty) {
+                        displayList = displayList.where((conv) {
+                          final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
+                          final snippet = conv.lastMessage.toLowerCase();
+                          return partner.contains(_searchQuery) || snippet.contains(_searchQuery);
+                        }).toList();
+                      }
+
+                      _latestVisibleConversations = displayList;
+
+                      _checkAutoUnarchive(conversations);
+
+                      if (conversations.isEmpty) {
+                        return _buildEmptyState();
+                      }
+
+                      if (displayList.isEmpty && _searchQuery.isNotEmpty) {
+                        return _buildSearchEmptyState();
+                      }
+
+                      if (displayList.isEmpty && _showArchivedView) {
+                        return _buildArchivedEmptyState(isDark);
+                      }
+
+                      final showArchivedRow = !_showArchivedView && _archivedChatIds.isNotEmpty && _searchQuery.isEmpty;
+
+                      if (displayList.isEmpty && !showArchivedRow) {
+                        return _buildEmptyFilterState(isDark);
+                      }
+
+                      // Count how many pinned chats are in displayList to place Archived row directly below them
+                      final pinnedCount = displayList.where((c) => _pinnedChatIds.contains(c.id)).length;
+                      final archivedRowIndex = pinnedCount; // below pinned chats, above regular chats
+                      final totalItemCount = displayList.length + (showArchivedRow ? 1 : 0);
+
+                      return ListView.separated(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: totalItemCount,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF1F5F9),
+                          indent: 80,
+                        ),
+                        itemBuilder: (context, index) {
+                          // Archived Header row below pinned chats and above regular chats
+                          if (showArchivedRow && index == archivedRowIndex) {
+                            return _buildArchivedRow(isDark);
+                          }
+
+                          final actualIndex = (showArchivedRow && index > archivedRowIndex) ? index - 1 : index;
+                          final conv = displayList[actualIndex];
+                          return _buildConversationTile(conv);
+                        },
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ],
@@ -1312,7 +1555,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ? IconButton(
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
-              onPressed: () => setState(() => _showArchivedView = false),
+              onPressed: () {
+                setState(() {
+                  _archivedTransitionDirection = -1.0;
+                  _lastTransitionWasArchived = true;
+                  _showArchivedView = false;
+                  _clearSelection();
+                });
+              },
             )
           : null,
       title: Text(
@@ -1368,7 +1618,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
       leading: IconButton(
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         tooltip: 'Close selection',
-        icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+        icon: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0.25, end: 0.0),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          builder: (context, turns, child) => RotationTransition(
+            turns: AlwaysStoppedAnimation(turns),
+            child: child,
+          ),
+          child: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+        ),
         onPressed: _clearSelection,
       ),
       titleSpacing: 0,
@@ -1391,12 +1650,28 @@ class _ChatListScreenState extends State<ChatListScreen> {
           tooltip: shouldPin
               ? (isSingle ? 'Pin chat' : 'Pin $selectedCount chats')
               : (isSingle ? 'Unpin chat' : 'Unpin $selectedCount chats'),
-          icon: Icon(
-            shouldPin ? Icons.push_pin_outlined : Icons.push_pin_rounded,
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
-            size: 22,
+          icon: TweenAnimationBuilder<double>(
+            key: ValueKey('pin_bounce_$_pinBounceTrigger'),
+            tween: Tween<double>(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.elasticOut,
+            builder: (context, val, child) {
+              final dropY = math.sin(val * math.pi) * 4.0;
+              return Transform.translate(
+                offset: Offset(0, dropY),
+                child: child,
+              );
+            },
+            child: Icon(
+              shouldPin ? Icons.push_pin_outlined : Icons.push_pin_rounded,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 22,
+            ),
           ),
-          onPressed: _handlePinSelected,
+          onPressed: () {
+            setState(() => _pinBounceTrigger++);
+            _handlePinSelected();
+          },
         ),
 
         // 2. Delete
@@ -1568,6 +1843,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
       itemBgColor = isDark ? Colors.black : Colors.white;
     }
 
+    final dismissDir = _dismissDirections[conv.id] ?? 'right';
+    final staggerDelay = _staggerDelays[conv.id] ?? 0;
+
     return RepaintBoundary(
       child: AnimatedSize(
         duration: const Duration(milliseconds: 250),
@@ -1577,16 +1855,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
           height: isDismissing ? 0 : null,
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(),
-          child: AnimatedOpacity(
+          child: AnimatedSlide(
             duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            opacity: isDismissing ? 0.0 : 1.0,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              color: itemBgColor,
+            curve: dismissDir == 'right' ? Curves.easeIn : Curves.easeOut,
+            offset: isDismissing
+                ? (dismissDir == 'right' ? const Offset(1.0, 0.0) : const Offset(-1.0, 0.0))
+                : Offset.zero,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              opacity: isDismissing ? 0.0 : 1.0,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                scale: _scalingTileId == conv.id ? 0.97 : 1.0,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOut,
+                  color: itemBgColor,
                   child: InkWell(
                     onLongPress: () {
+                      HapticFeedback.mediumImpact();
+                      setState(() => _scalingTileId = conv.id);
+                      Future.delayed(const Duration(milliseconds: 120), () {
+                        if (mounted) setState(() => _scalingTileId = null);
+                      });
                       _toggleSelection(conv);
                     },
                     onTap: () {
@@ -1595,10 +1888,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       } else {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => PersonalChatScreen(
+                          PageRouteBuilder(
+                            transitionDuration: const Duration(milliseconds: 300),
+                            pageBuilder: (_, animation, secondaryAnimation) => PersonalChatScreen(
                               currentUserHandle: widget.currentUserHandle,
                               partnerHandle: cleanHandle,
+                            ),
+                            transitionsBuilder: (_, animation, __, child) => FadeTransition(
+                              opacity: animation,
+                              child: child,
                             ),
                           ),
                         );
@@ -1609,7 +1907,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Avatar to Checkmark scale 1.0 -> 0.9 + checkmark fade+scale-in 220ms Curves.easeOutCubic
+                          // Shared-element Hero transition on avatar (300ms) + checkmark overlay
                           Stack(
                             alignment: Alignment.center,
                             children: [
@@ -1617,19 +1915,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 scale: isSelected ? 0.90 : 1.0,
                                 duration: const Duration(milliseconds: 220),
                                 curve: Curves.easeOutCubic,
-                                child: UserAvatar(
-                                  handle: cleanHandle,
-                                  size: 50,
-                                  fontSize: 18,
-                                  showOnlineBadge: !isSelected,
+                                child: Hero(
+                                  tag: 'chat_avatar_${cleanHandle.toLowerCase()}',
+                                  child: UserAvatar(
+                                    handle: cleanHandle,
+                                    size: 50,
+                                    fontSize: 18,
+                                    showOnlineBadge: !isSelected,
+                                  ),
                                 ),
                               ),
                               AnimatedScale(
                                 scale: isSelected ? 1.0 : 0.0,
-                                duration: const Duration(milliseconds: 220),
+                                duration: Duration(milliseconds: 150 + staggerDelay),
                                 curve: Curves.easeOutCubic,
                                 child: AnimatedOpacity(
-                                  duration: const Duration(milliseconds: 220),
+                                  duration: Duration(milliseconds: 150 + staggerDelay),
                                   curve: Curves.easeOutCubic,
                                   opacity: isSelected ? 1.0 : 0.0,
                                   child: Container(
@@ -1748,7 +2049,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: conv.isPartnerTyping(widget.currentUserHandle)
+                                      child: _isPartnerTypingFresh(conv)
                                           ? const Text(
                                               'typing...',
                                               maxLines: 1,
@@ -1812,6 +2113,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
               ),
             ),
+          ),
+        ),
       ),
     );
   }
@@ -1856,60 +2159,80 @@ class _ChatListScreenState extends State<ChatListScreen> {
   // ── Archived Row ──
 
   Widget _buildArchivedRow(bool isDark) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() {
-          _showArchivedView = true;
-          _clearSelection();
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.archive_rounded, size: 22, color: isDark ? Colors.white : const Color(0xFF0F172A)),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                'Archived',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  letterSpacing: -0.2,
+    return TweenAnimationBuilder<double>(
+      key: const ValueKey('archived_banner_entry'),
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      builder: (context, factor, child) => ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: factor,
+          child: child,
+        ),
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        alignment: Alignment.topCenter,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _archivedTransitionDirection = 1.0;
+              _lastTransitionWasArchived = true;
+              _showArchivedView = true;
+              _clearSelection();
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF1F5F9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.archive_rounded, size: 22, color: isDark ? Colors.white : const Color(0xFF0F172A)),
                 ),
-              ),
-            ),
-            TweenAnimationBuilder<double>(
-              key: ValueKey('archived_count_${_archivedChatIds.length}'),
-              tween: Tween<double>(begin: 1.08, end: 1.0),
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              builder: (context, scale, child) => Transform.scale(
-                scale: scale,
-                child: child,
-              ),
-              child: Text(
-                '${_archivedChatIds.length}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Archived',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                 ),
-              ),
+                TweenAnimationBuilder<double>(
+                  key: ValueKey('archived_count_${_archivedChatIds.length}'),
+                  tween: Tween<double>(begin: 1.08, end: 1.0),
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOut,
+                  builder: (context, scale, child) => Transform.scale(
+                    scale: scale,
+                    child: child,
+                  ),
+                  child: Text(
+                    '${_archivedChatIds.length}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 18, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, size: 18, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
-          ],
+          ),
         ),
       ),
     );
@@ -1924,7 +2247,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
       child: GestureDetector(
         onTap: () {
           HapticFeedback.selectionClick();
-          setState(() => _selectedFilter = filter);
+          setState(() {
+            _lastTransitionWasArchived = false;
+            _selectedFilter = filter;
+          });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -1943,8 +2269,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ),
           alignment: Alignment.center,
-          child: Text(
-            label,
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
             style: TextStyle(
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
@@ -1952,6 +2279,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ? (isDark ? Colors.black : Colors.white)
                   : (isDark ? Colors.white : const Color(0xFF0F172A)),
             ),
+            child: Text(label),
           ),
         ),
       ),
@@ -2401,16 +2729,8 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFFCBD5E1)),
                         onTap: () {
-                          Navigator.pop(context); // Close sheet
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PersonalChatScreen(
-                                currentUserHandle: widget.currentUserHandle,
-                                partnerHandle: handle,
-                              ),
-                            ),
-                          );
+                          HapticFeedback.selectionClick();
+                          Navigator.pop(context, handle);
                         },
                       );
                     },

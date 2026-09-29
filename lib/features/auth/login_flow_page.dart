@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/auth_repository.dart';
+import '../../core/splash_controller.dart';
 import '../../core/location/location_service.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
@@ -73,6 +74,15 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
           );
         }
       } else {
+        final loc = LocationService();
+        final repo = widget.postRepository ?? PostRepository(loc);
+        SplashController.instance.warmFetchOnLogin(
+          uid: userId,
+          handle: handle,
+          cityId: loc.cityId,
+          postRepo: repo,
+        );
+
         if (widget.onLoggedIn != null) {
           await widget.onLoggedIn!();
         }

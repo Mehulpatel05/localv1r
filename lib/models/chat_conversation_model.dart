@@ -7,6 +7,7 @@ class ChatConversation {
   final DateTime? updatedAt;
   final Map<String, int> unreadCounts;
   final Map<String, bool> typing;
+  final Map<String, int> typingTimestamps;
   final String? partnerAvatarUrl;
 
   const ChatConversation({
@@ -18,18 +19,27 @@ class ChatConversation {
     this.updatedAt,
     this.unreadCounts = const {},
     this.typing = const {},
+    this.typingTimestamps = const {},
     this.partnerAvatarUrl,
   });
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
     DateTime? updated;
-    final rawTime = json['updatedAt'] ?? json['lastMessageAt'] ?? json['created_at'];
+    final rawTime = json['updatedAt'] ?? json['lastMessageAt'] ?? json['last_message_at'] ?? json['created_at'];
     if (rawTime is int) {
       updated = rawTime > 1000000000000
-          ? DateTime.fromMillisecondsSinceEpoch(rawTime)
-          : DateTime.fromMillisecondsSinceEpoch(rawTime * 1000);
+          ? DateTime.fromMillisecondsSinceEpoch(rawTime, isUtc: true).toLocal()
+          : DateTime.fromMillisecondsSinceEpoch(rawTime * 1000, isUtc: true).toLocal();
     } else if (rawTime is String) {
-      updated = DateTime.tryParse(rawTime);
+      final numVal = int.tryParse(rawTime);
+      if (numVal != null) {
+        updated = numVal > 1000000000000
+            ? DateTime.fromMillisecondsSinceEpoch(numVal, isUtc: true).toLocal()
+            : DateTime.fromMillisecondsSinceEpoch(numVal * 1000, isUtc: true).toLocal();
+      } else {
+        final parsed = DateTime.tryParse(rawTime);
+        updated = parsed != null ? (parsed.isUtc ? parsed.toLocal() : parsed) : null;
+      }
     }
 
     final rawParticipants = json['participants'] as List<dynamic>? ?? [];
@@ -50,6 +60,9 @@ class ChatConversation {
     final rawTyping = json['typing'] as Map<String, dynamic>? ?? {};
     final typing = rawTyping.map((k, v) => MapEntry(k, v == true));
 
+    final rawTypingTs = json['typingTimestamps'] as Map<String, dynamic>? ?? {};
+    final typingTimestamps = rawTypingTs.map((k, v) => MapEntry(k, (v as num).toInt()));
+
     return ChatConversation(
       id: (json['id'] ?? '').toString(),
       participants: participants,
@@ -59,6 +72,7 @@ class ChatConversation {
       updatedAt: updated,
       unreadCounts: unreadCounts.isNotEmpty ? unreadCounts : {'unread': unreadCount},
       typing: typing,
+      typingTimestamps: typingTimestamps,
       partnerAvatarUrl: json['partnerAvatarUrl'] as String?,
     );
   }
@@ -73,13 +87,26 @@ class ChatConversation {
       'updatedAt': updatedAt?.toIso8601String(),
       'unreadCounts': unreadCounts,
       'typing': typing,
+      'typingTimestamps': typingTimestamps,
       'partnerAvatarUrl': partnerAvatarUrl,
     };
   }
 
+  /// Returns true only if partner is currently typing AND typing status was updated within 5s
   bool isPartnerTyping(String currentUserHandle) {
     final partner = getPartnerHandle(currentUserHandle).replaceAll('@', '').trim();
-    return typing[partner] == true || typing[partner.toLowerCase()] == true;
+    final isTyping = typing[partner] == true || typing[partner.toLowerCase()] == true;
+    if (!isTyping) return false;
+
+    // ⚡ Fix 8: 5-sec auto-timeout reset for typing indicator
+    final ts = typingTimestamps[partner] ?? typingTimestamps[partner.toLowerCase()];
+    if (ts != null) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - ts > 5000) {
+        return false;
+      }
+    }
+    return true;
   }
 
   String getPartnerHandle(String currentUserHandle) {

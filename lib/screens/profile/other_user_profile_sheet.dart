@@ -4,6 +4,8 @@ import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/friend_repository.dart';
 import '../chat/personal_chat_screen.dart';
+import '../../core/action_state/action_state_provider.dart';
+import '../../services/user_action_state_service.dart';
 
 /// Shows a bottom sheet with another user's profile
 Future<void> showOtherUserProfileSheet(
@@ -46,6 +48,8 @@ class OtherUserProfileSheet extends StatefulWidget {
 class _DummyRepo implements PostRepository {
   const _DummyRepo();
   @override
+  int getTotalLikesForUser(String handle) => 0;
+  @override
   int getTotalUpvotesForUser(String handle) => 0;
   @override
   Future<List<Post>> fetchPostsByUser(String handle) async => [];
@@ -56,7 +60,7 @@ class _DummyRepo implements PostRepository {
 class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   Map<String, dynamic>? _userData;
   int _postCount = 0;
-  int _upvoteCount = 0;
+  int _likeCount = 0;
   bool _isLoading = true;
   RelationshipStatus _relationshipStatus = RelationshipStatus.none;
   bool _friendActionLoading = false;
@@ -74,28 +78,29 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
   Future<void> _loadData() async {
     try {
-      // 1. Fetch user data via REST API
-      final user = await _friendRepo.getUserByHandle(_targetHandle);
+      final results = await Future.wait([
+        _friendRepo.getUserByHandle(_targetHandle),
+        (widget.repository is! _DummyRepo)
+            ? widget.repository.fetchPostsByUser(_targetHandle)
+            : Future.value(<Post>[]),
+        _friendRepo.getRelationshipStatus(_targetHandle),
+      ]);
+
+      final user = results[0] as Map<String, dynamic>?;
+      final posts = results[1] as List<Post>;
+      final relStatus = results[2] as RelationshipStatus;
+
       if (user != null) {
         _userData = user;
-        _upvoteCount = (user['reputation'] as num?)?.toInt() ?? 0;
+        _likeCount = (user['reputation'] as num?)?.toInt() ?? 0;
       }
-
-      // 2. Fetch post count & upvotes
-      try {
-        if (widget.repository is! _DummyRepo) {
-          final posts = await widget.repository.fetchPostsByUser(_targetHandle);
-          _postCount = posts.length;
-          int totalUpvotes = 0;
-          for (final p in posts) {
-            totalUpvotes += (p.upvotes > 0 ? p.upvotes : 0);
-          }
-          if (totalUpvotes > 0) _upvoteCount = totalUpvotes;
-        }
-      } catch (_) {}
-
-      // 3. Check relationship status
-      _relationshipStatus = await _friendRepo.getRelationshipStatus(_targetHandle);
+      _postCount = posts.length;
+      int totalLikes = 0;
+      for (final p in posts) {
+        totalLikes += (p.upvotes > 0 ? p.upvotes : 0);
+      }
+      if (totalLikes > 0) _likeCount = totalLikes;
+      _relationshipStatus = relStatus;
     } catch (e) {
       debugPrint('Error loading other user profile: $e');
     } finally {
@@ -260,6 +265,12 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     try {
       await _friendRepo.unblockUser(_targetHandle);
       _relationshipStatus = RelationshipStatus.none;
+      ActionStateProvider.instance.toggleBlocked(_targetHandle);
+      UserActionStateService.instance.setActionState(
+        targetId: _targetHandle,
+        targetType: 'user',
+        isBlocked: false,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -318,6 +329,12 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               try {
                 await _friendRepo.blockUser(_targetHandle);
                 _relationshipStatus = RelationshipStatus.blockedByMe;
+                ActionStateProvider.instance.toggleBlocked(_targetHandle);
+                UserActionStateService.instance.setActionState(
+                  targetId: _targetHandle,
+                  targetType: 'user',
+                  isBlocked: true,
+                );
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -552,10 +569,10 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                       const SizedBox(width: 16),
                       Row(
                         children: [
-                          const Icon(Icons.arrow_upward_rounded, size: 15, color: Color(0xFF10B981)),
+                          const Icon(Icons.favorite_rounded, size: 15, color: Color(0xFFEF4444)),
                           const SizedBox(width: 4),
                           Text(
-                            '$_upvoteCount Upvotes',
+                            '$_likeCount Likes',
                             style: const TextStyle(
                               color: Color(0xFF1E293B),
                               fontWeight: FontWeight.w700,

@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/location/location_models.dart';
+import '../../core/location/location_service.dart';
+import '../../core/location/city_picker_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/utils/content_filter.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
+import '../../services/token_decision_engine.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -24,6 +28,7 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   GeoCity? _selectedGeoCity;
+  bool _isEmergency = false;
 
   // Common
   final _contentController = TextEditingController();
@@ -59,9 +64,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final picker = ImagePicker();
       final pickedList = await picker.pickMultipleMedia(
-        imageQuality: 90,
-        maxWidth: 2048,
-        maxHeight: 2048,
+        imageQuality: 88,
+        maxWidth: 1440,
+        maxHeight: 1440,
       );
       if (pickedList.isNotEmpty) {
         setState(() {
@@ -77,9 +82,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       try {
         final picker = ImagePicker();
         final pickedImages = await picker.pickMultiImage(
-          imageQuality: 90,
-          maxWidth: 2048,
-          maxHeight: 2048,
+          imageQuality: 88,
+          maxWidth: 1440,
+          maxHeight: 1440,
         );
         if (pickedImages.isNotEmpty) {
           setState(() {
@@ -102,6 +107,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _errorMessage == null;
 
   Future<void> _submitPost() async {
+    if (!TokenDecisionEngine.instance.canPost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your account is currently restricted from creating posts.'),
+          backgroundColor: Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final text = _contentController.text.trim();
     final validationError = ContentFilter.validateContent(text);
     if (validationError != null) {
@@ -150,7 +165,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         authorHandle: widget.authorHandle,
         content: text,
         cityId: effectiveCity.id,
-        category: PostCategory.general,
+        category: _isEmergency ? PostCategory.safetyAlert : PostCategory.general,
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,
       );
@@ -392,77 +407,76 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Widget _buildNormalForm() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           controller: _contentController,
           maxLines: 8,
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15, height: 1.4),
+          style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
           decoration: InputDecoration(
             hintText:
                 'Ask a question, share traffic status, warn about police checkers, or vent about civic issues...',
-            hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14),
+            hintStyle: const TextStyle(color: Color(0xFF90B4B6), fontSize: 14),
             filled: true,
-            fillColor: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+            fillColor: const Color(0xFF072E33),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+              borderSide: const BorderSide(color: Color(0xFF0E4B52)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+              borderSide: const BorderSide(color: Color(0xFF0E4B52)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? Colors.white : Colors.black),
+              borderSide: const BorderSide(color: Colors.white),
             ),
             contentPadding: const EdgeInsets.all(16),
           ),
         ),
         const SizedBox(height: 16),
-        _buildMediaPreviews(isDark),
+        _buildMediaPreviews(true),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
+        backgroundColor: Colors.black,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.close, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+          icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: const Text(
           'Post Anonymously',
           style: TextStyle(
-              color: isDark ? Colors.white : const Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.w800),
+              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
         ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? Colors.white : Colors.black,
-                foregroundColor: isDark ? Colors.black : Colors.white,
+                backgroundColor: const Color(0xFF072E33),
+                foregroundColor: Colors.white,
                 shape: const StadiumBorder(),
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 18),
+                side: const BorderSide(color: Color(0xFF0E4B52)),
               ),
               onPressed: _canPublish ? _submitPost : null,
               child: _isPublishing
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          color: isDark ? Colors.black : Colors.white, strokeWidth: 2),
+                          color: Colors.white, strokeWidth: 2),
                     )
                   : const Text('Publish',
                       style: TextStyle(
@@ -482,9 +496,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: const Color(0xFF072E33),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF0E4B52)),
                 ),
                 child: Row(
                   children: [
@@ -501,14 +515,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           Text(
                             'Posting as @${widget.authorHandle.replaceAll('@', '')}',
                             style: const TextStyle(
-                              color: Color(0xFF0F172A),
+                              color: Colors.white,
                               fontWeight: FontWeight.w700,
                               fontSize: 13.5,
                             ),
                           ),
                           const Text(
                             'Visible to Vadodara community members',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                            style: TextStyle(color: Color(0xFF90B4B6), fontSize: 11),
                           ),
                         ],
                       ),
@@ -516,6 +530,67 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // 🚨 Emergency / Safety Alert Switch Card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _isEmergency ? const Color(0xFFFEF2F2) : const Color(0xFF072E33),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isEmergency ? const Color(0xFFEF4444) : const Color(0xFF0E4B52),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: _isEmergency ? const Color(0xFFEF4444) : const Color(0xFF0E4B52),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.warning_amber_rounded,
+                        color: _isEmergency ? Colors.white : const Color(0xFF90B4B6),
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Mark as Urgent Safety Alert',
+                            style: TextStyle(
+                              color: _isEmergency ? const Color(0xFFDC2626) : Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Broadcasts to neighbors within 3 km',
+                            style: TextStyle(
+                              color: _isEmergency ? const Color(0xFFB91C1C) : const Color(0xFF90B4B6),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: _isEmergency,
+                      activeTrackColor: const Color(0xFFEF4444),
+                      onChanged: (val) {
+                        setState(() => _isEmergency = val);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
               Row(
                 children: [
                   Expanded(
@@ -524,32 +599,42 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       children: [
                         const Text('POST LOCATION',
                             style: TextStyle(
-                                color: Colors.black54,
+                                color: Color(0xFF90B4B6),
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.black12),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.location_on_rounded, size: 16, color: isDark ? Colors.white : Colors.black),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Vadodara (Citywide)',
-                                  style: TextStyle(
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                        InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF072E33),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0E4B52)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.location_on_rounded, size: 16, color: Colors.white),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '${(_selectedGeoCity ?? context.watch<LocationService>().city).name} (Citywide)',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                                const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF90B4B6)),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -562,16 +647,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       children: [
                         const Text('POST CATEGORY',
                             style: TextStyle(
-                                color: Colors.black54,
+                                color: Color(0xFF90B4B6),
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
+                            color: const Color(0xFF072E33),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.black12),
+                            border: Border.all(color: const Color(0xFF0E4B52)),
                           ),
                           child: Row(
                             children: const [
@@ -581,7 +666,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 child: Text(
                                   'General Chat',
                                   style: TextStyle(
-                                    color: Color(0xFF0F172A),
+                                    color: Colors.white,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -602,9 +687,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: const Color(0xFF072E33),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12),
+                    border: Border.all(color: const Color(0xFF0E4B52)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,13 +699,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         children: [
                           const Text('Uploading Media...',
                               style: TextStyle(
-                                  color: Colors.black87,
+                                  color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold)),
                           Text(
                             '${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black,
+                            style: const TextStyle(
+                                color: Colors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -629,15 +714,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       const SizedBox(height: 12),
                       LinearProgressIndicator(
                         value: _uploadProgress > 0 ? _uploadProgress : null,
-                        backgroundColor: isDark ? const Color(0xFF262626) : Colors.black12,
-                        color: isDark ? Colors.white : Colors.black,
+                        backgroundColor: const Color(0xFF0E4B52),
+                        color: Colors.white,
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         'Please wait, this might take a moment depending on your network.',
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
+                        style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
                       ),
                     ],
                   ),
@@ -674,38 +759,38 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+                  color: const Color(0xFF072E33),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                    color: const Color(0xFF0E4B52),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  children: const [
                     Row(
                       children: [
                         Icon(
                           Icons.lock_person,
-                          color: isDark ? Colors.white : Colors.black87,
+                          color: Colors.white,
                           size: 18,
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Text(
                           'Anonymity & Compliance Note',
                           style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
+                            color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
                       "Your personal identity (phone, name) is never shown. You are posting under a randomized handle for this session. \n\nUnder India's IT Rules 2021 and DPDP Act 2023, doxxing, harassment, and sharing personal contacts is prohibited. We retain internal cryptographic identifiers for legal notices and repeat offender protection.",
                       style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                        color: Color(0xFF90B4B6),
                         fontSize: 11,
                         height: 1.5,
                       ),

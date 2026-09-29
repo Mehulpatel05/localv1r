@@ -3,6 +3,8 @@ import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/block_model.dart';
 import '../../services/friend_repository.dart';
+import '../../core/action_state/action_state_provider.dart';
+import '../../services/user_action_state_service.dart';
 
 /// Screen displaying all users blocked by the current user with unblock capability.
 class BlockedUsersScreen extends StatefulWidget {
@@ -103,6 +105,12 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     setState(() => _unblockingHandles.add(handle));
     try {
       await FriendRepository().unblockUser(handle);
+      ActionStateProvider.instance.toggleBlocked(handle);
+      UserActionStateService.instance.setActionState(
+        targetId: handle,
+        targetType: 'user',
+        isBlocked: false,
+      );
 
       if (mounted) {
         setState(() {

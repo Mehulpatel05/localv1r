@@ -3,7 +3,7 @@ import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../core/widgets/vote_capsule.dart';
+import '../../core/widgets/like_capsule.dart';
 import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
@@ -134,17 +134,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        foregroundColor: isDark ? Colors.white : Colors.black,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         elevation: 0,
         title: Text(
           (widget.post.category == PostCategory.general || (widget.post.areaName?.contains('General') ?? true))
               ? 'Discussion Thread — Vadodara'
               : 'Discussion Thread — ${widget.post.areaName}',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
+          style: const TextStyle(
+            color: Colors.white,
             fontSize: 14,
             fontWeight: FontWeight.bold,
           ),
@@ -171,13 +171,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: widget.post.isEmergency
-                        ? (isDark ? const Color(0xFF450A0A) : const Color(0xFFFEE2E2))
-                        : (isDark ? const Color(0xFF141414) : Colors.white),
+                        ? const Color(0xFF450A0A)
+                        : const Color(0xFF072E33),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: widget.post.isEmergency
                           ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                          : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                          : const Color(0xFF0E4B52),
                     ),
                   ),
                   child: Column(
@@ -273,7 +273,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           );
                           return Row(
                             children: [
-                              VoteCapsule(
+                              LikeCapsule(
                                 post: currentPost,
                                 repository: widget.repository,
                               ),
@@ -373,10 +373,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF141414) : Colors.white,
+                            color: const Color(0xFF072E33),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                              color: const Color(0xFF0E4B52),
                             ),
                           ),
                           child: Row(

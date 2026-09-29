@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -17,8 +18,9 @@ import 'core/auth_repository.dart';
 import 'features/auth/login_flow_page.dart';
 import 'features/auth/widgets/animated_splash_screen.dart';
 import 'services/call_listener_service.dart';
-import 'core/widgets/user_avatar.dart';
-
+import 'core/splash_controller.dart';
+import 'core/action_state/action_state_provider.dart';
+import 'services/user_action_state_service.dart';
 import 'screens/auth/create_handle_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -38,6 +40,10 @@ void main() async {
     ),
   ]);
   
+  // Optimize Flutter Image Cache for instant 0ms media renders
+  PaintingBinding.instance.imageCache.maximumSize = 2500;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024; // 120 MB
+
   // Non-blocking asynchronous service setup (does not delay runApp)
   _initNonCriticalServices();
 
@@ -59,6 +65,7 @@ class VadodaraLocalApp extends StatefulWidget {
 class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   late final LocationService locationService;
   late final PostRepository postRepository;
+  StreamSubscription<AuthEvent>? _authSub;
 
   bool _isReady = false;
   bool _isSplashFinished = false;
@@ -72,46 +79,63 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.initState();
     locationService = LocationService();
     postRepository = PostRepository(locationService);
+    _authSub = AuthService.instance.authEvents.listen(_handleAuthEvent);
     _bootstrapApp();
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    if (event == AuthEvent.signedOut || event == AuthEvent.forceSignedOut) {
+      postRepository.clearCache();
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = false;
+          _userHandle = 'Guest';
+        });
+      }
+      navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      if (event == AuthEvent.forceSignedOut) {
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired or revoked. Please sign in again.'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     locationService.dispose();
     postRepository.dispose();
     super.dispose();
   }
 
-  /// High-performance parallel warmup:
-  /// Pre-warms Auth, Location, and PostRepository concurrently in the background while Splash plays.
+  /// ⚡ Phase 2: Three-Stage Pre-Processing Pipeline Bootstrap
   Future<void> _bootstrapApp() async {
     try {
-      // 1. Start parallel async initialization tasks
-      final authFuture = _checkAuthStatus();
-      final locationFuture = locationService.load();
-      final avatarFuture = AvatarCacheService.instance.ensureInitialized();
-      final results = await Future.wait([
-        authFuture,
-        locationFuture,
-        avatarFuture,
-      ]);
+      final result = await SplashController.instance.runColdStartPipeline(
+        locationService: locationService,
+        postRepository: postRepository,
+      );
 
-      final authData = results[0] as Map<String, dynamic>;
-      final isLoggedIn = authData['isLoggedIn'] == true;
-      final handle = (authData['userHandle'] as String?) ?? 'Guest';
-      final isNewUser = handle.isEmpty || handle == 'Guest' || handle.startsWith('Anon#');
-
-      if (isLoggedIn && !isNewUser) {
-        postRepository.currentUserHandle = handle;
+      if (result.isLoggedIn && !result.isNewUser) {
+        postRepository.currentUserHandle = result.userHandle;
         _isLoggedIn = true;
-        _userHandle = handle;
+        _userHandle = result.userHandle;
 
         // Background non-critical service setup
         WidgetsBinding.instance.addPostFrameCallback((_) {
           NotificationService().initialize();
-          NotificationService().startListening(handle);
-          PresenceService.instance.init(handle);
-          CallListenerService.instance.startListening(handle);
+          NotificationService().startListening(result.userHandle);
+          PresenceService.instance.init(result.userHandle);
+          // Call system hidden for now
+          // CallListenerService.instance.startListening(result.userHandle);
         });
       }
 
@@ -128,33 +152,13 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     }
   }
 
-  // Check login status asynchronously using FlutterSecureStorage and SharedPreferences
-  Future<Map<String, dynamic>> _checkAuthStatus() async {
-    try {
-      final isSecureLoggedIn = await AuthService.instance.isLoggedIn();
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedInStr = prefs.getString('is_logged_in');
-      var handle = await AuthService.instance.getUserHandle() ?? prefs.getString('user_handle');
-
-      if ((handle == null || handle.isEmpty || handle == 'Guest') && (isSecureLoggedIn || isLoggedInStr == 'true')) {
-        final cloudProfile = await AuthService.instance.syncCloudProfile();
-        handle = cloudProfile?['handle'] ?? handle;
-      }
-
-      return {
-        'isLoggedIn': isSecureLoggedIn || isLoggedInStr == 'true',
-        'userHandle': handle ?? 'Guest',
-      };
-    } catch (_) {
-      return {'isLoggedIn': false, 'userHandle': 'Guest'};
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: locationService),
+        ChangeNotifierProvider.value(value: ActionStateProvider.instance),
+        ChangeNotifierProvider.value(value: UserActionStateService.instance),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
@@ -226,6 +230,15 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                             NotificationService().initialize();
                             PresenceService.instance.init(handle);
                             CallListenerService.instance.startListening(handle);
+
+                            // ⚡ Instant Cache Preloading (Chats, Communities, Feeds, Preferences)
+                            SplashController.instance.warmFetchOnLogin(
+                              uid: userId,
+                              handle: handle,
+                              cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
+                              postRepo: postRepository,
+                            );
+
                             if (mounted) {
                               setState(() {
                                 _isLoggedIn = true;

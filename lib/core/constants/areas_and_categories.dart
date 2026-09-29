@@ -5,7 +5,8 @@ enum PostCategory {
   rooms('Rentals & PG', '🏠'),
   shop('Shop', '🛍️'),
   events('Events', '🎉'),
-  jobs('Jobs & Referrals', '💼');
+  jobs('Jobs & Referrals', '💼'),
+  safetyAlert('Safety Alert', '🚨');
 
   final String label;
   final String icon;

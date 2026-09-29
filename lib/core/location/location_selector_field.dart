@@ -17,15 +17,15 @@ class LocationSelectorField extends StatefulWidget {
 }
 
 class _LocationSelectorFieldState extends State<LocationSelectorField> {
-  bool _initialized = false;
+  String? _lastCityId;
 
   @override
   Widget build(BuildContext context) {
     final locationService = context.watch<LocationService>();
     final city = locationService.city;
 
-    if (!_initialized) {
-      _initialized = true;
+    if (_lastCityId != city.id) {
+      _lastCityId = city.id;
       final defaultArea = GeoArea(
         id: '${city.id}_GENERAL',
         cityId: city.id,

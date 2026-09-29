@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import './index.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://localv1r.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://13.203.224.239';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('adminToken'));
@@ -129,7 +129,7 @@ function Dashboard({ token, onLogout }) {
   const categories = [
     { id: 'cat_general', label: '💬 General Chat', val: 'general' },
     { id: 'cat_services', label: '🔧 Local Services', val: 'services' },
-    { id: 'cat_food', label: '🍲 Food & Cafes', val: 'food' },
+    { id: 'cat_food', label: '🍲 Restaurants', val: 'food' },
     { id: 'cat_rooms', label: '🏠 Rentals & PG', val: 'rooms' },
     { id: 'cat_shop', label: '🛍️ Shop', val: 'shop' },
     { id: 'cat_events', label: '🎉 Events', val: 'events' },

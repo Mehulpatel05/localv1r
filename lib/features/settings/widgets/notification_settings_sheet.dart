@@ -14,7 +14,6 @@ class NotificationSettingsSheet extends StatefulWidget {
 class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
   bool _chatEnabled = true;
   bool _friendsEnabled = true;
-  bool _communitiesEnabled = true;
   bool _postsEnabled = true;
   bool _isLoading = true;
 
@@ -29,7 +28,6 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
     setState(() {
       _chatEnabled = prefs.getBool('notif_chat_enabled') ?? true;
       _friendsEnabled = prefs.getBool('notif_friends_enabled') ?? true;
-      _communitiesEnabled = prefs.getBool('notif_communities_enabled') ?? true;
       _postsEnabled = prefs.getBool('notif_posts_enabled') ?? true;
       _isLoading = false;
     });
@@ -125,17 +123,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                       _updatePref('notif_friends_enabled', val);
                     },
                   ),
-                  Divider(height: 1, thickness: 1, color: c.line),
-                  _ToggleRow(
-                    icon: Icons.groups_outlined,
-                    title: 'Community Messages',
-                    subtitle: 'Alerts from joined communities',
-                    value: _communitiesEnabled,
-                    onChanged: (val) {
-                      setState(() => _communitiesEnabled = val);
-                      _updatePref('notif_communities_enabled', val);
-                    },
-                  ),
+
                   Divider(height: 1, thickness: 1, color: c.line),
                   _ToggleRow(
                     icon: Icons.article_outlined,

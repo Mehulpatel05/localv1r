@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -27,7 +29,7 @@ class CallScreen extends StatefulWidget {
   State<CallScreen> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateMixin {
+class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   final WebRtcCallService _callService = WebRtcCallService.instance;
 
   CallStatus _status = CallStatus.calling;
@@ -44,6 +46,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   bool _isDismissed = false;
   bool _isLocalFullScreen = false; // Video PiP swap state
   bool _isNear = false; // Proximity sensor (phone at ear) state
+  bool _isDraggingPip = false; // PiP drag tracking for smooth 250ms snap
 
   void _safeDismiss() {
     if (_isDismissed) return;
@@ -64,14 +67,44 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  late AnimationController _flipController;
+  late Animation<double> _flipAnimation;
+
   // PIP offset
   Offset _pipOffset = const Offset(20, 70);
+
+  void _onCallServiceStatusChanged() {
+    final s = _callService.callStatusNotifier.value;
+    if (!mounted || _isEnding || _isDismissed) return;
+    if (s == CallStatus.connected && _status != CallStatus.connected) {
+      _ringTimeoutTimer?.cancel();
+      CallAudioToneService.instance.stop();
+      if (_pulseController.isAnimating) {
+        _pulseController.stop();
+      }
+      setState(() {
+        _status = CallStatus.connected;
+      });
+      HapticFeedback.mediumImpact();
+      _startTimer();
+    } else if (s == CallStatus.ringing && _status != CallStatus.ringing && _status != CallStatus.connected) {
+      setState(() {
+        _status = CallStatus.ringing;
+      });
+    } else if (s == CallStatus.ended || s == CallStatus.rejected || s == CallStatus.missed || s == CallStatus.busy) {
+      _ringTimeoutTimer?.cancel();
+      CallAudioToneService.instance.stop();
+      _handleCallTerminated(s);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _status = widget.call.status;
     _isSpeakerOn = widget.call.callType == CallType.video;
+
+    _callService.callStatusNotifier.addListener(_onCallServiceStatusChanged);
 
     _pulseController = AnimationController(
       vsync: this,
@@ -85,6 +118,15 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     if (_status != CallStatus.connected) {
       _pulseController.repeat(reverse: true);
     }
+
+    // ⚡ Section 4.5: 3D Camera Flip animation (300ms rotateY)
+    _flipController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _flipAnimation = Tween<double>(begin: 0.0, end: math.pi).animate(
+      CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
+    );
 
     // Play subtle outgoing ringback tone ("tring... tring...") on caller device
     if (widget.isCaller && _status != CallStatus.connected) {
@@ -374,8 +416,30 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _switchCamera() async {
+    _flipController.forward(from: 0.0);
     await _callService.switchCamera();
     setState(() {});
+  }
+
+  void _snapPipToNearestCorner(Size screenSize) {
+    const marginX = 16.0;
+    const marginY = 60.0;
+    final pipWidth = 110.0;
+    final pipHeight = 155.0;
+
+    final centerX = screenSize.width / 2;
+    final centerY = screenSize.height / 2;
+
+    final isLeft = _pipOffset.dx > centerX;
+    final isBottom = _pipOffset.dy > centerY;
+
+    final snapX = isLeft ? (screenSize.width - pipWidth - marginX) : marginX;
+    final snapY = isBottom ? (screenSize.height - pipHeight - 120.0) : marginY;
+
+    setState(() {
+      _isDraggingPip = false;
+      _pipOffset = Offset(snapX, snapY);
+    });
   }
 
   Future<void> _toggleSpeaker() async {
@@ -415,6 +479,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _isDismissed = true;
+    _callService.callStatusNotifier.removeListener(_onCallServiceStatusChanged);
     _proximitySubscription?.cancel();
     _proximitySubscription = null;
     _ringTimeoutTimer?.cancel();
@@ -422,6 +487,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollingTimer = null;
     CallAudioToneService.instance.stop();
     _pulseController.dispose();
+    _flipController.dispose();
     _callTimer?.cancel();
     _durationNotifier.dispose();
     _callService.cleanup();
@@ -570,11 +636,18 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // Floating Corner PiP Preview (Tap to Swap, Drag to Reposition)
-              Positioned(
+              // Floating Corner PiP Preview (Tap to Swap, Drag to Reposition, Snap to Corner)
+              AnimatedPositioned(
+                duration: _isDraggingPip ? Duration.zero : const Duration(milliseconds: 250),
+                curve: Curves.easeOutBack,
                 top: _pipOffset.dy,
                 right: _pipOffset.dx,
                 child: GestureDetector(
+                  onPanStart: (_) {
+                    setState(() {
+                      _isDraggingPip = true;
+                    });
+                  },
                   onPanUpdate: (details) {
                     setState(() {
                       _pipOffset = Offset(
@@ -583,140 +656,153 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                       );
                     });
                   },
+                  onPanEnd: (_) {
+                    _snapPipToNearestCorner(MediaQuery.of(context).size);
+                  },
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
                       _isLocalFullScreen = !_isLocalFullScreen;
                     });
                   },
-                  child: Container(
-                    width: 110,
-                    height: 155,
-                    decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
+                  child: AnimatedBuilder(
+                    animation: _flipAnimation,
+                    builder: (context, child) => Transform(
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.001)
+                        ..rotateY(_flipAnimation.value),
+                      alignment: Alignment.center,
+                      child: child,
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Stack(
-                      children: [
-                        // PiP Content (Swapped)
-                        Positioned.fill(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            switchInCurve: Curves.easeInOutCubic,
-                            switchOutCurve: Curves.easeInOutCubic,
-                            child: _isLocalFullScreen
-                                // In local fullscreen mode, PiP shows Remote Partner
-                                ? KeyedSubtree(
-                                    key: const ValueKey('pip_remote'),
-                                    child: ValueListenableBuilder<MediaStream?>(
-                                      valueListenable: _callService.remoteStreamNotifier,
-                                      builder: (context, remoteStream, _) {
-                                        final hasRemote = remoteStream != null &&
-                                            remoteStream.getVideoTracks().isNotEmpty;
-                                        if (hasRemote) {
-                                          return RepaintBoundary(
-                                            child: RTCVideoView(
-                                              _callService.remoteRenderer,
-                                              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                                            ),
-                                          );
-                                        }
-                                        return Container(
-                                          color: const Color(0xFF1E293B),
-                                          child: Center(
-                                            child: UserAvatar(
-                                              handle: cleanPartner,
-                                              size: 40,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  )
-                                // In remote fullscreen mode, PiP shows Local Camera
-                                : KeyedSubtree(
-                                    key: const ValueKey('pip_local'),
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        if (!_isCameraOff)
-                                          RepaintBoundary(
-                                            child: RTCVideoView(
-                                              _callService.localRenderer,
-                                              mirror: _callService.isFrontCamera,
-                                              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                                            ),
-                                          )
-                                        else
-                                          Container(
+                    child: Container(
+                      width: 110,
+                      height: 155,
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.35),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          // PiP Content (Swapped)
+                          Positioned.fill(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              switchInCurve: Curves.easeInOutCubic,
+                              switchOutCurve: Curves.easeInOutCubic,
+                              child: _isLocalFullScreen
+                                  // In local fullscreen mode, PiP shows Remote Partner
+                                  ? KeyedSubtree(
+                                      key: const ValueKey('pip_remote'),
+                                      child: ValueListenableBuilder<MediaStream?>(
+                                        valueListenable: _callService.remoteStreamNotifier,
+                                        builder: (context, remoteStream, _) {
+                                          final hasRemote = remoteStream != null &&
+                                              remoteStream.getVideoTracks().isNotEmpty;
+                                          if (hasRemote) {
+                                            return RepaintBoundary(
+                                              child: RTCVideoView(
+                                                _callService.remoteRenderer,
+                                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                              ),
+                                            );
+                                          }
+                                          return Container(
                                             color: const Color(0xFF1E293B),
                                             child: Center(
                                               child: UserAvatar(
-                                                handle: widget.currentUserHandle,
+                                                handle: cleanPartner,
                                                 size: 40,
                                                 fontSize: 16,
                                               ),
                                             ),
-                                          ),
-                                      ],
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  // In remote fullscreen mode, PiP shows Local Camera
+                                  : KeyedSubtree(
+                                      key: const ValueKey('pip_local'),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (!_isCameraOff)
+                                            RepaintBoundary(
+                                              child: RTCVideoView(
+                                                _callService.localRenderer,
+                                                mirror: _callService.isFrontCamera,
+                                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                              ),
+                                            )
+                                          else
+                                            Container(
+                                              color: const Color(0xFF1E293B),
+                                              child: Center(
+                                                child: UserAvatar(
+                                                  handle: widget.currentUserHandle,
+                                                  size: 40,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                          ),
-                        ),
-
-                        // Swap Hint Badge (Top Left of PiP)
-                        Positioned(
-                          top: 6,
-                          left: 6,
-                          child: Container(
-                            padding: const EdgeInsets.all(3.5),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.65),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.swap_horiz_rounded,
-                              color: Colors.white,
-                              size: 13,
                             ),
                           ),
-                        ),
 
-                        // Switch Camera Flip button (Bottom Right of PiP if local video in PiP)
-                        if (!_isLocalFullScreen && !_isCameraOff)
+                          // Swap Hint Badge (Top Left of PiP)
                           Positioned(
-                            bottom: 6,
-                            right: 6,
-                            child: GestureDetector(
-                              onTap: _switchCamera,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.flip_camera_ios_rounded,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
+                            top: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(3.5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.swap_horiz_rounded,
+                                color: Colors.white,
+                                size: 13,
                               ),
                             ),
                           ),
-                      ],
+
+                          // Switch Camera Flip button (Bottom Right of PiP if local video in PiP)
+                          if (!_isLocalFullScreen && !_isCameraOff)
+                            Positioned(
+                              bottom: 6,
+                              right: 6,
+                              child: GestureDetector(
+                                onTap: _switchCamera,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.flip_camera_ios_rounded,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -819,6 +905,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 0.5,
+                                    fontFamily: 'monospace',
+                                    fontFeatures: const [FontFeature.tabularFigures()],
                                   ),
                                 ),
                               ),
@@ -921,6 +1009,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                               color: Color(0xFF4ADE80),
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
                         ),
@@ -1034,14 +1124,18 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
             ),
 
             // ── 5. Proximity Sensor Black Screen (Ear touch protection) ──
-            if (_isNear && _status == CallStatus.connected && !isVideo)
-              Positioned.fill(
-                child: AbsorbPointer(
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !(_isNear && _status == CallStatus.connected && !isVideo),
+                child: AnimatedOpacity(
+                  opacity: (_isNear && _status == CallStatus.connected && !isVideo) ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
                   child: Container(
                     color: Colors.black,
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),

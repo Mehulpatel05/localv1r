@@ -9,7 +9,7 @@ class LocationChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locationService = context.watch<LocationService>();
-    final cityName = locationService.city.name;
+    final label = locationService.displayLabel;
     
     return InkWell(
       onTap: () {
@@ -32,7 +32,7 @@ class LocationChip extends StatelessWidget {
             const Icon(Icons.location_on, size: 14, color: Colors.black87),
             const SizedBox(width: 4),
             Text(
-              cityName,
+              label,
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,

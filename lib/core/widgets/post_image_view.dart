@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'safe_image.dart';
 import 'post_full_screen_viewer.dart';
@@ -65,53 +64,33 @@ class PostImageView extends StatelessWidget {
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final placeholderColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+
     Widget imageCard = ClipRRect(
       borderRadius: radius,
       child: Container(
         height: height,
         width: width,
-        color: const Color(0xFF0F172A),
+        color: placeholderColor,
         child: Stack(
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            // ── Layer 1: Ambient Blurred Backdrop ────────────────────────────
-            ClipRect(
-              child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: Transform.scale(
-                  scale: 1.20,
-                  child: SafeImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    alignment: Alignment.center,
-                    backgroundColor: const Color(0xFF0F172A),
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Layer 2: Subtle Dark Contrast Tint ───────────────────────────
-            Container(
-              color: Colors.black.withValues(alpha: 0.32),
-            ),
-
-            // ── Layer 3: Crisp, Complete Uncropped Image ─────────────────────
+            // Crisp, high-performance image with zero black flashes
             Hero(
               tag: '${tagPrefix}_$initialIndex',
               child: SafeImage(
                 imageUrl: imageUrl,
-                fit: BoxFit.contain,
+                fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
                 alignment: Alignment.center,
-                backgroundColor: Colors.transparent,
+                backgroundColor: placeholderColor,
               ),
             ),
 
-            // ── Layer 4: Optional Custom Overlay ────────────────────────────
+            // Optional Custom Overlay
             ?overlay,
 
             // ── Layer 5: Multi-Image Counter Pill ────────────────────────────

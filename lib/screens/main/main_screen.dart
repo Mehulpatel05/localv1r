@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/post_repository.dart';
 import '../feed/feed_screen.dart';
+import '../bazar/bazar_screen.dart';
 import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
-import '../communities/communities_list_screen.dart';
-import '../../services/community_repository.dart';
 import '../../services/notification_service.dart';
+import '../../services/direct_chat_service.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/user_avatar.dart';
 
@@ -25,55 +25,26 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
-  final Set<int> _mountedTabs = {0};
+  final Set<int> _mountedTabs = {0, 1, 2, 3};
   late final List<Widget?> _cachedTabs = [null, null, null, null];
-  late final CommunityRepository _communityRepository;
-  late final AnimationController _tabTransitionController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
-    _communityRepository = CommunityRepository()..currentUserHandle = widget.currentUserHandle;
-    
-    _tabTransitionController = AnimationController(
-      vsync: this,
-      duration: AppMotion.durationStandard,
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _tabTransitionController,
-      curve: AppMotion.enterCurve,
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.0, 0.012), // ~8-10px rise
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _tabTransitionController,
-        curve: AppMotion.enterCurve,
-      ),
-    );
-
-    _tabTransitionController.value = 1.0;
+    for (int i = 0; i < 4; i++) {
+      _cachedTabs[i] = _createTab(i);
+    }
   }
 
   @override
   void dispose() {
     _currentIndexNotifier.dispose();
-    _tabTransitionController.dispose();
     super.dispose();
   }
 
   void _onTabTapped(int index) {
     if (_currentIndexNotifier.value == index) return;
-    
-    _mountedTabs.add(index);
     _currentIndexNotifier.value = index;
-
-    _tabTransitionController.forward(from: 0.0);
   }
 
   Widget _getOrCreateTab(int index) {
@@ -93,7 +64,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           onOpenProfileTab: () => _onTabTapped(3),
         );
       case 1:
-        return CommunitiesListScreen(repository: _communityRepository);
+        return BazarScreen(
+          currentUserHandle: widget.currentUserHandle,
+        );
       case 2:
         return ChatListScreen(
           currentUserHandle: widget.currentUserHandle,
@@ -110,45 +83,30 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: Colors.black,
       body: ValueListenableBuilder<int>(
         valueListenable: _currentIndexNotifier,
         builder: (context, currentIndex, _) {
-          return SlideTransition(
-            position: _slideAnimation,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: IndexedStack(
-                index: currentIndex,
-                children: List.generate(4, (index) => _getOrCreateTab(index)),
-              ),
-            ),
+          return IndexedStack(
+            index: currentIndex,
+            children: List.generate(4, (index) => _getOrCreateTab(index)),
           );
         },
       ),
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: _currentIndexNotifier,
         builder: (context, currentIndex, _) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final barBg = isDark ? Colors.black : Colors.white;
-          final borderColor = isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6);
-          final activePillColor = isDark ? Colors.white.withValues(alpha: 0.14) : const Color(0xFFEAEAEA);
+          const barBg = Colors.black;
+          const borderColor = Color(0xFF072E33);
+          const activePillColor = Color(0xFF072E33);
 
           return Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: barBg,
               border: Border(
-                top: BorderSide(color: borderColor, width: 1.0),
+                top: BorderSide(color: borderColor, width: 1.5),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
             ),
             child: SafeArea(
               child: SizedBox(
@@ -158,21 +116,23 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final itemWidth = constraints.maxWidth / 4;
+                      final pillColumn = currentIndex;
                       return Stack(
                         alignment: Alignment.centerLeft,
                         children: [
-                          // Sliding active indicator pill
+                          // Active indicator pill with Deep Teal #072E33
                           AnimatedPositioned(
                             duration: AppMotion.durationMicro,
                             curve: AppMotion.interactiveCurve,
-                            left: currentIndex * itemWidth + (itemWidth - 58) / 2,
-                            width: 58,
+                            left: pillColumn * itemWidth + (itemWidth - 56) / 2,
+                            width: 56,
                             top: 4,
                             bottom: 4,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: activePillColor,
                                 borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFF0E525B), width: 1.0),
                               ),
                             ),
                           ),
@@ -185,35 +145,37 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                 icon: Icons.home_outlined,
                                 selectedIcon: Icons.home_rounded,
                                 tooltip: 'Home',
-                                isDark: isDark,
                               ),
                               _buildNavItem(
                                 index: 1,
                                 currentIndex: currentIndex,
-                                icon: Icons.people_outline_rounded,
-                                selectedIcon: Icons.people_rounded,
-                                tooltip: 'Communities',
-                                isDark: isDark,
+                                icon: Icons.storefront_outlined,
+                                selectedIcon: Icons.storefront_rounded,
+                                tooltip: 'Bazar',
                               ),
-                              StreamBuilder<int>(
-                                stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
-                                builder: (context, snapshot) {
-                                  final unreadCount = snapshot.data ?? 0;
-                                  return _buildNavItem(
-                                    index: 2,
-                                    currentIndex: currentIndex,
-                                    icon: Icons.chat_bubble_outline_rounded,
-                                    selectedIcon: Icons.chat_bubble_rounded,
-                                    tooltip: 'Chats',
-                                    isDark: isDark,
-                                    badgeCount: unreadCount,
+                              ValueListenableBuilder<int>(
+                                valueListenable: DirectChatService.instance.unreadCountNotifier,
+                                builder: (context, preloadedUnread, _) {
+                                  return StreamBuilder<int>(
+                                    initialData: preloadedUnread,
+                                    stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
+                                    builder: (context, snapshot) {
+                                      final unreadCount = snapshot.data ?? preloadedUnread;
+                                      return _buildNavItem(
+                                        index: 2,
+                                        currentIndex: currentIndex,
+                                        icon: Icons.chat_bubble_outline_rounded,
+                                        selectedIcon: Icons.chat_bubble_rounded,
+                                        tooltip: 'Chats',
+                                        badgeCount: unreadCount,
+                                      );
+                                    },
                                   );
                                 },
                               ),
-                              // Profile tab with live avatar
+                              // Profile tab
                               _buildProfileNavItem(
                                 currentIndex: currentIndex,
-                                isDark: isDark,
                               ),
                             ],
                           ),
@@ -236,12 +198,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     required IconData icon,
     required IconData selectedIcon,
     String? tooltip,
-    required bool isDark,
     int badgeCount = 0,
   }) {
     final isSelected = currentIndex == index;
-    final selectedColor = isDark ? Colors.white : Colors.black;
-    final unselectedColor = isDark ? const Color(0xFF9A9A9A) : const Color(0xFF8E8E93);
+    const selectedColor = Colors.white;
+    const unselectedColor = Color(0xFF90B4B6);
 
     return Expanded(
       child: Material(
@@ -281,16 +242,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             color: const Color(0xFFEF4444),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: isDark ? Colors.black : Colors.white,
+                              color: Colors.black,
                               width: 1.5,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFEF4444).withValues(alpha: 0.35),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -316,7 +270,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   Widget _buildProfileNavItem({
     required int currentIndex,
-    required bool isDark,
   }) {
     return Expanded(
       child: Material(
@@ -341,7 +294,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 }
 
-/// Separate StatefulWidget so it can listen to ValueListenableBuilder independently
 class _ProfileNavAvatar extends StatefulWidget {
   const _ProfileNavAvatar();
 
@@ -352,14 +304,12 @@ class _ProfileNavAvatar extends StatefulWidget {
 class _ProfileNavAvatarState extends State<_ProfileNavAvatar> {
   @override
   Widget build(BuildContext context) {
-    // Walk up to find the MainScreen's currentIndex and handle
     final mainState = context.findAncestorStateOfType<_MainScreenState>();
     final currentIndex = mainState?._currentIndexNotifier.value ?? 0;
     final handle = mainState?.widget.currentUserHandle ?? 'me';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = currentIndex == 3;
 
-    final ringColor = isDark ? Colors.white : Colors.black;
+    const ringColor = Colors.white;
     final borderWidth = isSelected ? 2.0 : 0.0;
 
     return AnimatedScale(

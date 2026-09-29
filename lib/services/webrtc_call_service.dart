@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import '../models/call_model.dart';
+import '../screens/chat/incoming_call_screen.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
 
@@ -47,15 +48,32 @@ class WebRtcCallService {
   MediaStream? get remoteStream => _remoteStream;
   MediaStream? get localStream => _localStream;
 
+  WebSocket? _signalingWs;
+  Timer? _iceCheckingTimeoutTimer;
+
+  // ⚡ Section 4.2: STUN + TURN Relay Servers configuration
   final Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
       {'urls': 'stun:stun2.l.google.com:19302'},
-      {'urls': 'stun:stun3.l.google.com:19302'},
-      {'urls': 'stun:stun4.l.google.com:19302'},
       {'urls': 'stun:stun.cloudflare.com:3478'},
       {'urls': 'stun:global.stun.twilio.com:3478'},
+      {
+        'urls': 'turn:openrelay.metered.ca:80',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
+      {
+        'urls': 'turn:openrelay.metered.ca:443',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
+      {
+        'urls': 'turns:openrelay.metered.ca:443?transport=tcp',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
     ],
     'sdpSemantics': 'unified-plan',
     'bundlePolicy': 'max-bundle',
@@ -63,6 +81,79 @@ class WebRtcCallService {
     'iceCandidatePoolSize': 10,
     'continualGatheringPolicy': 'gather_continually',
   };
+
+  // ⚡ Section 4.1: Realtime WebSocket Signaling Relay (Durable Object Channel)
+  Future<void> _connectSignalingWs(String callId, String myHandle) async {
+    try {
+      _signalingWs?.close();
+      final base = AuthService.baseUrl;
+      final wsBase = base.startsWith('https://')
+          ? base.replaceFirst('https://', 'wss://')
+          : base.replaceFirst('http://', 'ws://');
+      final uri = Uri.parse('$wsBase/calls/$callId/ws');
+
+      _signalingWs = await WebSocket.connect(uri.toString()).timeout(const Duration(seconds: 4));
+      _signalingWs?.listen((data) {
+        _handleIncomingWsMessage(data.toString());
+      }, onError: (err) {
+        debugPrint('[WebRTC WS] Signaling error: $err');
+      }, onDone: () {
+        debugPrint('[WebRTC WS] Signaling closed');
+      });
+    } catch (e) {
+      debugPrint('[WebRTC WS] Connect error (falling back to REST polling): $e');
+    }
+  }
+
+  void _sendWsMessage(Map<String, dynamic> payload) {
+    if (_signalingWs != null && _signalingWs!.readyState == WebSocket.open) {
+      try {
+        _signalingWs!.add(jsonEncode(payload));
+      } catch (e) {
+        debugPrint('[WebRTC WS] Send error: $e');
+      }
+    }
+  }
+
+  void _handleIncomingWsMessage(String raw) {
+    try {
+      final msg = jsonDecode(raw) as Map<String, dynamic>;
+      final type = msg['type']?.toString();
+
+      if (type == 'answer' && !_isRemoteDescriptionSet && msg['sdp'] != null) {
+        final sdp = msg['sdp'] as String;
+        final desc = RTCSessionDescription(sdp, 'answer');
+        _peerConnection?.setRemoteDescription(desc).then((_) {
+          _isRemoteDescriptionSet = true;
+          _drainPendingCandidates();
+          callStatusNotifier.value = CallStatus.connected;
+          if (currentCall?.callType == CallType.video) {
+            _boostVideoSenderBitrate();
+          }
+        });
+      } else if (type == 'candidate' && msg['candidate'] != null) {
+        final c = msg['candidate'] as Map<String, dynamic>;
+        final candidate = RTCIceCandidate(
+          c['candidate'],
+          c['sdpMid'],
+          (c['sdpMLineIndex'] as num?)?.toInt() ?? 0,
+        );
+        _addOrQueueCandidate(candidate);
+      } else if (type == 'status') {
+        final statusStr = (msg['status'] ?? '').toString().toLowerCase();
+        if (statusStr == 'ended' || statusStr == 'rejected' || statusStr == 'busy' || statusStr == 'missed') {
+          callStatusNotifier.value = CallStatus.ended;
+          cleanup();
+        } else if (statusStr == 'ringing') {
+          callStatusNotifier.value = CallStatus.ringing;
+        } else if (statusStr == 'accepted' || statusStr == 'connected') {
+          callStatusNotifier.value = CallStatus.connected;
+        }
+      }
+    } catch (e) {
+      debugPrint('[WebRTC WS] Parse message error: $e');
+    }
+  }
 
   /// Fast check if device has an active internet connection
   static Future<bool> hasInternetConnection() async {
@@ -90,18 +181,52 @@ class WebRtcCallService {
 
   /// Request required mic and camera permissions before starting/answering a call
   Future<bool> requestPermissions(CallType callType) async {
-    final micStatus = await Permission.microphone.request();
-    if (micStatus.isDenied || micStatus.isPermanentlyDenied) {
-      return false;
-    }
+    final permissions = <Permission>[
+      Permission.microphone,
+      if (callType == CallType.video) Permission.camera,
+    ];
 
-    if (callType == CallType.video) {
-      final camStatus = await Permission.camera.request();
-      if (camStatus.isDenied || camStatus.isPermanentlyDenied) {
+    final statuses = await permissions.request();
+    for (final p in permissions) {
+      final status = statuses[p];
+      if (status == PermissionStatus.permanentlyDenied || status == PermissionStatus.denied) {
         return false;
       }
     }
     return true;
+  }
+
+  /// Safe getUserMedia capture with fallback to basic constraints on device camera mismatch
+  Future<MediaStream> _getUserMediaWithFallback(bool isVideo) async {
+    final Map<String, dynamic> preferredConstraints = {
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
+      },
+      'video': isVideo
+          ? {
+              'facingMode': 'user',
+              'optional': [],
+              'mandatory': {
+                'minWidth': '640',
+                'minHeight': '480',
+                'minFrameRate': '24',
+              },
+            }
+          : false,
+    };
+
+    try {
+      return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+    } catch (e) {
+      debugPrint('Preferred media constraints failed ($e). Falling back to basic constraints...');
+      final Map<String, dynamic> fallbackConstraints = {
+        'audio': true,
+        'video': isVideo ? {'facingMode': 'user'} : false,
+      };
+      return await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+    }
   }
 
   /// Optimizes SDP for ultra-low latency audio
@@ -143,13 +268,6 @@ class WebRtcCallService {
         continue;
       }
 
-      if (line.startsWith('m=video')) {
-        modifiedLines.add(line);
-        modifiedLines.add('b=AS:1800');
-        modifiedLines.add('b=TIAS:1800000');
-        continue;
-      }
-
       modifiedLines.add(line);
     }
 
@@ -163,17 +281,17 @@ class WebRtcCallService {
       if (senders != null) {
         for (final sender in senders) {
           if (sender.track?.kind == 'video') {
-            final params = sender.parameters;
-            if (params.encodings != null && params.encodings!.isNotEmpty) {
-              for (final encoding in params.encodings!) {
-                encoding.maxBitrate = 1800000;
-                encoding.minBitrate = 400000;
-                encoding.maxFramerate = 30;
-                encoding.scaleResolutionDownBy = 1.0;
+            try {
+              final params = sender.parameters;
+              if (params.encodings != null && params.encodings!.isNotEmpty) {
+                for (final encoding in params.encodings!) {
+                  encoding.maxBitrate = 1500000;
+                  encoding.minBitrate = 300000;
+                  encoding.maxFramerate = 30;
+                }
+                await sender.setParameters(params);
               }
-              params.degradationPreference = RTCDegradationPreference.MAINTAIN_FRAMERATE;
-              await sender.setParameters(params);
-            }
+            } catch (_) {}
           }
         }
       }
@@ -205,29 +323,8 @@ class WebRtcCallService {
     _pendingIceCandidates.clear();
     _isRemoteDescriptionSet = false;
 
-    // 1. Get user media with 48kHz Studio Audio & Real HD Camera DSP
-    final mediaConstraints = <String, dynamic>{
-      'audio': {
-        'echoCancellation': true,
-        'noiseSuppression': true,
-        'autoGainControl': true,
-        'sampleRate': 48000,
-        'channelCount': 1,
-        'latency': 0,
-      },
-      'video': callType == CallType.video
-          ? {
-              'mandatory': {
-                'minWidth': '1280',
-                'minHeight': '720',
-                'minFrameRate': '30',
-              },
-              'facingMode': 'user',
-            }
-          : false,
-    };
-
-    _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    // 1. Get user media with robust fallback
+    _localStream = await _getUserMediaWithFallback(callType == CallType.video);
     for (final track in _localStream!.getTracks()) {
       track.enabled = true;
     }
@@ -298,9 +395,17 @@ class WebRtcCallService {
     _isCallActive = true;
     callStatusNotifier.value = CallStatus.calling;
 
-    // 5. Setup ICE candidate callback to send to D1
+    // Connect to WebSocket signaling relay (instant trickle-ICE)
+    _connectSignalingWs(callId, cleanCaller);
+
+    // 5. Setup ICE candidate callback to send over WebSocket (instant trickle-ICE) + D1 fallback
     _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
       if (candidate.candidate != null) {
+        _sendWsMessage({
+          'type': 'candidate',
+          'handle': cleanCaller,
+          'candidate': candidate.toMap(),
+        });
         http.post(
           Uri.parse('${AuthService.baseUrl}/calls/$callId/ice'),
           headers: {'Content-Type': 'application/json'},
@@ -358,29 +463,8 @@ class WebRtcCallService {
     _isCallActive = true;
     callStatusNotifier.value = CallStatus.connected;
 
-    // 1. Get user media
-    final mediaConstraints = <String, dynamic>{
-      'audio': {
-        'echoCancellation': true,
-        'noiseSuppression': true,
-        'autoGainControl': true,
-        'sampleRate': 48000,
-        'channelCount': 1,
-        'latency': 0,
-      },
-      'video': call.callType == CallType.video
-          ? {
-              'mandatory': {
-                'minWidth': '1280',
-                'minHeight': '720',
-                'minFrameRate': '30',
-              },
-              'facingMode': 'user',
-            }
-          : false,
-    };
-
-    _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    // 1. Get user media with robust fallback
+    _localStream = await _getUserMediaWithFallback(call.callType == CallType.video);
     for (final track in _localStream!.getTracks()) {
       track.enabled = true;
     }
@@ -404,9 +488,17 @@ class WebRtcCallService {
       _peerConnection?.addTrack(track, _localStream!);
     });
 
-    // 3. ICE candidate sending for receiver
+    // Connect to WebSocket signaling relay
+    _connectSignalingWs(call.callId, call.receiverHandle);
+
+    // 3. ICE candidate sending for receiver via WebSocket (instant trickle-ICE) + D1 fallback
     _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
       if (candidate.candidate != null) {
+        _sendWsMessage({
+          'type': 'candidate',
+          'handle': call.receiverHandle,
+          'candidate': candidate.toMap(),
+        });
         http.post(
           Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/ice'),
           headers: {'Content-Type': 'application/json'},
@@ -457,7 +549,13 @@ class WebRtcCallService {
       _boostVideoSenderBitrate();
     }
 
-    // Send answer to D1
+    // Send answer via WebSocket (instant) + D1 fallback
+    _sendWsMessage({
+      'type': 'answer',
+      'receiver': call.receiverHandle,
+      'sdp': optimizedAnswerSdp,
+    });
+
     await http.post(
       Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/answer'),
       headers: {'Content-Type': 'application/json'},
@@ -467,7 +565,7 @@ class WebRtcCallService {
       }),
     ).timeout(const Duration(seconds: 8));
 
-    // 6. Start polling for caller's ICE candidates and status
+    // 6. Start polling fallback for caller's ICE candidates and status
     _startIcePolling(call.callId, isCaller: false);
 
     if (call.callType == CallType.video) {
@@ -505,7 +603,7 @@ class WebRtcCallService {
           if (callData == null) return;
 
           final status = (callData['status'] ?? '').toString();
-          if (status == 'ended' || status == 'rejected' || status == 'busy') {
+          if (status == 'ended' || status == 'rejected' || status == 'busy' || status == 'missed') {
             callStatusNotifier.value = CallStatus.ended;
             cleanup();
             return;
@@ -624,11 +722,24 @@ class WebRtcCallService {
 
   /// Reject an incoming call
   Future<void> rejectCall(CallModel call) async {
+    IncomingCallScreen.dismissCall(call.callId);
+    NotificationService.instance.cancelCallNotification(call.callId);
+
+    _sendWsMessage({
+      'type': 'status',
+      'status': 'rejected',
+      'endedBy': call.receiverHandle,
+      'durationSeconds': 0,
+    });
     try {
       await http.post(
         Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'status': 'rejected'}),
+        body: jsonEncode({
+          'status': 'rejected',
+          'endedBy': call.receiverHandle,
+          'durationSeconds': 0,
+        }),
       );
     } catch (e) {
       debugPrint('Error rejecting call: $e');
@@ -642,12 +753,42 @@ class WebRtcCallService {
     required CallModel call,
     required CallStatus endStatus,
     int durationSeconds = 0,
+    String? endedBy,
   }) async {
+    IncomingCallScreen.dismissCall(call.callId);
+    NotificationService.instance.cancelCallNotification(call.callId);
+
+    final cleanEndedBy = (endedBy ?? call.callerHandle).replaceAll('@', '').trim();
+    _sendWsMessage({
+      'type': 'status',
+      'status': endStatus.name,
+      'endedBy': cleanEndedBy,
+      'durationSeconds': durationSeconds,
+    });
+
+    // If caller ends before answer, notify receiver device to cancel incoming call screen
+    final cleanReceiver = call.receiverHandle.replaceAll('@', '').trim();
+    if (cleanReceiver.isNotEmpty && (endStatus == CallStatus.missed || endStatus == CallStatus.ended || durationSeconds == 0)) {
+      NotificationService().sendNotification(
+        targetHandle: cleanReceiver,
+        title: 'Call Ended',
+        body: 'Call ended',
+        data: {
+          'type': 'call_cancelled',
+          'callId': call.callId,
+        },
+      ).catchError((_) {});
+    }
+
     try {
       await http.post(
         Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'status': endStatus.name}),
+        body: jsonEncode({
+          'status': endStatus.name,
+          'endedBy': cleanEndedBy,
+          'durationSeconds': durationSeconds,
+        }),
       );
     } catch (e) {
       debugPrint('Error ending call: $e');
@@ -659,6 +800,13 @@ class WebRtcCallService {
   /// Clean up all WebRTC streams, peer connection, and subscriptions
   Future<void> cleanup() async {
     _isCallActive = false;
+
+    _iceCheckingTimeoutTimer?.cancel();
+    _iceCheckingTimeoutTimer = null;
+    try {
+      _signalingWs?.close();
+    } catch (_) {}
+    _signalingWs = null;
 
     _pollingTimer?.cancel();
     _pollingTimer = null;
@@ -714,14 +862,11 @@ class WebRtcCallService {
   void _setupConnectionStateListeners() {
     _peerConnection?.onIceConnectionState = (RTCIceConnectionState state) {
       debugPrint('[WebRTC] ICE Connection State: $state');
+      _iceCheckingTimeoutTimer?.cancel();
+
       if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
           state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         isReconnectingNotifier.value = true;
-        try {
-          _peerConnection?.restartIce();
-        } catch (e) {
-          debugPrint('[WebRTC] restartIce error: $e');
-        }
       } else if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
           state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
         isReconnectingNotifier.value = false;

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Exact design tokens from the Nearhood Black & White Design spec.
+/// App-wide theme extension adhering to the user's custom color scheme:
+/// Background: Black (#000000)
+/// Containers / Other: Deep Teal (#072E33)
+/// Text: White (#FFFFFF)
 @immutable
 class NearhoodColors extends ThemeExtension<NearhoodColors> {
   final Color bg;
@@ -30,35 +33,22 @@ class NearhoodColors extends ThemeExtension<NearhoodColors> {
     required this.streets,
   });
 
-  /// Light Mode Tokens from CSS :root
-  static const NearhoodColors light = NearhoodColors(
-    bg: Color(0xFFFFFFFF),
-    ink: Color(0xFF000000),
-    muted: Color(0xFF6E6E6E),
-    line: Color(0xFFE6E6E6),
-    field: Color(0xFFF4F4F4),
-    field2: Color(0xFFEAEAEA),
-    btn: Color(0xFF000000),
-    btnink: Color(0xFFFFFFFF),
-    page: Color(0xFFEDEDED),
-    danger: Color(0xFFC2402D),
-    streets: Color(0x12000000), // rgba(0,0,0,0.07)
+  static const NearhoodColors darkTealScheme = NearhoodColors(
+    bg: Color(0xFF000000), // Background Black
+    ink: Color(0xFFFFFFFF), // Text White
+    muted: Color(0xFF90B4B6), // Light Teal-Slate Muted Text
+    line: Color(0xFF0C4148), // Border / Divider Teal
+    field: Color(0xFF072E33), // Other / Container Deep Teal (#072E33)
+    field2: Color(0xFF0E4B52), // Secondary Surface Deep Teal
+    btn: Color(0xFF072E33), // Primary Button Deep Teal (#072E33)
+    btnink: Color(0xFFFFFFFF), // Button Text White
+    page: Color(0xFF000000), // Page Background Black
+    danger: Color(0xFFEF4444),
+    streets: Color(0x33072E33),
   );
 
-  /// Dark Mode Tokens from CSS :root[data-theme="dark"]
-  static const NearhoodColors dark = NearhoodColors(
-    bg: Color(0xFF000000),
-    ink: Color(0xFFFFFFFF),
-    muted: Color(0xFF9A9A9A),
-    line: Color(0xFF262626),
-    field: Color(0xFF141414),
-    field2: Color(0xFF1F1F1F),
-    btn: Color(0xFFFFFFFF),
-    btnink: Color(0xFF000000),
-    page: Color(0xFF0A0A0A),
-    danger: Color(0xFFC2402D),
-    streets: Color(0x17FFFFFF), // rgba(255,255,255,0.09)
-  );
+  static const NearhoodColors light = darkTealScheme;
+  static const NearhoodColors dark = darkTealScheme;
 
   @override
   NearhoodColors copyWith({
@@ -111,58 +101,45 @@ class NearhoodColors extends ThemeExtension<NearhoodColors> {
 extension NearhoodThemeContext on BuildContext {
   NearhoodColors get nearhoodColors {
     final colors = Theme.of(this).extension<NearhoodColors>();
-    return colors ?? NearhoodColors.light;
+    return colors ?? NearhoodColors.darkTealScheme;
   }
 }
 
 class NearhoodTheme {
   const NearhoodTheme._();
 
-  static ThemeData get lightTheme {
-    final baseTextTheme =
-        GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme);
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: NearhoodColors.light.bg,
-      colorScheme: ColorScheme.light(
-        primary: NearhoodColors.light.btn,
-        onPrimary: NearhoodColors.light.btnink,
-        surface: NearhoodColors.light.bg,
-        onSurface: NearhoodColors.light.ink,
-        error: NearhoodColors.light.danger,
-      ),
-      textTheme: baseTextTheme.apply(
-        bodyColor: NearhoodColors.light.ink,
-        displayColor: NearhoodColors.light.ink,
-      ),
-      extensions: const <ThemeExtension<dynamic>>[
-        NearhoodColors.light,
-      ],
-    );
-  }
-
-  static ThemeData get darkTheme {
+  static ThemeData get customTheme {
     final baseTextTheme =
         GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: NearhoodColors.dark.bg,
-      colorScheme: ColorScheme.dark(
-        primary: NearhoodColors.dark.btn,
-        onPrimary: NearhoodColors.dark.btnink,
-        surface: NearhoodColors.dark.bg,
-        onSurface: NearhoodColors.dark.ink,
-        error: NearhoodColors.dark.danger,
+      scaffoldBackgroundColor: const Color(0xFF000000), // Background Black
+      canvasColor: const Color(0xFF000000),
+      cardColor: const Color(0xFF072E33), // Other Deep Teal
+      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF072E33)),
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFF072E33),
+        onPrimary: Colors.white,
+        surface: Color(0xFF072E33),
+        onSurface: Colors.white,
+        error: Color(0xFFEF4444),
       ),
       textTheme: baseTextTheme.apply(
-        bodyColor: NearhoodColors.dark.ink,
-        displayColor: NearhoodColors.dark.ink,
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF000000),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       extensions: const <ThemeExtension<dynamic>>[
-        NearhoodColors.dark,
+        NearhoodColors.darkTealScheme,
       ],
     );
   }
+
+  static ThemeData get lightTheme => customTheme;
+  static ThemeData get darkTheme => customTheme;
 }

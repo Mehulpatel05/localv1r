@@ -11,6 +11,7 @@ import '../../services/presence_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/r2_storage_service.dart';
+import '../../core/splash_controller.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../main/main_screen.dart';
@@ -434,6 +435,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       NotificationService().initialize();
       NotificationService().startListening(handle);
       PresenceService.instance.init(handle);
+
+      // ⚡ Instant Cache Preloading (Chats, Communities, Feeds, Preferences)
+      SplashController.instance.warmFetchOnLogin(
+        uid: effectiveUid,
+        handle: handle,
+        cityId: 'surat_gujarat',
+        postRepo: widget.repository,
+      );
 
       if (!mounted) return;
 

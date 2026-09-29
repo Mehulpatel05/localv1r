@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/auth_repository.dart';
 import '../../core/theme.dart';
+import '../../core/constants/areas_and_categories.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/auth_service.dart';
@@ -15,8 +15,11 @@ import '../../services/r2_storage_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
 import '../friends/friends_screen.dart';
-import '../detail/post_detail_screen.dart';
 import '../../features/settings/settings_page.dart';
+import '../../core/location/city_picker_screen.dart';
+import '../bazar/bazar_screen.dart';
+import '../shop/register_shop_screen.dart';
+import '../saved/saved_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -107,18 +110,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (mounted) {
         setState(() {
+          // Merge-update: only update fields that have new values, never clear existing data
           _userData = {
+            ...?_userData,
             'handle': resolvedHandle,
             'phone': rawPhone,
-            'email': '',
-            'bio': cloudProfile?['bio'] ?? _userData?['bio'] ?? '',
-            'photoUrl': photoUrl,
-            'reputation': cloudProfile?['reputation'] ?? _userData?['reputation'] ?? 0,
-            'upvotes': cloudProfile?['upvotes'] ?? _userData?['upvotes'] ?? 0,
-            'friendCount': cloudProfile?['friendCount'] ?? _userData?['friendCount'] ?? 0,
-            'createdAt': DateTime.now(),
+            if (cloudProfile?['bio'] != null) 'bio': cloudProfile!['bio'],
+            if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
+            if (cloudProfile?['reputation'] != null) 'reputation': cloudProfile!['reputation'],
+            if (cloudProfile?['upvotes'] != null) 'upvotes': cloudProfile!['upvotes'],
+            if (cloudProfile?['friendCount'] != null) 'friendCount': cloudProfile!['friendCount'],
           };
-          _bioController.text = _userData!['bio'] as String;
+          if (!_isSavingBio && (_bioController.text.isEmpty || _bioController.text == _userData!['bio'])) {
+            _bioController.text = (_userData!['bio'] as String?) ?? '';
+          }
         });
       }
 
@@ -148,7 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Material(
-        color: Colors.white,
+        color: const Color(0xFF072E33),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         clipBehavior: Clip.antiAlias,
         child: Padding(
@@ -416,12 +421,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF072E33),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Edit Bio',
           style: TextStyle(
-            color: Color(0xFF0F172A),
+            color: Colors.white,
             fontWeight: FontWeight.w800,
             fontSize: 18,
           ),
@@ -504,29 +509,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${DateTime.now().year}';
   }
 
-  int _getTotalUpvotes() {
-    int total = 0;
-    final Set<String> seenIds = {};
-    for (final p in _userPosts) {
-      final live = widget.repository.getPostById(p.id) ?? p;
-      seenIds.add(p.id);
-      total += (live.upvotes > 0 ? live.upvotes : 0);
-    }
-    final cleanCurrent = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
-    final repoPosts = widget.repository.allPosts
-        .where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == cleanCurrent);
-    for (final p in repoPosts) {
-      if (!seenIds.contains(p.id)) {
-        seenIds.add(p.id);
-        total += (p.upvotes > 0 ? p.upvotes : 0);
-      }
-    }
-    if (total == 0 && _userData != null && _userData!['upvotes'] != null) {
-      total = (_userData!['upvotes'] as num).toInt();
-    }
-    return total;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -543,8 +525,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bio = _userData?['bio'] ?? '';
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? const Color(0xFF141414) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6);
+    final cardBg = const Color(0xFF072E33);
+    final borderColor = const Color(0xFF0E4B52);
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -745,55 +727,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // 3. Stats Card (Posts | Upvotes | Friends)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem('${_userPosts.length}', 'Posts', isDark),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: borderColor,
+              // 3. Stats Card (Posts | Listings | Neighbours)
+              Builder(
+                builder: (context) {
+                  final listingsCount = _userPosts.where((p) =>
+                    p.category == PostCategory.shop ||
+                    p.category == PostCategory.rooms ||
+                    p.category == PostCategory.services ||
+                    p.category == PostCategory.events ||
+                    p.shopTitle != null ||
+                    p.roomTitle != null
+                  ).length;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: borderColor),
                     ),
-                    _buildStatItem('${_getTotalUpvotes()}', 'Upvotes', isDark),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: borderColor,
-                    ),
-                    StreamBuilder<List<Friendship>>(
-                      stream: _friendRepository.getFriendsList(),
-                      builder: (context, snapshot) {
-                        final count = snapshot.hasData
-                            ? snapshot.data!.length
-                            : (_userData?['friendCount'] as int? ?? 0);
-                        return _buildStatItem(
-                          '$count',
-                          'Friends',
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem('${_userPosts.length}', 'Posts', isDark),
+                        Container(
+                          height: 30,
+                          width: 1,
+                          color: borderColor,
+                        ),
+                        _buildStatItem(
+                          '$listingsCount',
+                          'Listings',
                           isDark,
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => FriendsScreen(
-                                  repository: _friendRepository,
-                                  currentUserHandle: widget.currentUserHandle,
-                                ),
+                                builder: (_) => const BazarScreen(initialShowMyListings: true),
                               ),
                             );
                           },
-                        );
-                      },
+                        ),
+                        Container(
+                          height: 30,
+                          width: 1,
+                          color: borderColor,
+                        ),
+                        StreamBuilder<List<Friendship>>(
+                          stream: _friendRepository.getFriendsList(),
+                          builder: (context, snapshot) {
+                            final count = snapshot.hasData
+                                ? snapshot.data!.length
+                                : (_userData?['friendCount'] as int? ?? 0);
+                            return _buildStatItem(
+                              '$count',
+                              'Neighbours',
+                              isDark,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => FriendsScreen(
+                                      repository: _friendRepository,
+                                      currentUserHandle: widget.currentUserHandle,
+                                      initialTab: FriendsTab.friends,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
 
               const SizedBox(height: 20),
@@ -915,105 +923,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 20),
 
-              // 6. Nearhood Community Section
-              Align(
-                alignment: Alignment.centerLeft,
+              // 6. Action Menu Items Card (My listings, Saved items, Change area, Register your shop)
+              Container(
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: borderColor),
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Nearhood community',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 18,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Local community member',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                    // 1. My listings
+                    _buildProfileMenuItem(
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'My listings',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BazarScreen(initialShowMyListings: true),
                           ),
-                        ),
-                      ],
+                        );
+                      },
+                    ),
+                    Divider(height: 1, color: borderColor),
+
+                    // 2. Saved items
+                    _buildProfileMenuItem(
+                      icon: Icons.favorite_border_rounded,
+                      title: 'Saved items',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SavedScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(height: 1, color: borderColor),
+
+                    // 3. Change area
+                    _buildProfileMenuItem(
+                      icon: Icons.push_pin_outlined,
+                      title: 'Change area',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+                        );
+                      },
+                    ),
+                    Divider(height: 1, color: borderColor),
+
+                    // 4. Register your shop
+                    _buildProfileMenuItem(
+                      icon: Icons.store_mall_directory_outlined,
+                      title: 'Register your shop',
+                      subtitle: 'For local businesses',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              // 7. My Posts Section Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'My Posts',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  Text(
-                    '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              if (_userPosts.isEmpty) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    children: const [
-                      Icon(Icons.post_add_rounded,
-                          size: 40, color: Color(0xFF94A3B8)),
-                      SizedBox(height: 10),
-                      Text(
-                        'No posts published yet',
-                        style: TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Your shared posts will appear here.',
-                        style:
-                            TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else ...[
-                ..._userPosts.map((post) => _buildUserPostCard(post)),
-              ],
 
               const SizedBox(height: 16),
             ],
@@ -1064,190 +1040,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return content;
   }
 
-  Widget _buildUserPostCard(Post rawPost) {
-    final post = widget.repository.getPostById(rawPost.id) ?? rawPost;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? const Color(0xFF141414) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PostDetailScreen(
-                  post: post,
-                  repository: widget.repository,
-                  currentUserHandle: widget.currentUserHandle,
-                ),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Category Pill & Date
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: post.isEmergency
-                            ? const Color(0xFFFEF2F2)
-                            : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF4F4F4)),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: post.isEmergency
-                              ? const Color(0xFFFECACA)
-                              : borderColor,
-                        ),
-                      ),
-                      child: Text(
-                        post.category.label,
-                        style: TextStyle(
-                          color: post.isEmergency
-                              ? const Color(0xFFEF4444)
-                              : (isDark ? Colors.white70 : const Color(0xFF4B5563)),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+  Widget _buildProfileMenuItem({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      '${post.createdAt.day} ${_getMonthName(post.createdAt.month)}',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFF90B4B6),
                         fontSize: 12,
                       ),
                     ),
                   ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // Content
-                Text(
-                  post.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF1E293B),
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
-                ),
-
-                if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  PostImageView(
-                    imageUrl: (post.imageUrl != null && post.imageUrl!.isNotEmpty)
-                        ? post.imageUrl!
-                        : post.mediaUrls.first,
-                    allImages: post.mediaUrls.isNotEmpty
-                        ? post.mediaUrls
-                        : [post.imageUrl!],
-                    height: 180,
-                    borderRadius: BorderRadius.circular(14),
-                    heroTagPrefix: 'profile_post_${post.id}',
-                    caption: post.content,
-                  ),
                 ],
-
-                const SizedBox(height: 12),
-
-                // Footer (Upvotes & Location)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 14,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${post.upvotes}',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.arrow_downward_rounded,
-                      size: 14,
-                      color: Color(0xFFEF4444),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${post.downvotes}',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      Icons.location_on_rounded,
-                      size: 13,
-                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      post.areaName ?? 'Vadodara',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFF90B4B6),
+              size: 20,
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return months[(month - 1) % 12];
   }
 }

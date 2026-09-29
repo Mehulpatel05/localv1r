@@ -89,11 +89,11 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
   bool _thresholdReached = false;
   bool _isDragging = false;
 
-  // Gesture & threshold constants
-  static const double _kTriggerThreshold = 45.0;
-  static const double _kHysteresisThreshold = 38.0;
-  static const double _kMaxDragLimit = 65.0;
-  static const double _kMaxDisplacementCap = 85.0;
+  // Gesture & threshold constants (Spec: 30px threshold, 60px damped max drag)
+  static const double _kTriggerThreshold = 30.0;
+  static const double _kHysteresisThreshold = 25.0;
+  static const double _kMaxDragLimit = 60.0;
+  static const double _kMaxDisplacementCap = 60.0;
 
   @override
   void initState() {
@@ -242,8 +242,8 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
       // User passed threshold -> fire reply
       widget.onSwipeReply();
 
-      // Spring / overshoot return curve (~280ms)
-      _returnController.duration = const Duration(milliseconds: 280);
+      // Spring / overshoot return curve (250ms)
+      _returnController.duration = const Duration(milliseconds: 250);
       _returnAnimation = Tween<double>(
         begin: startDisplacement,
         end: 0.0,

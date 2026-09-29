@@ -27,7 +27,7 @@ class CallListenerService {
 
     _pollingTimer?.cancel();
 
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) async {
       try {
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/calls/active?handle=$cleanHandle'),
@@ -37,13 +37,30 @@ class CallListenerService {
         if (res.statusCode == 200) {
           final body = jsonDecode(res.body);
           final callData = body['call'] as Map<String, dynamic>?;
-          if (callData == null) return;
+          if (callData == null) {
+            if (_activeIncomingCallId != null) {
+              IncomingCallScreen.dismissCall(_activeIncomingCallId!);
+              NotificationService.instance.cancelCallNotification(_activeIncomingCallId!);
+              _activeIncomingCallId = null;
+            }
+            return;
+          }
 
           final call = CallModel.fromJson(callData);
 
+          // If current active incoming call status is no longer ringing -> dismiss
+          if (_activeIncomingCallId != null && _activeIncomingCallId == call.callId) {
+            if (call.status != CallStatus.ringing && call.status != CallStatus.calling) {
+              IncomingCallScreen.dismissCall(_activeIncomingCallId!);
+              NotificationService.instance.cancelCallNotification(_activeIncomingCallId!);
+              _activeIncomingCallId = null;
+              return;
+            }
+          }
+
           // Only process incoming ringing calls
           if (call.receiverHandle.toLowerCase() != cleanHandle.toLowerCase() ||
-              call.status != CallStatus.ringing && call.status != CallStatus.calling) {
+              (call.status != CallStatus.ringing && call.status != CallStatus.calling)) {
             return;
           }
 

@@ -4,17 +4,48 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants/api_constants.dart';
+import '../core/action_state/action_state_provider.dart';
 import '../core/widgets/user_avatar.dart';
-import 'community_repository.dart';
+import '../models/token_claims.dart';
+
+import 'direct_chat_service.dart';
+import 'notification_service.dart';
+import 'token_decision_engine.dart';
+import 'user_action_state_service.dart';
+import 'chat_preferences_service.dart';
+import 'friend_repository.dart';
+import 'presence_service.dart';
+
+enum AuthEvent {
+  signedIn,
+  signedOut,
+  forceSignedOut,
+}
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   static AuthService get instance => _instance;
 
-  AuthService._internal();
+  final StreamController<AuthEvent> _authEventController = StreamController<AuthEvent>.broadcast();
+  Stream<AuthEvent> get authEvents => _authEventController.stream;
 
-  static const String baseUrl = 'https://localv1r.onrender.com/api/v1';
+  TokenDecisionEngine _decisionEngine = TokenDecisionEngine.anonymous();
+  TokenDecisionEngine get decisionEngine => _decisionEngine;
+
+  AuthService._internal() {
+    _initDecisionEngine();
+  }
+
+  Future<void> _initDecisionEngine() async {
+    final token = await getAccessToken();
+    if (token != null) {
+      updateDecisionEngineFromToken(token);
+    }
+  }
+
+  static const String baseUrl = ApiConstants.baseUrl;
 
   // Secure storage instance with Android & iOS security configurations
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
@@ -109,6 +140,7 @@ class AuthService {
         // 1. Secure storage write
         if (accessToken.isNotEmpty) {
           await _secureStorage.write(key: _kAccessTokenKey, value: accessToken);
+          updateDecisionEngineFromToken(accessToken);
         }
         if (refreshToken.isNotEmpty) {
           await _secureStorage.write(key: _kRefreshTokenKey, value: refreshToken);
@@ -123,13 +155,7 @@ class AuthService {
           await _secureStorage.write(key: _kHandleKey, value: handle);
         }
 
-        // 2. SharedPreferences cache for instant synchronous state lookups
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('is_logged_in', 'true');
-        if (userId.isNotEmpty) await prefs.setString('user_id', userId);
-        if (phone.isNotEmpty) await prefs.setString('phone_number', phone);
-        if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
-
+        // 2. Pure online session - ground truth in secure storage & in-memory state
         debugPrint('[AuthService] Login session saved. userId=$userId, handle=$handle, isNewUser=$isNewUser');
 
         return {
@@ -182,7 +208,13 @@ class AuthService {
         final newRefresh = body['refresh_token'] as String;
         await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
         await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
+        updateDecisionEngineFromToken(newAccess);
         return newAccess;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // ⚡ Phase 1 & 4 Instant Revocation Force Logout
+        debugPrint('[AuthService] Refresh rejected (${response.statusCode}). Revoking session and purging caches.');
+        await forceSignOut(reason: 'Session revoked or expired');
+        return null;
       }
     } catch (e) {
       debugPrint('[AuthService] Token refresh error: $e');
@@ -247,12 +279,11 @@ class AuthService {
         final body = jsonDecode(response.body);
         if (response.statusCode == 200) {
           await _secureStorage.write(key: _kHandleKey, value: clean);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('user_handle', clean);
-          await prefs.setString('is_logged_in', 'true');
 
           if (body['access_token'] != null) {
-            await _secureStorage.write(key: _kAccessTokenKey, value: body['access_token']);
+            final newTok = body['access_token'] as String;
+            await _secureStorage.write(key: _kAccessTokenKey, value: newTok);
+            updateDecisionEngineFromToken(newTok);
           }
           if (body['refresh_token'] != null) {
             await _secureStorage.write(key: _kRefreshTokenKey, value: body['refresh_token']);
@@ -315,8 +346,6 @@ class AuthService {
 
           if (handle != null && handle.isNotEmpty) {
             await _secureStorage.write(key: _kHandleKey, value: handle);
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('user_handle', handle);
           }
           if (phone != null && phone.isNotEmpty) {
             await _secureStorage.write(key: _kPhoneKey, value: phone);
@@ -325,9 +354,6 @@ class AuthService {
             await _secureStorage.write(key: _kUserIdKey, value: uid);
           }
           if (photoUrl != null && photoUrl.isNotEmpty) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('profile_photo_url', photoUrl);
-            await prefs.setString('user_photo_url', photoUrl);
             if (handle != null && handle.isNotEmpty) {
               AvatarCacheService.instance.setCachedUrl(handle, photoUrl);
             }
@@ -451,20 +477,114 @@ class AuthService {
       final clean = handle.replaceAll('@', '').trim().toLowerCase();
       AvatarCacheService.instance.setCachedUrl(clean, null);
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_photo_url');
   }
 
-  /// Complete Sign Out
+  /// ⚡ Phase 4: Complete Sign Out with Multi-Tenancy Data Purge
   Future<void> signOut() async {
+    await _purgeUserSessionData();
+    _authEventController.add(AuthEvent.signedOut);
+  }
+
+  /// ⚡ Phase 4: Forced Sign Out on Token Revocation or Account Ban
+  Future<void> forceSignOut({String reason = 'Session expired'}) async {
+    debugPrint('[AuthService] Force sign out triggered: $reason');
+    await _purgeUserSessionData();
+    _authEventController.add(AuthEvent.forceSignedOut);
+  }
+
+  /// Thoroughly purges all user-specific in-memory singletons, disk docs, and secure tokens
+  Future<void> _purgeUserSessionData() async {
     try {
-      CommunityRepository().clearLocalCache();
+      // 1. Reset Decision Engine to Anonymous
+      _decisionEngine = TokenDecisionEngine.anonymous();
+
+      // 2. Clear Action State Singletons (Hot sets, O(1) button caches)
+      ActionStateProvider.instance.clear();
+      UserActionStateService.instance.clear();
+
+      // 3. Clear Avatar, Repo, Friend, Preferences & Presence Caches
+      await AvatarCacheService.instance.clearAll();
+      FriendRepository().clearCache();
+      ChatPreferencesService.instance.clearCache();
+      PresenceService.instance.clearCache();
+
+      // 4. Reset DirectChat & Notification Counters & Listeners
+      DirectChatService.instance.unreadCountNotifier.value = 0;
+      NotificationService.instance.stopListening();
+      NotificationService.instance.unreadBadgeNotifier.value = 0;
+
+      // 5. Delete Secure Storage Tokens
       await _secureStorage.deleteAll();
+
+      // 6. Safety clear any legacy SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
+      debugPrint('[AuthService] Multi-tenancy session purged successfully.');
     } catch (e) {
-      debugPrint('[AuthService] Sign out error: $e');
+      debugPrint('[AuthService] Error during session purge: $e');
     }
   }
+
+  // ==========================================
+  // ⚡ PHASE 1: JWT IDENTITY & ZERO-DB DECISION LAYER
+  // ==========================================
+
+  /// Parses JWT payload without network calls in 0ms
+  Map<String, dynamic>? parseJwtPayload(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      String payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      final decodedBytes = base64Url.decode(payload);
+      final decodedString = utf8.decode(decodedBytes);
+      return jsonDecode(decodedString) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[AuthService] Error parsing JWT: $e');
+      return null;
+    }
+  }
+
+  /// Updates in-memory Decision Engine synchronously from newly minted or refreshed JWT
+  void updateDecisionEngineFromToken(String token) {
+    final payload = parseJwtPayload(token);
+    if (payload != null) {
+      final claims = TokenClaims.fromJwtMap(payload);
+      _decisionEngine = TokenDecisionEngine.fromClaims(claims);
+    }
+  }
+
+  /// Extracts active token claims (uid, role, cityId, verified, planTier, banned, tokenVersion)
+  Future<TokenClaims> getActiveClaims() async {
+    final token = await getAccessToken();
+    if (token == null) return TokenClaims.anonymous();
+    final payload = parseJwtPayload(token);
+    if (payload == null) return TokenClaims.anonymous();
+    final claims = TokenClaims.fromJwtMap(payload);
+    _decisionEngine = TokenDecisionEngine.fromClaims(claims);
+    return claims;
+  }
+
+  /// Fast synchronous role getter
+  Future<String> getUserRole() async {
+    final claims = await getActiveClaims();
+    return claims.role;
+  }
+
+  /// Fast synchronous cityId getter
+  Future<String> getUserCityId() async {
+    final claims = await getActiveClaims();
+    return claims.cityId;
+  }
+
+  /// Fast verification state getter
+  Future<bool> isUserVerified() async {
+    final claims = await getActiveClaims();
+    return claims.verified;
+  }
 }
+
+
 

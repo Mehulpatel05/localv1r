@@ -15,11 +15,13 @@ enum FriendsTab { requests, friends, sent }
 class FriendsScreen extends StatefulWidget {
   final FriendRepository repository;
   final String currentUserHandle;
+  final FriendsTab initialTab;
 
   const FriendsScreen({
     super.key,
     required this.repository,
     required this.currentUserHandle,
+    this.initialTab = FriendsTab.requests,
   });
 
   @override
@@ -27,7 +29,7 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  FriendsTab _activeTab = FriendsTab.requests;
+  late FriendsTab _activeTab;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchOpen = false;
   String _searchQuery = '';
@@ -35,6 +37,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
+    _activeTab = widget.initialTab;
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     if (cleanHandle.isNotEmpty) {
       widget.repository.currentUserHandle = cleanHandle;
@@ -456,26 +459,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
   // ── Header & Main Build ───────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFF8FAFC),
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        foregroundColor: isDark ? Colors.white : Colors.black,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : const Color(0xFF1E293B)),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          children: const [
             Text(
               'Friends',
               style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
@@ -484,7 +485,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             Text(
               'Your Nearhood connections',
               style: TextStyle(
-                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                color: Color(0xFF90B4B6),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -496,7 +497,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           IconButton(
             icon: Icon(
               _isSearchOpen ? Icons.close_rounded : Icons.search_rounded,
-              color: isDark ? Colors.white : const Color(0xFF1E293B),
+              color: Colors.white,
             ),
             onPressed: () {
               setState(() {
@@ -510,11 +511,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           // 3-Dots More Options
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_horiz_rounded, color: isDark ? Colors.white : const Color(0xFF1E293B)),
-            color: isDark ? const Color(0xFF141414) : Colors.white,
+            icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
+            color: const Color(0xFF072E33),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+              side: const BorderSide(color: Color(0xFF0E4B52)),
             ),
             onSelected: (val) {
               if (val == 'discover') {
@@ -527,14 +528,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
               PopupMenuItem(
                 value: 'discover',
                 child: Row(
-                  children: [
-                    Icon(Icons.explore_outlined, color: isDark ? Colors.white : Colors.black, size: 18),
-                    const SizedBox(width: 10),
+                  children: const [
+                    Icon(Icons.explore_outlined, color: Colors.white, size: 18),
+                    SizedBox(width: 10),
                     Text(
                       'Discover People',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
+                        color: Colors.white,
                       ),
                     ),
                   ],
@@ -550,24 +551,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
           // Expandable Search Bar
           if (_isSearchOpen)
             Container(
-              color: isDark ? Colors.black : Colors.white,
+              color: Colors.black,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
+                  color: const Color(0xFF072E33),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+                  border: Border.all(color: const Color(0xFF0E4B52)),
                 ),
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,
-                  style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
+                  style: const TextStyle(fontSize: 14, color: Colors.white),
+                  decoration: const InputDecoration(
                     hintText: 'Filter by handle...',
-                    hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
-                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: isDark ? Colors.white60 : const Color(0xFF94A3B8)),
+                    hintStyle: TextStyle(color: Color(0xFF90B4B6)),
+                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: Color(0xFF90B4B6)),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
@@ -575,15 +576,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
           // ── Segmented Navigation Capsule (Image 1 Header) ────────
           Container(
-            color: isDark ? Colors.black : Colors.white,
+            color: Colors.black,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
             child: Container(
               height: 44,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
+                color: const Color(0xFF072E33),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6)),
+                border: Border.all(color: const Color(0xFF0E4B52)),
               ),
               child: Row(
                 children: [

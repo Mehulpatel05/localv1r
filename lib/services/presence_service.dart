@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -33,10 +32,18 @@ class UserPresence {
         map['lastOnline'];
     if (lastSeenRaw is int) {
       dt = lastSeenRaw > 1000000000000
-          ? DateTime.fromMillisecondsSinceEpoch(lastSeenRaw)
-          : DateTime.fromMillisecondsSinceEpoch(lastSeenRaw * 1000);
+          ? DateTime.fromMillisecondsSinceEpoch(lastSeenRaw, isUtc: true).toLocal()
+          : DateTime.fromMillisecondsSinceEpoch(lastSeenRaw * 1000, isUtc: true).toLocal();
     } else if (lastSeenRaw is String) {
-      dt = DateTime.tryParse(lastSeenRaw);
+      final numVal = int.tryParse(lastSeenRaw);
+      if (numVal != null) {
+        dt = numVal > 1000000000000
+            ? DateTime.fromMillisecondsSinceEpoch(numVal, isUtc: true).toLocal()
+            : DateTime.fromMillisecondsSinceEpoch(numVal * 1000, isUtc: true).toLocal();
+      } else {
+        final parsed = DateTime.tryParse(lastSeenRaw);
+        dt = parsed != null ? (parsed.isUtc ? parsed.toLocal() : parsed) : null;
+      }
     }
 
     final showLastSeen = map['showLastSeen'] != false;
@@ -77,12 +84,11 @@ class PresenceService with WidgetsBindingObserver {
       _isInitialized = true;
     }
 
-    _loadCacheFromStorage();
     setOnline();
 
-    // Start periodic heartbeat every 30 seconds while app is active
+    // Start periodic heartbeat every 15 seconds while app is active (Fix 15: 15-sec heartbeat ping)
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _checkInternetAndHeartbeat();
     });
   }
@@ -174,16 +180,19 @@ class PresenceService with WidgetsBindingObserver {
 
     while (true) {
       try {
+        final token = await AuthService.instance.getAccessToken();
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/presence/$cleanHandle'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final presence = UserPresence.fromMap(data);
           _memoryCache[cleanHandle] = presence;
-          _saveCacheToStorage(cleanHandle, presence);
           yield presence;
         }
       } catch (_) {}
@@ -239,35 +248,15 @@ class PresenceService with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadCacheFromStorage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys().where((k) => k.startsWith('presence_'));
-      for (final key in keys) {
-        final raw = prefs.getString(key);
-        if (raw != null) {
-          final map = jsonDecode(raw) as Map<String, dynamic>;
-          final handle = key.replaceFirst('presence_', '');
-          _memoryCache[handle] = UserPresence.fromMap(map);
-        }
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _saveCacheToStorage(String handle, UserPresence presence) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final map = {
-        'isOnline': presence.isOnline,
-        'lastSeen': presence.lastSeen?.millisecondsSinceEpoch,
-        'showLastSeen': presence.showLastSeen,
-      };
-      await prefs.setString('presence_$handle', jsonEncode(map));
-    } catch (_) {}
+  void clearCache() {
+    _memoryCache.clear();
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _currentUserHandle = '';
   }
 
   void dispose() {
-    _heartbeatTimer?.cancel();
+    clearCache();
     if (_isInitialized) {
       WidgetsBinding.instance.removeObserver(this);
       _isInitialized = false;

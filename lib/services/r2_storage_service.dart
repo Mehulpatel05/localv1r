@@ -127,12 +127,107 @@ class R2StorageService {
 
   /// Backward-compatible alias for uploadMedia
   static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) {
+    return uploadDirectToR2(file, onProgress: onProgress);
+  }
+
+  /// ⚡ Phase 5: Direct Client-to-Cloudflare R2 Presigned Upload
+  /// Bypasses backend server proxy for file bytes, saving 100% backend bandwidth.
+  /// Naming Convention: r2://{cityId}/{moduleType}/{listingId}/{filename}
+  static Future<String?> uploadDirectToR2(
+    File file, {
+    String cityId = 'general',
+    String moduleType = 'posts',
+    String listingId = 'generic',
+    void Function(double)? onProgress,
+  }) async {
+    try {
+      if (!await file.exists()) {
+        debugPrint('File does not exist: ${file.path}');
+        return null;
+      }
+
+      final bytes = await file.readAsBytes();
+      final pathExt = file.path.split('.').last.toLowerCase().split('?').first;
+      final ext = pathExt.isNotEmpty ? pathExt : 'jpg';
+      final isVideo = isVideoFile(file.path);
+      final prefix = isVideo ? 'video' : 'image';
+      final filename = '${prefix}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final contentType = isVideo ? 'video/mp4' : 'image/jpeg';
+
+      if (onProgress != null) onProgress(0.2);
+
+      // 1. Request Presigned Upload URL from Backend
+      final token = await AuthService.instance.getAccessToken();
+      final presignedUri = Uri.parse('${PostRepository.backendBaseUrl}/storage/presigned-url');
+      final res = await http.post(
+        presignedUri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'cityId': cityId,
+          'moduleType': moduleType,
+          'listingId': listingId,
+          'filename': filename,
+          'contentType': contentType,
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final uploadUrl = data['uploadUrl'] as String?;
+        final publicUrl = data['publicUrl'] as String?;
+
+        if (uploadUrl != null && publicUrl != null) {
+          if (onProgress != null) onProgress(0.5);
+
+          // 2. Direct HTTP PUT upload to Cloudflare R2 bucket
+          final putRes = await http.put(
+            Uri.parse(uploadUrl),
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=31536000, immutable',
+            },
+            body: bytes,
+          ).timeout(const Duration(seconds: 45));
+
+          if (putRes.statusCode == 200 || putRes.statusCode == 201) {
+            if (onProgress != null) onProgress(1.0);
+            debugPrint('[R2StorageService] Direct R2 presigned upload succeeded: $publicUrl');
+            return publicUrl;
+          } else {
+            debugPrint('[R2StorageService] Presigned PUT failed (${putRes.statusCode}). Falling back to proxy upload.');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[R2StorageService] Direct upload exception: $e. Falling back to proxy upload.');
+    }
+
+    // Fallback to proxy upload
     return uploadMedia(file, onProgress: onProgress);
+  }
+
+  /// ⚡ Phase 5: Trigger Cloudflare CDN Pre-Warming for popular feed items
+  static Future<void> prewarmCdn(List<String> mediaUrls) async {
+    if (mediaUrls.isEmpty) return;
+    try {
+      final uri = Uri.parse('${PostRepository.backendBaseUrl}/storage/cdn-prewarm');
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'mediaUrls': mediaUrls}),
+      ).timeout(const Duration(seconds: 4));
+    } catch (_) {}
   }
 
   /// Upload multiple media files sequentially/in-batches with combined progress callback
   static Future<List<String>> uploadMultipleMedia(
     List<File> files, {
+    String cityId = 'general',
+    String moduleType = 'posts',
+    String listingId = 'generic',
     void Function(double overallProgress)? onProgress,
   }) async {
     final List<String> results = [];
@@ -141,8 +236,11 @@ class R2StorageService {
     final total = files.length;
     for (int i = 0; i < total; i++) {
       final file = files[i];
-      final url = await uploadMedia(
+      final url = await uploadDirectToR2(
         file,
+        cityId: cityId,
+        moduleType: moduleType,
+        listingId: listingId,
         onProgress: (p) {
           if (onProgress != null) {
             final overall = (i + p) / total;
@@ -158,3 +256,4 @@ class R2StorageService {
     return results;
   }
 }
+

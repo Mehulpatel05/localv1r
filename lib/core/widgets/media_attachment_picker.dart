@@ -9,7 +9,7 @@ enum MediaPickerMode {
 }
 
 class MediaAttachmentPicker {
-  /// Shows a modern bottom sheet to pick photos, videos, or record with camera
+  /// Shows a clean 2-option bottom sheet (Camera & Gallery) to pick photos and videos
   static Future<List<File>> showPickerSheet({
     required BuildContext context,
     MediaPickerMode mode = MediaPickerMode.all,
@@ -25,9 +25,15 @@ class MediaAttachmentPicker {
       return [];
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final subtextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final handleColor = isDark ? const Color(0xFF334155) : Colors.grey.shade300;
+
     final choice = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: sheetBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -42,12 +48,12 @@ class MediaAttachmentPicker {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: handleColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -55,53 +61,56 @@ class MediaAttachmentPicker {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: textColor,
                     ),
                   ),
                 ),
               ),
-              if (mode == MediaPickerMode.all || mode == MediaPickerMode.photoOnly) ...[
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFEFF6FF),
-                    child: Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+              // Option 1: Camera
+              ListTile(
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Capture picture using camera'),
-                  onTap: () => Navigator.pop(ctx, 'camera_photo'),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB), size: 22),
                 ),
-              ],
-              if (mode == MediaPickerMode.all || mode == MediaPickerMode.videoOnly) ...[
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFFAF5FF),
-                    child: Icon(Icons.videocam_rounded, color: Color(0xFF9333EA)),
+                title: Text(
+                  'Camera',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
+                ),
+                subtitle: Text(
+                  'Take a photo with camera',
+                  style: TextStyle(color: subtextColor, fontSize: 13),
+                ),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+
+              // Option 2: Gallery (Photos & Videos together)
+              ListTile(
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFAF5FF),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  title: const Text('Record Video', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Record up to 3 mins video clip'),
-                  onTap: () => Navigator.pop(ctx, 'camera_video'),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                 ),
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFECFDF5),
-                    child: Icon(Icons.video_library_rounded, color: Color(0xFF10B981)),
-                  ),
-                  title: const Text('Choose Video', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Select a video from gallery'),
-                  onTap: () => Navigator.pop(ctx, 'gallery_video'),
+                title: Text(
+                  'Gallery',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
                 ),
-              ],
-              if (mode == MediaPickerMode.all || mode == MediaPickerMode.photoOnly) ...[
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFF1F5F9),
-                    child: Icon(Icons.photo_library_rounded, color: Color(0xFF334155)),
-                  ),
-                  title: const Text('Gallery (Photos & Media)', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Select up to $remainingSlots photos/clips'),
-                  onTap: () => Navigator.pop(ctx, 'gallery_media'),
+                subtitle: Text(
+                  remainingSlots > 1
+                      ? 'Choose photos & videos (up to $remainingSlots)'
+                      : 'Choose a photo or video from gallery',
+                  style: TextStyle(color: subtextColor, fontSize: 13),
                 ),
-              ],
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -115,52 +124,75 @@ class MediaAttachmentPicker {
     final List<File> selectedFiles = [];
 
     try {
-      if (choice == 'camera_photo') {
+      if (choice == 'camera') {
         final picked = await picker.pickImage(
           source: ImageSource.camera,
-          imageQuality: 85,
-          maxWidth: 2048,
-          maxHeight: 2048,
+          imageQuality: 80,
+          maxWidth: 1080,
+          maxHeight: 1080,
         );
         if (picked != null) selectedFiles.add(File(picked.path));
-      } else if (choice == 'camera_video') {
-        final picked = await picker.pickVideo(
-          source: ImageSource.camera,
-          maxDuration: const Duration(minutes: 3),
-        );
-        if (picked != null) selectedFiles.add(File(picked.path));
-      } else if (choice == 'gallery_video') {
-        final picked = await picker.pickVideo(
-          source: ImageSource.gallery,
-          maxDuration: maxVideoDuration,
-        );
-        if (picked != null) selectedFiles.add(File(picked.path));
-      } else if (choice == 'gallery_media') {
+      } else if (choice == 'gallery') {
+        // Native Visual Photo & Video Picker
         try {
-          final pickedList = await picker.pickMultipleMedia(
-            imageQuality: 85,
-            maxWidth: 2048,
-            maxHeight: 2048,
-          );
-          if (pickedList.isNotEmpty) {
-            for (final x in pickedList) {
-              if (selectedFiles.length < remainingSlots) {
-                selectedFiles.add(File(x.path));
+          if (mode == MediaPickerMode.photoOnly) {
+            final pickedList = await picker.pickMultiImage(
+              imageQuality: 80,
+              maxWidth: 1080,
+              maxHeight: 1080,
+            );
+            if (pickedList.isNotEmpty) {
+              for (final x in pickedList) {
+                if (selectedFiles.length < remainingSlots) {
+                  selectedFiles.add(File(x.path));
+                }
+              }
+            }
+          } else if (mode == MediaPickerMode.videoOnly) {
+            final picked = await picker.pickVideo(
+              source: ImageSource.gallery,
+              maxDuration: maxVideoDuration,
+            );
+            if (picked != null) selectedFiles.add(File(picked.path));
+          } else {
+            // mode == MediaPickerMode.all: Pick photos and videos visually together
+            final pickedList = await picker.pickMultipleMedia(
+              imageQuality: 80,
+              maxWidth: 1080,
+              maxHeight: 1080,
+            );
+            if (pickedList.isNotEmpty) {
+              for (final x in pickedList) {
+                if (selectedFiles.length < remainingSlots) {
+                  selectedFiles.add(File(x.path));
+                }
               }
             }
           }
-        } catch (_) {
-          final pickedList = await picker.pickMultiImage(
-            imageQuality: 85,
-            maxWidth: 2048,
-            maxHeight: 2048,
-          );
-          if (pickedList.isNotEmpty) {
-            for (final x in pickedList) {
-              if (selectedFiles.length < remainingSlots) {
-                selectedFiles.add(File(x.path));
+        } catch (e) {
+          debugPrint('[MediaAttachmentPicker] pickMultipleMedia fallback: $e');
+          // Fallback to multi-image or single gallery pick
+          try {
+            final pickedList = await picker.pickMultiImage(
+              imageQuality: 80,
+              maxWidth: 1080,
+              maxHeight: 1080,
+            );
+            if (pickedList.isNotEmpty) {
+              for (final x in pickedList) {
+                if (selectedFiles.length < remainingSlots) {
+                  selectedFiles.add(File(x.path));
+                }
               }
             }
+          } catch (_) {
+            final picked = await picker.pickImage(
+              source: ImageSource.gallery,
+              imageQuality: 88,
+              maxWidth: 1440,
+              maxHeight: 1440,
+            );
+            if (picked != null) selectedFiles.add(File(picked.path));
           }
         }
       }

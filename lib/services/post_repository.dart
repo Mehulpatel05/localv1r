@@ -1,33 +1,41 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants/api_constants.dart';
 import '../core/constants/areas_and_categories.dart';
 import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../core/location/location_service.dart';
+import '../core/location/location_engine.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
+import 'r2_storage_service.dart';
+import 'user_action_state_service.dart';
+import '../core/action_state/action_state_provider.dart';
 
 enum FeedTab { latest, trending }
 
 class PostRepository extends ChangeNotifier {
-  // ⚠️ CONFIGURATION: Replace with your deployed FastAPI server URL.
-  // When running locally on Android Emulator, 10.0.2.2 points to local machine's localhost.
-  static const String backendBaseUrl = 'https://localv1r.onrender.com/api/v1';
+  // ⚠️ CONFIGURATION: Sourced from centralized ApiConstants.baseUrl
+  static const String backendBaseUrl = ApiConstants.baseUrl;
 
   // 🚀 PERSISTENT HTTP CONNECTION POOL (re-uses TCP/TLS sockets to save 300ms per request)
   static final http.Client _httpClient = http.Client();
 
+  static final Map<String, List<Post>> _categoryPostsCache = {};
+
   List<Post> _posts = [];
   final Map<String, Post> _postsRegistry = {};
   String _currentUserHandle = '';
-  Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
+  final Map<String, int> _localVotes = {}; // Maps postId -> vote direction (1, -1, 0)
   PostCategory? _selectedCategory = PostCategory.general;
   FeedTab _currentTab = FeedTab.latest;
-  bool _isLoading = false; // Starts false if disk cache loads in 0ms!
-  SharedPreferences? _prefs;
+  bool _isLoading = true;
+  bool _hasLoadedOnce = false;
+
+  bool get hasLoadedOnce => _hasLoadedOnce;
 
   Post? getPostById(String postId) => _postsRegistry[postId];
 
@@ -60,17 +68,58 @@ class PostRepository extends ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
 
-  PostRepository(this.locationService) {
-    locationService.addListener(_listenToPosts);
-    _initStorageAndLoad();
+  static const String _kOfflinePostsCachePrefix = 'cache_offline_posts_';
+
+  Future<void> _loadOfflineCategoryPosts(String catKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('$_kOfflinePostsCachePrefix$catKey');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(jsonStr);
+        final loaded = list.map((item) => Post.fromJson(item as Map<String, dynamic>)).toList();
+        if (loaded.isNotEmpty) {
+          _categoryPostsCache[catKey] = loaded;
+          if (_selectedCategory?.name == catKey || (catKey == 'ALL' && _selectedCategory == null)) {
+            _posts = List.from(loaded);
+            registerPosts(loaded);
+            _isLoading = false;
+            _hasLoadedOnce = true;
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[PostRepository] _loadOfflineCategoryPosts error: $e');
+    }
   }
 
-  Future<void> _initStorageAndLoad() async {
+  Future<void> _saveOfflineCategoryPosts(String catKey, List<Post> posts) async {
     try {
-      _prefs = await SharedPreferences.getInstance();
-      await _loadLocalVotes();
-      // 0ms instant display from disk cache before network call
-      _loadCachedPosts();
+      final prefs = await SharedPreferences.getInstance();
+      final toSave = posts.take(30).map((p) => p.toJson()).toList();
+      await prefs.setString('$_kOfflinePostsCachePrefix$catKey', jsonEncode(toSave));
+    } catch (e) {
+      debugPrint('[PostRepository] _saveOfflineCategoryPosts error: $e');
+    }
+  }
+
+  PostRepository(this.locationService) {
+    locationService.addListener(_listenToPosts);
+    final catKey = _selectedCategory?.name ?? 'ALL';
+    if (_categoryPostsCache.containsKey(catKey) && _categoryPostsCache[catKey]!.isNotEmpty) {
+      _posts = List.from(_categoryPostsCache[catKey]!);
+      registerPosts(_posts);
+      _isLoading = false;
+      _hasLoadedOnce = true;
+    } else {
+      _loadOfflineCategoryPosts(catKey);
+    }
+    _initOnlineFeed();
+  }
+
+  Future<void> _initOnlineFeed() async {
+    try {
+      // Fetch fresh real-time data directly from Cloudflare D1 backend
       _fetchPosts(refresh: true);
     } catch (e) {
       debugPrint('Error during PostRepository init: $e');
@@ -78,73 +127,44 @@ class PostRepository extends ChangeNotifier {
     }
   }
 
-  String _getCacheKey() {
-    final cityId = locationService.cityId;
-    final categoryStr = _selectedCategory?.name ?? 'ALL';
-    return 'cached_feed_${cityId}_$categoryStr';
-  }
-
-  /// 🚀 0ms Instant Disk Cache Reader (Offline-First)
-  void _loadCachedPosts() {
-    if (_prefs == null) return;
+  /// ⚡ Phase 2: Stage B Pre-fetch City Feed (Jobs/Rooms/Shops/Food/Events/General)
+  Future<void> prefetchCityFeed(String cityId, {String? category}) async {
     try {
-      final key = _getCacheKey();
-      final cachedJson = _prefs!.getString(key);
-      if (cachedJson != null && cachedJson.isNotEmpty) {
-        final List<dynamic> rawList = jsonDecode(cachedJson);
-        final cached = rawList.map((d) => _parsePost(d)).toList();
-        if (cached.isNotEmpty) {
-          _posts = cached;
-          registerPosts(cached);
-          _isLoading = false;
-          notifyListeners();
+      final effCat = category ?? (_selectedCategory?.name ?? 'ALL');
+      final catQuery = effCat != 'ALL' ? '&category=$effCat' : '';
+      final uri = Uri.parse('$backendBaseUrl/posts?cityId=$cityId$catQuery&limit=20');
+      final response = await _httpClient.get(
+        uri,
+        headers: {'Accept-Encoding': 'gzip'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final fetched = data.map((d) => _parsePost(d)).toList();
+          registerPosts(fetched);
+          if (_posts.isEmpty || locationService.cityId == cityId) {
+            _posts = fetched;
+            _isLoading = false;
+            notifyListeners();
+          }
+          // Pre-warm button action states in 1 batch query
+          final postIds = fetched.map((p) => p.id).toList();
+          UserActionStateService.instance.fetchBatch(postIds);
+
+          // ⚡ Phase 5: Pre-warm Cloudflare CDN Edge Cache for feed images
+          final mediaUrls = fetched
+              .map((p) => p.imageUrl)
+              .where((u) => u != null && u.isNotEmpty)
+              .cast<String>()
+              .toList();
+          if (mediaUrls.isNotEmpty) {
+            unawaited(R2StorageService.prewarmCdn(mediaUrls));
+          }
         }
       }
     } catch (e) {
-      debugPrint('Error loading cached posts: $e');
-    }
-  }
-
-  void _saveCachedPosts(List<dynamic> postsData) {
-    if (_prefs == null) return;
-    try {
-      final key = _getCacheKey();
-      _prefs!.setString(key, jsonEncode(postsData));
-    } catch (e) {
-      debugPrint('Error saving cached posts: $e');
-    }
-  }
-
-  Future<void> _loadLocalVotes() async {
-    try {
-      _prefs ??= await SharedPreferences.getInstance();
-      final String? jsonStr = _prefs!.getString('local_user_votes');
-      if (jsonStr != null && jsonStr.isNotEmpty) {
-        final Map<String, dynamic> rawMap = jsonDecode(jsonStr);
-        _localVotes = rawMap.map((key, value) => MapEntry(key, value as int));
-        for (final p in _posts) {
-          if (_localVotes.containsKey(p.id)) {
-            p.userVote = _localVotes[p.id]!;
-          }
-        }
-        for (final p in _postsRegistry.values) {
-          if (_localVotes.containsKey(p.id)) {
-            p.userVote = _localVotes[p.id]!;
-          }
-        }
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error loading local votes: $e');
-    }
-  }
-
-  Future<void> _saveLocalVotes() async {
-    try {
-      _prefs ??= await SharedPreferences.getInstance();
-      await _prefs!.setString('local_user_votes', jsonEncode(_localVotes));
-    } catch (e) {
-      debugPrint('Error saving local votes: $e');
+      debugPrint('[PostRepository] prefetchCityFeed warning: $e');
     }
   }
 
@@ -160,8 +180,19 @@ class PostRepository extends ChangeNotifier {
   String get currentUserHandle => _currentUserHandle;
 
   List<Post> get allPosts {
+    final originLat = locationService.area?.lat ?? locationService.city.lat ?? 22.3072;
+    final originLng = locationService.area?.lng ?? locationService.city.lng ?? 73.1812;
+
     var list = _posts.where((p) {
       if (_currentUserHandle.isNotEmpty && p.reporters.contains(_currentUserHandle)) return false;
+
+      // 🌐 Proximity Radius Distance Filter (distance <= 50.0 km)
+      final postLat = p.lat ?? LocationEngine.lookupCity(p.cityId ?? '')?.lat ?? 22.3072;
+      final postLng = p.lng ?? LocationEngine.lookupCity(p.cityId ?? '')?.lng ?? 73.1812;
+
+      final distKm = LocationService.calculateDistanceKm(originLat, originLng, postLat, postLng);
+      if (distKm > 50.0 && p.cityId != locationService.cityId) return false;
+
       return true;
     }).toList();
 
@@ -172,7 +203,21 @@ class PostRepository extends ChangeNotifier {
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // Nearest posts first
+      list.sort((a, b) {
+        final postLatA = a.lat ?? LocationEngine.lookupCity(a.cityId ?? '')?.lat ?? 22.3072;
+        final postLngA = a.lng ?? LocationEngine.lookupCity(a.cityId ?? '')?.lng ?? 73.1812;
+        final distA = LocationService.calculateDistanceKm(originLat, originLng, postLatA, postLngA);
+
+        final postLatB = b.lat ?? LocationEngine.lookupCity(b.cityId ?? '')?.lat ?? 22.3072;
+        final postLngB = b.lng ?? LocationEngine.lookupCity(b.cityId ?? '')?.lng ?? 73.1812;
+        final distB = LocationService.calculateDistanceKm(originLat, originLng, postLatB, postLngB);
+
+        if ((distA - distB).abs() > 0.5) {
+          return distA.compareTo(distB);
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
     }
 
     return list;
@@ -209,6 +254,8 @@ class PostRepository extends ChangeNotifier {
       cityId: d['cityId'],
       areaId: d['areaId'],
       areaName: d['areaName'],
+      lat: d['lat'] != null ? (d['lat'] as num).toDouble() : null,
+      lng: d['lng'] != null ? (d['lng'] as num).toDouble() : null,
       roomTitle: d['roomTitle'],
       roomArea: d['roomArea'],
       roomRent: d['roomRent'],
@@ -233,17 +280,13 @@ class PostRepository extends ChangeNotifier {
     );
   }
 
-  /// 🚀 Stale-While-Revalidate Fetcher (Instant UI + Background Refresh)
+  /// 🚀 Real-time Fetcher from Cloudflare D1 Backend
   Future<void> _fetchPosts({bool refresh = false}) async {
     if (refresh) {
       _nextCursor = null;
-      // If we don't have posts yet, show loading; otherwise keep showing cached posts
       if (_posts.isEmpty) {
-        _loadCachedPosts();
-        if (_posts.isEmpty) {
-          _isLoading = true;
-          notifyListeners();
-        }
+        _isLoading = true;
+        notifyListeners();
       }
     } else {
       _isLoadingMore = true;
@@ -264,7 +307,7 @@ class PostRepository extends ChangeNotifier {
       
       uri = uri.replace(queryParameters: queryParams);
         
-      final response = await _httpClient.get(uri, headers: await _getHeaders()).timeout(const Duration(seconds: 10));
+      final response = await _httpClient.get(uri, headers: await _getAuthHeaders()).timeout(const Duration(seconds: 10));
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -275,21 +318,23 @@ class PostRepository extends ChangeNotifier {
         
         if (refresh) {
           _posts = newPosts;
-          _saveCachedPosts(postsData);
         } else {
           _posts.addAll(newPosts);
         }
         registerPosts(newPosts);
 
-        // Demo posts removed for production
-
         _hasMore = postsData.isNotEmpty;
+
+        final catKey = _selectedCategory?.name ?? 'ALL';
+        _categoryPostsCache[catKey] = List.from(_posts);
+        _saveOfflineCategoryPosts(catKey, _posts);
       }
     } catch (e) {
       debugPrint('Error fetching posts over REST: $e');
     } finally {
       _isLoading = false;
       _isLoadingMore = false;
+      _hasLoadedOnce = true;
       notifyListeners();
     }
   }
@@ -309,8 +354,6 @@ class PostRepository extends ChangeNotifier {
 
   void _listenToPosts() {
     _fetchDebounceTimer?.cancel();
-    // 0ms instant display of cached posts for newly selected category/area
-    _loadCachedPosts();
     _fetchDebounceTimer = Timer(const Duration(milliseconds: 60), () {
       _fetchPosts(refresh: true);
     });
@@ -440,7 +483,22 @@ class PostRepository extends ChangeNotifier {
   }
 
   void setCategory(PostCategory? cat) {
+    if (_selectedCategory == cat && _hasLoadedOnce) return;
     _selectedCategory = cat;
+    final catKey = cat?.name ?? 'ALL';
+    if (_categoryPostsCache.containsKey(catKey) && _categoryPostsCache[catKey]!.isNotEmpty) {
+      _posts = List.from(_categoryPostsCache[catKey]!);
+      registerPosts(_posts);
+      _isLoading = false;
+      _hasLoadedOnce = true;
+      notifyListeners();
+    } else {
+      _posts = [];
+      _isLoading = true;
+      _hasLoadedOnce = false;
+      notifyListeners();
+      _loadOfflineCategoryPosts(catKey);
+    }
     _listenToPosts();
   }
 
@@ -519,6 +577,11 @@ class PostRepository extends ChangeNotifier {
     String? serviceTitle,
     String? serviceCategoryText,
     String? servicePrice,
+    // 🛍️ Phase 2 fields
+    String? itemCondition,
+    String? roomFurnishing,
+    String? roomTenantPreference,
+    String? jobWorkMode,
   }) async {
     try {
       final headers = await _getAuthHeaders();
@@ -554,6 +617,10 @@ class PostRepository extends ChangeNotifier {
           if (serviceTitle != null) 'serviceTitle': _cleanOptional(serviceTitle),
           if (serviceCategoryText != null) 'serviceCategoryText': _cleanOptional(serviceCategoryText),
           if (servicePrice != null) 'servicePrice': _cleanOptional(servicePrice, maxLen: 30),
+          if (itemCondition != null) 'itemCondition': _cleanOptional(itemCondition, maxLen: 30),
+          if (roomFurnishing != null) 'roomFurnishing': _cleanOptional(roomFurnishing, maxLen: 30),
+          if (roomTenantPreference != null) 'roomTenantPreference': _cleanOptional(roomTenantPreference, maxLen: 30),
+          if (jobWorkMode != null) 'jobWorkMode': _cleanOptional(jobWorkMode, maxLen: 30),
         }),
       );
       if (response.statusCode == 201) {
@@ -587,6 +654,15 @@ class PostRepository extends ChangeNotifier {
   int getUserVote(String postId) {
     return _localVotes[postId] ?? 0;
   }
+
+  /// Returns total likes accumulated across all posts by a specific user handle
+  int getTotalLikesForUser(String handle) => getTotalUpvotesForUser(handle);
+
+  /// Like/unlike toggle for a post (1 = liked, 0 = unliked)
+  Future<void> likePost(String postId) => votePost(postId, 1);
+
+  /// Check whether current user liked the post
+  bool isPostLiked(String postId) => getUserVote(postId) == 1;
 
   /// Returns total upvotes accumulated across all posts by a specific user handle
   int getTotalUpvotesForUser(String handle) {
@@ -637,7 +713,7 @@ class PostRepository extends ChangeNotifier {
 
     // 1. Optimistic memory update
     _localVotes[postId] = newVote;
-    _saveLocalVotes();
+    ActionStateProvider.instance.setVote(postId, newVote);
 
     final postIndex = _posts.indexWhere((p) => p.id == postId);
     Post? targetPost;
@@ -703,7 +779,7 @@ class PostRepository extends ChangeNotifier {
       }
 
       if (response.statusCode != 200) {
-        String errorMsg = 'Vote failed on server (${response.statusCode})';
+        String errorMsg = 'Like update failed on server (${response.statusCode})';
         try {
           final decoded = jsonDecode(response.body);
           if (decoded is Map && decoded['detail'] != null) {
@@ -718,20 +794,20 @@ class PostRepository extends ChangeNotifier {
       if (data['userVote'] != null) {
         final serverVote = data['userVote'] as int;
         _localVotes[postId] = serverVote;
+        ActionStateProvider.instance.setVote(postId, serverVote);
         if (postIndex != -1) {
           _posts[postIndex].userVote = serverVote;
         }
         if (regPost != null) {
           regPost.userVote = serverVote;
         }
-        _saveLocalVotes();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error voting on post $postId: $e');
       // 3. Rollback optimistic state on failure
       _localVotes[postId] = oldVote;
-      _saveLocalVotes();
+      ActionStateProvider.instance.setVote(postId, oldVote);
 
       if (postIndex != -1) {
         final p = _posts[postIndex];
@@ -755,7 +831,7 @@ class PostRepository extends ChangeNotifier {
     try {
       final response = await _httpClient.get(
         Uri.parse('$backendBaseUrl/posts?limit=50&author=$handle&authorHandle=$handle'),
-        headers: await _getHeaders(),
+        headers: await _getAuthHeaders(),
       ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -780,5 +856,59 @@ class PostRepository extends ChangeNotifier {
     }
     registerPosts(results);
     return results;
+  }
+
+  /// 🛍️ Phase 2: Toggle "Mark as Sold" for Buy & Sell items
+  Future<void> markAsSold(String postId, {bool isSold = true}) async {
+    final idx = _posts.indexWhere((p) => p.id == postId);
+    if (idx != -1) {
+      _posts[idx] = _posts[idx].copyWith(isSold: isSold);
+    }
+    final reg = _postsRegistry[postId];
+    if (reg != null) {
+      _postsRegistry[postId] = reg.copyWith(isSold: isSold);
+    }
+    notifyListeners();
+  }
+
+  /// 🔧 Phase 2: Toggle "Neighbor Recommended" status for services
+  Future<void> toggleRecommendService(String postId) async {
+    final idx = _posts.indexWhere((p) => p.id == postId);
+    if (idx != -1) {
+      final current = _posts[idx].isRecommended;
+      _posts[idx] = _posts[idx].copyWith(isRecommended: !current);
+    }
+    final reg = _postsRegistry[postId];
+    if (reg != null) {
+      _postsRegistry[postId] = reg.copyWith(isRecommended: !reg.isRecommended);
+    }
+    notifyListeners();
+  }
+
+  /// 🎉 Phase 2: Toggle RSVP / Going for events
+  Future<void> toggleEventRsvp(String postId) async {
+    final idx = _posts.indexWhere((p) => p.id == postId);
+    if (idx != -1) {
+      final post = _posts[idx];
+      final newRsvp = !post.isUserRsvped;
+      final newCount = (post.eventRsvpCount + (newRsvp ? 1 : -1)).clamp(0, 99999);
+      _posts[idx] = post.copyWith(isUserRsvped: newRsvp, eventRsvpCount: newCount);
+    }
+    final reg = _postsRegistry[postId];
+    if (reg != null) {
+      final newRsvp = !reg.isUserRsvped;
+      final newCount = (reg.eventRsvpCount + (newRsvp ? 1 : -1)).clamp(0, 99999);
+      _postsRegistry[postId] = reg.copyWith(isUserRsvped: newRsvp, eventRsvpCount: newCount);
+    }
+    notifyListeners();
+  }
+
+  /// ⚡ Phase 4: Wipes in-memory posts, registry, and local votes on logout
+  void clearCache() {
+    _posts.clear();
+    _postsRegistry.clear();
+    _localVotes.clear();
+    _currentUserHandle = '';
+    notifyListeners();
   }
 }

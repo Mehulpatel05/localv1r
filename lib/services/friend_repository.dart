@@ -499,4 +499,25 @@ class FriendRepository {
     }
     return null;
   }
+
+  // ── Session Purge & Resource Cleanup ──
+  void clearCache() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _currentUserHandle = '';
+    _cachedFriends = [];
+    _cachedPendingRequests = [];
+    _cachedSentRequests = [];
+    _cachedBlocked = [];
+    if (!_friendsController.isClosed) _friendsController.add([]);
+    if (!_pendingRequestsController.isClosed) _pendingRequestsController.add([]);
+    if (!_sentRequestsController.isClosed) _sentRequestsController.add([]);
+    if (!_blockedUsersController.isClosed) _blockedUsersController.add([]);
+    if (!_pendingCountController.isClosed) _pendingCountController.add(0);
+  }
+
+  void dispose() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -16,6 +17,12 @@ class IncomingCallScreen extends StatefulWidget {
   final CallModel call;
   final String currentUserHandle;
 
+  static final ValueNotifier<String?> dismissedCallNotifier = ValueNotifier<String?>(null);
+
+  static void dismissCall(String callId) {
+    dismissedCallNotifier.value = callId;
+  }
+
   const IncomingCallScreen({
     super.key,
     required this.call,
@@ -31,6 +38,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   Timer? _statusPollingTimer;
+  WebSocket? _signalingWs;
   bool _isProcessing = false;
   bool _isDismissed = false;
 
@@ -39,6 +47,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _isDismissed = true;
     _statusPollingTimer?.cancel();
     _statusPollingTimer = null;
+    try {
+      _signalingWs?.close();
+    } catch (_) {}
+    _signalingWs = null;
     CallAudioToneService.instance.stop();
     NotificationService().cancelCallNotification(widget.call.callId);
     if (mounted && Navigator.of(context).canPop()) {
@@ -46,17 +58,57 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     }
   }
 
+  void _onDismissNotifierChanged() {
+    if (IncomingCallScreen.dismissedCallNotifier.value == widget.call.callId) {
+      _safeDismiss();
+    }
+  }
+
+  Future<void> _connectSignalingWs() async {
+    try {
+      final base = AuthService.baseUrl;
+      final wsBase = base.startsWith('https://')
+          ? base.replaceFirst('https://', 'wss://')
+          : base.replaceFirst('http://', 'ws://');
+      final uri = Uri.parse('$wsBase/calls/${widget.call.callId}/ws');
+
+      _signalingWs = await WebSocket.connect(uri.toString()).timeout(const Duration(seconds: 3));
+      _signalingWs?.listen((data) {
+        try {
+          final msg = jsonDecode(data.toString()) as Map<String, dynamic>;
+          final type = msg['type']?.toString();
+          if (type == 'status') {
+            final statusStr = (msg['status'] ?? '').toString().toLowerCase();
+            if (statusStr == 'ended' ||
+                statusStr == 'rejected' ||
+                statusStr == 'missed' ||
+                statusStr == 'busy' ||
+                statusStr == 'declined') {
+              _safeDismiss();
+            }
+          }
+        } catch (_) {}
+      }, onError: (_) {}, onDone: () {});
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    IncomingCallScreen.dismissedCallNotifier.addListener(_onDismissNotifierChanged);
+
+    // ⚡ Section 4.4: Caller avatar pulse (scale 1.0 -> 1.08 -> 1.0, 1000ms loop)
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.18).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    // Connect WebSocket signaling for 0ms termination sync
+    _connectSignalingWs();
 
     // Notify caller that receiver's phone is ringing
     http.post(
@@ -68,8 +120,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     // Start playing incoming ringtone + vibration on receiver's phone
     CallAudioToneService.instance.playIncomingRingtone();
 
-    // Poll call status in D1
-    _statusPollingTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+    // Fast polling fallback for D1 call status
+    _statusPollingTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) async {
       try {
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/calls/${widget.call.callId}'),
@@ -79,7 +131,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final status = (data['call']?['status'] ?? '').toString().toLowerCase();
-          if (status == 'ended' || status == 'rejected' || status == 'missed') {
+          if (status == 'ended' ||
+              status == 'rejected' ||
+              status == 'missed' ||
+              status == 'busy' ||
+              status == 'declined') {
             _safeDismiss();
           }
         } else if (res.statusCode == 404) {
@@ -91,8 +147,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   @override
   void dispose() {
+    IncomingCallScreen.dismissedCallNotifier.removeListener(_onDismissNotifierChanged);
     _statusPollingTimer?.cancel();
     _statusPollingTimer = null;
+    try {
+      _signalingWs?.close();
+    } catch (_) {}
+    _signalingWs = null;
     CallAudioToneService.instance.stop();
     NotificationService().cancelCallNotification(widget.call.callId);
     _pulseController.dispose();
@@ -136,7 +197,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               currentUserHandle: widget.currentUserHandle,
               isCaller: false,
             ),
-            transitionDuration: const Duration(milliseconds: 250),
+            transitionDuration: const Duration(milliseconds: 300),
             transitionsBuilder: (context, animation, secondaryAnimation, child) =>
                 FadeTransition(opacity: animation, child: child),
             fullscreenDialog: true,

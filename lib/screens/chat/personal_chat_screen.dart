@@ -3,11 +3,11 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/audio_upload_service.dart';
@@ -17,6 +17,9 @@ import '../../services/direct_chat_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/call_model.dart';
 import '../../services/webrtc_call_service.dart';
+import '../../services/token_decision_engine.dart';
+import '../../core/action_state/action_state_provider.dart';
+import '../../core/widgets/media_attachment_picker.dart';
 import '../../main.dart';
 import 'call_screen.dart';
 import '../profile/other_user_profile_sheet.dart';
@@ -25,6 +28,7 @@ import 'widgets/voice_note_bubble.dart';
 import 'widgets/reply_preview_banner.dart';
 import 'widgets/quoted_message_widget.dart';
 import 'widgets/swipe_to_reply_wrapper.dart';
+import '../../core/services/app_image_cache_service.dart';
 
 class _PendingImageUpload {
   final String id;
@@ -45,7 +49,7 @@ class _PendingImageUpload {
 }
 
 class _OptimisticTextMessage {
-  final String id;
+  String id;
   final String content;
   final String senderHandle;
   final String? senderUid;
@@ -133,9 +137,18 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   // Pre-cached chat metadata for zero-latency sending
   bool _isBlocked = false;
 
+  // Track already-animated messages to eliminate screen flickering / re-animation on polling
+  final Set<String> _animatedMessageIds = {};
+
   // Live typing state
   Timer? _typingDebounceTimer;
   bool _isTypingReported = false;
+
+  // Media picker animation state
+  bool _isMediaPickerOpen = false;
+
+  // Call log pulse animation state
+  String? _pulsingCallLogId;
 
   @override
   void initState() {
@@ -147,6 +160,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _initChatCache();
     _messageController.addListener(_onTextChanged);
     _markChatAsRead();
+    _checkVoiceCheckpoint();
+  }
+
+  void _fireMarkChatRead() {
+    DirectChatService.instance.markChatRead(_chatId, widget.currentUserHandle).catchError((_) => false);
   }
 
   void _initStreams() {
@@ -163,7 +181,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         _updateTypingStatus(true);
       }
       _typingDebounceTimer?.cancel();
-      _typingDebounceTimer = Timer(const Duration(seconds: 3), () {
+      _typingDebounceTimer = Timer(const Duration(seconds: 5), () {
         if (_isTypingReported) {
           _isTypingReported = false;
           _updateTypingStatus(false);
@@ -258,6 +276,22 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   Future<void> _startCall(CallType type) async {
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     if (cleanPartner.isEmpty) return;
+
+    // ⚡ Phase 1 & 3: 2-Step calling check (JWT ban check + in-memory block check)
+    final canCall = TokenDecisionEngine.instance.canCallUserSync(cleanPartner);
+    final isBlockedInState = ActionStateProvider.instance.isBlocked(cleanPartner);
+    if (!canCall || isBlockedInState || _isBlocked) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot initiate call. You or the recipient may be restricted or blocked.'),
+            backgroundColor: Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     HapticFeedback.lightImpact();
 
@@ -399,9 +433,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       );
 
       if (res != null && res['success'] == true) {
+        final realId = res['messageId'] as String?;
         if (mounted) {
           setState(() {
-            _optimisticMessages.removeWhere((m) => m.id == optimisticMsg.id);
+            optimisticMsg.status = 'sent';
+            if (realId != null && realId.isNotEmpty) {
+              optimisticMsg.id = realId;
+              _animatedMessageIds.add(realId);
+            }
           });
         }
       } else {
@@ -434,113 +473,83 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
   }
 
+  // ⚡ Fix 7: Retry failed optimistic message
+  void _retrySendMessage(String msgId) {
+    final idx = _optimisticMessages.indexWhere((m) => m.id == msgId);
+    if (idx != -1) {
+      final msg = _optimisticMessages[idx];
+      setState(() {
+        msg.status = 'sending';
+      });
+      final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
+      final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
+      _performSendMessageBackground(msg, msg.content, msg.replyTo, cleanMe, cleanPartner);
+    }
+  }
 
-  Future<void> _pickAndSendImages() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF2563EB),
-                child: Icon(Icons.camera_alt_rounded, color: Colors.white),
-              ),
-              title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Capture a picture with camera'),
-              onTap: () => Navigator.pop(context, 'camera'),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF9333EA),
-                child: Icon(Icons.videocam_rounded, color: Colors.white),
-              ),
-              title: const Text('Record Video', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Record a quick video clip'),
-              onTap: () => Navigator.pop(context, 'video_camera'),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF10B981),
-                child: Icon(Icons.video_library_rounded, color: Colors.white),
-              ),
-              title: const Text('Select Video', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Choose a video from gallery'),
-              onTap: () => Navigator.pop(context, 'video_gallery'),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF2563EB),
-                child: Icon(Icons.photo_library_rounded, color: Colors.white),
-              ),
-              title: const Text('Gallery (Photos & Videos)', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Choose photos and media from gallery'),
-              onTap: () => Navigator.pop(context, 'gallery'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (choice == null) return;
+  // ⚡ Fix 9: Voice note checkpointing keys & methods
+  static const String _kVoiceCheckpointPathKey = 'voice_note_checkpoint_path';
+  static const String _kVoiceCheckpointChatIdKey = 'voice_note_checkpoint_chat_id';
+  static const String _kVoiceCheckpointTimeKey = 'voice_note_checkpoint_time';
 
-    final picker = ImagePicker();
-    List<File> filesToUpload = [];
+  Future<void> _checkVoiceCheckpoint() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final path = prefs.getString(_kVoiceCheckpointPathKey);
+      final chatId = prefs.getString(_kVoiceCheckpointChatIdKey);
+      final time = prefs.getInt(_kVoiceCheckpointTimeKey);
 
-    if (choice == 'camera') {
-      final picked = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-      if (picked != null) filesToUpload.add(File(picked.path));
-    } else if (choice == 'video_camera') {
-      final picked = await picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: const Duration(minutes: 3),
-      );
-      if (picked != null) filesToUpload.add(File(picked.path));
-    } else if (choice == 'video_gallery') {
-      final picked = await picker.pickVideo(
-        source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5),
-      );
-      if (picked != null) filesToUpload.add(File(picked.path));
-    } else {
-      try {
-        final pickedList = await picker.pickMultipleMedia(
-          imageQuality: 80,
-          maxWidth: 2048,
-          maxHeight: 2048,
-        );
-        if (pickedList.isNotEmpty) {
-          filesToUpload = pickedList.map((x) => File(x.path)).toList();
-        }
-      } catch (_) {
-        final pickedList = await picker.pickMultiImage(
-          imageQuality: 80,
-          maxWidth: 2048,
-          maxHeight: 2048,
-        );
-        if (pickedList.isNotEmpty) {
-          filesToUpload = pickedList.map((x) => File(x.path)).toList();
+      if (path != null && path.isNotEmpty) {
+        final file = File(path);
+        if (await file.exists()) {
+          final length = await file.length();
+          final age = time != null
+              ? DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(time))
+              : const Duration(hours: 2);
+
+          if (length == 0 || age.inHours >= 1) {
+            // Clean up stale or zero-byte temp file
+            try { await file.delete(); } catch (_) {}
+            await prefs.remove(_kVoiceCheckpointPathKey);
+            await prefs.remove(_kVoiceCheckpointChatIdKey);
+            await prefs.remove(_kVoiceCheckpointTimeKey);
+          } else if (chatId == _chatId && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Found interrupted voice recording from previous session'),
+                action: SnackBarAction(
+                  label: 'Discard',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    try { file.delete(); } catch (_) {}
+                    prefs.remove(_kVoiceCheckpointPathKey);
+                    prefs.remove(_kVoiceCheckpointChatIdKey);
+                    prefs.remove(_kVoiceCheckpointTimeKey);
+                  },
+                ),
+                duration: const Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        } else {
+          await prefs.remove(_kVoiceCheckpointPathKey);
         }
       }
+    } catch (e) {
+      debugPrint('[VoiceNote] Checkpoint check error: $e');
+    }
+  }
+
+
+  Future<void> _pickAndSendImages() async {
+    setState(() => _isMediaPickerOpen = true);
+    final filesToUpload = await MediaAttachmentPicker.showPickerSheet(
+      context: context,
+      maxFiles: 8,
+    );
+    if (mounted) {
+      setState(() => _isMediaPickerOpen = false);
     }
 
     if (filesToUpload.isEmpty) return;
@@ -811,14 +820,24 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   DateTime _parseTimestamp(dynamic timestamp) {
-    if (timestamp is DateTime) return timestamp;
+    if (timestamp is DateTime) return timestamp.isUtc ? timestamp.toLocal() : timestamp;
     if (timestamp is int) {
       return timestamp > 1000000000000
-          ? DateTime.fromMillisecondsSinceEpoch(timestamp)
-          : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+          ? DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal()
+          : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true).toLocal();
     }
     if (timestamp is String) {
-      return DateTime.tryParse(timestamp) ?? DateTime.now();
+      final numVal = int.tryParse(timestamp);
+      if (numVal != null) {
+        return numVal > 1000000000000
+            ? DateTime.fromMillisecondsSinceEpoch(numVal, isUtc: true).toLocal()
+            : DateTime.fromMillisecondsSinceEpoch(numVal * 1000, isUtc: true).toLocal();
+      }
+      final parsed = DateTime.tryParse(timestamp);
+      if (parsed != null) {
+        return parsed.isUtc ? parsed.toLocal() : parsed;
+      }
+      return DateTime.now();
     }
     return DateTime.now();
   }
@@ -927,6 +946,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         }
       });
 
+      // ⚡ Fix 9: Save temp file checkpoint to survive process kill
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kVoiceCheckpointPathKey, path);
+      await prefs.setString(_kVoiceCheckpointChatIdKey, _chatId);
+      await prefs.setInt(_kVoiceCheckpointTimeKey, DateTime.now().millisecondsSinceEpoch);
+
       setState(() => _isRecording = true);
       HapticFeedback.mediumImpact();
     } catch (e) {
@@ -947,6 +972,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _recordingTimer?.cancel();
     _amplitudeSubscription?.cancel();
     await _audioRecorder.stop();
+
+    // ⚡ Fix 9: Clear checkpoint on cancel
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kVoiceCheckpointPathKey);
+    await prefs.remove(_kVoiceCheckpointChatIdKey);
+    await prefs.remove(_kVoiceCheckpointTimeKey);
+
     // Delete temp file
     if (_recordingPath != null) {
       final f = File(_recordingPath!);
@@ -1043,6 +1075,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         );
       }
     } finally {
+      // ⚡ Fix 9: Clear checkpoint on send finish
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_kVoiceCheckpointPathKey);
+        await prefs.remove(_kVoiceCheckpointChatIdKey);
+        await prefs.remove(_kVoiceCheckpointTimeKey);
+      } catch (_) {}
       if (mounted) setState(() => _isSendingVoice = false);
     }
   }
@@ -1134,12 +1173,22 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final msg = _selectedMessagesData[id];
     if (msg == null) return false;
 
+    if (msg['isDeleted'] == true || msg['deletedForEveryone'] == true) return false;
+
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
     final msgSenderHandle = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim().toLowerCase();
     final isMe = msgSenderHandle.isNotEmpty && msgSenderHandle == cleanMe;
 
     final type = (msg['type'] ?? 'text') as String;
-    return isMe && type == 'text';
+    if (!isMe || type != 'text') return false;
+
+    // ⚡ Fix 5: 15-minute hard limit client validation
+    final msgTime = _parseTimestamp(msg['timestamp'] ?? msg['createdAt']);
+    final diff = DateTime.now().difference(msgTime);
+    if (diff.inSeconds > (15 * 60)) {
+      return false;
+    }
+    return true;
   }
 
   void _startEditingMessage() {
@@ -1187,19 +1236,39 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       return;
     }
 
+    final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
+    _cancelEditing();
+
     try {
+      // ⚡ Fix 5: Server-validated 15-minute edit API call
+      await DirectChatService.instance.editMessage(
+        messageId: editId,
+        userHandle: cleanMe,
+        newContent: newText,
+      );
+
       if (mounted) {
-        _cancelEditing();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Message edited'),
-            duration: Duration(seconds: 1),
+            duration: Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
       debugPrint('Error editing message: $e');
+      if (mounted) {
+        final errText = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cannot edit message: $errText'),
+            backgroundColor: const Color(0xFFEF4444),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -1255,8 +1324,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       return aTs.compareTo(bTs);
     });
 
-    final selectedList = entries.map((e) => e.value).toList();
+    final selectedList = entries
+        .map((e) => e.value)
+        .where((m) => m['isDeleted'] != true && m['deletedForEveryone'] != true)
+        .toList();
     _clearSelection();
+
+    if (selectedList.isEmpty) return;
 
     showModalBottomSheet(
       context: context,
@@ -1276,14 +1350,19 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
 
     bool allFromMe = true;
+    bool allWithin48Hours = true;
     for (final msg in _selectedMessagesData.values) {
       final msgSenderHandle = (msg['senderHandle'] ?? '').toString().replaceAll('@', '').trim().toLowerCase();
       if (msgSenderHandle != cleanMe) {
         allFromMe = false;
-        break;
+      }
+      final msgTime = _parseTimestamp(msg['timestamp'] ?? msg['createdAt']);
+      if (DateTime.now().difference(msgTime).inSeconds > (48 * 3600)) {
+        allWithin48Hours = false;
       }
     }
 
+    final canDeleteForEveryone = allFromMe && allWithin48Hours;
     final count = _selectedMessageIds.length;
     final idsToDelete = Set<String>.from(_selectedMessageIds);
 
@@ -1301,9 +1380,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           ),
         ),
         content: Text(
-          allFromMe
+          canDeleteForEveryone
               ? 'You can delete these messages just for yourself, or delete them for everyone in this chat.'
-              : 'These messages will be removed from your chat view.',
+              : (allFromMe && !allWithin48Hours
+                  ? 'Messages older than 48 hours cannot be deleted for everyone. They will be removed from your chat view.'
+                  : 'These messages will be removed from your chat view.'),
           style: TextStyle(
             fontSize: 14,
             color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
@@ -1334,7 +1415,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               ),
             ),
           ),
-          if (allFromMe)
+          if (canDeleteForEveryone)
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
@@ -1357,9 +1438,16 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _clearSelection();
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
+    // Immediately remove from optimistic messages if present
+    if (mounted) {
+      setState(() {
+        _optimisticMessages.removeWhere((m) => msgIds.contains(m.id));
+      });
+    }
+
     try {
       for (final id in msgIds) {
-        await DirectChatService.instance.deleteMessage(id, cleanMe);
+        await DirectChatService.instance.deleteMessage(id, cleanMe, forEveryone: forEveryone);
       }
 
       if (mounted) {
@@ -1499,8 +1587,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             _toggleMessageSelection(msgId, msg);
             return;
           }
+          setState(() => _pulsingCallLogId = msgId);
           HapticFeedback.lightImpact();
-          _startCall(isVideo ? CallType.video : CallType.audio);
+          Future.delayed(const Duration(milliseconds: 200), () {
+            if (mounted) {
+              setState(() => _pulsingCallLogId = null);
+              _startCall(isVideo ? CallType.video : CallType.audio);
+            }
+          });
         },
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -1512,17 +1606,22 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: badgeColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  iconData,
-                  color: iconColor,
-                  size: isVideo ? 21 : 19,
+              AnimatedScale(
+                scale: _pulsingCallLogId == msgId ? 1.25 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    iconData,
+                    color: iconColor,
+                    size: isVideo ? 21 : 19,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1618,15 +1717,135 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
     // 1. If deleted for me, hide completely
-    final deletedForUsers = msg['deletedForUsers'] as List?;
-    if (deletedForUsers != null && deletedForUsers.contains(cleanMe)) {
+    final deletedForUsers = (msg['deletedForUsers'] as List?)
+        ?.map((u) => u.toString().replaceAll('@', '').trim().toLowerCase())
+        .toList();
+    if (deletedForUsers != null && deletedForUsers.contains(cleanMe.toLowerCase())) {
       return const SizedBox.shrink();
     }
 
     // 2. If revoked / deleted for everyone, show WhatsApp-style placeholder
     final isDeleted = msg['isDeleted'] == true || msg['deletedForEveryone'] == true;
     if (isDeleted) {
-      return const SizedBox.shrink();
+      final isSelected = _selectedMessageIds.contains(msgId);
+      final isSelectionActive = _isSelectionMode;
+      final timeStr = _formatMsgTime(msg['timestamp']);
+
+      final tombstoneContent = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.block_rounded,
+              size: 15,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                isMe ? 'You deleted this message' : 'This message was deleted',
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  fontSize: 13.5,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+            if (timeStr.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                timeStr,
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+
+      final bubbleWidget = Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3.5),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.78,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(18),
+              topRight: const Radius.circular(18),
+              bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
+              bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
+            ),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              width: 1.0,
+            ),
+          ),
+          child: AbsorbPointer(
+            absorbing: isSelectionActive,
+            child: tombstoneContent,
+          ),
+        ),
+      );
+
+      final rowContent = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (isSelectionActive)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 2),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF2563EB)
+                        : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                    width: 1.8,
+                  ),
+                ),
+                child: isSelected
+                    ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                    : null,
+              ),
+            ),
+          Expanded(
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              opacity: isSelectionActive && !isSelected ? 0.55 : 1.0,
+              child: bubbleWidget,
+            ),
+          ),
+        ],
+      );
+
+      final selectedBgColor = isSelected
+          ? (isDark
+              ? const Color(0xFF1E293B).withValues(alpha: 0.7)
+              : const Color(0xFFEBF4FF))
+          : Colors.transparent;
+
+      return Material(
+        color: selectedBgColor,
+        child: InkWell(
+          onTap: isSelectionActive ? () => _toggleMessageSelection(msgId, msg) : null,
+          onLongPress: () => _toggleMessageSelection(msgId, msg),
+          splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
+          highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
+          child: rowContent,
+        ),
+      );
     }
 
     final isSelected = _selectedMessageIds.contains(msgId);
@@ -1803,18 +2022,52 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                     ),
                   ),
                   if (isMe) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      isRead
-                          ? Icons.done_all_rounded
-                          : (status == 'delivered'
-                              ? Icons.done_all_rounded
-                              : Icons.done_rounded),
-                      size: 14,
-                      color: isRead
-                          ? const Color(0xFF93C5FD)
-                          : Colors.white.withValues(alpha: 0.75),
-                    ),
+                    if (status == 'failed') ...[
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => _retrySendMessage(msgId),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.error_outline_rounded,
+                              size: 13,
+                              color: Color(0xFFEF4444),
+                            ),
+                            SizedBox(width: 2),
+                            Text(
+                              'Retry',
+                              style: TextStyle(
+                                color: Color(0xFFEF4444),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (status == 'sending') ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 12,
+                        color: isDark ? Colors.black54 : Colors.white70,
+                      ),
+                    ] else ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        isRead
+                            ? Icons.done_all_rounded
+                            : (status == 'delivered'
+                                ? Icons.done_all_rounded
+                                : Icons.done_rounded),
+                        size: 14,
+                        color: isRead
+                            ? const Color(0xFF93C5FD)
+                            : (isDark ? Colors.black54 : Colors.white70),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1910,7 +2163,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final tappableRow = Material(
       color: selectedBgColor,
       child: InkWell(
-        onTap: isSelectionActive ? () => _toggleMessageSelection(msgId, msg) : null,
+        onTap: isSelectionActive
+            ? () => _toggleMessageSelection(msgId, msg)
+            : (status == 'failed' ? () => _retrySendMessage(msgId) : null),
         onLongPress: () => _toggleMessageSelection(msgId, msg),
         splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
         highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
@@ -1939,13 +2194,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       );
       _scrollController.animateTo(
         targetOffset,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOutCubic,
       );
       setState(() {
         _highlightedMessageId = messageId;
       });
-      Future.delayed(const Duration(milliseconds: 1400), () {
+      Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted && _highlightedMessageId == messageId) {
           setState(() {
             _highlightedMessageId = null;
@@ -1999,8 +2254,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   Widget _buildMessagesList(List<Map<String, dynamic>> messages) {
-    // Automatically evict optimistic messages that have been confirmed in backend messages
-    _optimisticMessages.removeWhere((m) => messages.any((doc) => (doc['id'] ?? doc['messageId']) == m.id));
+    // Automatically evict optimistic messages that have been confirmed in synced messages
+    _optimisticMessages.removeWhere((opt) => messages.any((doc) {
+      final docId = (doc['id'] ?? doc['messageId'] ?? '').toString();
+      if (docId.isNotEmpty && docId == opt.id) return true;
+      if (opt.id.startsWith('temp_') && doc['content'] == opt.content && doc['senderHandle'] == opt.senderHandle) {
+        return true;
+      }
+      return false;
+    }));
 
     _messageIndexMap.clear();
     for (int i = 0; i < messages.length; i++) {
@@ -2022,9 +2284,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         if (index < _optimisticMessages.length) {
           final optMsg = _optimisticMessages[index];
           final bubble = _buildMessageBubble(optMsg.toMap(), optMsg.id, true);
+          final isNew = !_animatedMessageIds.contains(optMsg.id);
+          if (isNew) _animatedMessageIds.add(optMsg.id);
+
           return KeyedSubtree(
             key: ValueKey('opt_${optMsg.id}'),
-            child: bubble,
+            child: isNew ? _AnimatedMessageEntry(child: bubble) : bubble,
           );
         }
 
@@ -2059,23 +2324,194 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               ),
             );
 
+        final bool isNew = !_animatedMessageIds.contains(msgId);
+        if (isNew) _animatedMessageIds.add(msgId);
+
+        Widget itemWidget = bubble;
         if (showDateSeparator) {
-          return KeyedSubtree(
-            key: ValueKey('msg_sep_$msgId'),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                bubble,
-                _buildDateSeparator(currentTimestamp),
-              ],
-            ),
+          itemWidget = Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              bubble,
+              _buildDateSeparator(currentTimestamp),
+            ],
           );
         }
+
+        // Only animate NEW incoming or sent messages on first arrival, NEVER re-animate during polling
+        if (isNew && index == 0) {
+          itemWidget = _AnimatedMessageEntry(child: itemWidget);
+        }
+
         return KeyedSubtree(
-          key: ValueKey('msg_$msgId'),
-          child: bubble,
+          key: ValueKey(showDateSeparator ? 'msg_sep_$msgId' : 'msg_$msgId'),
+          child: itemWidget,
         );
       },
+    );
+  }
+
+  PreferredSizeWidget _buildSelectionAppBar(bool isDark) {
+    return AppBar(
+      key: const ValueKey('selection_app_bar'),
+      backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+      elevation: 0.5,
+      scrolledUnderElevation: 0.5,
+      leading: IconButton(
+        icon: Icon(
+          Icons.close_rounded,
+          color: isDark ? Colors.white : const Color(0xFF0F172A),
+        ),
+        tooltip: 'Clear selection',
+        onPressed: _clearSelection,
+      ),
+      title: Text(
+        '${_selectedMessageIds.length} Selected',
+        style: TextStyle(
+          color: isDark ? Colors.white : const Color(0xFF0F172A),
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
+      ),
+      actions: [
+        if (_canEditSelectedMessage())
+          IconButton(
+            icon: Icon(
+              Icons.edit_outlined,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 22,
+            ),
+            tooltip: 'Edit message',
+            onPressed: _startEditingMessage,
+          ),
+        IconButton(
+          icon: Icon(
+            Icons.copy_rounded,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            size: 21,
+          ),
+          tooltip: 'Copy',
+          onPressed: _copySelectedMessages,
+        ),
+        IconButton(
+          icon: Transform.flip(
+            flipX: true,
+            child: Icon(
+              Icons.reply_rounded,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 22,
+            ),
+          ),
+          tooltip: 'Forward',
+          onPressed: _forwardSelectedMessages,
+        ),
+        IconButton(
+          icon: const Icon(
+            Icons.delete_outline_rounded,
+            color: Color(0xFFEF4444),
+            size: 22,
+          ),
+          tooltip: 'Delete',
+          onPressed: _deleteSelectedMessages,
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  PreferredSizeWidget _buildNormalAppBar(bool isDark) {
+    return AppBar(
+      key: const ValueKey('normal_app_bar'),
+      backgroundColor: isDark ? Colors.black : Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: Icon(
+          Icons.arrow_back_rounded,
+          color: isDark ? Colors.white : const Color(0xFF0F172A),
+        ),
+        onPressed: () {
+          _fireMarkChatRead();
+          Navigator.pop(context);
+        },
+      ),
+      title: InkWell(
+        onTap: () {
+          showOtherUserProfileSheet(
+            context,
+            partnerHandle: widget.partnerHandle,
+            currentUserHandle: widget.currentUserHandle,
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Row(
+            children: [
+              Hero(
+                tag: 'chat_avatar_${widget.partnerHandle.replaceAll('@', '').trim().toLowerCase()}',
+                child: UserAvatar(
+                  handle: widget.partnerHandle,
+                  size: 38,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: StreamBuilder<UserPresence>(
+                  stream: _presenceStream,
+                  initialData: PresenceService.instance.getCachedPresence(widget.partnerHandle),
+                  builder: (context, snapshot) {
+                    final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
+                    final presence = snapshot.data;
+                    final statusText = PresenceService.formatLastSeen(presence);
+                    final isOnline = presence?.isOnline == true;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '@$cleanPartner',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Row(
+                          children: [
+                            _PulsingOnlineDot(isOnline: isOnline),
+                            Flexible(
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  color: isOnline ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                  fontSize: 11.5,
+                                  fontWeight: isOnline ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: const [
+        // Voice and Video call system hidden for now
+        SizedBox(width: 8),
+      ],
     );
   }
 
@@ -2086,7 +2522,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     return PopScope(
       canPop: !_isSelectionMode && _editingMessageId == null,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        if (didPop) {
+          _fireMarkChatRead();
+          return;
+        }
         if (_isSelectionMode) {
           _clearSelection();
         } else if (_editingMessageId != null) {
@@ -2095,190 +2534,24 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       },
       child: Scaffold(
         backgroundColor: isDark ? Colors.black : Colors.white,
-        appBar: _isSelectionMode
-            ? AppBar(
-                backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
-                elevation: 0.5,
-                scrolledUnderElevation: 0.5,
-                leading: IconButton(
-                  icon: Icon(
-                    Icons.close_rounded,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                  tooltip: 'Clear selection',
-                  onPressed: _clearSelection,
-                ),
-                title: Text(
-                  '${_selectedMessageIds.length} Selected',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                actions: [
-                  if (_canEditSelectedMessage())
-                    IconButton(
-                      icon: Icon(
-                        Icons.edit_outlined,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                        size: 22,
-                      ),
-                      tooltip: 'Edit message',
-                      onPressed: _startEditingMessage,
-                    ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.copy_rounded,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      size: 21,
-                    ),
-                    tooltip: 'Copy',
-                    onPressed: _copySelectedMessages,
-                  ),
-                  IconButton(
-                    icon: Transform.flip(
-                      flipX: true,
-                      child: Icon(
-                        Icons.reply_rounded,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                        size: 22,
-                      ),
-                    ),
-                    tooltip: 'Forward',
-                    onPressed: _forwardSelectedMessages,
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Color(0xFFEF4444),
-                      size: 22,
-                    ),
-                    tooltip: 'Delete',
-                    onPressed: _deleteSelectedMessages,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-              )
-            : AppBar(
-                backgroundColor: isDark ? Colors.black : Colors.white,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                titleSpacing: 0,
-                leading: IconButton(
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                title: InkWell(
-                  onTap: () {
-                    showOtherUserProfileSheet(
-                      context,
-                      partnerHandle: widget.partnerHandle,
-                      currentUserHandle: widget.currentUserHandle,
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                    child: Row(
-                      children: [
-                        UserAvatar(
-                          handle: widget.partnerHandle,
-                          size: 38,
-                          fontSize: 15,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: StreamBuilder<UserPresence>(
-                            stream: _presenceStream,
-                            initialData: PresenceService.instance.getCachedPresence(widget.partnerHandle),
-                            builder: (context, snapshot) {
-                              final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
-                              final presence = snapshot.data;
-                              final statusText = PresenceService.formatLastSeen(presence);
-                              final isOnline = presence?.isOnline == true;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '@$cleanPartner',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                      fontSize: 15.5,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.3,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (isOnline) ...[
-                                        Container(
-                                          width: 7,
-                                          height: 7,
-                                          margin: const EdgeInsets.only(right: 5),
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF16A34A),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ],
-                                      Flexible(
-                                        child: Text(
-                                          statusText,
-                                          style: TextStyle(
-                                            color: isOnline ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                                            fontSize: 11.5,
-                                            fontWeight: isOnline ? FontWeight.w700 : FontWeight.w500,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.call_outlined,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      size: 22,
-                    ),
-                    tooltip: 'Voice Call',
-                    onPressed: () => _startCall(CallType.audio),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.videocam_outlined,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      size: 24,
-                    ),
-                    tooltip: 'Video Call',
-                    onPressed: () => _startCall(CallType.video),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-              ),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _isSelectionMode
+                ? _buildSelectionAppBar(isDark)
+                : _buildNormalAppBar(isDark),
+          ),
+        ),
         body: Column(
           children: [
             const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _messagesStream,
+                initialData: DirectChatService.instance.getLastKnownMessages(_chatId).isNotEmpty
+                    ? DirectChatService.instance.getLastKnownMessages(_chatId)
+                    : null,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                     return const Center(
@@ -2297,10 +2570,35 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
                   final sortedDocs = List<Map<String, dynamic>>.from(rawDocs);
                   sortedDocs.sort((a, b) {
-                    final aTime = _parseTimestamp(a['timestamp'] ?? a['createdAt']);
-                    final bTime = _parseTimestamp(b['timestamp'] ?? b['createdAt']);
-                    return bTime.compareTo(aTime);
+                    final aTime = _parseTimestamp(a['timestamp'] ?? a['createdAt']).millisecondsSinceEpoch;
+                    final bTime = _parseTimestamp(b['timestamp'] ?? b['createdAt']).millisecondsSinceEpoch;
+                    if (bTime != aTime) {
+                      return bTime.compareTo(aTime);
+                    }
+                    final aId = (a['id'] ?? a['messageId'] ?? '').toString();
+                    final bId = (b['id'] ?? b['messageId'] ?? '').toString();
+                    return bId.compareTo(aId);
                   });
+
+                  // 🚀 Instant 0ms Chat Image Prefetch
+                  final List<String> chatImages = [];
+                  for (final doc in sortedDocs.take(20)) {
+                    final img = doc['imageUrl'] as String?;
+                    if (img != null && img.isNotEmpty && !img.endsWith('.m4a') && !img.endsWith('.mp3')) {
+                      chatImages.add(img);
+                    }
+                    final mediaUrls = doc['mediaUrls'] as List?;
+                    if (mediaUrls != null) {
+                      for (final m in mediaUrls) {
+                        if (m is String && m.isNotEmpty && !chatImages.contains(m)) {
+                          chatImages.add(m);
+                        }
+                      }
+                    }
+                  }
+                  if (chatImages.isNotEmpty) {
+                    AppImageCacheService.instance.prefetchImages(chatImages);
+                  }
 
                   _hasMoreMessages = sortedDocs.length >= _messageLimit;
                   return _buildMessagesList(sortedDocs);
@@ -2313,12 +2611,29 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 color: isDark ? Colors.white : Colors.black,
               ),
 
-            // ── Edit Message Banner ─────────────────────────────────────────────
-            AnimatedSize(
+            // ── Edit Message Banner (200ms Slide Down + Fade) ───────────────────
+            AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
+              transitionBuilder: (child, animation) {
+                final slideAnim = Tween<Offset>(
+                  begin: const Offset(0.0, 0.5),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                return SlideTransition(
+                  position: slideAnim,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1.0,
+                      child: child,
+                    ),
+                  ),
+                );
+              },
               child: _editingMessageId != null
                   ? Container(
+                      key: const ValueKey('active_edit_banner'),
                       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
@@ -2380,7 +2695,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         ],
                       ),
                     )
-                  : const SizedBox.shrink(),
+                  : const SizedBox.shrink(key: ValueKey('empty_edit_banner')),
             ),
 
             // ── Reply Banner ────────────────────────────────────────────────────
@@ -2546,16 +2861,21 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         padding: const EdgeInsets.fromLTRB(10, 8, 12, 12),
                         child: Row(
                           children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.photo_library_outlined,
-                                color: isDark
-                                    ? const Color(0xFF9A9A9A)
-                                    : const Color(0xFF6E6E6E),
-                                size: 24,
+                            AnimatedRotation(
+                              turns: _isMediaPickerOpen ? 0.125 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.add_photo_alternate_rounded,
+                                  color: isDark
+                                      ? const Color(0xFF9A9A9A)
+                                      : const Color(0xFF6E6E6E),
+                                  size: 24,
+                                ),
+                                onPressed: _editingMessageId != null ? null : _pickAndSendImages,
+                                tooltip: 'Attach Media',
                               ),
-                              onPressed: _editingMessageId != null ? null : _pickAndSendImages,
-                              tooltip: 'Send Photos',
                             ),
                             Expanded(
                               child: TextField(
@@ -3071,6 +3391,139 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PulsingOnlineDot extends StatefulWidget {
+  final bool isOnline;
+  const _PulsingOnlineDot({required this.isOnline});
+
+  @override
+  State<_PulsingOnlineDot> createState() => _PulsingOnlineDotState();
+}
+
+class _PulsingOnlineDotState extends State<_PulsingOnlineDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    if (widget.isOnline) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulsingOnlineDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isOnline != oldWidget.isOnline) {
+      if (widget.isOnline) {
+        _controller.repeat(reverse: true);
+      } else {
+        _controller.stop();
+        _controller.reset();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isOnline) {
+      return ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.only(right: 5),
+          decoration: const BoxDecoration(
+            color: Color(0xFF16A34A),
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: 7,
+      height: 7,
+      margin: const EdgeInsets.only(right: 5),
+      decoration: const BoxDecoration(
+        color: Color(0xFF94A3B8),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _AnimatedMessageEntry extends StatefulWidget {
+  final Widget child;
+
+  const _AnimatedMessageEntry({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  State<_AnimatedMessageEntry> createState() => _AnimatedMessageEntryState();
+}
+
+class _AnimatedMessageEntryState extends State<_AnimatedMessageEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0.0, 0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: widget.child,
       ),
     );
   }

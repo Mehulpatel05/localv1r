@@ -9,12 +9,9 @@ import 'package:http/http.dart' as http;
 import '../main.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/personal_chat_screen.dart';
-import '../screens/communities/community_chat_screen.dart';
-import '../screens/communities/join_requests_screen.dart';
 import '../screens/detail/post_detail_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../services/auth_service.dart';
-import '../services/community_repository.dart';
 import '../services/friend_repository.dart';
 import '../services/post_repository.dart';
 import '../core/location/location_service.dart';
@@ -28,6 +25,75 @@ import 'chat_preferences_service.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('BG message received: ${message.notification?.title} | data: ${message.data}');
+  final type = message.data['type']?.toString();
+  if (type == 'call_cancelled' || type == 'call_ended') {
+    final callId = message.data['callId']?.toString();
+    if (callId != null && callId.isNotEmpty) {
+      NotificationService.instance.cancelCallNotification(callId);
+      IncomingCallScreen.dismissCall(callId);
+    }
+    return;
+  }
+
+  // Display background push notification on system tray when app is closed/background
+  final notification = message.notification;
+  final title = notification?.title ?? (message.data['title'] as String?) ?? 'Nearhood';
+  final body = notification?.body ?? (message.data['body'] as String?) ?? '';
+
+  if (title.isNotEmpty || body.isNotEmpty) {
+    try {
+      final localNotifs = FlutterLocalNotificationsPlugin();
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      await localNotifs.initialize(settings: const InitializationSettings(android: androidInit));
+
+      const channel = AndroidNotificationChannel(
+        'nearhood_channel',
+        'Nearhood Notifications',
+        description: 'Notifications for friend requests, messages, posts, and communities',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
+
+      final androidPlugin = localNotifs
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(channel);
+
+      final notifId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) & 0x7FFFFFFF;
+      final isCall = type == 'call';
+
+      await localNotifs.show(
+        id: notifId,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            isCall ? 'nearhood_call_channel' : 'nearhood_channel',
+            isCall ? 'Nearhood Calls' : 'Nearhood Notifications',
+            importance: Importance.max,
+            priority: Priority.max,
+            icon: '@mipmap/ic_launcher',
+            color: const Color(0xFF000000),
+            playSound: true,
+            enableVibration: true,
+            channelShowBadge: true,
+            visibility: NotificationVisibility.public,
+            category: isCall ? AndroidNotificationCategory.call : AndroidNotificationCategory.message,
+            audioAttributesUsage: isCall ? AudioAttributesUsage.voiceCommunication : AudioAttributesUsage.notification,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+              summaryText: isCall ? 'Incoming Call' : 'Nearhood',
+            ),
+          ),
+        ),
+        payload: jsonEncode(message.data),
+      );
+    } catch (e) {
+      debugPrint('Error handling background FCM notification: $e');
+    }
+  }
 }
 
 class NotificationService {
@@ -46,6 +112,37 @@ class NotificationService {
 
   /// Currently open community ID (to suppress heads-up notification while in that community)
   String? activeCommunityId;
+
+  final ValueNotifier<int> unreadBadgeNotifier = ValueNotifier<int>(0);
+
+  /// ⚡ Phase 2: Stage B Pre-fetch Notification Badge Counts
+  Future<int> prefetchBadgeCounts(String userHandle) async {
+    final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return 0;
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final uri = Uri.parse('${AuthService.baseUrl}/actions/counters');
+      final res = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final counters = body['counters'] as Map<String, dynamic>? ?? {};
+        final unread = (counters['unreadNotifications'] as int?) ?? 0;
+        unreadBadgeNotifier.value = unread;
+        return unread;
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] prefetchBadgeCounts error: $e');
+    }
+    return unreadBadgeNotifier.value;
+  }
 
   // Android notification channel for general messages & posts
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -116,13 +213,80 @@ class NotificationService {
         _handleNotificationTap(initialMessage);
       }
 
-      // 8. Start listening to realtime notifications for logged in user
+      // 8. Retrieve and sync device FCM Token to backend for push notifications
+      try {
+        final fcmToken = await _fcm.getToken();
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          debugPrint('[NotificationService] Registered FCM Token: $fcmToken');
+          _syncFcmToken(fcmToken);
+        }
+
+        _fcm.onTokenRefresh.listen((newToken) {
+          debugPrint('[NotificationService] Refreshed FCM Token: $newToken');
+          _syncFcmToken(newToken);
+        });
+      } catch (e) {
+        debugPrint('[NotificationService] Error retrieving FCM token: $e');
+      }
+
+      // 9. Start listening to realtime notifications for logged in user
       final currentHandle = await AuthService.instance.getUserHandle();
       if (currentHandle != null && currentHandle.isNotEmpty) {
         startListening(currentHandle);
       }
     } catch (e) {
       debugPrint('NotificationService init error: $e');
+    }
+  }
+
+  /// Sync FCM device token to backend for push notifications when app is closed
+  Future<void> _syncFcmToken(String fcmToken) async {
+    try {
+      final currentHandle = await AuthService.instance.getUserHandle();
+      final cleanHandle = currentHandle?.replaceAll('@', '').trim();
+      if (cleanHandle == null || cleanHandle.isEmpty || cleanHandle == 'Guest') return;
+
+      final token = await AuthService.instance.getAccessToken();
+      final uri = Uri.parse('${AuthService.baseUrl}/users/fcm-token');
+      await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'handle': cleanHandle,
+          'fcm_token': fcmToken,
+        }),
+      ).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('[NotificationService] _syncFcmToken error: $e');
+    }
+  }
+
+  /// Public helper to register FCM token whenever a user session is active
+  Future<void> syncFcmTokenForUser(String userHandle) async {
+    try {
+      final fcmToken = await _fcm.getToken();
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        final cleanHandle = userHandle.replaceAll('@', '').trim();
+        if (cleanHandle.isEmpty || cleanHandle == 'Guest') return;
+        final token = await AuthService.instance.getAccessToken();
+        final uri = Uri.parse('${AuthService.baseUrl}/users/fcm-token');
+        await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'handle': cleanHandle,
+            'fcm_token': fcmToken,
+          }),
+        ).timeout(const Duration(seconds: 4));
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] syncFcmTokenForUser error: $e');
     }
   }
 
@@ -143,12 +307,27 @@ class NotificationService {
 
   final Set<String> _processedNotificationIds = {};
 
+  String _extractNotifId(Map<String, dynamic> notif) {
+    final id = notif['id'] ?? notif['_id'] ?? notif['notification_id'] ?? notif['doc_id'];
+    if (id != null && id.toString().trim().isNotEmpty) {
+      return id.toString().trim();
+    }
+    final title = notif['title'] ?? '';
+    final body = notif['body'] ?? '';
+    final time = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'] ?? '';
+    return '${title}_${body}_$time';
+  }
+
   /// Start realtime notification poller for a specific handle
   void startListening(String handle) {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty) return;
 
+    // Sync device FCM push token with D1 backend for background notifications
+    syncFcmTokenForUser(cleanHandle);
+
     _pollingTimer?.cancel();
+    bool isInitialTick = true;
     final sessionThreshold = DateTime.now().subtract(const Duration(seconds: 30));
 
     _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
@@ -162,19 +341,33 @@ class NotificationService {
           final data = jsonDecode(res.body);
           final notifs = (data['notifications'] as List<dynamic>?) ?? [];
 
+          if (isInitialTick) {
+            for (final raw in notifs) {
+              final notif = raw as Map<String, dynamic>;
+              final docId = _extractNotifId(notif);
+              if (docId.isNotEmpty) {
+                _processedNotificationIds.add(docId);
+              }
+            }
+            isInitialTick = false;
+            return;
+          }
+
           for (final raw in notifs) {
             final notif = raw as Map<String, dynamic>;
-            final docId = (notif['id'] ?? '').toString();
+            final docId = _extractNotifId(notif);
             if (_processedNotificationIds.contains(docId)) continue;
             _processedNotificationIds.add(docId);
 
-            final isRead = notif['isRead'] == true;
+            final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
             if (isRead) continue;
 
-            final rawCreated = notif['timestamp'] ?? notif['createdAt'];
+            final rawCreated = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'];
             DateTime? createdAt;
             if (rawCreated is int) {
-              createdAt = DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
+              createdAt = rawCreated > 10000000000
+                  ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
+                  : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
             } else if (rawCreated is String) {
               createdAt = DateTime.tryParse(rawCreated);
             }
@@ -187,6 +380,15 @@ class NotificationService {
             final body = notif['body'] as String? ?? '';
             final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
             final type = payloadData['type'] as String? ?? notif['type'] as String?;
+
+            if (type == 'call_cancelled' || type == 'call_ended') {
+              final callId = (payloadData['callId'] ?? notif['callId'])?.toString();
+              if (callId != null && callId.isNotEmpty) {
+                cancelCallNotification(callId);
+                IncomingCallScreen.dismissCall(callId);
+              }
+              continue;
+            }
 
             // Check user notification preferences
             final isAllowed = await _checkIfCategoryAllowed(type);
@@ -235,10 +437,22 @@ class NotificationService {
   void stopListening() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _processedNotificationIds.clear();
+    unreadBadgeNotifier.value = 0;
   }
 
   /// Show a local notification when an FCM message arrives in the foreground
   void _showForegroundNotification(RemoteMessage message) {
+    final type = message.data['type']?.toString();
+    if (type == 'call_cancelled' || type == 'call_ended') {
+      final callId = message.data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        cancelCallNotification(callId);
+        IncomingCallScreen.dismissCall(callId);
+      }
+      return;
+    }
+
     final notification = message.notification;
     final title = notification?.title ?? (message.data['title'] as String?);
     final body = notification?.body ?? (message.data['body'] as String?);
@@ -355,10 +569,7 @@ class NotificationService {
 
     final type = data['type'] as String?;
     
-    final prefs = await SharedPreferences.getInstance();
-    final currentHandle = await AuthService.instance.getUserHandle() ??
-        prefs.getString('user_handle') ??
-        'Guest';
+    final currentHandle = await AuthService.instance.getUserHandle() ?? 'Guest';
     final cleanCurrentHandle = currentHandle.replaceAll('@', '').trim();
 
     if (!context.mounted) return;
@@ -452,76 +663,7 @@ class NotificationService {
         );
       }
     }
-    // ── 4. Community Message ──
-    else if (type == 'community_message' || type == 'community') {
-      final communityId = data['communityId'] as String?;
-      if (communityId != null && communityId.isNotEmpty) {
-        try {
-          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
-          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
-          if (community != null && context.mounted) {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => CommunityChatScreen(
-                  repository: commRepo,
-                  community: community,
-                ),
-              ),
-            );
-            return;
-          }
-        } catch (e) {
-          debugPrint('Error navigating to community chat: $e');
-        }
-      }
-    }
-    // ── 5. Community Join Request ──
-    else if (type == 'community_join_request') {
-      final communityId = data['communityId'] as String?;
-      if (communityId != null && communityId.isNotEmpty) {
-        try {
-          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
-          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
-          if (community != null && context.mounted) {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => JoinRequestsScreen(
-                  community: community,
-                  repository: commRepo,
-                ),
-              ),
-            );
-            return;
-          }
-        } catch (e) {
-          debugPrint('Error navigating to join requests: $e');
-        }
-      }
-    }
-    // ── 6. Community Request Response ──
-    else if (type == 'community_request_response') {
-      final communityId = data['communityId'] as String?;
-      final approved = data['approved'] == true;
-      if (communityId != null && communityId.isNotEmpty && approved) {
-        try {
-          final commRepo = CommunityRepository()..currentUserHandle = cleanCurrentHandle;
-          final community = await commRepo.getCommunityById(communityId, forceRefresh: true);
-          if (community != null && context.mounted) {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => CommunityChatScreen(
-                  repository: commRepo,
-                  community: community,
-                ),
-              ),
-            );
-            return;
-          }
-        } catch (e) {
-          debugPrint('Error navigating to community: $e');
-        }
-      }
-    }
+
     // ── 5. Incoming Call ──
     else if (type == 'call') {
       final callId = data['callId'] as String?;

@@ -29,8 +29,9 @@ class VoiceNoteBubble extends StatefulWidget {
   State<VoiceNoteBubble> createState() => _VoiceNoteBubbleState();
 }
 
-class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
+class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProviderStateMixin {
   late final AudioPlayer _player;
+  late final AnimationController _playPauseController;
   bool _isPlaying = false;
   double _progress = 0.0; // 0.0 – 1.0
   int _remainingSeconds = 0;
@@ -42,14 +43,23 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
     super.initState();
     _player = AudioPlayer();
     _remainingSeconds = widget.durationSeconds;
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
 
     VoiceNoteBubble.activeAudioUrlNotifier.addListener(_onActiveAudioChanged);
 
     _player.playerStateStream.listen((state) {
       if (!mounted) return;
+      final playing = state.playing && state.processingState != ProcessingState.completed;
+      if (playing) {
+        _playPauseController.forward();
+      } else {
+        _playPauseController.reverse();
+      }
       setState(() {
-        _isPlaying = state.playing &&
-            state.processingState != ProcessingState.completed;
+        _isPlaying = playing;
         if (state.processingState == ProcessingState.completed) {
           _progress = 0.0;
           _remainingSeconds = widget.durationSeconds;
@@ -82,6 +92,7 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
   void dispose() {
     VoiceNoteBubble.activeAudioUrlNotifier.removeListener(_onActiveAudioChanged);
     _player.dispose();
+    _playPauseController.dispose();
     super.dispose();
   }
 
@@ -202,12 +213,13 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
                 color: iconColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                _isPlaying
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-                color: iconColor,
-                size: 22,
+              child: Center(
+                child: AnimatedIcon(
+                  icon: AnimatedIcons.play_pause,
+                  progress: _playPauseController,
+                  color: iconColor,
+                  size: 22,
+                ),
               ),
             ),
           ),
@@ -312,19 +324,32 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
                     ],
                     if (widget.isMe) ...[
                       const SizedBox(width: 4),
-                      Icon(
-                        widget.isRead
-                            ? Icons.done_all_rounded
-                            : (widget.status == 'delivered'
-                                ? Icons.done_all_rounded
-                                : Icons.done_rounded),
-                        size: 13,
-                        color: widget.isRead
-                            ? const Color(0xFF93C5FD)
-                            : (isDark
-                                ? Colors.black54
-                                : Colors.white70),
-                      ),
+                      if (widget.status == 'failed')
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          size: 13,
+                          color: Color(0xFFEF4444),
+                        )
+                      else if (widget.status == 'sending')
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 12,
+                          color: isDark ? Colors.black54 : Colors.white70,
+                        )
+                      else
+                        Icon(
+                          widget.isRead
+                              ? Icons.done_all_rounded
+                              : (widget.status == 'delivered'
+                                  ? Icons.done_all_rounded
+                                  : Icons.done_rounded),
+                          size: 13,
+                          color: widget.isRead
+                              ? const Color(0xFF93C5FD)
+                              : (isDark
+                                  ? Colors.black54
+                                  : Colors.white70),
+                        ),
                     ],
                   ],
                 ),
