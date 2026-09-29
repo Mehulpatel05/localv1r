@@ -332,9 +332,15 @@ class NotificationService {
 
     _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
       try {
+        final token = await AuthService.instance.getAccessToken();
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/notifications?handle=$cleanHandle'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            'x-user-handle': cleanHandle,
+          },
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -507,9 +513,15 @@ class NotificationService {
 
     while (true) {
       try {
+        final token = await AuthService.instance.getAccessToken();
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/notifications?handle=$clean'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            'x-user-handle': clean,
+          },
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -541,9 +553,15 @@ class NotificationService {
 
     while (true) {
       try {
+        final token = await AuthService.instance.getAccessToken();
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/chats?handle=$clean'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            'x-user-handle': clean,
+          },
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -726,18 +744,25 @@ class NotificationService {
     if (cleanTarget.isEmpty) return;
 
     try {
+      final token = await AuthService.instance.getAccessToken();
+      final sender = data['senderHandle'] ?? data['partnerHandle'] ?? '';
       final payload = {
         'target_handle': cleanTarget,
         'title': title,
         'body': body,
         'type': data['type'] ?? 'general',
-        'sender_handle': data['senderHandle'] ?? data['partnerHandle'],
+        'sender_handle': sender,
         'data': data,
       };
 
       await http.post(
         Uri.parse('${AuthService.baseUrl}/notifications'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (sender.toString().isNotEmpty) 'x-user-handle': sender.toString().replaceAll('@', '').trim(),
+        },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {

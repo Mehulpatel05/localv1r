@@ -49,9 +49,20 @@ class AppImageCacheService {
     }
   }
 
+  /// Normalizes any .r2.dev URLs to use the active backend streaming endpoint
+  static String normalizeImageUrl(String url) {
+    var clean = url.trim();
+    if (clean.contains('.r2.dev/')) {
+      final path = clean.split('.r2.dev/').last;
+      return 'https://backend-v2-cu1p.onrender.com/api/v2/media/file/$path';
+    }
+    return clean;
+  }
+
   /// Generates a deterministic safe file path from URL using MD5/SHA256
   String _getCacheKey(String url) {
-    return md5.convert(utf8.encode(url.trim())).toString();
+    final normalized = normalizeImageUrl(url);
+    return md5.convert(utf8.encode(normalized)).toString();
   }
 
   Future<File?> _getCacheFile(String url) async {
@@ -59,8 +70,9 @@ class AppImageCacheService {
       await _initDiskCache();
     }
     if (_cacheDir == null) return null;
-    final key = _getCacheKey(url);
-    final ext = _extractExtension(url);
+    final normalized = normalizeImageUrl(url);
+    final key = _getCacheKey(normalized);
+    final ext = _extractExtension(normalized);
     return File('${_cacheDir!.path}/$key.$ext');
   }
 
@@ -75,15 +87,16 @@ class AppImageCacheService {
 
   /// Synchronously checks if image bytes are ready in RAM (0ms)
   Uint8List? getFromMemory(String url) {
-    final clean = url.trim();
+    final clean = normalizeImageUrl(url);
     return _memoryCache[clean];
   }
 
   /// Synchronously checks if image file already exists on local disk
   File? getFromDiskSync(String url) {
     if (!_isInitialized || _cacheDir == null) return null;
-    final key = _getCacheKey(url);
-    final ext = _extractExtension(url);
+    final normalized = normalizeImageUrl(url);
+    final key = _getCacheKey(normalized);
+    final ext = _extractExtension(normalized);
     final file = File('${_cacheDir!.path}/$key.$ext');
     if (file.existsSync() && file.lengthSync() > 0) {
       return file;
@@ -93,7 +106,7 @@ class AppImageCacheService {
 
   /// Retrieves cached file or downloads and stores it persistently
   Future<File?> getOrFetchImageFile(String url, {Map<String, String>? headers}) async {
-    final cleanUrl = url.trim();
+    final cleanUrl = normalizeImageUrl(url);
     if (cleanUrl.isEmpty || cleanUrl.startsWith('data:image/')) return null;
 
     // 1. If it's already a local file path

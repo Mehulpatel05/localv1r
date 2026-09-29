@@ -14,6 +14,7 @@ import '../../services/r2_storage_service.dart';
 import '../../core/splash_controller.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
+import '../../core/theme.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
 import 'phone_login_screen.dart';
@@ -57,14 +58,22 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   File? _pickedProfileImage;
 
   Future<void> _showPhotoPickerSheet() async {
+    final colors = context.nearhoodColors;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Material(
-        color: Colors.white,
+        color: colors.field,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         clipBehavior: Clip.antiAlias,
-        child: Padding(
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.field,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: colors.line, width: 1.5),
+            ),
+          ),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -76,14 +85,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
+                    color: colors.line,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              const Text(
+              Text(
                 'Add Profile Picture',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: colors.ink,
+                ),
               ),
               const SizedBox(height: 14),
               ListTile(
@@ -91,10 +104,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 leading: Container(
                   width: 42,
                   height: 42,
-                  decoration: const BoxDecoration(color: Color(0xFFEFF6FF), shape: BoxShape.circle),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF3B82F6), size: 22),
+                  decoration: BoxDecoration(
+                    color: colors.field2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8), size: 22),
                 ),
-                title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                title: const Text(
+                  'Take Photo',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickImage(ImageSource.camera);
@@ -105,10 +128,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 leading: Container(
                   width: 42,
                   height: 42,
-                  decoration: const BoxDecoration(color: Color(0xFFF5F3FF), shape: BoxShape.circle),
-                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF8B5CF6), size: 22),
+                  decoration: BoxDecoration(
+                    color: colors.field2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFFA78BFA), size: 22),
                 ),
-                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                title: const Text(
+                  'Choose from Gallery',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickImage(ImageSource.gallery);
@@ -120,10 +153,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   leading: Container(
                     width: 42,
                     height: 42,
-                    decoration: const BoxDecoration(color: Color(0xFFFEF2F2), shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
                     child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
                   ),
-                  title: const Text('Remove Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFFEF4444))),
+                  title: const Text(
+                    'Remove Photo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Color(0xFFEF4444),
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     setState(() => _pickedProfileImage = null);
@@ -479,27 +522,36 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Future<void> _handleSignOut() async {
+    final colors = context.nearhoodColors;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Setup?'),
-        content: const Text(
-            'If you leave now, your account setup won\'t be completed and you will be signed out.'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: colors.field,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: colors.line, width: 1.5),
+        ),
+        title: Text(
+          'Cancel Setup?',
+          style: TextStyle(color: colors.ink, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'If you leave now, your account setup won\'t be completed and you will be signed out.',
+          style: TextStyle(color: colors.muted, height: 1.4),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Stay', style: TextStyle(color: Color(0xFF64748B))),
+            child: Text('Stay', style: TextStyle(color: colors.muted, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sign Out'),
+            child: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -520,6 +572,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.nearhoodColors;
     final isButtonActive =
         _state == UsernameState.available && !_isSubmitting;
 
@@ -531,15 +584,15 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: colors.bg,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: colors.bg,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.close_rounded,
-              color: Color(0xFF64748B),
+              color: colors.muted,
               size: 22,
             ),
             tooltip: 'Cancel & Sign Out',
@@ -560,19 +613,19 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                       children: [
                         const SizedBox(height: 16),
 
-                        // App Logo (Two overlapping geometric circles)
-                        _buildLogo(),
+                        // App Logo / Profile Avatar
+                        _buildLogo(colors),
 
                         const SizedBox(height: 32),
 
                         // Title
-                        const Text(
+                        Text(
                           'Choose your\nusername',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF1E293B),
+                            color: colors.ink,
                             letterSpacing: -0.5,
                             height: 1.2,
                           ),
@@ -581,12 +634,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         const SizedBox(height: 12),
 
                         // Subtitle
-                        const Text(
+                        Text(
                           'Your username is how people will find\nand recognize you in the app.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
-                            color: Color(0xFF64748B),
+                            color: colors.muted,
                             height: 1.4,
                             fontWeight: FontWeight.w400,
                           ),
@@ -595,28 +648,28 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         const SizedBox(height: 36),
 
                         // Username Input Field Box
-                        _buildInputField(),
+                        _buildInputField(colors),
 
                         const SizedBox(height: 10),
 
                         // Status & Helper Message below input
-                        _buildStatusHelper(),
+                        _buildStatusHelper(colors),
 
                         const Spacer(),
 
                         const SizedBox(height: 24),
 
                         // Continue Button
-                        _buildContinueButton(isButtonActive),
+                        _buildContinueButton(colors, isButtonActive),
 
                         const SizedBox(height: 16),
 
                         // Footer note
-                        const Text(
+                        Text(
                           'You can change your username later.',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF94A3B8),
+                            color: colors.muted.withValues(alpha: 0.7),
                             fontWeight: FontWeight.w400,
                           ),
                         ),
@@ -634,43 +687,43 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(NearhoodColors colors) {
     return GestureDetector(
       onTap: _showPhotoPickerSheet,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: 104,
+            height: 104,
             padding: EdgeInsets.all(_pickedProfileImage != null ? 3.0 : 0),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: _pickedProfileImage != null ? UserAvatar.instagramGradient : null,
-              color: _pickedProfileImage == null ? const Color(0xFFF8FAFC) : null,
+              color: _pickedProfileImage == null ? colors.field : null,
               border: _pickedProfileImage == null
-                  ? Border.all(color: const Color(0xFFE2E8F0), width: 2)
+                  ? Border.all(color: colors.line, width: 2)
                   : null,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF64748B).withValues(alpha: 0.12),
-                  blurRadius: 20,
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Container(
-              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : const EdgeInsets.all(14),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.field,
                 shape: BoxShape.circle,
               ),
               child: ClipOval(
                 child: _pickedProfileImage != null
                     ? Image.file(
                         _pickedProfileImage!,
-                        width: 86,
-                        height: 86,
+                        width: 90,
+                        height: 90,
                         fit: BoxFit.cover,
                         alignment: Alignment.center,
                       )
@@ -680,10 +733,10 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         height: 64,
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
+                          return Icon(
                             Icons.person_rounded,
                             size: 44,
-                            color: Color(0xFF64748B),
+                            color: colors.muted,
                           );
                         },
                       ),
@@ -691,18 +744,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             ),
           ),
           Positioned(
-            bottom: 0,
-            right: 0,
+            bottom: 2,
+            right: 2,
             child: Container(
-              width: 32,
-              height: 32,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: colors.field2,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2.5),
+                border: Border.all(color: colors.bg, width: 2.5),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
+                    color: Colors.black.withValues(alpha: 0.4),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -711,7 +764,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 16,
+                size: 17,
               ),
             ),
           ),
@@ -720,58 +773,54 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     );
   }
 
-  Widget _buildInputField() {
+  Widget _buildInputField(NearhoodColors colors) {
     Color borderColor;
-    Color fillColor;
+    Color fillColor = colors.field;
     List<BoxShadow> shadows = [];
 
     switch (_state) {
       case UsernameState.empty:
         borderColor = _focusNode.hasFocus
-            ? const Color(0xFF3B82F6)
-            : const Color(0xFFE2E8F0);
-        fillColor = Colors.white;
+            ? const Color(0xFF2DD4BF)
+            : colors.line;
         if (_focusNode.hasFocus) {
           shadows = [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+              color: const Color(0xFF2DD4BF).withValues(alpha: 0.15),
               blurRadius: 10,
-              spreadRadius: 2,
+              spreadRadius: 1,
             ),
           ];
         }
         break;
       case UsernameState.focused:
-        borderColor = const Color(0xFF3B82F6);
-        fillColor = Colors.white;
+        borderColor = const Color(0xFF2DD4BF);
         shadows = [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+            color: const Color(0xFF2DD4BF).withValues(alpha: 0.15),
             blurRadius: 10,
-            spreadRadius: 2,
+            spreadRadius: 1,
           ),
         ];
         break;
       case UsernameState.checking:
-        borderColor = const Color(0xFFE2E8F0);
-        fillColor = Colors.white;
+        borderColor = colors.line;
         break;
       case UsernameState.available:
-        borderColor = const Color(0xFF3B82F6);
-        fillColor = Colors.white;
+        borderColor = const Color(0xFF4ADE80);
         shadows = [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withValues(alpha: 0.14),
+            color: const Color(0xFF4ADE80).withValues(alpha: 0.2),
             blurRadius: 10,
-            spreadRadius: 2,
+            spreadRadius: 1,
           ),
         ];
         break;
       case UsernameState.taken:
       case UsernameState.invalid:
       case UsernameState.reserved:
-        borderColor = const Color(0xFFF87171);
-        fillColor = const Color(0xFFFEF2F2);
+        borderColor = const Color(0xFFEF4444);
+        fillColor = const Color(0xFFEF4444).withValues(alpha: 0.12);
         break;
     }
 
@@ -795,14 +844,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(left: 18, right: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 18, right: 8),
             child: Text(
               '@',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
+                color: colors.ink,
               ),
             ),
           ),
@@ -822,21 +871,21 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 }),
               ],
               onChanged: _onTextChanged,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1E293B),
+                color: colors.ink,
                 letterSpacing: 0.2,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'username',
                 hintStyle: TextStyle(
-                  color: Color(0xFF94A3B8),
+                  color: colors.muted.withValues(alpha: 0.5),
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
           ),
@@ -848,7 +897,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2DD4BF)),
                 ),
               ),
             )
@@ -859,18 +908,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     );
   }
 
-  Widget _buildStatusHelper() {
+  Widget _buildStatusHelper(NearhoodColors colors) {
     switch (_state) {
       case UsernameState.empty:
       case UsernameState.focused:
-        return const SizedBox(
+        return SizedBox(
           width: double.infinity,
           child: Padding(
-            padding: EdgeInsets.only(left: 4, top: 4),
+            padding: const EdgeInsets.only(left: 4, top: 4),
             child: Text(
               '3–20 characters • lowercase letters and numbers',
               style: TextStyle(
-                color: Color(0xFF94A3B8),
+                color: colors.muted,
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
               ),
@@ -879,14 +928,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         );
 
       case UsernameState.checking:
-        return const SizedBox(
+        return SizedBox(
           width: double.infinity,
           child: Padding(
-            padding: EdgeInsets.only(left: 4, top: 4),
+            padding: const EdgeInsets.only(left: 4, top: 4),
             child: Text(
               'Checking availability...',
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: colors.muted,
                 fontSize: 13.5,
                 fontWeight: FontWeight.w500,
               ),
@@ -903,15 +952,15 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: Row(
                 children: const [
                   Icon(
-                    Icons.check_circle,
+                    Icons.check_circle_rounded,
                     size: 18,
-                    color: Color(0xFF16A34A),
+                    color: Color(0xFF4ADE80),
                   ),
                   SizedBox(width: 6),
                   Text(
                     'Username available',
                     style: TextStyle(
-                      color: Color(0xFF16A34A),
+                      color: Color(0xFF4ADE80),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -920,12 +969,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
               child: Text(
                 '3–20 characters • lowercase letters and numbers',
                 style: TextStyle(
-                  color: Color(0xFF94A3B8),
+                  color: colors.muted,
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                 ),
@@ -940,7 +989,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: const [
               Icon(
-                Icons.cancel,
+                Icons.cancel_rounded,
                 size: 18,
                 color: Color(0xFFEF4444),
               ),
@@ -948,9 +997,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               Text(
                 'Username is already taken',
                 style: TextStyle(
-                  color: Color(0xFFDC2626),
+                  color: Color(0xFFEF4444),
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -967,7 +1016,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               const Padding(
                 padding: EdgeInsets.only(top: 2),
                 child: Icon(
-                  Icons.cancel,
+                  Icons.cancel_rounded,
                   size: 18,
                   color: Color(0xFFEF4444),
                 ),
@@ -978,7 +1027,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   _customErrorMessage ??
                       'Username must be 3–20 characters using lowercase letters and numbers.',
                   style: const TextStyle(
-                    color: Color(0xFFDC2626),
+                    color: Color(0xFFEF4444),
                     fontSize: 13.5,
                     fontWeight: FontWeight.w500,
                     height: 1.3,
@@ -991,7 +1040,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     }
   }
 
-  Widget _buildContinueButton(bool isButtonActive) {
+  Widget _buildContinueButton(NearhoodColors colors, bool isButtonActive) {
     return Container(
       width: double.infinity,
       height: 54,
@@ -1000,7 +1049,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         boxShadow: isButtonActive
             ? [
                 BoxShadow(
-                  color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
+                  color: colors.field2.withValues(alpha: 0.5),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -1010,10 +1059,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: isButtonActive
-              ? const Color(0xFF3B82F6)
-              : const Color(0xFF93C5FD).withValues(alpha: 0.6),
-          foregroundColor: Colors.white,
+              ? colors.field2
+              : colors.field,
+          foregroundColor: isButtonActive
+              ? Colors.white
+              : colors.muted.withValues(alpha: 0.4),
           elevation: 0,
+          side: BorderSide(
+            color: isButtonActive ? const Color(0xFF2DD4BF) : colors.line,
+            width: 1.5,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

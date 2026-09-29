@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/friend_request_model.dart';
 import '../models/friendship_model.dart';
 import '../models/block_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
 
@@ -62,10 +63,29 @@ class FriendRepository {
 
   Future<Map<String, String>> _getAuthHeaders() async {
     final token = await AuthService.instance.getAccessToken();
+    var handle = _currentUserHandle;
+    if (handle.isEmpty) {
+      final h = await AuthService.instance.getUserHandle();
+      if (h != null && h.isNotEmpty) {
+        handle = h.replaceAll('@', '').trim();
+        _currentUserHandle = handle;
+      } else {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final saved = prefs.getString('user_handle');
+          if (saved != null && saved.isNotEmpty) {
+            handle = saved.replaceAll('@', '').trim();
+            _currentUserHandle = handle;
+          }
+        } catch (_) {}
+      }
+    }
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (handle.isNotEmpty) 'x-user-handle': handle,
+      if (handle.isNotEmpty) 'user-handle': handle,
     };
   }
 
@@ -115,15 +135,31 @@ class FriendRepository {
         final rawRecv = data['received'] as List? ?? [];
         final rawSent = data['sent'] as List? ?? [];
 
-        _cachedPendingRequests = rawRecv.map((item) {
+        final seenRecv = <String>{};
+        final List<FriendRequest> recvList = [];
+        for (final item in rawRecv) {
           final map = item as Map<String, dynamic>;
-          return FriendRequest.fromMap(map, map['id']?.toString() ?? '');
-        }).toList();
+          final req = FriendRequest.fromMap(map, map['id']?.toString() ?? '');
+          final sender = req.senderHandle.toLowerCase();
+          if (sender.isNotEmpty && !seenRecv.contains(sender)) {
+            seenRecv.add(sender);
+            recvList.add(req);
+          }
+        }
+        _cachedPendingRequests = recvList;
 
-        _cachedSentRequests = rawSent.map((item) {
+        final seenSent = <String>{};
+        final List<FriendRequest> sentList = [];
+        for (final item in rawSent) {
           final map = item as Map<String, dynamic>;
-          return FriendRequest.fromMap(map, map['id']?.toString() ?? '');
-        }).toList();
+          final req = FriendRequest.fromMap(map, map['id']?.toString() ?? '');
+          final receiver = req.receiverHandle.toLowerCase();
+          if (receiver.isNotEmpty && !seenSent.contains(receiver)) {
+            seenSent.add(receiver);
+            sentList.add(req);
+          }
+        }
+        _cachedSentRequests = sentList;
 
         _pendingRequestsController.add(List.unmodifiable(_cachedPendingRequests));
         _sentRequestsController.add(List.unmodifiable(_cachedSentRequests));
@@ -161,7 +197,14 @@ class FriendRepository {
     final them = otherHandle.replaceAll('@', '').trim();
     if (them.isEmpty) return RelationshipStatus.none;
 
-    final me = _currentUserHandle.replaceAll('@', '').trim();
+    var me = _currentUserHandle.replaceAll('@', '').trim();
+    if (me.isEmpty) {
+      final h = await AuthService.instance.getUserHandle();
+      if (h != null && h.isNotEmpty) {
+        me = h.replaceAll('@', '').trim();
+        _currentUserHandle = me;
+      }
+    }
     if (me.isNotEmpty && me.toLowerCase() == them.toLowerCase()) {
       return RelationshipStatus.none;
     }
@@ -200,7 +243,7 @@ class FriendRepository {
   }
 
   // ── Send Friend Request ──
-  Future<void> sendFriendRequest(String receiverHandle) async {
+  Future<RelationshipStatus> sendFriendRequest(String receiverHandle) async {
     final them = receiverHandle.replaceAll('@', '').trim();
     if (them.isEmpty) throw Exception('Target user not specified');
 
@@ -209,15 +252,39 @@ class FriendRepository {
     final res = await http.post(
       uri,
       headers: headers,
-      body: jsonEncode({'receiverHandle': them}),
-    );
+      body: jsonEncode({
+        'receiverHandle': them,
+        'receiver': them,
+        'targetHandle': them,
+      }),
+    ).timeout(const Duration(seconds: 10));
 
     if (res.statusCode == 200) {
-      final me = _currentUserHandle.replaceAll('@', '').trim();
+      final data = jsonDecode(res.body);
+      final rel = data['relationship']?.toString();
+      var me = _currentUserHandle.replaceAll('@', '').trim();
+      if (me.isEmpty) {
+        final h = await AuthService.instance.getUserHandle();
+        me = (h ?? '').replaceAll('@', '').trim();
+      }
+
+      if (rel == 'friends') {
+        final newFriendship = Friendship(
+          id: '${them.toLowerCase()}_${me.toLowerCase()}',
+          users: [them, me],
+          otherUser: them,
+          createdAt: DateTime.now(),
+        );
+        _cachedFriends.insert(0, newFriendship);
+        _friendsController.add(List.unmodifiable(_cachedFriends));
+        return RelationshipStatus.friends;
+      }
+
+      _cachedSentRequests.removeWhere((r) => r.receiverHandle.toLowerCase() == them.toLowerCase());
       _cachedSentRequests.insert(
         0,
         FriendRequest(
-          id: '${me.toLowerCase()}_${them.toLowerCase()}',
+          id: 'req_${DateTime.now().millisecondsSinceEpoch}_${me.toLowerCase()}_${them.toLowerCase()}',
           senderHandle: me,
           receiverHandle: them,
           status: FriendRequestStatus.pending,
@@ -236,9 +303,11 @@ class FriendRepository {
           'senderHandle': me,
         },
       ).catchError((_) {});
+
+      return RelationshipStatus.requestSentByMe;
     } else {
       final data = jsonDecode(res.body);
-      final errorMsg = data['detail'] ?? data['error']?['message'] ?? 'Failed to send friend request';
+      final errorMsg = data['error']?['message'] ?? data['error'] ?? data['detail'] ?? 'Failed to send friend request';
       throw Exception(errorMsg);
     }
   }
@@ -253,11 +322,15 @@ class FriendRepository {
     final res = await http.post(
       uri,
       headers: headers,
-      body: jsonEncode({'senderHandle': them}),
-    );
+      body: jsonEncode({'senderHandle': them, 'sender': them}),
+    ).timeout(const Duration(seconds: 10));
 
     if (res.statusCode == 200) {
-      final me = _currentUserHandle.replaceAll('@', '').trim();
+      var me = _currentUserHandle.replaceAll('@', '').trim();
+      if (me.isEmpty) {
+        final h = await AuthService.instance.getUserHandle();
+        me = (h ?? '').replaceAll('@', '').trim();
+      }
       _cachedPendingRequests.removeWhere((r) =>
           r.senderHandle.toLowerCase() == them.toLowerCase() ||
           r.receiverHandle.toLowerCase() == them.toLowerCase());
@@ -285,7 +358,7 @@ class FriendRepository {
       ).catchError((_) {});
     } else {
       final data = jsonDecode(res.body);
-      final errorMsg = data['detail'] ?? data['error']?['message'] ?? 'Failed to accept friend request';
+      final errorMsg = data['error']?['message'] ?? data['error'] ?? data['detail'] ?? 'Failed to accept friend request';
       throw Exception(errorMsg);
     }
   }
@@ -476,6 +549,24 @@ class FriendRepository {
     return _pendingCountController.stream;
   }
 
+  // ── Discover / Search People ──
+  Future<List<Map<String, dynamic>>> discoverPeople({String query = '', int limit = 40}) async {
+    final cleanQuery = query.replaceAll('@', '').trim();
+    final uri = Uri.parse('${AuthService.baseUrl}/friends/discover?q=${Uri.encodeComponent(cleanQuery)}&limit=$limit');
+    try {
+      final headers = await _getAuthHeaders();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final rawList = data['users'] as List? ?? [];
+        return rawList.map((item) => item as Map<String, dynamic>).toList();
+      }
+    } catch (e) {
+      debugPrint('[FriendRepository] discoverPeople error: $e');
+    }
+    return [];
+  }
+
   // ── Check if two users are friends ──
   Future<bool> areFriends(String otherHandle) async {
     final status = await getRelationshipStatus(otherHandle);
@@ -487,15 +578,28 @@ class FriendRepository {
     final clean = handle.replaceAll('@', '').trim();
     if (clean.isEmpty) return null;
 
-    final uri = Uri.parse('${AuthService.baseUrl}/auth/profile/$clean');
+    final uri = Uri.parse('${AuthService.baseUrl}/profile/$clean');
     try {
-      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      final headers = await _getAuthHeaders();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return data['user'] as Map<String, dynamic>?;
+        final prof = (data['profile'] ?? data['user']) as Map<String, dynamic>?;
+        if (prof != null) return prof;
       }
     } catch (e) {
-      debugPrint('[FriendRepository] getUserByHandle error: $e');
+      debugPrint('[FriendRepository] getUserByHandle profile error: $e');
+    }
+
+    try {
+      final authUri = Uri.parse('${AuthService.baseUrl}/auth/profile/$clean');
+      final res = await http.get(authUri).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return (data['profile'] ?? data['user']) as Map<String, dynamic>?;
+      }
+    } catch (e) {
+      debugPrint('[FriendRepository] getUserByHandle auth error: $e');
     }
     return null;
   }

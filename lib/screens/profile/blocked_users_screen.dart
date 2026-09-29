@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/block_model.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/friend_repository.dart';
 import '../../core/action_state/action_state_provider.dart';
 import '../../services/user_action_state_service.dart';
@@ -64,7 +65,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           side: BorderSide(color: c.line),
         ),
         title: Text(
-          'Unblock @$handle?',
+          'Unblock ${handle.displayHandle}?',
           style: TextStyle(
             color: c.ink,
             fontWeight: FontWeight.w800,
@@ -72,7 +73,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           ),
         ),
         content: Text(
-          '@$handle will be able to see your posts and message you again.',
+          '${handle.displayHandle} will be able to see your posts and message you again.',
           style: TextStyle(
             color: c.muted,
             fontSize: 14,
@@ -121,7 +122,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '@$handle has been unblocked',
+                '${handle.displayHandle} has been unblocked',
                 style: TextStyle(color: c.btnink, fontWeight: FontWeight.w600, fontSize: 13.5),
                 textAlign: TextAlign.center,
               ),
@@ -278,7 +279,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            '@$handle',
+                                            handle.displayHandle,
                                             style: TextStyle(
                                               color: c.ink,
                                               fontWeight: FontWeight.w700,

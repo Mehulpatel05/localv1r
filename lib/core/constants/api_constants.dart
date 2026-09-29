@@ -8,7 +8,7 @@ class ApiConstants {
   /// Can be overridden at build-time via `--dart-define=BACKEND_URL=https://...`
   static const String baseUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'http://13.203.224.239/api/v1',
+    defaultValue: 'https://backend-v2-cu1p.onrender.com/api/v2',
   );
 
   /// Root Host URL (without /api/v1)

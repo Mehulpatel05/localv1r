@@ -18,8 +18,11 @@ import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
 import '../../core/location/city_picker_screen.dart';
 import '../bazar/bazar_screen.dart';
+import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
+import '../shop/manage/my_shop_dashboard_screen.dart';
 import '../saved/saved_screen.dart';
+import '../../services/bazar_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -43,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isUploadingPhoto = false;
   late TextEditingController _bioController;
   late final FriendRepository _friendRepository;
+  LocalShop? _myRegisteredShop;
 
   @override
   void initState() {
@@ -132,9 +136,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final freshPosts = await widget.repository.fetchPostsByUser(widget.currentUserHandle);
+      final shop = await BazarRepository.instance.fetchMyShop();
       if (mounted) {
         setState(() {
           _userPosts = freshPosts;
+          _myRegisteredShop = shop;
         });
       }
     } catch (e) {
@@ -697,7 +703,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // 2. Handle & Subtitle
               Text(
-                '@$handle',
+                handle.toString().displayHandle,
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -730,7 +736,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // 3. Stats Card (Posts | Listings | Neighbours)
               Builder(
                 builder: (context) {
-                  final listingsCount = _userPosts.where((p) =>
+                  final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
+                  final postListings = _userPosts.where((p) =>
                     p.category == PostCategory.shop ||
                     p.category == PostCategory.rooms ||
                     p.category == PostCategory.services ||
@@ -738,6 +745,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     p.shopTitle != null ||
                     p.roomTitle != null
                   ).length;
+                  final listingsCount = bazarListings > 0 ? bazarListings : postListings;
 
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -763,7 +771,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const BazarScreen(initialShowMyListings: true),
+                                builder: (_) => BazarScreen(
+                                  initialShowMyListings: true,
+                                  currentUserHandle: widget.currentUserHandle,
+                                ),
                               ),
                             );
                           },
@@ -851,7 +862,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         SharePlus.instance.share(
                           ShareParams(
                             text:
-                                'Connect with @$handle on Nearhood — the local community app for Vadodara!',
+                                'Connect with ${handle.toString().displayHandle} on Nearhood — the local community app for Vadodara!',
                           ),
                         );
                       },
@@ -940,7 +951,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const BazarScreen(initialShowMyListings: true),
+                            builder: (_) => BazarScreen(
+                              initialShowMyListings: true,
+                              currentUserHandle: widget.currentUserHandle,
+                            ),
                           ),
                         );
                       },
@@ -975,18 +989,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     Divider(height: 1, color: borderColor),
 
-                    // 4. Register your shop
-                    _buildProfileMenuItem(
-                      icon: Icons.store_mall_directory_outlined,
-                      title: 'Register your shop',
-                      subtitle: 'For local businesses',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
-                        );
-                      },
-                    ),
+                    // 4. Register your shop OR Manage my shop
+                    if (_myRegisteredShop != null)
+                      _buildProfileMenuItem(
+                        icon: Icons.store_mall_directory_rounded,
+                        title: 'Manage my shop',
+                        subtitle: '${_myRegisteredShop!.name} · Live 🟢',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MyShopDashboardScreen(
+                                initialShop: _myRegisteredShop,
+                                currentUserHandle: widget.currentUserHandle,
+                              ),
+                            ),
+                          ).then((_) => _loadProfileData());
+                        },
+                      )
+                    else
+                      _buildProfileMenuItem(
+                        icon: Icons.store_mall_directory_outlined,
+                        title: 'Register your shop',
+                        subtitle: 'For local businesses',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
+                          ).then((_) => _loadProfileData());
+                        },
+                      ),
                   ],
                 ),
               ),

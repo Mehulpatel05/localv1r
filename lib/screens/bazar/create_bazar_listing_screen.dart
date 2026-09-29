@@ -1,9 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'bazar_screen.dart';
 import '../../services/bazar_repository.dart';
-import '../../services/auth_service.dart';
+import '../../services/r2_storage_service.dart';
 
 class CreateBazarListingScreen extends StatefulWidget {
   const CreateBazarListingScreen({super.key});
@@ -164,29 +163,31 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
     String imageUrl = '';
     if (_pickedImagePaths.isNotEmpty) {
-      imageUrl = _pickedImagePaths.first;
+      try {
+        final file = File(_pickedImagePaths.first);
+        if (await file.exists()) {
+          final uploaded = await R2StorageService.uploadImage(file);
+          if (uploaded != null && uploaded.isNotEmpty) {
+            imageUrl = uploaded;
+          } else {
+            imageUrl = _pickedImagePaths.first;
+          }
+        }
+      } catch (e) {
+        debugPrint('[CreateBazarListingScreen] Image upload error: $e');
+        imageUrl = _pickedImagePaths.first;
+      }
     }
 
-    final handle = await AuthService.instance.getUserHandle();
-    final currentHandle = (handle != null && handle.isNotEmpty) ? handle : 'me';
-
-    final newProduct = BazarProduct(
-      id: 'm_${DateTime.now().millisecondsSinceEpoch}',
+    final newProduct = await BazarRepository.instance.createListing(
       title: title,
       price: price,
-      category: _selectedCategory,
-      distanceKm: 0.8,
-      imageUrl: imageUrl,
-      sellerHandle: currentHandle,
-      location: 'Local Area',
       description: 'Condition: $_selectedCondition. Visibility: $_selectedLocation.',
-      viewsCount: 0,
-      chatsCount: 0,
-      isSold: false,
+      category: _selectedCategory,
+      condition: _selectedCondition,
+      location: _selectedLocation,
+      imageUrl: imageUrl,
     );
-
-    // Save persistently to BazarRepository
-    await BazarRepository.instance.addProduct(newProduct);
 
     if (mounted) {
       Navigator.pop(context, newProduct);

@@ -105,10 +105,10 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
   void _shareViaEmail() {
     SharePlus.instance.share(
       ShareParams(
-        text: 'Nearhood Support Query from @${widget.profile.handle}:\n'
+        text: 'Nearhood Support Query from ${widget.profile.displayHandle}:\n'
             'Category: ${_selectedCategory.label}\n'
             'Message: ${_messageController.text.trim().isNotEmpty ? _messageController.text.trim() : "[Your question/feedback here]"}',
-        subject: 'Nearhood Support - @${widget.profile.handle}',
+        subject: 'Nearhood Support - ${widget.profile.displayHandle}',
       ),
     );
   }
@@ -254,7 +254,7 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Submitting as @${widget.profile.handle}',
+                        'Submitting as ${widget.profile.displayHandle}',
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,

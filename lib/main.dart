@@ -240,13 +240,11 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                             CallListenerService.instance.startListening(handle);
 
                             // ⚡ Instant Background Cache Preloading (non-blocking)
-                            unawaited(
-                              SplashController.instance.warmFetchOnLogin(
-                                uid: userId,
-                                handle: handle,
-                                cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
-                                postRepo: postRepository,
-                              ),
+                            SplashController.instance.warmFetchOnLogin(
+                              uid: userId,
+                              handle: handle,
+                              cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
+                              postRepo: postRepository,
                             );
                           }
                         } catch (e, stack) {

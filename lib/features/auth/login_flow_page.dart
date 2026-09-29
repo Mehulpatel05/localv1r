@@ -76,13 +76,11 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
       } else {
         final loc = LocationService();
         final repo = widget.postRepository ?? PostRepository(loc);
-        unawaited(
-          SplashController.instance.warmFetchOnLogin(
-            uid: userId,
-            handle: handle,
-            cityId: loc.cityId,
-            postRepo: repo,
-          ),
+        SplashController.instance.warmFetchOnLogin(
+          uid: userId,
+          handle: handle,
+          cityId: loc.cityId,
+          postRepo: repo,
         );
 
         if (widget.onLoggedIn != null) {

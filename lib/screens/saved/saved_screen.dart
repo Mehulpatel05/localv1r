@@ -331,7 +331,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
+                        color: const Color(0xA6000000),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white24, width: 1),
                       ),

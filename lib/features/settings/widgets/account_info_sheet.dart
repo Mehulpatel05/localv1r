@@ -64,7 +64,7 @@ class AccountInfoSheet extends StatelessWidget {
               children: [
                 _InfoRow(
                   label: 'Handle',
-                  value: '@${profile.handle}',
+                  value: profile.displayHandle,
                 ),
                 Divider(height: 1, thickness: 1, color: c.line),
                 _InfoRow(

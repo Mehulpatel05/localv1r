@@ -118,7 +118,7 @@ class ApiV2Service {
           'condition': condition,
           'location': location,
           'imageUrls': imageUrls,
-          if (shopId != null) 'shopId': shopId,
+          'shopId': ?shopId,
         }),
       );
       if (res.statusCode == 200) {
@@ -164,7 +164,7 @@ class ApiV2Service {
         body: jsonEncode({
           'receiver': receiver,
           'content': content,
-          if (mediaR2Path != null) 'mediaR2Path': mediaR2Path,
+          'mediaR2Path': ?mediaR2Path,
           'messageType': messageType,
         }),
       );

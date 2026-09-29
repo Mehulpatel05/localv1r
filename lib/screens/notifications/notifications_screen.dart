@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
+import '../../core/models/user_profile.dart';
 
 enum NotificationFilter { all, unread, likes, comments, requests, uploads }
 
@@ -631,7 +632,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       children: [
                         if (sender != null && sender.isNotEmpty)
                           TextSpan(
-                            text: '@$sender ',
+                            text: '${sender.displayHandle} ',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               color: c.ink,
@@ -737,8 +738,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == 'post_like') {
       return 'liked your post.';
     } else if (type == 'post_comment') {
-      if (sender != null && body.startsWith('@$sender commented: ')) {
-        return body.replaceFirst('@$sender ', '');
+      if (sender != null && sender.isNotEmpty) {
+        final disp = sender.displayHandle;
+        if (body.startsWith('$disp commented: ')) {
+          return body.replaceFirst('$disp ', '');
+        }
+        if (body.startsWith('@$sender commented: ')) {
+          return body.replaceFirst('@$sender ', '');
+        }
       }
       return body;
     } else if (type == 'friend_request') {

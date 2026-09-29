@@ -301,8 +301,8 @@ class PostRepository extends ChangeNotifier {
       final queryParams = <String, String>{
         'limit': '50',
         'cityId': cityId,
-        if (_nextCursor != null) 'cursor': _nextCursor!,
-        if (categoryStr != null) 'category': categoryStr,
+        'cursor': ?_nextCursor,
+        'category': ?categoryStr,
       };
       
       uri = uri.replace(queryParameters: queryParams);
@@ -604,7 +604,7 @@ class PostRepository extends ChangeNotifier {
           if (shopPrice != null) 'shopPrice': _cleanOptional(shopPrice, maxLen: 30),
           if (shopCategory != null) 'shopCategory': _cleanOptional(shopCategory, maxLen: 50),
           if (foodTitle != null) 'foodTitle': _cleanOptional(foodTitle),
-          if (foodRating != null) 'foodRating': foodRating,
+          'foodRating': ?foodRating,
           if (foodPrice != null) 'foodPrice': _cleanOptional(foodPrice, maxLen: 30),
           if (eventTitle != null) 'eventTitle': _cleanOptional(eventTitle),
           if (eventDate != null) 'eventDate': _cleanOptional(eventDate, maxLen: 50),

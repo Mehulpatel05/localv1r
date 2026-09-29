@@ -28,7 +28,7 @@ class ProximityRadiusFilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: options.length + (currentArea != null ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           // If area is selected, show Area badge as first item
           if (currentArea != null && index == 0) {

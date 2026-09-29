@@ -3,6 +3,7 @@ import '../../core/widgets/user_avatar.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/friend_repository.dart';
+import '../../services/auth_service.dart';
 import '../chat/personal_chat_screen.dart';
 import '../../core/action_state/action_state_provider.dart';
 import '../../services/user_action_state_service.dart';
@@ -70,14 +71,28 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   @override
   void initState() {
     super.initState();
-    _targetHandle = (widget.userHandle ?? widget.partnerHandle).replaceAll('@', '').trim();
+    _targetHandle = (widget.userHandle != null && widget.userHandle!.isNotEmpty
+            ? widget.userHandle!
+            : widget.partnerHandle)
+        .replaceAll('@', '')
+        .trim();
     final cleanCurrent = widget.currentUserHandle.replaceAll('@', '').trim();
-    _friendRepo = FriendRepository()..currentUserHandle = cleanCurrent;
+    _friendRepo = FriendRepository();
+    if (cleanCurrent.isNotEmpty) {
+      _friendRepo.currentUserHandle = cleanCurrent;
+    }
     _loadData();
   }
 
   Future<void> _loadData() async {
     try {
+      if (_friendRepo.currentUserHandle.isEmpty) {
+        final currentH = await AuthService.instance.getUserHandle();
+        if (currentH != null && currentH.isNotEmpty) {
+          _friendRepo.currentUserHandle = currentH.replaceAll('@', '').trim();
+        }
+      }
+
       final results = await Future.wait([
         _friendRepo.getUserByHandle(_targetHandle),
         (widget.repository is! _DummyRepo)
@@ -111,13 +126,19 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   Future<void> _sendFriendRequest() async {
     setState(() => _friendActionLoading = true);
     try {
-      await _friendRepo.sendFriendRequest(_targetHandle);
-      _relationshipStatus = RelationshipStatus.requestSentByMe;
+      final newStatus = await _friendRepo.sendFriendRequest(_targetHandle);
       if (mounted) {
+        setState(() => _relationshipStatus = newStatus);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Friend request sent to @$_targetHandle!'),
-            backgroundColor: const Color(0xFF3B82F6),
+            content: Text(
+              newStatus == RelationshipStatus.friends
+                  ? 'You and @$_targetHandle are now friends! 🎉'
+                  : 'Friend request sent to @$_targetHandle!',
+            ),
+            backgroundColor: newStatus == RelationshipStatus.friends
+                ? const Color(0xFF10B981)
+                : const Color(0xFF3B82F6),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -141,8 +162,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     setState(() => _friendActionLoading = true);
     try {
       await _friendRepo.acceptFriendRequest(_targetHandle);
-      _relationshipStatus = RelationshipStatus.friends;
       if (mounted) {
+        setState(() => _relationshipStatus = RelationshipStatus.friends);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('You and @$_targetHandle are now friends! 🎉'),
@@ -170,8 +191,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     setState(() => _friendActionLoading = true);
     try {
       await _friendRepo.cancelFriendRequest(_targetHandle);
-      _relationshipStatus = RelationshipStatus.none;
       if (mounted) {
+        setState(() => _relationshipStatus = RelationshipStatus.none);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Friend request cancelled'),
@@ -235,8 +256,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     setState(() => _friendActionLoading = true);
     try {
       await _friendRepo.unfriend(_targetHandle);
-      _relationshipStatus = RelationshipStatus.none;
       if (mounted) {
+        setState(() => _relationshipStatus = RelationshipStatus.none);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Removed @$_targetHandle from friends'),

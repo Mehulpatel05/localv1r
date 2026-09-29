@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/chat_conversation_model.dart';
 import '../../models/friendship_model.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/chat_preferences_service.dart';
 import '../../services/direct_chat_service.dart';
 import '../../services/friend_repository.dart';
@@ -1120,7 +1121,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(selectedCount == 1 ? '@${partnerHandles.first} blocked' : '$selectedCount contacts blocked'),
+                    content: Text(selectedCount == 1 ? '${partnerHandles.first.displayHandle} blocked' : '$selectedCount contacts blocked'),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -1415,7 +1416,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   );
                 },
                 child: KeyedSubtree(
-                  key: ValueKey('list_filter_${_selectedFilter}_archived_${_showArchivedView}'),
+                  key: ValueKey('list_filter_${_selectedFilter}_archived_$_showArchivedView'),
                   child: StreamBuilder<List<ChatConversation>>(
                     stream: _getChatsStream(),
                     initialData: DirectChatService.instance.lastKnownChats,
@@ -1894,7 +1895,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               currentUserHandle: widget.currentUserHandle,
                               partnerHandle: cleanHandle,
                             ),
-                            transitionsBuilder: (_, animation, __, child) => FadeTransition(
+                            transitionsBuilder: (_, animation, _, child) => FadeTransition(
                               opacity: animation,
                               child: child,
                             ),
@@ -1967,7 +1968,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                         children: [
                                           Flexible(
                                             child: Text(
-                                              '@$cleanHandle',
+                                              cleanHandle.displayHandle,
                                               style: TextStyle(
                                                 fontSize: 15.5,
                                                 fontWeight: (hasUnread || isSelected) ? FontWeight.w800 : FontWeight.w700,
@@ -2716,7 +2717,7 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                         tileColor: isDark ? const Color(0xFF141414) : Colors.white,
                         leading: UserAvatar(handle: handle, size: 42, fontSize: 16),
                         title: Text(
-                          '@$handle',
+                          handle.displayHandle,
                           style: TextStyle(
                             color: isDark ? Colors.white : const Color(0xFF0F172A),
                             fontWeight: FontWeight.w700,

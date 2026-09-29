@@ -10,6 +10,7 @@ import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/like_capsule.dart';
 import '../../models/post_model.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/post_repository.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
@@ -173,7 +174,7 @@ class _FeedScreenState extends State<FeedScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final chip = chips[index];
           final isSelected = chip == _selectedFilterChip;
@@ -565,7 +566,6 @@ class _FeedScreenState extends State<FeedScreen> {
                       physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics(),
                       ),
-                      cacheExtent: 800.0,
                       addRepaintBoundaries: true,
                       addAutomaticKeepAlives: true,
                       padding: const EdgeInsets.only(
@@ -1409,7 +1409,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               GestureDetector(
                                 onTap: widget.onProfileTap,
                                 child: Text(
-                                  post.authorHandle.contains(' ') ? post.authorHandle : '@${post.authorHandle}',
+                                  post.authorHandle.displayHandle,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,

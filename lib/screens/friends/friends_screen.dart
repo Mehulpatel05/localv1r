@@ -6,8 +6,10 @@ import '../../services/friend_repository.dart';
 import '../../services/post_repository.dart';
 import '../../models/friend_request_model.dart';
 import '../../models/friendship_model.dart';
+import '../../core/models/user_profile.dart';
 import '../chat/personal_chat_screen.dart';
 import '../profile/other_user_profile_sheet.dart';
+import 'discover_people_screen.dart';
 
 enum FriendsTab { requests, friends, sent }
 
@@ -218,7 +220,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '@$handle will be removed from your friends.',
+                '${handle.displayHandle} will be removed from your friends.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFF64748B),
@@ -265,7 +267,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         try {
                           await widget.repository.unfriend(handle);
                           _showDarkPillToast(
-                            message: '@$handle removed from your friends',
+                            message: '${handle.displayHandle} removed from your friends',
                             icon: Icons.check_circle_rounded,
                             iconColor: const Color(0xFFF59E0B),
                           );
@@ -374,7 +376,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         try {
                           await widget.repository.blockUser(handle);
                           _showDarkPillToast(
-                            message: '@$handle has been blocked',
+                            message: '${handle.displayHandle} has been blocked',
                             icon: Icons.check_circle_rounded,
                             iconColor: const Color(0xFFEF4444),
                           );
@@ -399,6 +401,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openDiscoverPeople() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DiscoverPeopleScreen(
+          repository: widget.repository,
+          currentUserHandle: widget.currentUserHandle,
         ),
       ),
     );
@@ -493,6 +507,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ],
         ),
         actions: [
+          // Quick Discover People Button
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF14B8A6), size: 22),
+            tooltip: 'Discover People',
+            onPressed: _openDiscoverPeople,
+          ),
           // Search Toggle Button
           IconButton(
             icon: Icon(
@@ -519,9 +539,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
             onSelected: (val) {
               if (val == 'discover') {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Browse posts or profiles to connect with more locals!')),
-                );
+                _openDiscoverPeople();
               }
             },
             itemBuilder: (context) => [
@@ -745,9 +763,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             title: 'No new requests',
             subtitle: 'When someone wants to connect with you, their request will appear here.',
             actionLabel: 'Discover people',
-            onAction: () {
-              Navigator.pop(context);
-            },
+            onAction: _openDiscoverPeople,
           );
         }
 
@@ -811,7 +827,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '@$handle',
+                        handle.displayHandle,
                         style: TextStyle(
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
                           fontSize: 15.5,
@@ -932,7 +948,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             title: 'Build your local network',
             subtitle: 'Connect with people from your community and start conversations.',
             actionLabel: 'Find people',
-            onAction: () => Navigator.pop(context),
+            onAction: _openDiscoverPeople,
           );
         }
 
@@ -1001,7 +1017,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '@$handle',
+                    handle.displayHandle,
                     style: TextStyle(
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                       fontSize: 14.5,
@@ -1094,6 +1110,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             icon: Icons.access_time_rounded,
             title: 'No pending requests',
             subtitle: 'Friend requests you send will appear here.',
+            actionLabel: 'Find people',
+            onAction: _openDiscoverPeople,
           );
         }
 
@@ -1152,7 +1170,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '@$handle',
+                  handle.displayHandle,
                   style: TextStyle(
                     color: isDark ? Colors.white : const Color(0xFF0F172A),
                     fontSize: 14.5,

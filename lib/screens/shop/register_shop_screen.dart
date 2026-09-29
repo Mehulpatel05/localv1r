@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../../services/bazar_repository.dart';
+import '../../services/auth_service.dart';
+import '../../services/r2_storage_service.dart';
+import '../../core/location/location_engine.dart';
+import './manage/my_shop_dashboard_screen.dart';
 
 class RegisterShopScreen extends StatefulWidget {
   const RegisterShopScreen({super.key});
@@ -22,12 +28,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   final TextEditingController _shortDescController = TextEditingController();
 
   final List<Map<String, String>> _categories = [
-    {'name': 'Kirana', 'icon': '🛒'},
     {'name': 'Pharmacy', 'icon': '💊'},
+    {'name': 'Kirana', 'icon': '🛒'},
     {'name': 'Bakery', 'icon': '🥐'},
     {'name': 'Salon', 'icon': '💇'},
-    {'name': 'Tailor', 'icon': '👗'},
-    {'name': 'Other', 'icon': '💬'},
+    {'name': 'Fashion', 'icon': '👗'},
+    {'name': 'Tailor', 'icon': '👔'},
+    {'name': 'Electronics', 'icon': '📱'},
+    {'name': 'Cafe', 'icon': '☕'},
+    {'name': 'Other', 'icon': '🏪'},
   ];
 
   // Step 2: Location & contact
@@ -35,6 +44,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   String _selectedVisibilityKm = '2 km';
   final List<String> _visibilityKmOptions = ['1 km', '2 km', '5 km', '10 km', '30 km'];
   final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _whatsAppController = TextEditingController();
   bool _sameNumberOnWhatsApp = true;
 
   // Step 3: Timings & delivery
@@ -57,6 +67,111 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   String? _shopBoardPhotoPath;
   final TextEditingController _gstController = TextEditingController();
   bool _isSubmitting = false;
+  bool _isLocating = false;
+
+  Future<void> _useCurrentLocation() async {
+    if (_isLocating) return;
+
+    setState(() => _isLocating = true);
+
+    try {
+      // 1. Check if Device Location Services (GPS) is ON
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Please enable GPS / Location services on your device.'),
+              backgroundColor: Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. Check Permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Location permission was denied.'),
+              backgroundColor: Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Location permission permanently denied. Please enable in Settings.'),
+              backgroundColor: Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 3. Fetch FRESH Position
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => throw TimeoutException('GPS signal timed out'),
+      );
+
+      // 4. Perform Reverse Geocoding via LocationEngine
+      final matchResult = LocationEngine.detectLocation(position.latitude, position.longitude);
+
+      String detectedAddress = '';
+      if (matchResult.area != null) {
+        detectedAddress = '${matchResult.area!.name}, ${matchResult.city.name}';
+      } else if (matchResult.city.name.isNotEmpty) {
+        detectedAddress = matchResult.city.name;
+      } else {
+        detectedAddress = 'Vadodara';
+      }
+
+      if (mounted) {
+        setState(() {
+          _addressController.text = detectedAddress;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF072E33),
+            content: Text('📍 Location updated to $detectedAddress'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not fetch GPS location: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -64,8 +179,74 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     _shortDescController.dispose();
     _addressController.dispose();
     _contactController.dispose();
+    _whatsAppController.dispose();
     _gstController.dispose();
     super.dispose();
+  }
+
+  void _showErrorSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600))),
+          ],
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  bool _validateStep(int step) {
+    if (step == 1) {
+      if (_shopNameController.text.trim().length < 3) {
+        _showErrorSnackBar('Shop name is required (min 3 characters).');
+        return false;
+      }
+      if (_selectedCategory.isEmpty) {
+        _showErrorSnackBar('Please select a shop category.');
+        return false;
+      }
+      if (_shortDescController.text.trim().length < 5) {
+        _showErrorSnackBar('Please enter a short description about your shop.');
+        return false;
+      }
+      return true;
+    } else if (step == 2) {
+      if (_addressController.text.trim().length < 4) {
+        _showErrorSnackBar('Shop address is required.');
+        return false;
+      }
+      final phone = _contactController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      if (phone.length < 10) {
+        _showErrorSnackBar('Valid 10-digit contact number is required.');
+        return false;
+      }
+      if (!_sameNumberOnWhatsApp) {
+        final wa = _whatsAppController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+        if (wa.length < 10) {
+          _showErrorSnackBar('Valid 10-digit WhatsApp number is required.');
+          return false;
+        }
+      }
+      return true;
+    } else if (step == 3) {
+      if (_selectedOpenDays.isEmpty) {
+        _showErrorSnackBar('Please select at least 1 open day for your shop.');
+        return false;
+      }
+      if (_selectedPaymentMethods.isEmpty) {
+        _showErrorSnackBar('Please select at least 1 accepted payment method.');
+        return false;
+      }
+      return true;
+    }
+    return true;
   }
 
   Future<void> _pickShopLogo() async {
@@ -98,38 +279,63 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     }
   }
 
-  void _submitRegistration() {
+  void _submitRegistration() async {
     setState(() => _isSubmitting = true);
+
+    String finalLogoUrl = '';
+    if (_shopLogoPath != null) {
+      try {
+        final uploaded = await R2StorageService.uploadDirectToR2(
+          File(_shopLogoPath!),
+          moduleType: 'shops',
+        );
+        if (uploaded != null && uploaded.isNotEmpty) {
+          finalLogoUrl = uploaded;
+        }
+      } catch (e) {
+        debugPrint('[RegisterShop] logo upload error: $e');
+      }
+    }
 
     final categoryIcon = _categories.firstWhere(
       (c) => c['name'] == _selectedCategory,
       orElse: () => {'icon': '🏪'},
     )['icon']!;
 
+    final handle = await AuthService.instance.getUserHandle() ?? '@me';
+    final cleanHandle = handle.replaceAll('@', '').trim();
+
     final newShop = LocalShop(
-      id: 'shop_${DateTime.now().millisecondsSinceEpoch}',
-      name: _shopNameController.text.trim().isEmpty ? 'My Shop' : _shopNameController.text.trim(),
+      id: 'shop_$cleanHandle',
+      ownerHandle: cleanHandle,
+      name: _shopNameController.text.trim(),
       category: _selectedCategory,
       categoryIcon: categoryIcon,
-      location: _addressController.text.trim().isEmpty ? 'Local Area' : _addressController.text.trim(),
+      location: _addressController.text.trim(),
       distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
       isVerified: true,
-      imageUrl: _shopLogoPath ?? '',
+      imageUrl: finalLogoUrl,
+      bannerUrl: finalLogoUrl,
       phone: _contactController.text.trim(),
       deliveryInfo: _homeDeliveryEnabled ? 'Home delivery available' : 'In-store pickup only',
       timings: '$_openingTime - $_closingTime',
       aboutText: _shortDescController.text.trim(),
+      isOpen: true,
+      sameWhatsapp: _sameNumberOnWhatsApp,
+      homeDelivery: _homeDeliveryEnabled,
+      viewsCount: 0,
+      chatsCount: 0,
+      ordersCount: 0,
+      status: 'active',
       products: [],
     );
 
-    BazarRepository.instance.registerShop(newShop);
+    await BazarRepository.instance.registerShop(newShop);
 
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() {
-        _isSubmitting = false;
-        _currentStep = 5;
-      });
+    if (!mounted) return;
+    setState(() {
+      _isSubmitting = false;
+      _currentStep = 5;
     });
   }
 
@@ -444,7 +650,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 24),
 
                 // SHOP NAME
-                const Text('SHOP NAME', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'SHOP NAME '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
@@ -467,7 +681,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 20),
 
                 // CATEGORY
-                const Text('CATEGORY', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'CATEGORY '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 GridView.builder(
                   shrinkWrap: true,
@@ -523,7 +745,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 20),
 
                 // SHORT DESCRIPTION
-                const Text('SHORT DESCRIPTION', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'SHORT DESCRIPTION '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
@@ -577,7 +807,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 _buildProgressBar(2),
 
                 // SHOP ADDRESS
-                const Text('SHOP ADDRESS', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'SHOP ADDRESS '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
@@ -610,20 +848,21 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
-                  icon: const Text('📍', style: TextStyle(fontSize: 16)),
-                  label: const Text(
-                    'Use my current location',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  icon: _isLocating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('📍', style: TextStyle(fontSize: 16)),
+                  label: Text(
+                    _isLocating ? 'Detecting current location...' : 'Use my current location',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: Color(0xFF072E33),
-                        content: Text('📍 Location updated to current GPS position.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  onPressed: _isLocating ? null : _useCurrentLocation,
                 ),
 
                 const SizedBox(height: 20),
@@ -665,7 +904,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 20),
 
                 // CONTACT NUMBER
-                const Text('CONTACT NUMBER', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'CONTACT NUMBER (10 DIGITS) '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
@@ -722,6 +969,38 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   ],
                 ),
 
+                if (!_sameNumberOnWhatsApp) ...[
+                  const SizedBox(height: 14),
+                  RichText(
+                    text: const TextSpan(
+                      style: labelStyle,
+                      children: [
+                        TextSpan(text: 'WHATSAPP NUMBER (10 DIGITS) '),
+                        TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderColor),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: TextField(
+                      controller: _whatsAppController,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. 98xxxxxx12',
+                        hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
               ],
             ),
@@ -755,7 +1034,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 _buildProgressBar(3),
 
                 // OPEN DAYS
-                const Text('OPEN DAYS', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'OPEN DAYS '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -799,7 +1086,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 20),
 
                 // OPENING TIME
-                const Text('OPENING TIME', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'OPENING & CLOSING TIMINGS '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -902,7 +1197,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 20),
 
                 // PAYMENT ACCEPTED
-                const Text('PAYMENT ACCEPTED', style: labelStyle),
+                RichText(
+                  text: const TextSpan(
+                    style: labelStyle,
+                    children: [
+                      TextSpan(text: 'PAYMENT ACCEPTED '),
+                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -1144,9 +1447,11 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
             ),
           ),
           onPressed: () {
-            setState(() {
-              _currentStep++;
-            });
+            if (_validateStep(_currentStep)) {
+              setState(() {
+                _currentStep++;
+              });
+            }
           },
           child: const Text(
             'Continue',
@@ -1190,7 +1495,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
           // Headline: Shop submitted!
           const Text(
-            'Shop submitted!',
+            'Shop registered!',
             style: TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -1202,7 +1507,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
           // Subtitle
           Text(
-            "We're reviewing $shopName. You'll get a notification within 24 hours.",
+            "Congratulations! $shopName is now live in your neighbourhood. Start adding your products now!",
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFF90B4B6),
@@ -1213,7 +1518,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
           const SizedBox(height: 32),
 
-          // Shop Preview Card (Matching image media_1790654844118.png)
+          // Shop Preview Card
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -1224,7 +1529,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
             ),
             child: Row(
               children: [
-                // Category/Logo Icon Square
                 Container(
                   width: 56,
                   height: 56,
@@ -1241,7 +1545,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 ),
                 const SizedBox(width: 14),
 
-                // Shop Meta Column
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1256,7 +1559,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$_selectedCategory  •  Alkapuri',
+                        '$_selectedCategory  •  ${_addressController.text.trim().split(',').first}',
                         style: const TextStyle(
                           color: Color(0xFF90B4B6),
                           fontSize: 13,
@@ -1264,19 +1567,18 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       ),
                       const SizedBox(height: 8),
 
-                      // Pending verification Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF074047),
+                          color: const Color(0xFF0D5E56),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
-                          'Pending verification',
+                          '🟢 Live in Bazaar',
                           style: TextStyle(
-                            color: Color(0xFF90B4B6),
+                            color: Color(0xFF2DD4BF),
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -1289,9 +1591,43 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
           const Spacer(),
 
-          // Buttons Stack (Preview my shop page & Done)
+          // Action Buttons
           Column(
             children: [
+              // Solid Button: Go to My Shop Dashboard
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  icon: const Icon(Icons.dashboard_outlined, size: 20),
+                  label: const Text(
+                    'Go to My Shop Dashboard',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
+                  onPressed: () async {
+                    final handle = await AuthService.instance.getUserHandle() ?? '@me';
+                    if (!mounted) return;
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MyShopDashboardScreen(
+                          currentUserHandle: handle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
               // Outlined Button: Preview my shop page
               SizedBox(
                 width: double.infinity,
@@ -1308,31 +1644,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   onPressed: _openShopPreviewSheet,
                   child: const Text(
                     'Preview my shop page',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Solid White Button: Done
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context, true);
-                  },
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

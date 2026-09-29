@@ -9,6 +9,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/audio_upload_service.dart';
 import '../../services/presence_service.dart';
@@ -168,7 +169,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   void _initStreams() {
-    _messagesStream = DirectChatService.instance.pollMessagesStream(_chatId, limit: _messageLimit);
+    _messagesStream = DirectChatService.instance.pollMessagesStream(
+      _chatId,
+      limit: _messageLimit,
+      userHandle: widget.currentUserHandle,
+    );
     _presenceStream = PresenceService.instance.getPresenceStream(widget.partnerHandle);
   }
 
@@ -229,7 +234,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _isLoadingMore = true;
     setState(() {
       _messageLimit += 30;
-      _messagesStream = DirectChatService.instance.pollMessagesStream(_chatId, limit: _messageLimit);
+      _messagesStream = DirectChatService.instance.pollMessagesStream(
+        _chatId,
+        limit: _messageLimit,
+        userHandle: widget.currentUserHandle,
+      );
     });
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -2625,7 +2634,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                     opacity: animation,
                     child: SizeTransition(
                       sizeFactor: animation,
-                      axisAlignment: -1.0,
+                      alignment: Alignment.topCenter,
                       child: child,
                     ),
                   ),
@@ -3307,7 +3316,7 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      '@$handle',
+                                      handle.displayHandle,
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
@@ -3475,7 +3484,6 @@ class _AnimatedMessageEntry extends StatefulWidget {
   final Widget child;
 
   const _AnimatedMessageEntry({
-    super.key,
     required this.child,
   });
 

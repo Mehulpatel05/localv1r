@@ -69,6 +69,9 @@ class UserProfile {
     );
   }
 
+  String get displayHandle => handle.displayHandle;
+  String get cleanHandle => handle.cleanHandle;
+
   UserProfile copyWith({
     String? handle,
     String? phone,
@@ -83,5 +86,20 @@ class UserProfile {
       joinedYear: joinedYear ?? this.joinedYear,
       joinedDate: joinedDate ?? this.joinedDate,
     );
+  }
+}
+
+extension HandleFormattingExt on String {
+  /// Returns handle with exactly ONE leading '@' (e.g. '@skyking')
+  String get displayHandle {
+    final trimmed = trim();
+    if (trimmed.isEmpty) return '';
+    final clean = trimmed.replaceAll(RegExp(r'^@+'), '');
+    return clean.isEmpty ? '' : '@$clean';
+  }
+
+  /// Returns handle with NO leading '@' (e.g. 'skyking')
+  String get cleanHandle {
+    return trim().replaceAll(RegExp(r'^@+'), '');
   }
 }

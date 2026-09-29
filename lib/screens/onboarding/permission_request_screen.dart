@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/motion.dart';
+import '../../core/theme.dart';
 import '../../services/app_permission_service.dart';
 
 /// Full-page permission onboarding screen designed to fit entirely on screen
-/// without scrolling, featuring custom app branding and compact cards.
+/// without scrolling, featuring custom app branding and Nearhood theme styling.
 class PermissionRequestScreen extends StatefulWidget {
   final void Function(BuildContext context) onComplete;
 
@@ -73,8 +74,10 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.nearhoodColors;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.bg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -87,37 +90,38 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 56,
-                    height: 56,
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(16),
+                      color: colors.field,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colors.line, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 12,
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(18),
                       child: Image.asset(
                         'assets/images/nearhood_app_icon_1024.png',
-                        width: 56,
-                        height: 56,
+                        width: 64,
+                        height: 64,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Image.asset(
                             'assets/images/nearhood_logo.png',
-                            width: 56,
-                            height: 56,
+                            width: 64,
+                            height: 64,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
+                              return Icon(
                                 Icons.location_city_rounded,
-                                color: Colors.white,
-                                size: 28,
+                                color: colors.ink,
+                                size: 30,
                               );
                             },
                           );
@@ -125,25 +129,25 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
+                  const SizedBox(height: 18),
+                  Text(
                     'Nearhood Needs Access',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
+                      color: colors.ink,
                       letterSpacing: -0.4,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Allow the following permissions so the app\nworks fully for you.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 13,
-                      height: 1.35,
+                      color: colors.muted,
+                      fontSize: 14,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -156,8 +160,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: _permissions
                     .map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _buildPermissionCard(item),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildPermissionCard(item, colors),
                         ))
                     .toList(),
               ),
@@ -171,17 +175,17 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                   if (_hasRequested && _hasPermanentlyDenied) ...[
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4B5563),
-                        side: const BorderSide(color: Color(0xFFE5E7EB)),
-                        minimumSize: const Size(double.infinity, 44),
+                        foregroundColor: colors.muted,
+                        side: BorderSide(color: colors.line),
+                        minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       icon: const Icon(Icons.settings_outlined, size: 18),
                       label: const Text(
                         'Open Settings to Allow',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       onPressed: AppPermissionService.openSettings,
                     ),
@@ -190,13 +194,17 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
                   SizedBox(
                     width: double.infinity,
-                    height: 48,
+                    height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
+                        backgroundColor: colors.field2,
                         foregroundColor: Colors.white,
+                        side: const BorderSide(
+                          color: Color(0xFF2DD4BF),
+                          width: 1.5,
+                        ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 0,
                       ),
@@ -217,15 +225,15 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                           : Text(
                               _hasRequested ? 'Get Started' : 'Allow Permissions',
                               style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                     ),
                   ),
 
                   if (!_hasRequested) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     TextButton(
                       onPressed: () => widget.onComplete(context),
                       style: TextButton.styleFrom(
@@ -233,11 +241,11 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: const Text(
+                      child: Text(
                         'Skip for now',
                         style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 13,
+                          color: colors.muted.withValues(alpha: 0.8),
+                          fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -254,39 +262,51 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     );
   }
 
-  Widget _buildPermissionCard(_PermItem item) {
+  Widget _buildPermissionCard(_PermItem item, NearhoodColors colors) {
+    final cardColor = item.granted
+        ? const Color(0xFF064E3B).withValues(alpha: 0.35)
+        : colors.field;
+    final borderColor = item.granted
+        ? const Color(0xFF4ADE80)
+        : item.denied
+            ? const Color(0xFFEF4444)
+            : colors.line;
+
     return AnimatedContainer(
       duration: AppMotion.durationStandard,
       curve: AppMotion.interactiveCurve,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: item.granted ? const Color(0xFFF0FDF4) : Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: item.granted
-              ? const Color(0xFF86EFAC)
-              : item.denied
-                  ? const Color(0xFFFCA5A5)
-                  : const Color(0xFFE5E7EB),
-          width: 1.2,
+          color: borderColor,
+          width: 1.4,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3F4F6),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colors.field2,
               shape: BoxShape.circle,
             ),
             child: Icon(
               item.icon,
-              color: const Color(0xFF1F2937),
-              size: 20,
+              color: colors.ink,
+              size: 22,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,42 +314,42 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
               children: [
                 Text(
                   item.title,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                  style: TextStyle(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   item.reason,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 11.5,
+                  style: TextStyle(
+                    color: colors.muted,
+                    fontSize: 12,
                     height: 1.3,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           if (item.granted)
             const Icon(
               Icons.check_circle_rounded,
-              color: Color(0xFF10B981),
-              size: 22,
+              color: Color(0xFF4ADE80),
+              size: 24,
             )
           else if (item.denied)
             const Icon(
               Icons.cancel_rounded,
-              color: Colors.redAccent,
-              size: 22,
+              color: Color(0xFFEF4444),
+              size: 24,
             )
           else
-            const Icon(
+            Icon(
               Icons.radio_button_unchecked,
-              color: Color(0xFFD1D5DB),
-              size: 22,
+              color: colors.muted.withValues(alpha: 0.4),
+              size: 24,
             ),
         ],
       ),

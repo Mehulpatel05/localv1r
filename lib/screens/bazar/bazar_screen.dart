@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'create_bazar_listing_screen.dart';
 import 'shop_detail_screen.dart';
+import '../chat/personal_chat_screen.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/bazar_repository.dart';
+import '../../services/auth_service.dart';
 
 class BazarProduct {
   final String id;
@@ -50,23 +55,121 @@ class BazarProduct {
         'createdAt': createdAt.toIso8601String(),
       };
 
-  factory BazarProduct.fromJson(Map<String, dynamic> json) => BazarProduct(
-        id: json['id'] ?? '',
-        title: json['title'] ?? '',
-        price: json['price'] is num ? (json['price'] as num).toInt() : 0,
-        category: json['category'] ?? 'Other',
-        distanceKm: json['distanceKm'] is num ? (json['distanceKm'] as num).toDouble() : 0.0,
-        imageUrl: json['imageUrl'] ?? '',
-        sellerHandle: json['sellerHandle'] ?? '',
-        location: json['location'] ?? '',
-        description: json['description'] ?? '',
-        viewsCount: json['viewsCount'] ?? 0,
-        chatsCount: json['chatsCount'] ?? 0,
-        isSold: json['isSold'] ?? false,
-        createdAt: json['createdAt'] != null
-            ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()
-            : DateTime.now(),
+  factory BazarProduct.fromJson(Map<String, dynamic> json) {
+    String img = (json['imageUrl'] as String?) ?? '';
+    if (img.isEmpty && json['imageUrls'] is List && (json['imageUrls'] as List).isNotEmpty) {
+      img = (json['imageUrls'] as List).first.toString();
+    }
+    if (img.isEmpty && json['image_urls_json'] is String) {
+      try {
+        final decoded = jsonDecode(json['image_urls_json']);
+        if (decoded is List && decoded.isNotEmpty) {
+          img = decoded.first.toString();
+        }
+      } catch (_) {}
+    }
+
+    final sHandle = (json['sellerHandle'] ?? json['seller_handle'] ?? '') as String;
+    final views = json['viewsCount'] ?? json['views_count'] ?? 0;
+    final chats = json['chatsCount'] ?? json['chats_count'] ?? 0;
+    final isActive = json['is_active'];
+    final isSold = json['isSold'] ?? (isActive != null ? isActive == 0 : false);
+
+    return BazarProduct(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      price: json['price'] is num
+          ? (json['price'] as num).toInt()
+          : (int.tryParse(json['price']?.toString() ?? '0') ?? 0),
+      category: (json['category'] ?? 'Other').toString(),
+      distanceKm: json['distanceKm'] is num
+          ? (json['distanceKm'] as num).toDouble()
+          : (json['distance_km'] is num ? (json['distance_km'] as num).toDouble() : 0.8),
+      imageUrl: img,
+      sellerHandle: sHandle,
+      location: (json['location'] ?? 'Vadodara').toString(),
+      description: (json['description'] ?? '').toString(),
+      viewsCount: views is num ? views.toInt() : 0,
+      chatsCount: chats is num ? chats.toInt() : 0,
+      isSold: isSold == true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
+    );
+  }
+
+  static Widget buildProductImage(
+    String imageUrl, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+    IconData fallbackIcon = Icons.storefront_rounded,
+    double fallbackIconSize = 36,
+  }) {
+    if (imageUrl.trim().isEmpty) {
+      return Container(
+        width: width,
+        height: height,
+        color: const Color(0xFF0E525B),
+        child: Center(
+          child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+        ),
       );
+    }
+
+    final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+    if (!isNetwork) {
+      try {
+        final file = File(imageUrl);
+        if (file.existsSync()) {
+          return Image.file(
+            file,
+            fit: fit,
+            width: width,
+            height: height,
+            errorBuilder: (ctx, err, stack) => Container(
+              width: width,
+              height: height,
+              color: const Color(0xFF0E525B),
+              child: Center(
+                child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+              ),
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      width: width,
+      height: height,
+      errorBuilder: (ctx, err, stack) => Container(
+        width: width,
+        height: height,
+        color: const Color(0xFF0E525B),
+        child: Center(
+          child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+        ),
+      ),
+      loadingBuilder: (ctx, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFF0E525B),
+          child: const Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class BazarScreen extends StatefulWidget {
@@ -111,7 +214,6 @@ class _BazarScreenState extends State<BazarScreen> {
 
     if (newProduct != null) {
       setState(() {
-        _allProducts.insert(0, newProduct);
         _showMyListings = true;
         _myListingsTab = 'Active';
       });
@@ -130,14 +232,28 @@ class _BazarScreenState extends State<BazarScreen> {
 
   List<BazarProduct> _allProducts = [];
   List<LocalShop> _localShops = [];
+  String _activeHandle = '';
 
   @override
   void initState() {
     super.initState();
     _showMyListings = widget.initialShowMyListings;
+    _activeHandle = widget.currentUserHandle;
+    _resolveActiveHandle();
 
     BazarRepository.instance.addListener(_onBazarRepoChanged);
     _initBazarData();
+  }
+
+  Future<void> _resolveActiveHandle() async {
+    if (_activeHandle.isEmpty) {
+      final h = await AuthService.instance.getUserHandle();
+      if (mounted && h != null && h.isNotEmpty) {
+        setState(() {
+          _activeHandle = h;
+        });
+      }
+    }
   }
 
   Future<void> _initBazarData() async {
@@ -148,7 +264,14 @@ class _BazarScreenState extends State<BazarScreen> {
   void _onBazarRepoChanged() {
     if (!mounted) return;
     setState(() {
-      _allProducts = List.from(BazarRepository.instance.products);
+      final seenIds = <String>{};
+      final uniqueProducts = <BazarProduct>[];
+      for (final p in BazarRepository.instance.products) {
+        if (seenIds.add(p.id)) {
+          uniqueProducts.add(p);
+        }
+      }
+      _allProducts = uniqueProducts;
       _localShops = List.from(BazarRepository.instance.shops);
     });
   }
@@ -159,14 +282,6 @@ class _BazarScreenState extends State<BazarScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
-
-
-
-
-
-
-
 
   List<BazarProduct> get _filteredProducts {
     return _allProducts.where((product) {
@@ -192,11 +307,14 @@ class _BazarScreenState extends State<BazarScreen> {
   }
 
   List<BazarProduct> get _userMyListings {
-    final activeHandle = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
+    final active = (_activeHandle.isNotEmpty ? _activeHandle : widget.currentUserHandle)
+        .replaceAll('@', '')
+        .trim()
+        .toLowerCase();
     return _allProducts.where((p) {
       final seller = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
-      if (activeHandle.isNotEmpty) {
-        return seller == activeHandle || seller == 'me';
+      if (active.isNotEmpty) {
+        return seller == active || seller == 'me' || seller.contains(active);
       }
       return seller == 'me';
     }).where((p) {
@@ -386,10 +504,15 @@ class _BazarScreenState extends State<BazarScreen> {
   Widget _buildBrowseBazarView() {
     final products = _filteredProducts;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return RefreshIndicator(
+      onRefresh: () => BazarRepository.instance.fetchListings(),
+      color: Colors.white,
+      backgroundColor: const Color(0xFF072E33),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Horizontal Filter Chips
           Container(
             height: 48,
@@ -474,8 +597,9 @@ class _BazarScreenState extends State<BazarScreen> {
                 ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildLocalShopsSection() {
     return Column(
@@ -654,37 +778,11 @@ class _BazarScreenState extends State<BazarScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Image.network(
+                    child: BazarProduct.buildProductImage(
                       product.imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (ctx, err, stack) {
-                        return Container(
-                          color: const Color(0xFF0E525B),
-                          child: const Center(
-                            child: Icon(
-                              Icons.storefront_rounded,
-                              color: Colors.white54,
-                              size: 40,
-                            ),
-                          ),
-                        );
-                      },
-                      loadingBuilder: (ctx, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          color: const Color(0xFF0E525B),
-                          child: const Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                      fallbackIcon: Icons.storefront_rounded,
+                      fallbackIconSize: 40,
                     ),
                   ),
 
@@ -769,8 +867,17 @@ class _BazarScreenState extends State<BazarScreen> {
   // --- MY LISTINGS VIEW ---
   Widget _buildMyListingsView() {
     final listings = _userMyListings;
-    final activeCount = _allProducts.where((p) => p.sellerHandle == 'me' && !p.isSold).length;
-    final soldCount = _allProducts.where((p) => p.sellerHandle == 'me' && p.isSold).length;
+    final activeHandle = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
+    final allUserListings = _allProducts.where((p) {
+      final seller = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
+      if (activeHandle.isNotEmpty) {
+        return seller == activeHandle || seller == 'me';
+      }
+      return seller == 'me';
+    }).toList();
+
+    final activeCount = allUserListings.where((p) => !p.isSold).length;
+    final soldCount = allUserListings.where((p) => p.isSold).length;
 
     return Column(
       children: [
@@ -878,13 +985,11 @@ class _BazarScreenState extends State<BazarScreen> {
             child: SizedBox(
               width: 80,
               height: 80,
-              child: Image.network(
+              child: BazarProduct.buildProductImage(
                 item.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => Container(
-                  color: const Color(0xFF0E525B),
-                  child: const Icon(Icons.shopping_bag_outlined, color: Colors.white54),
-                ),
+                fallbackIcon: Icons.shopping_bag_outlined,
+                fallbackIconSize: 32,
               ),
             ),
           ),
@@ -987,15 +1092,11 @@ class _BazarScreenState extends State<BazarScreen> {
             child: SizedBox(
               width: double.infinity,
               height: 200,
-              child: Image.network(
+              child: BazarProduct.buildProductImage(
                 product.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => Container(
-                  color: const Color(0xFF0E525B),
-                  child: const Center(
-                    child: Icon(Icons.storefront_rounded, color: Colors.white54, size: 50),
-                  ),
-                ),
+                fallbackIcon: Icons.storefront_rounded,
+                fallbackIconSize: 50,
               ),
             ),
           ),
@@ -1075,16 +1176,38 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
               icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
               label: Text(
-                'Chat with Seller (@${product.sellerHandle})',
+                'Chat with Seller (${product.sellerHandle.displayHandle})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: const Color(0xFF072E33),
-                    content: Text('💬 Chat started with @${product.sellerHandle}!'),
-                    behavior: SnackBarBehavior.floating,
+                final myHandle = await AuthService.instance.getUserHandle() ?? '@me';
+                final cleanMy = myHandle.replaceAll('@', '').trim().toLowerCase();
+                final cleanSeller = product.sellerHandle.replaceAll('@', '').trim().toLowerCase();
+
+                if (cleanMy.isNotEmpty && cleanSeller.isNotEmpty && cleanMy == cleanSeller) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Color(0xFF072E33),
+                      content: Text('ℹ️ This is your own product listing.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+
+                // Record listing chat inquiry in background
+                BazarRepository.instance.recordListingChatInquiry(product.id);
+
+                if (!mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PersonalChatScreen(
+                      currentUserHandle: myHandle,
+                      partnerHandle: product.sellerHandle,
+                    ),
                   ),
                 );
               },

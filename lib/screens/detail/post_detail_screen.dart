@@ -8,6 +8,7 @@ import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
 import '../../core/utils/content_filter.dart';
+import '../../core/models/user_profile.dart';
 import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 
@@ -67,7 +68,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       NotificationService().sendNotification(
         targetHandle: author,
         title: 'New Comment',
-        body: '@$me commented: "$text"',
+        body: '${me.displayHandle} commented: "$text"',
         data: {
           'type': 'post_comment',
           'postId': widget.post.id,
@@ -217,7 +218,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     }
                                   },
                                   child: Text(
-                                    '@${widget.post.authorHandle}',
+                                    widget.post.authorHandle.displayHandle,
                                     style: TextStyle(
                                       color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
                                       fontWeight: FontWeight.w700,
@@ -416,7 +417,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                             }
                                           },
                                           child: Text(
-                                            '@${comment.authorHandle}',
+                                            comment.authorHandle.displayHandle,
                                             style: TextStyle(
                                               color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
                                               fontWeight: FontWeight.w700,

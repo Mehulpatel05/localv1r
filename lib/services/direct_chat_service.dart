@@ -143,7 +143,9 @@ class DirectChatService {
         Uri.parse('${AuthService.baseUrl}/chats?handle=$clean'),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'x-user-handle': clean,
         },
       ).timeout(const Duration(seconds: 8));
 
@@ -175,6 +177,7 @@ class DirectChatService {
     String chatId, {
     int limit = 50,
     int? before,
+    String? userHandle,
   }) async {
     final cleanId = chatId.trim();
     if (cleanId.isEmpty) return [];
@@ -194,7 +197,9 @@ class DirectChatService {
         Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (userHandle != null && userHandle.isNotEmpty) 'x-user-handle': userHandle.replaceAll('@', '').trim(),
         },
       ).timeout(const Duration(seconds: 8));
 
@@ -217,9 +222,10 @@ class DirectChatService {
     String chatId, {
     Duration interval = const Duration(seconds: 2),
     int limit = 50,
+    String? userHandle,
   }) async* {
     while (true) {
-      final msgs = await getMessages(chatId, limit: limit);
+      final msgs = await getMessages(chatId, limit: limit, userHandle: userHandle);
       yield msgs;
       await Future.delayed(interval);
     }
@@ -242,17 +248,22 @@ class DirectChatService {
       final payload = {
         'sender': cleanSender,
         'receiver': cleanReceiver,
+        'receiverHandle': cleanReceiver,
         'content': content,
-        if (imageUrl != null) 'imageUrl': imageUrl,
-        if (mediaUrls != null) 'mediaUrls': mediaUrls,
+        'text': content,
+        'imageUrl': ?imageUrl,
+        'mediaUrls': ?mediaUrls,
+        'mediaR2Path': ?imageUrl,
         'messageType': messageType,
       };
 
       final res = await http.post(
-        Uri.parse('${AuthService.baseUrl}/chats/message'),
+        Uri.parse('${AuthService.baseUrl}/chats/send'),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'x-user-handle': cleanSender,
         },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 10));
@@ -274,6 +285,7 @@ class DirectChatService {
             'imageUrl': imageUrl,
             'mediaUrls': mediaUrls ?? [],
             'type': messageType,
+            'messageType': messageType,
             'reactions': <String, dynamic>{},
             'isRead': false,
             'isEdited': false,
@@ -310,7 +322,9 @@ class DirectChatService {
         Uri.parse('${AuthService.baseUrl}/chats/$chatId/read'),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'x-user-handle': cleanUser,
         },
         body: jsonEncode({'user_handle': cleanUser}),
       ).timeout(const Duration(seconds: 6));
@@ -318,8 +332,8 @@ class DirectChatService {
       return res.statusCode == 200;
     } catch (e) {
       debugPrint('[DirectChatService] Error marking read: $e');
-      return false;
     }
+    return false;
   }
 
   /// Fetch all conversation IDs matching active query/filter from backend query

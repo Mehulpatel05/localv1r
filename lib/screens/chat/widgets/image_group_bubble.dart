@@ -37,7 +37,7 @@ class ImageGroupBubble extends StatelessWidget {
           caption: caption,
           heroTagPrefix: messageId,
         ),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+        transitionsBuilder: (_, animation, _, child) => FadeTransition(
           opacity: animation,
           child: child,
         ),
