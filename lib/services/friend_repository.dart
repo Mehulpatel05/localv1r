@@ -21,6 +21,7 @@ enum RelationshipStatus {
 class FriendRepository {
   static final FriendRepository _singleton = FriendRepository._internal();
   factory FriendRepository() => _singleton;
+  static FriendRepository get instance => _singleton;
   FriendRepository._internal();
 
   String _currentUserHandle = '';
@@ -56,7 +57,7 @@ class FriendRepository {
   Timer? _pollingTimer;
 
   void _startPollingIfNeeded() {
-    _pollingTimer ??= Timer.periodic(const Duration(seconds: 15), (_) {
+    _pollingTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
       refreshAll();
     });
   }
@@ -102,7 +103,7 @@ class FriendRepository {
     }
   }
 
-  // ── Fetch Friends List ──
+  // ── Fetch Friends List (Strictly Deduplicated) ──
   Future<List<Friendship>> fetchFriends({int limit = 200}) async {
     final uri = Uri.parse('${AuthService.baseUrl}/friends?limit=$limit');
     try {
@@ -111,10 +112,18 @@ class FriendRepository {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final rawList = data['friends'] as List? ?? [];
-        _cachedFriends = rawList.map((item) {
+        final seenFriends = <String>{};
+        final List<Friendship> friendsList = [];
+        for (final item in rawList) {
           final map = item as Map<String, dynamic>;
-          return Friendship.fromMap(map, map['id']?.toString() ?? '');
-        }).toList();
+          final f = Friendship.fromMap(map, map['id']?.toString() ?? '');
+          final other = (f.otherUser ?? '').replaceAll('@', '').trim().toLowerCase();
+          if (other.isNotEmpty && !seenFriends.contains(other)) {
+            seenFriends.add(other);
+            friendsList.add(f);
+          }
+        }
+        _cachedFriends = friendsList;
         _friendsController.add(List.unmodifiable(_cachedFriends));
         return _cachedFriends;
       }
@@ -549,7 +558,7 @@ class FriendRepository {
     return _pendingCountController.stream;
   }
 
-  // ── Discover / Search People ──
+  // ── Discover / Search People (Strictly Deduplicated & Real Users Only) ──
   Future<List<Map<String, dynamic>>> discoverPeople({String query = '', int limit = 40}) async {
     final cleanQuery = query.replaceAll('@', '').trim();
     final uri = Uri.parse('${AuthService.baseUrl}/friends/discover?q=${Uri.encodeComponent(cleanQuery)}&limit=$limit');
@@ -559,7 +568,18 @@ class FriendRepository {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final rawList = data['users'] as List? ?? [];
-        return rawList.map((item) => item as Map<String, dynamic>).toList();
+        final myHandle = _currentUserHandle.replaceAll('@', '').trim().toLowerCase();
+        final seen = <String>{};
+        final List<Map<String, dynamic>> deduped = [];
+
+        for (final item in rawList) {
+          final map = item as Map<String, dynamic>;
+          final handle = (map['handle'] as String? ?? '').replaceAll('@', '').trim().toLowerCase();
+          if (handle.isEmpty || handle == myHandle || seen.contains(handle)) continue;
+          seen.add(handle);
+          deduped.add(map);
+        }
+        return deduped;
       }
     } catch (e) {
       debugPrint('[FriendRepository] discoverPeople error: $e');

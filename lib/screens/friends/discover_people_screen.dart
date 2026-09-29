@@ -23,6 +23,7 @@ class DiscoverPeopleScreen extends StatefulWidget {
 class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounceTimer;
+  Timer? _liveRefreshTimer;
   List<Map<String, dynamic>> _people = [];
   bool _isLoading = true;
   final Set<String> _loadingHandles = {};
@@ -35,11 +36,19 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       widget.repository.currentUserHandle = clean;
     }
     _loadPeople();
+
+    // ⚡ Live auto-refresh while viewing Discover People screen
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted && _searchController.text.trim().isEmpty) {
+        _silentRefreshPeople();
+      }
+    });
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _liveRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -58,6 +67,17 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       debugPrint('[DiscoverPeopleScreen] Error loading people: $e');
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _silentRefreshPeople() async {
+    try {
+      final results = await widget.repository.discoverPeople(query: '');
+      if (mounted && results.isNotEmpty) {
+        setState(() {
+          _people = results;
+        });
+      }
+    } catch (_) {}
   }
 
   void _onSearchChanged(String val) {

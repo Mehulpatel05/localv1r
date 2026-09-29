@@ -330,7 +330,7 @@ class NotificationService {
     bool isInitialTick = true;
     final sessionThreshold = DateTime.now().subtract(const Duration(seconds: 30));
 
-    _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       try {
         final token = await AuthService.instance.getAccessToken();
         final res = await http.get(
@@ -394,6 +394,11 @@ class NotificationService {
                 IncomingCallScreen.dismissCall(callId);
               }
               continue;
+            }
+
+            // Real-time synchronization for friends & chat modules
+            if (type == 'friend_request' || type == 'friend_accept' || type == 'friend_rejected' || type == 'friend') {
+              FriendRepository.instance.refreshAll().catchError((_) {});
             }
 
             // Check user notification preferences
