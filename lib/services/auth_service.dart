@@ -95,8 +95,8 @@ class AuthService {
   /// Robust check to determine if a handle belongs to a new/unconfigured account
   static bool isNewUserHandle(String? handle) {
     if (handle == null) return true;
-    final h = handle.trim().toLowerCase();
-    if (h.isEmpty || h == 'guest' || h.startsWith('anon#')) {
+    final h = handle.trim().toLowerCase().replaceAll('@', '');
+    if (h.isEmpty || h == 'guest' || h.startsWith('anon#') || h.startsWith('user_')) {
       return true;
     }
     return false;
@@ -129,13 +129,13 @@ class AuthService {
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        final accessToken = (body['access_token'] as String?) ?? '';
-        final refreshToken = (body['refresh_token'] as String?) ?? '';
+        final accessToken = (body['access_token'] as String?) ?? (body['sessionToken'] as String?) ?? '';
+        final refreshToken = (body['refresh_token'] as String?) ?? accessToken;
         final user = body['user'] as Map<String, dynamic>? ?? {};
         final userId = (user['userId'] as String?) ?? '';
         final phone = (user['phoneNumber'] as String?) ?? (phoneNumber ?? '');
-        final handle = (user['handle'] as String?) ?? '';
-        final isNewUser = user['isNewUser'] == true || isNewUserHandle(handle);
+        final handle = (user['handle'] as String?) ?? (body['handle'] as String?) ?? '';
+        final isNewUser = body['isNewUser'] == true || user['isNewUser'] == true || isNewUserHandle(handle);
 
         // 1. Secure storage write
         if (accessToken.isNotEmpty) {
@@ -155,7 +155,14 @@ class AuthService {
           await _secureStorage.write(key: _kHandleKey, value: handle);
         }
 
-        // 2. Pure online session - ground truth in secure storage & in-memory state
+        // 2. Sync to SharedPreferences for instant 0ms UI access
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
+          if (userId.isNotEmpty) await prefs.setString('user_id', userId);
+          if (phone.isNotEmpty) await prefs.setString('phone_number', phone);
+        } catch (_) {}
+
         debugPrint('[AuthService] Login session saved. userId=$userId, handle=$handle, isNewUser=$isNewUser');
 
         return {

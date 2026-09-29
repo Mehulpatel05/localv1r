@@ -227,17 +227,6 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                           } else {
                             debugPrint('[MainFlow] Existing user detected. Activating main session for $handle...');
                             postRepository.currentUserHandle = handle;
-                            NotificationService().initialize();
-                            PresenceService.instance.init(handle);
-                            CallListenerService.instance.startListening(handle);
-
-                            // ⚡ Instant Cache Preloading (Chats, Communities, Feeds, Preferences)
-                            SplashController.instance.warmFetchOnLogin(
-                              uid: userId,
-                              handle: handle,
-                              cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
-                              postRepo: postRepository,
-                            );
 
                             if (mounted) {
                               setState(() {
@@ -245,10 +234,23 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                                 _userHandle = handle;
                               });
                             }
+
+                            NotificationService().initialize();
+                            PresenceService.instance.init(handle);
+                            CallListenerService.instance.startListening(handle);
+
+                            // ⚡ Instant Background Cache Preloading (non-blocking)
+                            unawaited(
+                              SplashController.instance.warmFetchOnLogin(
+                                uid: userId,
+                                handle: handle,
+                                cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
+                                postRepo: postRepository,
+                              ),
+                            );
                           }
                         } catch (e, stack) {
                           debugPrint('[MainFlow] ERROR in onLoggedIn: $e\n$stack');
-                          rethrow;
                         }
                       },
                     ),
