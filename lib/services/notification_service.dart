@@ -26,6 +26,8 @@ import 'chat_preferences_service.dart';
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('BG message received: ${message.notification?.title} | data: ${message.data}');
   final type = message.data['type']?.toString();
+
+  // Handle call cancellation / end signals silently
   if (type == 'call_cancelled' || type == 'call_ended') {
     final callId = message.data['callId']?.toString();
     if (callId != null && callId.isNotEmpty) {
@@ -35,65 +37,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  // Display background push notification on system tray when app is closed/background
-  final notification = message.notification;
-  final title = notification?.title ?? (message.data['title'] as String?) ?? 'Nearhood';
-  final body = notification?.body ?? (message.data['body'] as String?) ?? '';
-
-  if (title.isNotEmpty || body.isNotEmpty) {
-    try {
-      final localNotifs = FlutterLocalNotificationsPlugin();
-      const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
-      await localNotifs.initialize(settings: const InitializationSettings(android: androidInit));
-
-      const channel = AndroidNotificationChannel(
-        'nearhood_channel',
-        'Nearhood Notifications',
-        description: 'Notifications for friend requests, messages, posts, and communities',
-        importance: Importance.max,
-        playSound: true,
-        enableVibration: true,
-        showBadge: true,
-      );
-
-      final androidPlugin = localNotifs
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(channel);
-
-      final notifId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) & 0x7FFFFFFF;
-      final isCall = type == 'call';
-
-      await localNotifs.show(
-        id: notifId,
-        title: title,
-        body: body,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            isCall ? 'nearhood_call_channel' : 'nearhood_channel',
-            isCall ? 'Nearhood Calls' : 'Nearhood Notifications',
-            importance: Importance.max,
-            priority: Priority.max,
-            icon: '@drawable/ic_notification',
-            color: const Color(0xFF000000),
-            playSound: true,
-            enableVibration: true,
-            channelShowBadge: true,
-            visibility: NotificationVisibility.public,
-            category: isCall ? AndroidNotificationCategory.call : AndroidNotificationCategory.message,
-            audioAttributesUsage: isCall ? AudioAttributesUsage.voiceCommunication : AudioAttributesUsage.notification,
-            styleInformation: BigTextStyleInformation(
-              body,
-              contentTitle: title,
-              summaryText: isCall ? 'Incoming Call' : 'Nearhood',
-            ),
-          ),
-        ),
-        payload: jsonEncode(message.data),
-      );
-    } catch (e) {
-      debugPrint('Error handling background FCM notification: $e');
-    }
-  }
+  // NOTE: Android OS automatically shows the system tray notification from the
+  // FCM message's "notification" field when the app is in background/killed.
+  // We do NOT call localNotifs.show() here to avoid duplicate notifications.
+  // The OS-rendered notification is sufficient and correct.
+  debugPrint('BG FCM notification auto-handled by Android OS: $type');
 }
 
 class NotificationService {
