@@ -381,17 +381,9 @@ class NotificationService {
               );
             }
 
-            // Chat/message: FCM already shows system tray notification.
-            // Polling only shows in-app banner (above) to avoid duplicate notifications.
-            // All other types (friend_request, post_like, etc.) show system tray from polling.
-            final isChatType = type == 'chat' || type == 'message';
-            if (!isChatType) {
-              showLocalNotification(
-                title: title,
-                body: body,
-                data: payloadData,
-              );
-            }
+            // NOTE: Polling loop NEVER shows system tray notification.
+            // FCM push already handles system tray for ALL types (chat, post_like, friend_request, etc.)
+            // when app is background/killed. Polling only shows in-app banner (above) when app is open.
           }
         }
       } catch (_) {}
