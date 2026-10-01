@@ -40,10 +40,13 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
       _state == LocationState.permissionDenied || _state == LocationState.permissionDeniedForever;
   bool get isPermissionDeniedForever => _state == LocationState.permissionDeniedForever;
   bool get isUnknownArea => _state == LocationState.unknownArea;
-  double get selectedRadiusKm => 50.0;
+  double _selectedRadiusKm = 50.0;
+  double get selectedRadiusKm => _selectedRadiusKm;
   void setSelectedRadius(double radiusKm) {
+    _selectedRadiusKm = radiusKm;
     notifyListeners();
   }
+
 
   String get displayLabel {
     if (_state == LocationState.unknownArea) {

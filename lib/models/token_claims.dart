@@ -61,8 +61,14 @@ class TokenClaims {
       };
 
   bool get isExpired {
-    if (exp == null) return false;
-    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return nowSeconds >= exp!;
+    if (exp != null) {
+      final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      return nowSeconds >= exp!;
+    }
+    if (uid.isEmpty && (handle.isEmpty || handle == 'guest')) {
+      return true;
+    }
+    return false;
   }
+
 }

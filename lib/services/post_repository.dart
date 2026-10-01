@@ -18,6 +18,9 @@ import '../core/action_state/action_state_provider.dart';
 enum FeedTab { latest, trending }
 
 class PostRepository extends ChangeNotifier {
+  static PostRepository? _instance;
+  static PostRepository get instance => _instance ??= PostRepository(LocationService());
+
   // ⚠️ CONFIGURATION: Sourced from centralized ApiConstants.baseUrl
   static const String backendBaseUrl = ApiConstants.baseUrl;
 
@@ -104,6 +107,7 @@ class PostRepository extends ChangeNotifier {
   }
 
   PostRepository(this.locationService) {
+    _instance = this;
     locationService.addListener(_listenToPosts);
     final catKey = _selectedCategory?.name ?? 'ALL';
     if (_categoryPostsCache.containsKey(catKey) && _categoryPostsCache[catKey]!.isNotEmpty) {
@@ -398,12 +402,13 @@ class PostRepository extends ChangeNotifier {
     try {
       final headers = await _getAuthHeaders();
       final response = await _httpClient.post(
-        Uri.parse('$backendBaseUrl/posts/$postId/comment'),
+        Uri.parse('$backendBaseUrl/posts/$postId/comments'),
         headers: headers,
         body: jsonEncode({'content': content}),
       );
-      if (response.statusCode != 201) {
-        throw Exception(jsonDecode(response.body)['detail'] ?? 'Failed to write comment.');
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        final body = jsonDecode(response.body);
+        throw Exception(body['error'] ?? body['detail'] ?? 'Failed to write comment.');
       }
     } catch (e) {
       debugPrint('Error commenting via backend: $e');
@@ -427,6 +432,7 @@ class PostRepository extends ChangeNotifier {
       debugPrint('Error reporting post via backend: $e');
     }
   }
+
 
   List<Post> get reportedPosts {
     return _posts.where((p) => p.reportCount > 0).toList();
@@ -507,11 +513,11 @@ class PostRepository extends ChangeNotifier {
     _listenToPosts();
   }
 
-  // --- Missing API Methods ---
-
   Future<Map<String, String>> _getHeaders() async {
+    final token = await AuthService.instance.getAccessToken();
     return {
       'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -522,6 +528,7 @@ class PostRepository extends ChangeNotifier {
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
+
 
   PostCategory _parseCategory(dynamic value) {
     if (value == null) return PostCategory.general;
@@ -869,6 +876,17 @@ class PostRepository extends ChangeNotifier {
       _postsRegistry[postId] = reg.copyWith(isSold: isSold);
     }
     notifyListeners();
+
+    try {
+      final headers = await _getAuthHeaders();
+      await _httpClient.post(
+        Uri.parse('$backendBaseUrl/posts/$postId/sold'),
+        headers: headers,
+        body: jsonEncode({'isSold': isSold}),
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('Error syncing markAsSold to backend: $e');
+    }
   }
 
   /// 🔧 Phase 2: Toggle "Neighbor Recommended" status for services
@@ -883,25 +901,50 @@ class PostRepository extends ChangeNotifier {
       _postsRegistry[postId] = reg.copyWith(isRecommended: !reg.isRecommended);
     }
     notifyListeners();
+
+    try {
+      final headers = await _getAuthHeaders();
+      await _httpClient.post(
+        Uri.parse('$backendBaseUrl/posts/$postId/recommend'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('Error syncing recommend to backend: $e');
+    }
   }
 
   /// 🎉 Phase 2: Toggle RSVP / Going for events
   Future<void> toggleEventRsvp(String postId) async {
     final idx = _posts.indexWhere((p) => p.id == postId);
+    bool isRsvped = true;
     if (idx != -1) {
       final post = _posts[idx];
       final newRsvp = !post.isUserRsvped;
+      isRsvped = newRsvp;
       final newCount = (post.eventRsvpCount + (newRsvp ? 1 : -1)).clamp(0, 99999);
       _posts[idx] = post.copyWith(isUserRsvped: newRsvp, eventRsvpCount: newCount);
     }
     final reg = _postsRegistry[postId];
     if (reg != null) {
       final newRsvp = !reg.isUserRsvped;
+      isRsvped = newRsvp;
       final newCount = (reg.eventRsvpCount + (newRsvp ? 1 : -1)).clamp(0, 99999);
       _postsRegistry[postId] = reg.copyWith(isUserRsvped: newRsvp, eventRsvpCount: newCount);
     }
     notifyListeners();
+
+    try {
+      final headers = await _getAuthHeaders();
+      await _httpClient.post(
+        Uri.parse('$backendBaseUrl/posts/$postId/rsvp'),
+        headers: headers,
+        body: jsonEncode({'isRsvped': isRsvped}),
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('Error syncing RSVP to backend: $e');
+    }
   }
+
 
   /// ⚡ Phase 4: Wipes in-memory posts, registry, and local votes on logout
   void clearCache() {

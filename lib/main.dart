@@ -157,9 +157,11 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: locationService),
+        ChangeNotifierProvider.value(value: postRepository),
         ChangeNotifierProvider.value(value: ActionStateProvider.instance),
         ChangeNotifierProvider.value(value: UserActionStateService.instance),
       ],
+
       child: MaterialApp(
         navigatorKey: navigatorKey,
         title: 'Nearhood',
@@ -202,9 +204,9 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                         try {
                           debugPrint('[MainFlow] onLoggedIn callback triggered.');
                           final prefs = await SharedPreferences.getInstance();
-                          final handle = prefs.getString('user_handle') ?? await AuthService.instance.getUserHandle() ?? '';
-                          final userId = prefs.getString('user_id') ?? await AuthService.instance.getUserId() ?? '';
-                          final phone = prefs.getString('phone_number') ?? await AuthService.instance.getPhoneNumber() ?? '';
+                          final handle = (await AuthService.instance.getUserHandle()) ?? prefs.getString('user_handle') ?? '';
+                          final userId = (await AuthService.instance.getUserId()) ?? prefs.getString('user_id') ?? '';
+                          final phone = (await AuthService.instance.getPhoneNumber()) ?? prefs.getString('phone_number') ?? '';
 
                           final isNewUser = AuthService.isNewUserHandle(handle);
                           debugPrint('[MainFlow] Auth evaluation: userId=$userId, phone=$phone, handle="$handle", isNewUser=$isNewUser');

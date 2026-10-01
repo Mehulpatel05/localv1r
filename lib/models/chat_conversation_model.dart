@@ -25,7 +25,9 @@ class ChatConversation {
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
     DateTime? updated;
-    final rawTime = json['updatedAt'] ?? json['lastMessageAt'] ?? json['last_message_at'] ?? json['created_at'];
+    // Backend returns lastTimestamp as int (epoch ms), or updatedAt as string
+    final rawTime = json['lastTimestamp'] ?? json['updatedAt'] ?? json['lastMessageAt'] ??
+        json['last_message_at'] ?? json['created_at'];
     if (rawTime is int) {
       updated = rawTime > 1000000000000
           ? DateTime.fromMillisecondsSinceEpoch(rawTime, isUtc: true).toLocal()
@@ -42,20 +44,29 @@ class ChatConversation {
       }
     }
 
+    // Backend returns otherUserHandle directly; fallback to participants array
+    final otherUserHandle = (json['otherUserHandle'] ?? '').toString().replaceAll('@', '').trim();
     final rawParticipants = json['participants'] as List<dynamic>? ?? [];
-    List<String> participants = rawParticipants.map((e) => e.toString()).toList();
+    List<String> participants = rawParticipants.map((e) => e.toString().replaceAll('@', '').trim()).toList();
 
-    // If partnerHandle is directly supplied
-    if (participants.isEmpty && json['partnerHandle'] != null) {
-      participants = [json['partnerHandle'].toString()];
+    // Build participants from otherUserHandle if not provided
+    if (participants.isEmpty && otherUserHandle.isNotEmpty) {
+      participants = [otherUserHandle];
+    } else if (json['partnerHandle'] != null && participants.isEmpty) {
+      participants = [(json['partnerHandle'] as String).replaceAll('@', '').trim()];
     }
 
     final rawUids = json['participantsUids'] as List<dynamic>? ?? [];
     final participantsUids = rawUids.map((e) => e.toString()).toList();
 
+    // Backend returns unreadCount as a single int; map it by chatId key
     final unreadCount = (json['unreadCount'] as num?)?.toInt() ?? 0;
     final rawUnread = json['unreadCounts'] as Map<String, dynamic>? ?? {};
     final unreadCounts = rawUnread.map((k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0));
+    // Use unreadCount for the otherUser's perspective if no map provided
+    final effectiveUnread = unreadCounts.isNotEmpty
+        ? unreadCounts
+        : (unreadCount > 0 ? {'unread': unreadCount} : <String, int>{});
 
     final rawTyping = json['typing'] as Map<String, dynamic>? ?? {};
     final typing = rawTyping.map((k, v) => MapEntry(k, v == true));
@@ -63,19 +74,23 @@ class ChatConversation {
     final rawTypingTs = json['typingTimestamps'] as Map<String, dynamic>? ?? {};
     final typingTimestamps = rawTypingTs.map((k, v) => MapEntry(k, (v as num).toInt()));
 
+    // chatId or canonicalId from backend, fallback to id
+    final chatId = (json['chatId'] ?? json['canonicalId'] ?? json['id'] ?? '').toString();
+
     return ChatConversation(
-      id: (json['id'] ?? '').toString(),
+      id: chatId,
       participants: participants,
       participantsUids: participantsUids,
-      lastMessage: (json['lastMessage'] ?? '').toString(),
+      lastMessage: (json['lastMessage'] ?? json['last_message'] ?? '').toString(),
       lastSenderHandle: (json['lastSenderHandle'] ?? '').toString(),
       updatedAt: updated,
-      unreadCounts: unreadCounts.isNotEmpty ? unreadCounts : {'unread': unreadCount},
+      unreadCounts: effectiveUnread,
       typing: typing,
       typingTimestamps: typingTimestamps,
       partnerAvatarUrl: json['partnerAvatarUrl'] as String?,
     );
   }
+
 
   Map<String, dynamic> toJson() {
     return {

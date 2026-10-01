@@ -27,3 +27,5 @@ backend/service-account.json
 backend/venv/
 backend/__pycache__/
 *.pyc
+# Widget Preview related
+.widget_preview/

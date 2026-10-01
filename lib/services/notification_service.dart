@@ -43,7 +43,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (title.isNotEmpty || body.isNotEmpty) {
     try {
       final localNotifs = FlutterLocalNotificationsPlugin();
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
       await localNotifs.initialize(settings: const InitializationSettings(android: androidInit));
 
       const channel = AndroidNotificationChannel(
@@ -73,7 +73,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
             isCall ? 'Nearhood Calls' : 'Nearhood Notifications',
             importance: Importance.max,
             priority: Priority.max,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notification',
             color: const Color(0xFF000000),
             playSound: true,
             enableVibration: true,
@@ -180,10 +180,9 @@ class NotificationService {
       debugPrint('Notification permission: ${settings.authorizationStatus}');
 
       // 2. Initialize local notifications
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: androidInit);
+      const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
       await _localNotifications.initialize(
-        settings: initSettings,
+        settings: const InitializationSettings(android: androidInit),
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
@@ -487,7 +486,7 @@ class NotificationService {
           channelDescription: _channel.description,
           importance: Importance.high,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+          icon: '@drawable/ic_notification',
           color: const Color(0xFF000000),
         ),
       ),
@@ -801,7 +800,7 @@ class NotificationService {
             channelDescription: isCall ? _callChannel.description : _channel.description,
             importance: Importance.max,
             priority: Priority.max,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notification',
             color: const Color(0xFF000000),
             playSound: true,
             enableVibration: true,
@@ -846,7 +845,7 @@ class NotificationService {
             channelDescription: _callChannel.description,
             importance: Importance.max,
             priority: Priority.max,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notification',
             color: const Color(0xFF2563EB),
             playSound: true,
             enableVibration: true,

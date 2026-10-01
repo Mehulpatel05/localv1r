@@ -85,10 +85,9 @@ class FriendRepository {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      if (handle.isNotEmpty) 'x-user-handle': handle,
-      if (handle.isNotEmpty) 'user-handle': handle,
     };
   }
+
 
   // ── Refresh all friend data from backend ──
   Future<void> refreshAll() async {

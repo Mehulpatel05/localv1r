@@ -51,9 +51,9 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
   Future<void> _onOtpVerified() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final handle = prefs.getString('user_handle') ?? await AuthService.instance.getUserHandle() ?? '';
-      final userId = prefs.getString('user_id') ?? await AuthService.instance.getUserId() ?? '';
-      final phone = prefs.getString('phone_number') ?? await AuthService.instance.getPhoneNumber() ?? '';
+      final handle = (await AuthService.instance.getUserHandle()) ?? prefs.getString('user_handle') ?? '';
+      final userId = (await AuthService.instance.getUserId()) ?? prefs.getString('user_id') ?? '';
+      final phone = (await AuthService.instance.getPhoneNumber()) ?? prefs.getString('phone_number') ?? '';
 
       final isNewUser = AuthService.isNewUserHandle(handle);
       debugPrint('[LoginFlowPage] _onOtpVerified: handle="$handle", userId=$userId, isNewUser=$isNewUser');

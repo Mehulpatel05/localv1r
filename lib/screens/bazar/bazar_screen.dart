@@ -258,6 +258,10 @@ class _BazarScreenState extends State<BazarScreen> {
 
   Future<void> _initBazarData() async {
     await BazarRepository.instance.init();
+    await Future.wait([
+      BazarRepository.instance.fetchListings(),
+      BazarRepository.instance.fetchShops(),
+    ]);
     _onBazarRepoChanged();
   }
 
@@ -505,7 +509,10 @@ class _BazarScreenState extends State<BazarScreen> {
     final products = _filteredProducts;
 
     return RefreshIndicator(
-      onRefresh: () => BazarRepository.instance.fetchListings(),
+      onRefresh: () => Future.wait([
+        BazarRepository.instance.fetchListings(),
+        BazarRepository.instance.fetchShops(),
+      ]),
       color: Colors.white,
       backgroundColor: const Color(0xFF072E33),
       child: SingleChildScrollView(
@@ -621,12 +628,16 @@ class _BazarScreenState extends State<BazarScreen> {
               if (_localShops.isNotEmpty)
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ShopDetailScreen(shop: _localShops.first),
-                      ),
-                    );
+                    if (_localShops.length == 1) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ShopDetailScreen(shop: _localShops.first),
+                        ),
+                      );
+                    } else {
+                      _showAllShopsSheet(context);
+                    }
                   },
                   child: const Text(
                     'See all >',
@@ -679,6 +690,109 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  void _showAllShopsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF072E33),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0E525B),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'All Local Shops',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _localShops.length,
+                  separatorBuilder: (_, _) => const Divider(color: Color(0xFF0E525B), height: 1),
+                  itemBuilder: (context, index) {
+                    final shop = _localShops[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                      leading: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0E525B),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF147A86), width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(shop.categoryIcon, style: const TextStyle(fontSize: 22)),
+                      ),
+                      title: Text(
+                        shop.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${shop.category} • ${shop.location}',
+                        style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: shop.isOpen ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.redAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          shop.isOpen ? 'OPEN' : 'CLOSED',
+                          style: TextStyle(
+                            color: shop.isOpen ? const Color(0xFF10B981) : Colors.redAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ShopDetailScreen(shop: shop),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

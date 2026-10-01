@@ -46,124 +46,20 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_selectedFilterChip == 'All') return posts;
 
     if (_selectedFilterChip == 'Questions') {
-      final filtered = posts.where((p) => p.category == PostCategory.general || p.content.contains('?')).toList();
-      if (filtered.isNotEmpty) return filtered;
-      return [
-        Post(
-          id: 'q_sample_1',
-          authorHandle: 'Ravi K.',
-          content: 'Any good chai stall nearby for this evening?',
-          category: PostCategory.general,
-          createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
-          commentCount: 7,
-          reporters: const [],
-          areaName: 'Akota',
-        ),
-        Post(
-          id: 'q_sample_2',
-          authorHandle: 'Neha P.',
-          content: 'Looking for a reliable electrician for AC repair.',
-          category: PostCategory.general,
-          createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-          commentCount: 3,
-          reporters: const [],
-          areaName: 'Gotri',
-        ),
-        Post(
-          id: 'q_sample_3',
-          authorHandle: 'Kiran S.',
-          content: 'Which school near Alkapuri has good CBSE results?',
-          category: PostCategory.general,
-          createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-          commentCount: 12,
-          reporters: const [],
-          areaName: 'Karelibaug',
-        ),
-      ];
+      return posts.where((p) => p.category == PostCategory.general || p.content.contains('?')).toList();
     }
 
     if (_selectedFilterChip == 'Events') {
-      final filtered = posts.where((p) => p.category == PostCategory.events).toList();
-      if (filtered.isNotEmpty) return filtered;
-      return [
-        Post(
-          id: 'ev_sample_1',
-          authorHandle: 'Society Admin',
-          content: 'Plantation drive at Society Garden',
-          eventTitle: 'Plantation drive',
-          eventDate: '8:00 AM',
-          eventLocationText: 'Society garden, Gotri',
-          eventRsvpCount: 42,
-          category: PostCategory.events,
-          createdAt: DateTime(DateTime.now().year, 9, 30, 8, 0),
-          reporters: const [],
-        ),
-        Post(
-          id: 'ev_sample_2',
-          authorHandle: 'Alkapuri Club',
-          content: 'Garba night at Alkapuri Club',
-          eventTitle: 'Garba night',
-          eventDate: '7:30 PM',
-          eventLocationText: 'Alkapuri Club',
-          eventRsvpCount: 120,
-          category: PostCategory.events,
-          createdAt: DateTime(DateTime.now().year, 10, 4, 19, 30),
-          reporters: const [],
-        ),
-        Post(
-          id: 'ev_sample_3',
-          authorHandle: 'Sayaji Events',
-          content: 'Weekend flea market at Sayaji Garden',
-          eventTitle: 'Weekend flea market',
-          eventDate: '10:00 AM',
-          eventLocationText: 'Sayaji Garden',
-          eventRsvpCount: 67,
-          category: PostCategory.events,
-          createdAt: DateTime(DateTime.now().year, 10, 6, 10, 0),
-          reporters: const [],
-        ),
-      ];
+      return posts.where((p) => p.category == PostCategory.events).toList();
     }
 
     if (_selectedFilterChip == 'Alerts') {
-      final filtered = posts.where((p) => p.category == PostCategory.safetyAlert || p.isEmergency).toList();
-      if (filtered.isNotEmpty) return filtered;
-      return [
-        Post(
-          id: 'alt_sample_1',
-          authorHandle: 'Area admin',
-          content: 'Water supply off from 2 PM to 6 PM today.',
-          category: PostCategory.safetyAlert,
-          isEmergency: true,
-          createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
-          reporters: const [],
-          areaName: 'Akota',
-        ),
-        Post(
-          id: 'alt_sample_2',
-          authorHandle: 'Mona K.',
-          content: 'Brown Labrador missing near Gotri lake. Please call if seen.',
-          category: PostCategory.safetyAlert,
-          isEmergency: false,
-          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-          reporters: const [],
-          areaName: 'Gotri',
-        ),
-        Post(
-          id: 'alt_sample_3',
-          authorHandle: 'Sam B.',
-          content: 'Two-wheeler theft reported near the main road. Be careful.',
-          category: PostCategory.safetyAlert,
-          isEmergency: false,
-          createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-          reporters: const [],
-          areaName: 'Alkapuri',
-        ),
-      ];
+      return posts.where((p) => p.category == PostCategory.safetyAlert || p.isEmergency).toList();
     }
 
     return posts;
   }
+
 
   Widget _buildFilterChipsRow(bool isDark) {
     final chips = ['All', 'Questions', 'Events', 'Alerts'];

@@ -67,7 +67,7 @@ class AuthService {
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone_number': phoneNumber}),
-      );
+      ).timeout(const Duration(seconds: 35));
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
@@ -84,6 +84,11 @@ class AuthService {
           'statusCode': response.statusCode,
         };
       }
+    } on TimeoutException {
+      return {
+        'success': false,
+        'error': 'Server is starting up, please wait a moment and try again.',
+      };
     } catch (e) {
       return {
         'success': false,
@@ -123,14 +128,14 @@ class AuthService {
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 35));
 
       debugPrint('[AuthService] verifyOtp response status: ${response.statusCode}, body: ${response.body}');
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
         final accessToken = (body['access_token'] as String?) ?? (body['sessionToken'] as String?) ?? '';
-        final refreshToken = (body['refresh_token'] as String?) ?? accessToken;
+        final refreshToken = (body['refresh_token'] as String?) ?? '';
         final user = body['user'] as Map<String, dynamic>? ?? {};
         final userId = (user['userId'] as String?) ?? '';
         final phone = (user['phoneNumber'] as String?) ?? (phoneNumber ?? '');
@@ -155,13 +160,14 @@ class AuthService {
           await _secureStorage.write(key: _kHandleKey, value: handle);
         }
 
-        // 2. Sync to SharedPreferences for instant 0ms UI access
+        // 2. Sync non-sensitive identifiers to SharedPreferences for instant 0ms UI access
         try {
           final prefs = await SharedPreferences.getInstance();
           if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
           if (userId.isNotEmpty) await prefs.setString('user_id', userId);
-          if (phone.isNotEmpty) await prefs.setString('phone_number', phone);
+          await prefs.remove('phone_number'); // Remove any legacy plaintext phone PII
         } catch (_) {}
+
 
         debugPrint('[AuthService] Login session saved. userId=$userId, handle=$handle, isNewUser=$isNewUser');
 
@@ -286,6 +292,10 @@ class AuthService {
         final body = jsonDecode(response.body);
         if (response.statusCode == 200) {
           await _secureStorage.write(key: _kHandleKey, value: clean);
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_handle', clean);
+          } catch (_) {}
 
           if (body['access_token'] != null) {
             final newTok = body['access_token'] as String;

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/widgets/user_avatar.dart';
@@ -21,7 +23,6 @@ import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
 import '../shop/manage/my_shop_dashboard_screen.dart';
-import '../saved/saved_screen.dart';
 import '../../services/bazar_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -395,8 +396,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isSavingBio = true);
     try {
       final bioText = _bioController.text.trim();
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${AuthService.baseUrl}/profile');
+        final response = await http.put(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'bio': bioText}),
+        ).timeout(const Duration(seconds: 10));
+
+        if (response.statusCode != 200) {
+          final err = jsonDecode(response.body);
+          throw Exception(err['error'] ?? 'Failed to update profile');
+        }
+      }
+
       setState(() {
-        _userData!['bio'] = bioText;
+        if (_userData != null) {
+          _userData!['bio'] = bioText;
+        }
       });
       if (mounted) {
         Navigator.of(context).pop();
@@ -421,6 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) setState(() => _isSavingBio = false);
     }
   }
+
 
   void _showEditBioDialog() {
     _bioController.text = _userData?['bio'] ?? '';
@@ -965,11 +987,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildProfileMenuItem(
                       icon: Icons.favorite_border_rounded,
                       title: 'Saved items',
+                      badgeText: 'COMING SOON',
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SavedScreen(),
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Row(
+                              children: [
+                                Icon(Icons.stars_rounded, color: Color(0xFF2DD4BF), size: 20),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Saved items feature is coming soon! ✨',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF072E33),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Color(0xFF14B8A6), width: 1),
+                            ),
+                            duration: const Duration(seconds: 2),
                           ),
                         );
                       },
@@ -1076,6 +1118,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     required String title,
     String? subtitle,
+    String? badgeText,
+    Widget? trailing,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -1112,11 +1156,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFF90B4B6),
-              size: 20,
-            ),
+            if (badgeText != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E766E).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF14B8A6), width: 0.8),
+                ),
+                child: Text(
+                  badgeText,
+                  style: const TextStyle(
+                    color: Color(0xFF2DD4BF),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            trailing ??
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF90B4B6),
+                  size: 20,
+                ),
           ],
         ),
       ),

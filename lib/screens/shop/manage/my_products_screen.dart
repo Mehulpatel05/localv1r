@@ -256,9 +256,8 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 
                               String finalImageUrl = currentImageUrl ?? '';
                               if (localImagePath != null) {
-                                final uploaded = await R2StorageService.uploadDirectToR2(
+                                final uploaded = await R2StorageService.uploadMedia(
                                   File(localImagePath!),
-                                  moduleType: 'shops',
                                 );
                                 if (uploaded != null && uploaded.isNotEmpty) {
                                   finalImageUrl = uploaded;

@@ -145,8 +145,8 @@ class DirectChatService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          'x-user-handle': clean,
         },
+
       ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
@@ -199,7 +199,6 @@ class DirectChatService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          if (userHandle != null && userHandle.isNotEmpty) 'x-user-handle': userHandle.replaceAll('@', '').trim(),
         },
       ).timeout(const Duration(seconds: 8));
 
@@ -245,17 +244,21 @@ class DirectChatService {
 
     try {
       final token = await AuthService.instance.getAccessToken();
-      final payload = {
+      final payload = <String, dynamic>{
         'sender': cleanSender,
         'receiver': cleanReceiver,
         'receiverHandle': cleanReceiver,
         'content': content,
         'text': content,
-        'imageUrl': ?imageUrl,
-        'mediaUrls': ?mediaUrls,
-        'mediaR2Path': ?imageUrl,
         'messageType': messageType,
       };
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        payload['imageUrl'] = imageUrl;
+        payload['mediaR2Path'] = imageUrl;
+      }
+      if (mediaUrls != null && mediaUrls.isNotEmpty) {
+        payload['mediaUrls'] = mediaUrls;
+      }
 
       final res = await http.post(
         Uri.parse('${AuthService.baseUrl}/chats/send'),
@@ -263,7 +266,6 @@ class DirectChatService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          'x-user-handle': cleanSender,
         },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 10));
@@ -324,10 +326,10 @@ class DirectChatService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          'x-user-handle': cleanUser,
         },
         body: jsonEncode({'user_handle': cleanUser}),
       ).timeout(const Duration(seconds: 6));
+
 
       return res.statusCode == 200;
     } catch (e) {

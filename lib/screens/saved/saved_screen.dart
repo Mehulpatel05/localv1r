@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../../services/bazar_repository.dart';
+import '../../services/post_repository.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -22,12 +23,14 @@ class _SavedScreenState extends State<SavedScreen> {
   void initState() {
     super.initState();
     BazarRepository.instance.addListener(_refreshSavedData);
+    PostRepository.instance.addListener(_refreshSavedData);
     _refreshSavedData();
   }
 
   @override
   void dispose() {
     BazarRepository.instance.removeListener(_refreshSavedData);
+    PostRepository.instance.removeListener(_refreshSavedData);
     super.dispose();
   }
 
@@ -40,9 +43,18 @@ class _SavedScreenState extends State<SavedScreen> {
       _savedShops = BazarRepository.instance.shops
           .where((s) => BazarRepository.instance.isShopSaved(s.id))
           .toList();
-      _savedPosts = [];
+      _savedPosts = PostRepository.instance.posts
+          .where((p) => p.isSaved)
+          .map((p) => {
+                'id': p.id,
+                'title': p.content.isNotEmpty ? (p.content.length > 50 ? '${p.content.substring(0, 50)}...' : p.content) : 'Post by @${p.authorHandle}',
+                'author': '@${p.authorHandle}',
+                'time': p.timeAgo,
+              })
+          .toList();
     });
   }
+
 
   void _unsaveItem(BazarProduct product) {
     BazarRepository.instance.toggleSaveProduct(product.id);

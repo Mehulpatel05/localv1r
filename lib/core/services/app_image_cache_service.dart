@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import '../constants/api_constants.dart';
 
 /// 🚀 High-Performance Multi-Tier Persistent Disk & Memory Image Cache Service
 ///
@@ -54,10 +55,11 @@ class AppImageCacheService {
     var clean = url.trim();
     if (clean.contains('.r2.dev/')) {
       final path = clean.split('.r2.dev/').last;
-      return 'https://backend-v2-cu1p.onrender.com/api/v2/media/file/$path';
+      return '${ApiConstants.baseUrl}/media/file/$path';
     }
     return clean;
   }
+
 
   /// Generates a deterministic safe file path from URL using MD5/SHA256
   String _getCacheKey(String url) {

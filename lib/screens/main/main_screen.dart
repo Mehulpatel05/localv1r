@@ -279,12 +279,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
-          child: const Tooltip(
+          child: Tooltip(
             message: 'Profile',
             child: SizedBox(
               height: 48,
               child: Center(
-                child: _ProfileNavAvatar(),
+                child: _ProfileNavAvatar(
+                  isSelected: currentIndex == 3,
+                  handle: widget.currentUserHandle,
+                ),
               ),
             ),
           ),
@@ -294,21 +297,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 }
 
-class _ProfileNavAvatar extends StatefulWidget {
-  const _ProfileNavAvatar();
+class _ProfileNavAvatar extends StatelessWidget {
+  final bool isSelected;
+  final String handle;
 
-  @override
-  State<_ProfileNavAvatar> createState() => _ProfileNavAvatarState();
-}
+  const _ProfileNavAvatar({
+    required this.isSelected,
+    required this.handle,
+  });
 
-class _ProfileNavAvatarState extends State<_ProfileNavAvatar> {
   @override
   Widget build(BuildContext context) {
-    final mainState = context.findAncestorStateOfType<_MainScreenState>();
-    final currentIndex = mainState?._currentIndexNotifier.value ?? 0;
-    final handle = mainState?.widget.currentUserHandle ?? 'me';
-    final isSelected = currentIndex == 3;
-
     const ringColor = Colors.white;
     final borderWidth = isSelected ? 2.0 : 0.0;
 
@@ -337,3 +336,4 @@ class _ProfileNavAvatarState extends State<_ProfileNavAvatar> {
     );
   }
 }
+

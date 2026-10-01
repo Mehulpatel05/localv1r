@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/user_profile.dart';
 import '../../core/theme.dart';
+import '../../services/auth_service.dart';
 
 enum FeedbackCategory {
   bug('Report a Bug', Icons.bug_report_outlined),
@@ -64,8 +67,25 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
     });
 
     try {
-      // Simulate network request / log feedback
-      await Future.delayed(const Duration(milliseconds: 600));
+      final token = await AuthService.instance.getAccessToken();
+      final uri = Uri.parse('${AuthService.baseUrl}/feedback');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'category': _selectedCategory.label,
+          'subject': _subjectController.text.trim(),
+          'feedback_text': message,
+          'contact': _contactController.text.trim(),
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Server returned ${response.statusCode}');
+      }
 
       if (mounted) {
         setState(() {
@@ -81,6 +101,7 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
       }
     }
   }
+
 
   void _showErrorSnackBar(String text) {
     final c = context.nearhoodColors;

@@ -125,9 +125,9 @@ class R2StorageService {
     }
   }
 
-  /// Backward-compatible alias for uploadMedia
+  /// Upload image through backend proxy — returns backend proxy URL (R2 bucket is private)
   static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) {
-    return uploadDirectToR2(file, onProgress: onProgress);
+    return uploadMedia(file, onProgress: onProgress);
   }
 
   /// ⚡ Phase 5: Direct Client-to-Cloudflare R2 Presigned Upload

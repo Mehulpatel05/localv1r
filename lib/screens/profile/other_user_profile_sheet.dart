@@ -33,30 +33,19 @@ class OtherUserProfileSheet extends StatefulWidget {
   final PostRepository repository;
   final String? userHandle;
 
-  const OtherUserProfileSheet({
+  OtherUserProfileSheet({
     super.key,
     String? partnerHandle,
     required this.currentUserHandle,
     PostRepository? repository,
     this.userHandle,
   })  : partnerHandle = partnerHandle ?? '',
-        repository = repository ?? const _DummyRepo();
+        repository = repository ?? PostRepository.instance;
 
   @override
   State<OtherUserProfileSheet> createState() => _OtherUserProfileSheetState();
 }
 
-class _DummyRepo implements PostRepository {
-  const _DummyRepo();
-  @override
-  int getTotalLikesForUser(String handle) => 0;
-  @override
-  int getTotalUpvotesForUser(String handle) => 0;
-  @override
-  Future<List<Post>> fetchPostsByUser(String handle) async => [];
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
 
 class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   Map<String, dynamic>? _userData;
@@ -95,9 +84,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
       final results = await Future.wait([
         _friendRepo.getUserByHandle(_targetHandle),
-        (widget.repository is! _DummyRepo)
-            ? widget.repository.fetchPostsByUser(_targetHandle)
-            : Future.value(<Post>[]),
+        widget.repository.fetchPostsByUser(_targetHandle),
         _friendRepo.getRelationshipStatus(_targetHandle),
       ]);
 

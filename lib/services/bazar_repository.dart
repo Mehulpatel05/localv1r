@@ -88,8 +88,11 @@ class BazarRepository extends ChangeNotifier {
       _isInitialized = true;
       notifyListeners();
 
-      // 2. Fetch fresh marketplace listings from Backend V2 / Cloudflare D1
-      await fetchListings();
+      // 2. Fetch fresh marketplace listings & shops from Backend V2 / Cloudflare D1
+      await Future.wait([
+        fetchListings(),
+        fetchShops(),
+      ]);
     } catch (e) {
       debugPrint('[BazarRepository] error initializing: $e');
     }
@@ -147,6 +150,56 @@ class BazarRepository extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Fetch community shops from Backend V2 Cloudflare D1
+  Future<void> fetchShops({String? category, String? search}) async {
+    try {
+      final queryParams = <String, String>{};
+      if (category != null && category.isNotEmpty && category != 'All') {
+        queryParams['category'] = category;
+      }
+      if (search != null && search.trim().isNotEmpty) {
+        queryParams['search'] = search.trim();
+      }
+
+      final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops').replace(
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true && body['shops'] is List) {
+          final List<dynamic> rawShops = body['shops'];
+          final List<LocalShop> freshShops = [];
+          final seen = <String>{};
+
+          for (final item in rawShops) {
+            if (item is Map<String, dynamic>) {
+              final shop = LocalShop.fromJson(item);
+              if (seen.add(shop.id)) {
+                freshShops.add(shop);
+              }
+            }
+          }
+
+          // Merge: keep locally created shops if not yet indexed by server
+          for (final local in _shops) {
+            if (!seen.contains(local.id)) {
+              freshShops.add(local);
+            }
+          }
+
+          _shops = freshShops;
+          await _persistShops();
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[BazarRepository] error fetching remote shops: $e');
     }
   }
 
@@ -269,7 +322,25 @@ class BazarRepository extends ChangeNotifier {
       await _persistProducts();
       notifyListeners();
     }
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/listings/$productId/sold');
+        await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'isSold': true}),
+        ).timeout(const Duration(seconds: 8));
+      }
+    } catch (e) {
+      debugPrint('[BazarRepository] error marking product as sold: $e');
+    }
   }
+
 
   Future<void> deleteProduct(String productId) async {
     await init();
@@ -433,7 +504,7 @@ class BazarRepository extends ChangeNotifier {
       final token = await AuthService.instance.getAccessToken();
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops');
-        await http.post(
+        final res = await http.post(
           uri,
           headers: {
             'Content-Type': 'application/json',
@@ -453,6 +524,10 @@ class BazarRepository extends ChangeNotifier {
             'isOpen': shopWithOwner.isOpen ? 1 : 0,
           }),
         ).timeout(const Duration(seconds: 10));
+
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          await fetchShops();
+        }
       }
     } catch (e) {
       debugPrint('[BazarRepository] error registering remote shop: $e');
@@ -472,7 +547,7 @@ class BazarRepository extends ChangeNotifier {
       final token = await AuthService.instance.getAccessToken();
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops/${shop.id}');
-        await http.put(
+        final res = await http.put(
           uri,
           headers: {
             'Content-Type': 'application/json',
@@ -489,6 +564,10 @@ class BazarRepository extends ChangeNotifier {
             'status': shop.status,
           }),
         ).timeout(const Duration(seconds: 10));
+
+        if (res.statusCode == 200) {
+          await fetchShops();
+        }
       }
     } catch (e) {
       debugPrint('[BazarRepository] error updating shop: $e');
@@ -532,7 +611,7 @@ class BazarRepository extends ChangeNotifier {
       final token = await AuthService.instance.getAccessToken();
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops/$shopId/status');
-        await http.patch(
+        final res = await http.patch(
           uri,
           headers: {
             'Content-Type': 'application/json',
@@ -543,6 +622,10 @@ class BazarRepository extends ChangeNotifier {
             'status': isOpen ? 'active' : 'inactive',
           }),
         ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          await fetchShops();
+        }
       }
     } catch (e) {
       debugPrint('[BazarRepository] error toggling shop status: $e');
@@ -631,7 +714,7 @@ class BazarRepository extends ChangeNotifier {
       debugPrint('[BazarRepository] error fetching insights: $e');
     }
 
-    // 100% Real Dynamic calculation fallback from user's actual products
+    // Fallback: Real calculation from user's actual products without fake multipliers
     final myProducts = await fetchMyShopProducts();
     final totalViews = myProducts.fold<int>(0, (sum, p) => sum + p.viewsCount);
     final totalChats = myProducts.fold<int>(0, (sum, p) => sum + p.chatsCount);
@@ -646,16 +729,12 @@ class BazarRepository extends ChangeNotifier {
         : null;
 
     final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    final dailyViews = days.map((day) {
-      if (totalViews == 0) return {'day': day, 'views': 0};
-      return {'day': day, 'views': (totalViews / 7).round()};
-    }).toList();
+    final dailyViews = days.map((day) => {'day': day, 'views': 0}).toList();
 
     final tips = <String>[];
     if (myProducts.isEmpty) {
       tips.add('Tip: Add your first product to start getting customer views and inquiries in your area.');
       tips.add('Tip: Shops with 5+ products and clear photos get 3x higher visibility in Bazaar.');
-      tips.add('Tip: Keep your shop timings updated so nearby buyers know when you are open.');
     } else {
       if (myProducts.length < 5) {
         tips.add('Tip: Shops with 5+ product photos get 2x more views and local inquiries.');
@@ -664,16 +743,15 @@ class BazarRepository extends ChangeNotifier {
       if (outOfStock > 0) {
         tips.add('Tip: You have $outOfStock out-of-stock item(s). Restocking keeps your shop ranked higher.');
       }
-      tips.add('Tip: Fast replies on chats within 15 minutes increase closing rate by 70%.');
-      tips.add('Tip: Offering Home Delivery attracts 3x more orders in Vadodara.');
     }
 
     return {
       'success': true,
+      'totalViews': totalViews,
       'viewsLast7Days': dailyViews,
       'topProduct': topProduct,
       'chatsThisWeek': totalChats,
-      'chatsLastWeek': (totalChats * 0.7).round(),
+      'chatsLastWeek': 0,
       'tips': tips,
     };
   }
@@ -683,6 +761,23 @@ class BazarRepository extends ChangeNotifier {
     _shops.removeWhere((s) => s.id == shopId);
     await _persistShops();
     notifyListeners();
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops/$shopId');
+        final res = await http.delete(
+          uri,
+          headers: {'Authorization': 'Bearer $token'},
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          await fetchShops();
+        }
+      }
+    } catch (e) {
+      debugPrint('[BazarRepository] error deleting shop: $e');
+    }
   }
 
   Future<void> _persistShops() async {
@@ -734,7 +829,19 @@ class BazarRepository extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('${_kSavedShopsKey}_$activeHandle', _savedShopIds.toList());
     notifyListeners();
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/shops/$shopId/save');
+        await http.post(
+          uri,
+          headers: {'Authorization': 'Bearer $token'},
+        ).timeout(const Duration(seconds: 8));
+      }
+    } catch (_) {}
   }
+
 
   Future<void> recordShopChatInquiry(String shopId) async {
     try {

@@ -89,14 +89,14 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _shareApp(BuildContext context) {
-    // TODO(dev): replace the store link with the real Play Store / App Store URL.
     SharePlus.instance.share(
       ShareParams(
         text:
-            'Join me on Nearhood, the app for every local need. [Store link coming soon]',
+            'Join me on Nearhood, your neighborhood hub for local news, events, and marketplace! Download now at https://nearhood.in',
       ),
     );
   }
+
 
   // ── Build ─────────────────────────────────────────────────────────────────
 

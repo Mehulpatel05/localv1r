@@ -1,4 +1,6 @@
 import '../core/constants/areas_and_categories.dart';
+import '../services/user_action_state_service.dart';
+import '../core/action_state/action_state_provider.dart';
 
 class Post {
   final String id;
@@ -125,6 +127,25 @@ class Post {
   int get score => upvotes - downvotes;
   int get likes => upvotes > 0 ? upvotes : 0;
   bool get isLiked => userVote == 1;
+
+  bool get isSaved =>
+      UserActionStateService.instance.isSaved(id) ||
+      ActionStateProvider.instance.isSaved(id);
+
+  String get timeAgo {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inSeconds < 60) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return '${createdAt.day}/${createdAt.month}/${createdAt.year}';
+    }
+  }
 
   Map<String, dynamic> toJson() {
     return {

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/post_repository.dart';
 import '../services/direct_chat_service.dart';
@@ -169,9 +168,12 @@ class SplashController {
       final handle = await AuthService.instance.getUserHandle();
       final uid = await AuthService.instance.getUserId();
 
+      // Token + handle present = user is logged in.
+      // NOTE: Our tokens are plain secure random hex strings (not JWTs),
+      // so JWT-based isExpired check is meaningless here — the server-side
+      // auth middleware validates every request against D1. Trust the stored
+      // token and let the server reject it if truly invalid.
       if (token != null && token.isNotEmpty && handle != null && handle.isNotEmpty) {
-        // Fast synchronous JWT decode & decision engine instantiation
-        AuthService.instance.updateDecisionEngineFromToken(token);
         final isNewUser = AuthService.isNewUserHandle(handle);
         return {
           'isLoggedIn': true,
@@ -181,28 +183,20 @@ class SplashController {
         };
       }
 
-      // Check SharedPreferences local disk fallback
-      final prefs = await SharedPreferences.getInstance();
-      final loggedInFlag = prefs.getString('is_logged_in') == 'true';
-      final cachedHandle = prefs.getString('user_handle') ?? 'Guest';
-      final cachedUid = prefs.getString('user_id') ?? '';
-
-      return {
-        'isLoggedIn': loggedInFlag && cachedHandle != 'Guest',
-        'isNewUser': AuthService.isNewUserHandle(cachedHandle),
-        'userId': cachedUid,
-        'handle': cachedHandle,
-      };
+      return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};
     } catch (e) {
       debugPrint('[SplashController] Auth resolution error: $e');
       return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};
     }
   }
 
+
   Future<void> _pingServerHealth() async {
     try {
       final uri = Uri.parse('${AuthService.baseUrl}/health');
-      await http.get(uri).timeout(const Duration(milliseconds: 1200));
+      // Render free tier sleeps after 15 min — ping with 30s timeout to wake it up
+      // before the user attempts login, so OTP send doesn't timeout
+      await http.get(uri).timeout(const Duration(seconds: 30));
     } catch (_) {
       // Non-blocking ping
     }
