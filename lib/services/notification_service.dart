@@ -295,11 +295,11 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     if (type == 'chat' || type == 'message') {
       return prefs.getBool('notif_chat_enabled') ?? true;
-    } else if (type == 'friend_request') {
+    } else if (type == 'friend_request' || type == 'friend_accept' || type == 'friend_accepted' || type == 'friend') {
       return prefs.getBool('notif_friends_enabled') ?? true;
     } else if (type == 'community_message' || type == 'community' || type == 'community_join_request' || type == 'community_request_response') {
       return prefs.getBool('notif_communities_enabled') ?? true;
-    } else if (type == 'post' || type == 'new_post') {
+    } else if (type == 'post' || type == 'new_post' || type == 'post_like' || type == 'post_comment' || type == 'post_upload') {
       return prefs.getBool('notif_posts_enabled') ?? true;
     }
     return true;
@@ -339,8 +339,8 @@ class NotificationService {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-            'x-user-handle': cleanHandle,
           },
+
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -525,7 +525,6 @@ class NotificationService {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-            'x-user-handle': clean,
           },
         ).timeout(const Duration(seconds: 4));
 
@@ -565,8 +564,8 @@ class NotificationService {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-            'x-user-handle': clean,
           },
+
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -766,8 +765,8 @@ class NotificationService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          if (sender.toString().isNotEmpty) 'x-user-handle': sender.toString().replaceAll('@', '').trim(),
         },
+
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
