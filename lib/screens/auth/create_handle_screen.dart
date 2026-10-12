@@ -53,12 +53,11 @@ class CreateHandleScreen extends StatefulWidget {
 
 class _CreateHandleScreenState extends State<CreateHandleScreen> {
   static const Color _primaryGreen = Color(0xFF0E8A3E);
-  static const Color _darkGreen = Color(0xFF0B5D2A);
   static const Color _lightGreenTint = Color(0xFFE3F4EA);
-  static const Color _screenBg = Color(0xFFF4F6F5);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _borderColor = Color(0xFFE5E7EB);
+  static const Color _screenBg = Color(0xFFF8FAFC);
+  static const Color _textPrimary = Color(0xFF0F172A);
+  static const Color _textSecondary = Color(0xFF64748B);
+  static const Color _borderColor = Color(0xFFE2E8F0);
 
   static const List<String> _popularAreaNames = [
     'Alkapuri',
@@ -1493,7 +1492,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.paddingOf(context).top;
     final isNameValid = _nameController.text.trim().length >= 2;
     final isStep1Valid =
         isNameValid && _state == UsernameState.available && !_isSubmitting;
@@ -1508,172 +1506,98 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: _screenBg,
-        body: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          child: Stack(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              _currentStep == 1 ? Icons.close_rounded : Icons.arrow_back_rounded,
+              color: _textPrimary,
+              size: 22,
+            ),
+            onPressed: _handleTopLeftAction,
+          ),
+          title: const Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 140 + topPadding,
-                child: _buildCurvedHeaderBackground(),
-              ),
-              SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 6),
-                      _buildHeaderTopBar(),
-                      const SizedBox(height: 8),
-                      _buildHeaderTitles(),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: _currentStep == 1
-                            ? _buildStep1Card()
-                            : _buildStep2Card(),
-                      ),
-                      const SizedBox(height: 12),
-                      _currentStep == 1
-                          ? _buildStep1ContinueButton(isStep1Valid)
-                          : _buildStep2FinishButton(isStep2Valid),
-                      const SizedBox(height: 8),
-                      _buildFooterText(),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
+              LogoPin(width: 22, height: 28),
+              SizedBox(width: 8),
+              Text(
+                'nearhood',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCurvedHeaderBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: _darkGreen,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -30,
-            right: -20,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -15,
-            left: -15,
-            child: Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.04),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderTopBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Semantics(
-          label: _currentStep == 1 ? 'Close setup' : 'Back to previous step',
-          button: true,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _handleTopLeftAction,
-              borderRadius: BorderRadius.circular(18),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
+          actions: [
+            if (widget.isChangeArea)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: Text(
+                    'Change Area',
+                    style: TextStyle(
+                      color: _primaryGreen,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  _currentStep == 1
-                      ? Icons.close_rounded
-                      : Icons.arrow_back_rounded,
-                  color: Colors.white,
-                  size: 18,
+              )
+            else
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$_currentStep/2',
+                    style: const TextStyle(
+                      color: _textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              alignment: Alignment.center,
-              child: const LogoPin(width: 13, height: 17),
-            ),
-            const SizedBox(width: 7),
-            const Text(
-              'nearhood',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
           ],
         ),
-        if (widget.isChangeArea)
-          const Text(
-            'Change Area',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '$_currentStep/2',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-              ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeaderTitles(),
+                const SizedBox(height: 18),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _currentStep == 1
+                      ? _buildStep1Card()
+                      : _buildStep2Card(),
+                ),
+                const SizedBox(height: 18),
+                _currentStep == 1
+                    ? _buildStep1ContinueButton(isStep1Valid)
+                    : _buildStep2FinishButton(isStep2Valid),
+                const SizedBox(height: 12),
+                _buildFooterText(),
+                const SizedBox(height: 20),
+              ],
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 
@@ -1691,19 +1615,19 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         Text(
           title,
           style: const TextStyle(
-            color: Colors.white,
-            fontSize: 19,
+            color: _textPrimary,
+            fontSize: 24,
             fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 6),
         Text(
           subtitle,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.88),
-            fontSize: 12,
-            height: 1.25,
+          style: const TextStyle(
+            color: _textSecondary,
+            fontSize: 14,
+            height: 1.35,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -1712,51 +1636,43 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Widget _buildStep1Card() {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
-      children: [
-        Container(
-          margin: const EdgeInsets.only(top: 24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 38, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Center(
-                child: Text(
-                  'Photo optional hai',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: _textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: _buildAvatar()),
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'Photo optional hai',
+              style: TextStyle(
+                fontSize: 12,
+                color: _textSecondary,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: 14),
-              _buildFullNameField(),
-              const SizedBox(height: 12),
-              _buildUsernameField(),
-              const SizedBox(height: 6),
-              _buildUsernameStatusHelper(),
-            ],
+            ),
           ),
-        ),
-        Positioned(
-          top: 0,
-          child: _buildAvatar(),
-        ),
-      ],
+          const SizedBox(height: 20),
+          _buildFullNameField(),
+          const SizedBox(height: 16),
+          _buildUsernameField(),
+          const SizedBox(height: 8),
+          _buildUsernameStatusHelper(),
+        ],
+      ),
     );
   }
 
@@ -1767,8 +1683,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 68,
-            height: 68,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               color: _currentAvatarBgColor,
               shape: BoxShape.circle,
@@ -1785,12 +1701,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: _pickedProfileImage != null
                   ? Image.file(
                       _pickedProfileImage!,
-                      width: 68,
-                      height: 68,
+                      width: 80,
+                      height: 80,
                       fit: BoxFit.cover,
                     )
                   : CustomPaint(
-                      size: const Size(68, 68),
+                      size: const Size(80, 80),
                       painter: _DefaultAvatarPainter(
                         color: _currentAvatarAccentColor,
                       ),
@@ -1801,8 +1717,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             bottom: 0,
             right: 0,
             child: Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
                 color: _primaryGreen,
                 shape: BoxShape.circle,
@@ -1818,7 +1734,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 12,
+                size: 13,
               ),
             ),
           ),
@@ -2106,7 +2022,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   Widget _buildStep1ContinueButton(bool isStep1Valid) {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: isStep1Valid
@@ -2115,7 +2031,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         onPressed: isStep1Valid
@@ -2132,12 +2048,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               'Continue',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 15,
+                fontSize: 16,
                 letterSpacing: 0.2,
               ),
             ),
             SizedBox(width: 6),
-            Icon(Icons.arrow_forward_rounded, size: 17),
+            Icon(Icons.arrow_forward_rounded, size: 18),
           ],
         ),
       ),
@@ -2146,19 +2062,19 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   Widget _buildStep2Card() {
     return Container(
-      margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2166,26 +2082,26 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           if (_isAreaSearching &&
               (_livePredictions.isNotEmpty || _isSearchingPlaces))
             _buildAreaSuggestionsList(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           _buildCurrentLocationButton(),
           if (_selectedArea != null)
             Container(
-              margin: const EdgeInsets.only(top: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: _lightGreenTint.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _primaryGreen.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 16),
+                  const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${_selectedArea!.name}, ${_selectedCityName ?? "Vadodara"}',
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: _textPrimary,
                       ),
@@ -2196,9 +2112,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           _buildPopularChips(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           _buildAddressNoteField(),
         ],
       ),
@@ -2437,7 +2353,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               'Popular in $cityName',
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 12.5,
+                fontSize: 13,
                 color: _textPrimary,
               ),
             ),
@@ -2452,7 +2368,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                     Text(
                       cityName,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w700,
                         color: _primaryGreen,
                       ),
@@ -2469,43 +2385,37 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 34,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: chipsList.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final areaName = chipsList[index];
-              final isSelected =
-                  _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
-              return Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _selectPopularArea(areaName),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSelected ? _primaryGreen : _screenBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: isSelected ? null : Border.all(color: _borderColor),
-                    ),
-                    child: Text(
-                      areaName,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : _textPrimary,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 12.5,
-                      ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: chipsList.take(8).map((areaName) {
+            final isSelected =
+                _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _selectPopularArea(areaName),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? _primaryGreen : _screenBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isSelected ? null : Border.all(color: _borderColor),
+                  ),
+                  child: Text(
+                    areaName,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : _textPrimary,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13,
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -2521,13 +2431,13 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           'Society / flat / landmark (Optional)',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 12.5,
+            fontSize: 13,
             color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Container(
-          height: 46,
+          height: 52,
           decoration: BoxDecoration(
             color: _screenBg,
             borderRadius: BorderRadius.circular(14),
@@ -2539,11 +2449,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Icon(
                   Icons.home_outlined,
                   color: hasFocus ? _primaryGreen : _textSecondary,
-                  size: 18,
+                  size: 20,
                 ),
               ),
               Expanded(
@@ -2552,37 +2462,37 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   focusNode: _addressNoteFocusNode,
                   textCapitalization: TextCapitalization.sentences,
                   style: const TextStyle(
-                    fontSize: 13.5,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w500,
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'e.g. Tower B, Near Circle',
+                    hintText: 'e.g. Tower B, Shivalik Residency, Near Circle',
                     hintStyle: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: 13.5,
                       color: _textSecondary.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         const Row(
           children: [
-            Icon(Icons.lock_outline_rounded, size: 12, color: _textSecondary),
+            Icon(Icons.lock_outline_rounded, size: 13, color: _textSecondary),
             SizedBox(width: 4),
             Expanded(
               child: Text(
                 'Exact address kisi ko nahi dikhega, sirf aapka area.',
                 style: TextStyle(
                   color: _textSecondary,
-                  fontSize: 11.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -2598,7 +2508,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: isStep2Valid
@@ -2607,14 +2517,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         onPressed: isStep2Valid ? _createHandle : null,
         child: _isSubmitting
             ? const SizedBox(
-                width: 20,
-                height: 20,
+                width: 22,
+                height: 22,
                 child: CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2.2,
@@ -2629,12 +2539,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         : 'Finish & join $areaName',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                      fontSize: 16,
                       letterSpacing: 0.2,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(Icons.check_circle_rounded, size: 17),
+                  const Icon(Icons.check_circle_rounded, size: 18),
                 ],
               ),
       ),

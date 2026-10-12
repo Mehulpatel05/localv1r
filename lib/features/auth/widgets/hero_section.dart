@@ -19,6 +19,8 @@ class _TopSectionState extends State<TopSection>
     with SingleTickerProviderStateMixin {
   late final AnimationController _chipController;
   late final Animation<double> _chip1Anim;
+  late final Animation<double> _chip2Anim;
+  late final Animation<double> _chip3Anim;
 
   @override
   void initState() {
@@ -33,6 +35,16 @@ class _TopSectionState extends State<TopSection>
     _chip1Anim = CurvedAnimation(
       parent: _chipController,
       curve: const Interval(0.0, 700 / 940, curve: cubicCurve),
+    );
+
+    _chip2Anim = CurvedAnimation(
+      parent: _chipController,
+      curve: const Interval(120 / 940, 820 / 940, curve: cubicCurve),
+    );
+
+    _chip3Anim = CurvedAnimation(
+      parent: _chipController,
+      curve: const Interval(240 / 940, 1.0, curve: cubicCurve),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,22 +69,12 @@ class _TopSectionState extends State<TopSection>
   @override
   Widget build(BuildContext context) {
     final statusBar = MediaQuery.paddingOf(context).top;
-    final double targetHeight = widget.isOtp ? 80.0 : 130.0;
+    final double targetHeight = widget.isOtp ? 210.0 : 300.0;
 
     return Container(
       height: targetHeight + statusBar,
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF085A2B),
-            Color(0xFF0C6E35),
-            Color(0xFF0A6832),
-          ],
-        ),
-      ),
+      color: Colors.white,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -80,77 +82,70 @@ class _TopSectionState extends State<TopSection>
             child: RepaintBoundary(
               child: CustomPaint(
                 painter: StreetPainter(
-                  strokeColor: const Color(0xFF22C55E),
+                  strokeColor: const Color(0x1A0B8A3E),
                   isOtp: widget.isOtp,
                 ),
               ),
             ),
           ),
           Positioned(
-            top: (widget.isOtp ? 12.0 : 16.0) + statusBar,
-            left: 20.0,
-            right: 20.0,
-            child: Row(
+            top: 46.0 + statusBar,
+            left: 24.0,
+            right: 24.0,
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  width: widget.isOtp ? 36 : 40,
-                  height: widget.isOtp ? 36 : 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(13),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.14),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: LogoPin(
-                    width: widget.isOtp ? 18 : 20,
-                    height: widget.isOtp ? 24 : 26,
+                LogoPin(
+                  width: 28,
+                  height: 36,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'nearhood',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.44,
+                    color: Color(0xFF0F172A),
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'nearhood',
-                      style: TextStyle(
-                        fontSize: widget.isOtp ? 22 : 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: Colors.white,
-                        height: 1.1,
-                      ),
-                    ),
-                    if (!widget.isOtp)
-                      const Text(
-                        'Your neighbourhood community',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFFDCFCE7),
-                        ),
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                if (!widget.isOtp)
-                  NearbyPinChip(
-                    service: 'Live local',
-                    distance: '500m',
-                    dotColor: const Color(0xFF22C55E),
-                    animation: _chip1Anim,
-                  ),
               ],
             ),
           ),
+          if (!widget.isOtp) ...[
+            Positioned(
+              top: 120.0 + statusBar,
+              left: 22.0,
+              child: NearbyPinChip(
+                service: 'Plumber',
+                distance: '0.4 km',
+                dotColor: const Color(0xFF22C55E),
+                animation: _chip1Anim,
+              ),
+            ),
+            Positioned(
+              top: 164.0 + statusBar,
+              right: 22.0,
+              child: NearbyPinChip(
+                service: 'Tiffin',
+                distance: '0.8 km',
+                dotColor: const Color(0xFFF59E0B),
+                animation: _chip2Anim,
+              ),
+            ),
+            Positioned(
+              top: 214.0 + statusBar,
+              left: 70.0,
+              child: NearbyPinChip(
+                service: 'Salon',
+                distance: '1.2 km',
+                dotColor: const Color(0xFFEC4899),
+                animation: _chip3Anim,
+              ),
+            ),
+          ],
         ],
       ),
     );

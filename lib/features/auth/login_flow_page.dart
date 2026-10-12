@@ -111,7 +111,7 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: const Color(0xFF096832),
+        backgroundColor: Colors.white,
         body: SafeArea(
           top: false,
           bottom: false,
@@ -128,67 +128,51 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
                 ),
               ),
               Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(32),
-                      topRight: Radius.circular(32),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(32),
-                      topRight: Radius.circular(32),
-                    ),
-                    child: SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: AnimatedSwitcher(
-                        duration: disableAnimations
-                            ? Duration.zero
-                            : const Duration(milliseconds: 220),
-                        switchInCurve: Curves.ease,
-                        switchOutCurve: const Threshold(0),
-                        transitionBuilder: (child, animation) {
-                          if (disableAnimations) return child;
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: AnimatedSwitcher(
+                    duration: disableAnimations
+                        ? Duration.zero
+                        : const Duration(milliseconds: 220),
+                    switchInCurve: Curves.ease,
+                    switchOutCurve: const Threshold(0),
+                    transitionBuilder: (child, animation) {
+                      if (disableAnimations) return child;
 
-                          final isIncoming = child.key == ValueKey(_currentStep);
-                          if (!isIncoming) {
-                            return const SizedBox.shrink();
-                          }
+                      final isIncoming = child.key == ValueKey(_currentStep);
+                      if (!isIncoming) {
+                        return const SizedBox.shrink();
+                      }
 
-                          return AnimatedBuilder(
-                            animation: animation,
-                            builder: (context, childWidget) {
-                              final progress = Curves.ease.transform(animation.value);
-                              final dx = (1.0 - progress) * 8.0;
-                              return Opacity(
-                                opacity: animation.value.clamp(0.0, 1.0),
-                                child: Transform.translate(
-                                  offset: Offset(dx, 0),
-                                  child: childWidget,
-                                ),
-                              );
-                            },
-                            child: child,
+                      return AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, childWidget) {
+                          final progress = Curves.ease.transform(animation.value);
+                          final dx = (1.0 - progress) * 8.0;
+                          return Opacity(
+                            opacity: animation.value.clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset: Offset(dx, 0),
+                              child: childWidget,
+                            ),
                           );
                         },
-                        child: isOtp
-                            ? OtpStep(
-                                key: const ValueKey(AuthStep.otp),
-                                phone: _phone,
-                                authRepository: widget.authRepository,
-                                onChangeNumber: _onChangeNumber,
-                                onVerified: _onOtpVerified,
-                              )
-                            : PhoneStep(
-                                key: const ValueKey(AuthStep.phone),
-                                authRepository: widget.authRepository,
-                                onPhoneSubmitted: _onPhoneSubmitted,
-                              ),
-                      ),
-                    ),
+                        child: child,
+                      );
+                    },
+                    child: isOtp
+                        ? OtpStep(
+                            key: const ValueKey(AuthStep.otp),
+                            phone: _phone,
+                            authRepository: widget.authRepository,
+                            onChangeNumber: _onChangeNumber,
+                            onVerified: _onOtpVerified,
+                          )
+                        : PhoneStep(
+                            key: const ValueKey(AuthStep.phone),
+                            authRepository: widget.authRepository,
+                            onPhoneSubmitted: _onPhoneSubmitted,
+                          ),
                   ),
                 ),
               ),
