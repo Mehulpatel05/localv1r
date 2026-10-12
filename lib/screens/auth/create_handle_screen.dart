@@ -236,6 +236,105 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     } catch (_) {}
   }
 
+  List<String> get _currentPopularChips {
+    if (_dynamicPopularNames.isNotEmpty) return _dynamicPopularNames;
+    final cityId = _selectedCityId ?? 'GJ-VAD';
+    final localCity = LocationEngine.lookupCity(cityId);
+    if (localCity != null && localCity.areas.isNotEmpty) {
+      final names = localCity.areas
+          .map((a) => a.name.trim())
+          .where((n) => n.isNotEmpty && n != 'Other / Not listed')
+          .take(12)
+          .toList();
+      if (names.isNotEmpty) return names;
+    }
+    return _popularAreaNames;
+  }
+
+  void _showCityPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final cities = kPanIndiaStates.expand((s) => s.cities).toList();
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Select City',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: cities.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final c = cities[i];
+                    final isSelected = c.id == (_selectedCityId ?? 'GJ-VAD');
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      title: Text(
+                        c.name,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected ? _primaryGreen : _textPrimary,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 20)
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _selectedCityId = c.id;
+                          _selectedCityName = c.name;
+                          _selectedArea = null;
+                          _areaSearchController.clear();
+                          _dynamicPopularNames = [];
+                        });
+                        _loadPopularAreas(c.id);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -617,12 +716,22 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 8),
-        ),
-      );
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+      } catch (_) {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null) {
+          position = last;
+        } else {
+          rethrow;
+        }
+      }
 
       final res = await AuthService.instance.reverseGeocodeCoordinates(
         position.latitude,
@@ -634,9 +743,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (res != null && res['live'] == true && res['area'] != null) {
         final areaData = res['area'] as Map<String, dynamic>;
         final cityData = res['city'] as Map<String, dynamic>?;
-        final cityName = cityData?['name'] as String? ?? 'Vadodara';
+        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
         final cityId =
-            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? 'GJ-VAD';
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? 'GJ-VAD';
 
         setState(() {
           _selectedCityName = cityName;
@@ -662,7 +771,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           ),
         );
       } else if (res != null && res['live'] == false) {
-        final detectedCity = res['detected_city'] as String? ?? 'Aapka shehar';
+        final detectedCity = res['detected_city'] as String? ?? _selectedCityName ?? 'Aapka shehar';
         setState(() {
           _selectedArea = null;
         });
@@ -678,15 +787,17 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         );
         if (match.area != null) {
           setState(() {
-            _selectedCityName = 'Vadodara';
+            _selectedCityName = match.city.name;
+            _selectedCityId = match.city.id;
             _selectedArea = match.area;
             _areaSearchController.text = match.area!.name;
             _isAreaSearching = false;
             _livePredictions.clear();
           });
+          _loadPopularAreas(match.city.id);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Detected: ${match.area!.name}, Vadodara'),
+              content: Text('Detected: ${match.area!.name}, ${match.city.name}'),
               backgroundColor: _primaryGreen,
               behavior: SnackBarBehavior.floating,
             ),
@@ -1406,36 +1517,34 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                 top: 0,
                 left: 0,
                 right: 0,
-                height: 290 + topPadding,
+                height: 140 + topPadding,
                 child: _buildCurvedHeaderBackground(),
               ),
               SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 6),
                       _buildHeaderTopBar(),
-                      const SizedBox(height: 16),
-                      _buildHeaderLogoTile(),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       _buildHeaderTitles(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 250),
                         child: _currentStep == 1
                             ? _buildStep1Card()
                             : _buildStep2Card(),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       _currentStep == 1
                           ? _buildStep1ContinueButton(isStep1Valid)
                           : _buildStep2FinishButton(isStep2Valid),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       _buildFooterText(),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -1451,16 +1560,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     return Container(
       decoration: const BoxDecoration(
         color: _darkGreen,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       child: Stack(
         children: [
           Positioned(
-            top: -40,
-            right: -30,
+            top: -30,
+            right: -20,
             child: Container(
-              width: 150,
-              height: 150,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.05),
@@ -1468,26 +1577,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             ),
           ),
           Positioned(
-            bottom: -20,
-            left: -20,
+            bottom: -15,
+            left: -15,
             child: Container(
-              width: 120,
-              height: 120,
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.04),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 70,
-            left: 50,
-            child: Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.03),
               ),
             ),
           ),
@@ -1507,10 +1604,10 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: _handleTopLeftAction,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               child: Container(
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.16),
                   shape: BoxShape.circle,
@@ -1520,85 +1617,63 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                       ? Icons.close_rounded
                       : Icons.arrow_back_rounded,
                   color: Colors.white,
-                  size: 20,
+                  size: 18,
                 ),
               ),
             ),
           ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              alignment: Alignment.center,
+              child: const LogoPin(width: 13, height: 17),
+            ),
+            const SizedBox(width: 7),
+            const Text(
+              'nearhood',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+          ],
         ),
         if (widget.isChangeArea)
           const Text(
             'Change Area',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
           )
         else
-          Row(
-            children: [
-              Text(
-                'Step $_currentStep of 2',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$_currentStep/2',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 24,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                width: 24,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: _currentStep == 2
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
+            ),
           ),
       ],
-    );
-  }
-
-  Widget _buildHeaderLogoTile() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Image.asset(
-            'assets/images/app_icon.png',
-            width: 28,
-            height: 28,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const LogoPin(width: 24, height: 30),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1607,8 +1682,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         ? 'Namaste! Aap kaun?'
         : 'Aapka ghar kahan hai?';
     final subtitle = _currentStep == 1
-        ? 'Apna naam aur username chuniye, taaki padosi aapko pehchaan sakein.'
-        : 'Apne area ke padosi, shops aur posts dekhne ke liye.';
+        ? 'Apna naam aur username chuniye'
+        : 'Apne area ke padosi aur posts dekhne ke liye';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1617,18 +1692,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           title,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 24,
+            fontSize: 19,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.3,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 2),
         Text(
           subtitle,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.88),
-            fontSize: 13.5,
-            height: 1.35,
+            fontSize: 12,
+            height: 1.25,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -1642,37 +1717,37 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       alignment: Alignment.topCenter,
       children: [
         Container(
-          margin: const EdgeInsets.only(top: 42),
+          margin: const EdgeInsets.only(top: 24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(20, 52, 20, 24),
+          padding: const EdgeInsets.fromLTRB(16, 38, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Center(
                 child: Text(
-                  'Photo add karna optional hai',
+                  'Photo optional hai',
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 11.5,
                     color: _textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               _buildFullNameField(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _buildUsernameField(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               _buildUsernameStatusHelper(),
             ],
           ),
@@ -1692,17 +1767,17 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 84,
-            height: 84,
+            width: 68,
+            height: 68,
             decoration: BoxDecoration(
               color: _currentAvatarBgColor,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3.5),
+              border: Border.all(color: Colors.white, width: 3.0),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
@@ -1710,12 +1785,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: _pickedProfileImage != null
                   ? Image.file(
                       _pickedProfileImage!,
-                      width: 84,
-                      height: 84,
+                      width: 68,
+                      height: 68,
                       fit: BoxFit.cover,
                     )
                   : CustomPaint(
-                      size: const Size(84, 84),
+                      size: const Size(68, 68),
                       painter: _DefaultAvatarPainter(
                         color: _currentAvatarAccentColor,
                       ),
@@ -1726,24 +1801,24 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             bottom: 0,
             right: 0,
             child: Container(
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 color: _primaryGreen,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2.2),
+                border: Border.all(color: Colors.white, width: 2.0),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1.5),
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 14,
+                size: 12,
               ),
             ),
           ),
@@ -1763,16 +1838,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           'Full Name',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 13,
+            fontSize: 12.5,
             color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Container(
-          height: 54,
+          height: 48,
           decoration: BoxDecoration(
             color: _screenBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: hasFocus ? _primaryGreen : _borderColor,
               width: hasFocus ? 1.5 : 1.0,
@@ -1781,11 +1856,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: [
               Padding(
-                padding: const EdgeInsets.only(left: 14, right: 10),
+                padding: const EdgeInsets.only(left: 12, right: 8),
                 child: Icon(
                   Icons.person_outline_rounded,
                   color: hasFocus ? _primaryGreen : _textSecondary,
-                  size: 20,
+                  size: 18,
                 ),
               ),
               Expanded(
@@ -1795,30 +1870,30 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
                   style: const TextStyle(
-                    fontSize: 15.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Aapka poora naam (e.g. Rahul Sharma)',
                     hintStyle: TextStyle(
-                      fontSize: 14.5,
+                      fontSize: 13.5,
                       color: _textSecondary.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
               if (isValid)
                 const Padding(
-                  padding: EdgeInsets.only(right: 14),
+                  padding: EdgeInsets.only(right: 12),
                   child: Icon(
                     Icons.check_circle_rounded,
                     color: _primaryGreen,
-                    size: 18,
+                    size: 17,
                   ),
                 ),
             ],
@@ -1850,16 +1925,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           'Username',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 13,
+            fontSize: 12.5,
             color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Container(
-          height: 54,
+          height: 48,
           decoration: BoxDecoration(
             color: (isTaken || isInvalid) ? AppColors.errorSoft : _screenBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: currentBorderColor,
               width: (hasFocus || isAvailable || isTaken || isInvalid) ? 1.5 : 1.0,
@@ -1868,11 +1943,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: [
               const Padding(
-                padding: EdgeInsets.only(left: 14, right: 6),
+                padding: EdgeInsets.only(left: 12, right: 6),
                 child: Text(
                   '@',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.w700,
                     color: _primaryGreen,
                   ),
@@ -1894,20 +1969,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   ],
                   onChanged: _onTextChanged,
                   style: const TextStyle(
-                    fontSize: 15.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
                     hintText: 'username',
                     hintStyle: TextStyle(
-                      fontSize: 14.5,
+                      fontSize: 14,
                       color: _textSecondary.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
@@ -2031,7 +2106,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   Widget _buildStep1ContinueButton(bool isStep1Valid) {
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: 48,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: isStep1Valid
@@ -2040,7 +2115,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
         onPressed: isStep1Valid
@@ -2057,12 +2132,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               'Continue',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 16,
+                fontSize: 15,
                 letterSpacing: 0.2,
               ),
             ),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward_rounded, size: 18),
+            SizedBox(width: 6),
+            Icon(Icons.arrow_forward_rounded, size: 17),
           ],
         ),
       ),
@@ -2071,19 +2146,19 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   Widget _buildStep2Card() {
     return Container(
-      margin: const EdgeInsets.only(top: 24),
+      margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2091,11 +2166,39 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           if (_isAreaSearching &&
               (_livePredictions.isNotEmpty || _isSearchingPlaces))
             _buildAreaSuggestionsList(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _buildCurrentLocationButton(),
-          const SizedBox(height: 18),
+          if (_selectedArea != null)
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _lightGreenTint.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _primaryGreen.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${_selectedArea!.name}, ${_selectedCityName ?? "Vadodara"}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 14),
           _buildPopularChips(),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           _buildAddressNoteField(),
         ],
       ),
@@ -2110,16 +2213,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           'Your area',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 13,
+            fontSize: 12.5,
             color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Container(
-          height: 54,
+          height: 48,
           decoration: BoxDecoration(
             color: _screenBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _primaryGreen,
               width: 1.5,
@@ -2128,11 +2231,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: [
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14),
+                padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Icon(
                   Icons.location_on_outlined,
                   color: _primaryGreen,
-                  size: 20,
+                  size: 19,
                 ),
               ),
               Expanded(
@@ -2141,20 +2244,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   focusNode: _areaFocusNode,
                   onChanged: _onAreaSearchChanged,
                   style: const TextStyle(
-                    fontSize: 15.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Search or choose your area (e.g. Alkapuri)',
                     hintStyle: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13.5,
                       color: _textSecondary.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
@@ -2271,18 +2374,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: _isLocating ? null : _detectCurrentLocation,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: CustomPaint(
           painter: const _DashedBorderPainter(
             color: _primaryGreen,
-            radius: 14,
+            radius: 12,
             strokeWidth: 1.2,
           ),
           child: Container(
-            height: 48,
+            height: 44,
             decoration: BoxDecoration(
               color: _lightGreenTint.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
               child: _isLocating
@@ -2300,7 +2403,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         Icon(
                           Icons.my_location_rounded,
                           color: _primaryGreen,
-                          size: 18,
+                          size: 17,
                         ),
                         SizedBox(width: 8),
                         Text(
@@ -2308,7 +2411,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                           style: TextStyle(
                             color: _primaryGreen,
                             fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                            fontSize: 13.5,
                           ),
                         ),
                       ],
@@ -2321,52 +2424,88 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Widget _buildPopularChips() {
-    final chipsList = _dynamicPopularNames.isNotEmpty
-        ? _dynamicPopularNames
-        : _popularAreaNames;
+    final chipsList = _currentPopularChips;
+    final cityName = _selectedCityName ?? 'Vadodara';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Popular in ${_selectedCityName ?? 'Vadodara'}',
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 13,
-            color: _textPrimary,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Popular in $cityName',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                color: _textPrimary,
+              ),
+            ),
+            InkWell(
+              onTap: _showCityPickerSheet,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cityName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: _primaryGreen,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: chipsList.map((areaName) {
-            final isSelected =
-                _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _selectPopularArea(areaName),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? _primaryGreen : _screenBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected ? null : Border.all(color: _borderColor),
-                  ),
-                  child: Text(
-                    areaName,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : _textPrimary,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13,
+        SizedBox(
+          height: 34,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: chipsList.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final areaName = chipsList[index];
+              final isSelected =
+                  _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _selectPopularArea(areaName),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected ? _primaryGreen : _screenBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: isSelected ? null : Border.all(color: _borderColor),
+                    ),
+                    child: Text(
+                      areaName,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : _textPrimary,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -2382,16 +2521,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           'Society / flat / landmark (Optional)',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 13,
+            fontSize: 12.5,
             color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Container(
-          height: 54,
+          height: 46,
           decoration: BoxDecoration(
             color: _screenBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: hasFocus ? _primaryGreen : _borderColor,
               width: hasFocus ? 1.5 : 1.0,
@@ -2400,11 +2539,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           child: Row(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Icon(
                   Icons.home_outlined,
                   color: hasFocus ? _primaryGreen : _textSecondary,
-                  size: 20,
+                  size: 18,
                 ),
               ),
               Expanded(
@@ -2413,37 +2552,37 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   focusNode: _addressNoteFocusNode,
                   textCapitalization: TextCapitalization.sentences,
                   style: const TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w500,
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'e.g. Tower B, Shivalik Residency, Near Circle',
+                    hintText: 'e.g. Tower B, Near Circle',
                     hintStyle: TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 12.5,
                       color: _textSecondary.withValues(alpha: 0.6),
                       fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         const Row(
           children: [
-            Icon(Icons.lock_outline_rounded, size: 13, color: _textSecondary),
+            Icon(Icons.lock_outline_rounded, size: 12, color: _textSecondary),
             SizedBox(width: 4),
             Expanded(
               child: Text(
                 'Exact address kisi ko nahi dikhega, sirf aapka area.',
                 style: TextStyle(
                   color: _textSecondary,
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -2459,7 +2598,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: 48,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: isStep2Valid
@@ -2468,14 +2607,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
         onPressed: isStep2Valid ? _createHandle : null,
         child: _isSubmitting
             ? const SizedBox(
-                width: 22,
-                height: 22,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2.2,
@@ -2490,12 +2629,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                         : 'Finish & join $areaName',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 16,
+                      fontSize: 15,
                       letterSpacing: 0.2,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(Icons.check_circle_rounded, size: 18),
+                  const Icon(Icons.check_circle_rounded, size: 17),
                 ],
               ),
       ),

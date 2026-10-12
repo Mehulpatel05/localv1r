@@ -266,10 +266,10 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        24,
-        28,
-        24,
-        20 + MediaQuery.paddingOf(context).bottom,
+        20,
+        16,
+        20,
+        16 + MediaQuery.paddingOf(context).bottom,
       ),
       child: AutofillGroup(
         child: Column(
@@ -287,40 +287,45 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                     widget.onChangeNumber();
                   },
                   child: const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      '← Change number',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0E8A3E),
-                      ),
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_back_rounded, size: 15, color: Color(0xFF0E8A3E)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Change number',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0E8A3E),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
             const Text(
-              'Enter the code',
+              'Enter verification code',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
+                letterSpacing: -0.5,
                 color: Color(0xFF0F172A),
-                height: 1.15,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              'Sent to ${_formatPhoneNumber(widget.phone)}',
+              'Code sent to ${_formatPhoneNumber(widget.phone)}',
               style: const TextStyle(
-                fontSize: 14.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w400,
                 color: Color(0xFF64748B),
-                height: 1.45,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             AnimatedBuilder(
               animation: _shakeController,
               builder: (context, child) {
@@ -379,10 +384,10 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                                 ? Duration.zero
                                 : const Duration(milliseconds: 150),
                             curve: Curves.easeOut,
-                            height: 58,
+                            height: 48,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: boxBorderColor,
                                 width: isFocused ? 1.8 : 1.2,
@@ -402,7 +407,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                               ],
                               onChanged: (val) => _onDigitChanged(index, val),
                               style: const TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w700,
                                 color: Color(0xFF0F172A),
                               ),
@@ -422,20 +427,20 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              padding: const EdgeInsets.only(top: 6, bottom: 8),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 20),
+                constraints: const BoxConstraints(minHeight: 16),
                 child: _hasError
                     ? Text(
                         'Incorrect code. Try again.',
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: AppColors.error,
-                          height: 1.3,
+                          height: 1.2,
                         ),
                       )
-                    : const SizedBox(height: 20),
+                    : const SizedBox(height: 10),
               ),
             ),
             Semantics(
@@ -454,7 +459,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                   scale: _isPressed && !disableAnimations ? 0.985 : 1.0,
                   duration: const Duration(milliseconds: 100),
                   child: SizedBox(
-                    height: 54,
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: isButtonEnabled ? _verifyOtp : null,
                       style: ElevatedButton.styleFrom(
@@ -463,16 +468,16 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                         elevation: 0,
                         shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         padding: EdgeInsets.zero,
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                              width: 20,
-                              height: 20,
+                              width: 18,
+                              height: 18,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
+                                strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   Colors.white,
                                 ),
@@ -481,7 +486,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                           : Text(
                               'Verify and continue',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: isButtonEnabled
                                     ? Colors.white
@@ -494,7 +499,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(top: 14),
+              padding: const EdgeInsets.only(top: 10),
               child: Center(
                 child: _secondsRemaining > 0
                     ? Text(
