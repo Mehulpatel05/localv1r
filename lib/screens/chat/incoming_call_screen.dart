@@ -11,6 +11,8 @@ import '../../services/auth_service.dart';
 import '../../services/webrtc_call_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/call_audio_tone_service.dart';
+import '../../theme/app_colors.dart';
+import '../../core/services/name_cache_service.dart';
 import 'call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -97,7 +99,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     super.initState();
     IncomingCallScreen.dismissedCallNotifier.addListener(_onDismissNotifierChanged);
 
-    // ⚡ Section 4.4: Caller avatar pulse (scale 1.0 -> 1.08 -> 1.0, 1000ms loop)
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -107,20 +108,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Connect WebSocket signaling for 0ms termination sync
     _connectSignalingWs();
 
-    // Notify caller that receiver's phone is ringing
     http.post(
       Uri.parse('${AuthService.baseUrl}/calls/${widget.call.callId}/status'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'status': 'ringing'}),
     ).catchError((_) => http.Response('', 500));
 
-    // Start playing incoming ringtone + vibration on receiver's phone
     CallAudioToneService.instance.playIncomingRingtone();
 
-    // Fast polling fallback for D1 call status
     _statusPollingTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) async {
       try {
         final res = await http.get(
@@ -264,8 +261,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const SizedBox(height: 36),
-
-                // Top Details
                 Column(
                   children: [
                     Container(
@@ -298,7 +293,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     ),
                     const SizedBox(height: 22),
                     Text(
-                      '@$caller',
+                      getDisplayName(caller),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 30,
@@ -317,8 +312,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     ),
                   ],
                 ),
-
-                // Pulsing Avatar
                 ScaleTransition(
                   scale: _pulseAnimation,
                   child: Stack(
@@ -329,7 +322,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                         height: 170,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: (isVideo ? const Color(0xFF3B82F6) : const Color(0xFF22C55E))
+                          color: (isVideo ? const Color(0xFF3B82F6) : AppColors.primary)
                               .withValues(alpha: 0.12),
                         ),
                       ),
@@ -338,7 +331,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                         height: 146,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: (isVideo ? const Color(0xFF3B82F6) : const Color(0xFF22C55E))
+                          color: (isVideo ? const Color(0xFF3B82F6) : AppColors.primary)
                               .withValues(alpha: 0.2),
                         ),
                       ),
@@ -350,14 +343,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     ],
                   ),
                 ),
-
-                // Bottom Call Action Buttons
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      // Decline Button
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -373,11 +363,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                 width: 76,
                                 height: 76,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEF4444),
+                                  color: AppColors.error,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFEF4444).withValues(alpha: 0.45),
+                                      color: AppColors.error.withValues(alpha: 0.45),
                                       blurRadius: 20,
                                       offset: const Offset(0, 6),
                                     ),
@@ -402,8 +392,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                           ),
                         ],
                       ),
-
-                      // Accept Button
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -419,11 +407,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                 width: 76,
                                 height: 76,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF22C55E),
+                                  color: AppColors.primary,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF22C55E).withValues(alpha: 0.45),
+                                      color: AppColors.primary.withValues(alpha: 0.45),
                                       blurRadius: 20,
                                       offset: const Offset(0, 6),
                                     ),

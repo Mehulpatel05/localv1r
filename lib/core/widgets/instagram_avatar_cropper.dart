@@ -3,10 +3,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import '../../theme/app_colors.dart';
 
-/// Instagram-Grade Profile Picture "Move and Scale" Interactive Cropper
-/// Allows users to pinch to zoom, drag, and position their photo inside
-/// a circular frame with rule-of-thirds grid lines, exactly like Instagram.
 class InstagramAvatarCropper extends StatefulWidget {
   final File imageFile;
 
@@ -15,7 +13,6 @@ class InstagramAvatarCropper extends StatefulWidget {
     required this.imageFile,
   });
 
-  /// Helper method to open the cropper screen and return the cropped 1080x1080 image file.
   static Future<File?> cropImage(BuildContext context, {required File imageFile}) async {
     return Navigator.of(context).push<File?>(
       MaterialPageRoute(
@@ -52,7 +49,6 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
     setState(() => _isProcessing = true);
 
     try {
-      // Ensure layout is settled
       await Future.delayed(const Duration(milliseconds: 30));
 
       final boundary = _cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
@@ -61,7 +57,6 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
         return;
       }
 
-      // Render crisp, high-performance 512x512 square image (fast encode & upload)
       final double cropWidgetSize = boundary.size.width;
       final double pixelRatio = (512.0 / cropWidgetSize).clamp(1.0, 2.0);
 
@@ -123,18 +118,18 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
             child: TextButton(
               onPressed: (_isProcessing || !_imageLoaded) ? null : _onDone,
               child: _isProcessing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                        color: Color(0xFF3897F0),
+                        color: AppColors.primary,
                         strokeWidth: 2,
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Done',
                       style: TextStyle(
-                        color: Color(0xFF3897F0),
+                        color: AppColors.primary,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
@@ -147,8 +142,6 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
         child: Column(
           children: [
             const Spacer(),
-
-            // Interactive Viewport with Circular Mask & Grid
             Center(
               child: SizedBox(
                 width: cropSize,
@@ -156,7 +149,6 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // 1. The Capturable Image Area (Exact 1:1 square captured by RepaintBoundary)
                     RepaintBoundary(
                       key: _cropKey,
                       child: Container(
@@ -191,16 +183,14 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
                                   ),
                                 ),
                               )
-                            : const Center(
+                            : Center(
                                 child: CircularProgressIndicator(
-                                  color: Color(0xFF3897F0),
+                                  color: AppColors.primary,
                                   strokeWidth: 2,
                                 ),
                               ),
                       ),
                     ),
-
-                    // 2. Instagram Dark Dimming Overlay with Circular Cutout
                     Positioned.fill(
                       child: IgnorePointer(
                         child: CustomPaint(
@@ -215,10 +205,7 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
                 ),
               ),
             ),
-
             const Spacer(),
-
-            // Bottom Instructions & Controls
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
@@ -266,8 +253,6 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
   }
 }
 
-/// Custom painter that draws the Instagram-style outer dimmed mask,
-/// circular white border guide, and 3x3 rule-of-thirds grid inside the circle.
 class _InstagramCropOverlayPainter extends CustomPainter {
   final double cropSize;
   final bool showGrid;
@@ -282,7 +267,6 @@ class _InstagramCropOverlayPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
 
-    // 1. Draw dark mask outside the circle
     final backgroundPath = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final circlePath = Path()
@@ -294,14 +278,12 @@ class _InstagramCropOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawPath(maskPath, maskPaint);
 
-    // 2. Draw white circular border ring
     final borderPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.9)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawCircle(center, radius - 0.75, borderPaint);
 
-    // 3. Draw Rule-of-Thirds Grid inside circle when interacting
     if (showGrid) {
       canvas.save();
       canvas.clipPath(circlePath);
@@ -314,11 +296,9 @@ class _InstagramCropOverlayPainter extends CustomPainter {
       final oneThird = size.width / 3;
       final twoThirds = (size.width / 3) * 2;
 
-      // Vertical grid lines
       canvas.drawLine(Offset(oneThird, 0), Offset(oneThird, size.height), gridPaint);
       canvas.drawLine(Offset(twoThirds, 0), Offset(twoThirds, size.height), gridPaint);
 
-      // Horizontal grid lines
       canvas.drawLine(Offset(0, oneThird), Offset(size.width, oneThird), gridPaint);
       canvas.drawLine(Offset(0, twoThirds), Offset(size.width, twoThirds), gridPaint);
 

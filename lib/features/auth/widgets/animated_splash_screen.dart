@@ -1,18 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../theme/app_colors.dart';
+import '../../../core/constants/app_static_assets.dart';
 
-import 'package:flutter_native_splash/flutter_native_splash.dart';
-
-/// Kinetic Animated Splash Screen for Nearhood replicating the exact
-/// HTML/CSS timeline with hardware-accelerated 60/120 FPS buttery smoothness:
-/// - 0.00s–0.55s: Streets vector background fades in.
-/// - 0.12s–0.78s: Map pin drops from above with squash and rebound bounce.
-/// - 0.65s–1.25s: Perspective elliptical ripple pulse emanates from pin tip.
-/// - 0.70s–1.00s: Three network nodes sequentially pop in with cubic-bezier elastic overshoot.
-/// - 0.75s–1.20s: Inverted triangle stroke path connects the nodes.
-/// - 0.90s–1.35s: Wordmark "nearhood" slides up and fades in.
-/// - 1.05s–1.50s: Tagline "one app. every local need." slides up and fades in.
-/// - 1.60s: Triggers [onAnimationComplete] for soft cross-fade to Main/Login.
 class AnimatedSplashScreen extends StatefulWidget {
   final VoidCallback? onAnimationComplete;
   final bool? isDarkMode;
@@ -31,7 +21,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  // GPU-composited animations (run on compositor thread, not UI thread)
   late final Animation<double> _streetsOpacity;
   late final Animation<double> _pinTranslateY;
   late final Animation<double> _pinScaleX;
@@ -48,13 +37,12 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final Animation<double> _tagOpacity;
   late final Animation<double> _tagOffsetY;
 
-  // Cached text styles to avoid allocations on each frame
   late final TextStyle _wordStyleDark;
   late final TextStyle _wordStyleLight;
   late final TextStyle _tagStyleDark;
   late final TextStyle _tagStyleLight;
 
-  static const int totalDurationMs = 2500; // Cinematic, luxurious, ultra-smooth
+  static const int totalDurationMs = 2500;
 
   @override
   void initState() {
@@ -65,7 +53,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       duration: const Duration(milliseconds: totalDurationMs),
     );
 
-    // Pre-cache GoogleFonts styles once
     _wordStyleDark = GoogleFonts.plusJakartaSans(
       fontSize: 34,
       fontWeight: FontWeight.w800,
@@ -76,7 +63,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _wordStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 34,
       fontWeight: FontWeight.w800,
-      color: Colors.black,
+      color: AppColors.textPrimary,
       letterSpacing: -0.03 * 34,
       height: 1.0,
     );
@@ -89,11 +76,10 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _tagStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 13.5,
       fontWeight: FontWeight.w500,
-      color: Colors.black.withValues(alpha: 0.70),
+      color: AppColors.textMuted,
       letterSpacing: 0,
     );
 
-    // 1. Streets Fade: 0.0s to 0.75s — easeOutQuart
     _streetsOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -102,14 +88,12 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     );
 
-    // 2. Drop sequence: 0.15s to 1.10s
     const dropInterval = Interval(
       150 / totalDurationMs,
       1100 / totalDurationMs,
       curve: Curves.linear,
     );
 
-    // Drop TranslateY
     _pinTranslateY = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: -220.0, end: 0.0)
@@ -132,7 +116,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     ]).animate(CurvedAnimation(parent: _controller, curve: dropInterval));
 
-    // Drop ScaleX
     _pinScaleX = TweenSequence<double>([
       TweenSequenceItem(
         tween: ConstantTween<double>(1.0),
@@ -155,7 +138,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     ]).animate(CurvedAnimation(parent: _controller, curve: dropInterval));
 
-    // Drop ScaleY
     _pinScaleY = TweenSequence<double>([
       TweenSequenceItem(
         tween: ConstantTween<double>(1.0),
@@ -178,7 +160,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     ]).animate(CurvedAnimation(parent: _controller, curve: dropInterval));
 
-    // Drop Opacity
     _pinOpacity = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.0)
@@ -191,7 +172,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     ]).animate(CurvedAnimation(parent: _controller, curve: dropInterval));
 
-    // 3. Tip Ripple Pulse: 0.85s to 1.65s
     const rippleInterval = Interval(
       850 / totalDurationMs,
       1650 / totalDurationMs,
@@ -204,7 +184,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       CurvedAnimation(parent: _controller, curve: rippleInterval),
     );
 
-    // 4. Three Nodes Pop — elastic overshoot
     const popCurve = Cubic(0.2, 0.9, 0.3, 1.45);
     _node1Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -228,7 +207,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     );
 
-    // 5. Triangle path draw: 1.05s to 1.65s
     _triangleProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -237,7 +215,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       ),
     );
 
-    // 6. Wordmark: 1.25s to 1.85s
     const wordCurve = Interval(
       1250 / totalDurationMs,
       1850 / totalDurationMs,
@@ -250,7 +227,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       CurvedAnimation(parent: _controller, curve: wordCurve),
     );
 
-    // 7. Tagline: 1.45s to 2.05s
     const tagCurve = Interval(
       1450 / totalDurationMs,
       2050 / totalDurationMs,
@@ -269,9 +245,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       }
     });
 
-    // Remove native splash and start kinetic animation on very first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      FlutterNativeSplash.remove();
       if (mounted) _controller.forward();
     });
   }
@@ -292,8 +266,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
 
     final isDark = widget.isDarkMode ??
         (Theme.of(context).brightness == Brightness.dark);
-    final sbg = isDark ? Colors.black : Colors.white;
-    final sfg = isDark ? Colors.white : Colors.black;
+    final sbg = isDark ? Colors.black : AppColors.background;
+    final sfg = isDark ? Colors.white : AppColors.primary;
     final wordStyle = isDark ? _wordStyleDark : _wordStyleLight;
     final tagStyle = isDark ? _tagStyleDark : _tagStyleLight;
 
@@ -302,7 +276,17 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Street Map Background — FadeTransition runs on compositor (GPU) thread
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _streetsOpacity,
+              child: Image.network(
+                AppStaticAssets.splashBackground,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
           RepaintBoundary(
             child: FadeTransition(
               opacity: _streetsOpacity,
@@ -313,8 +297,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
               ),
             ),
           ),
-
-          // 2. Center Branding
           RepaintBoundary(
             child: Center(
               child: Transform.translate(
@@ -322,7 +304,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Pin Mark Wrap
                     SizedBox(
                       width: 86,
                       height: 108,
@@ -330,7 +311,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                         clipBehavior: Clip.none,
                         alignment: Alignment.bottomCenter,
                         children: [
-                          // Ripple Ring — clipped to save GPU overdraw when invisible
                           AnimatedBuilder(
                             animation: _rippleOpacity,
                             builder: (context, child) {
@@ -359,8 +339,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                               ),
                             ),
                           ),
-
-                          // Map Pin — all transforms batched in single AnimatedBuilder
                           AnimatedBuilder(
                             animation: _controller,
                             builder: (context, child) {
@@ -383,23 +361,20 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                               painter: _SplashPinPainter(
                                 pinColor: sfg,
                                 innerColor: sbg,
-                                node1Scale: 0, // driven by AnimatedBuilder below
+                                node1Scale: 0,
                                 node2Scale: 0,
                                 node3Scale: 0,
                                 triangleProgress: 0,
                               ),
                             ),
                           ),
-
-                          // Nodes & Triangle — separate AnimatedBuilder so pin drop
-                          // doesn't force nodes to re-layout unnecessarily
                           AnimatedBuilder(
                             animation: _controller,
                             builder: (context, _) {
                               return CustomPaint(
                                 size: const Size(86, 108),
                                 painter: _SplashPinPainter(
-                                  pinColor: Colors.transparent, // pin drawn above
+                                  pinColor: Colors.transparent,
                                   innerColor: sbg,
                                   node1Scale: _node1Scale.value,
                                   node2Scale: _node2Scale.value,
@@ -412,10 +387,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 20),
-
-                    // Wordmark — FadeTransition + SlideTransition are GPU-composited
                     FadeTransition(
                       opacity: _wordOpacity,
                       child: AnimatedBuilder(
@@ -427,10 +399,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                         child: Text('nearhood', style: wordStyle),
                       ),
                     ),
-
                     const SizedBox(height: 6),
-
-                    // Tagline — same pattern
                     FadeTransition(
                       opacity: _tagOpacity,
                       child: AnimatedBuilder(
@@ -453,8 +422,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   }
 }
 
-/// CustomPainter rendering the exact streets SVG paths from HTML
-/// (viewBox="0 0 330 620" preserveAspectRatio="xMidYMid slice")
 class _SplashStreetsPainter extends CustomPainter {
   final Color strokeColor;
 
@@ -462,7 +429,6 @@ class _SplashStreetsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // PreserveAspect slice over 330x620
     final scale = (size.width / 330.0 > size.height / 620.0)
         ? size.width / 330.0
         : size.height / 620.0;
@@ -487,41 +453,35 @@ class _SplashStreetsPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..isAntiAlias = true;
 
-    // Curved thick road 1: M-20 130 C70 100 130 190 210 160 S320 100 360 130
     final p1 = Path()
       ..moveTo(-20, 130)
       ..cubicTo(70, 100, 130, 190, 210, 160)
       ..cubicTo(290, 130, 320, 100, 360, 130);
     canvas.drawPath(p1, thickPaint);
 
-    // Curved thick road 2: M-20 430 C50 400 120 460 200 420 S300 380 360 440
     final p2 = Path()
       ..moveTo(-20, 430)
       ..cubicTo(50, 400, 120, 460, 200, 420)
       ..cubicTo(280, 380, 300, 380, 360, 440);
     canvas.drawPath(p2, thickPaint);
 
-    // Curved thick road 3: M60 -20 C80 150 50 330 100 470 S130 600 120 650
     final p3 = Path()
       ..moveTo(60, -20)
       ..cubicTo(80, 150, 50, 330, 100, 470)
       ..cubicTo(150, 610, 130, 600, 120, 650);
     canvas.drawPath(p3, thickPaint);
 
-    // Curved thick road 4: M260 -20 C240 140 290 300 260 450 S280 600 290 650
     final p4 = Path()
       ..moveTo(260, -20)
       ..cubicTo(240, 140, 290, 300, 260, 450)
       ..cubicTo(230, 600, 280, 600, 290, 650);
     canvas.drawPath(p4, thickPaint);
 
-    // Thin straight road 1: M-20 290 L360 270
     final t1 = Path()
       ..moveTo(-20, 290)
       ..lineTo(360, 270);
     canvas.drawPath(t1, thinPaint);
 
-    // Thin straight road 2: M170 -20 L185 650
     final t2 = Path()
       ..moveTo(170, -20)
       ..lineTo(185, 650);
@@ -535,8 +495,6 @@ class _SplashStreetsPainter extends CustomPainter {
       oldDelegate.strokeColor != strokeColor;
 }
 
-/// CustomPainter rendering the pin silhouette, popping nodes, and
-/// progressively drawn connecting triangle stroke.
 class _SplashPinPainter extends CustomPainter {
   final Color pinColor;
   final Color innerColor;
@@ -556,11 +514,9 @@ class _SplashPinPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Canonical SVG viewBox: 0 0 40 50
     final sx = size.width / 40.0;
     final sy = size.height / 50.0;
 
-    // 1. Draw Map Pin Body: M20 1 C9.5 1 1 9.3 1 19.5 C1 33 20 49 20 49 s19 -16 19 -29.5 C39 9.3 30.5 1 20 1 Z
     final pinPaint = Paint()
       ..color = pinColor
       ..style = PaintingStyle.fill
@@ -576,7 +532,6 @@ class _SplashPinPainter extends CustomPainter {
 
     canvas.drawPath(pinPath, pinPaint);
 
-    // 2. Triangle Lines: M13 15 H27 L20 28 Z (drawn with stroke-dashoffset equivalent)
     if (triangleProgress > 0.001) {
       final trianglePath = Path()
         ..moveTo(13.0 * sx, 15.0 * sy)
@@ -603,7 +558,6 @@ class _SplashPinPainter extends CustomPainter {
       }
     }
 
-    // 3. Three Nodes: (13,15), (27,15), (20,28), r: 3.2
     final nodePaint = Paint()
       ..color = innerColor
       ..style = PaintingStyle.fill
@@ -611,7 +565,6 @@ class _SplashPinPainter extends CustomPainter {
 
     final baseRadius = 3.2 * sx;
 
-    // Node 1 (left)
     if (node1Scale > 0.001) {
       canvas.drawCircle(
         Offset(13.0 * sx, 15.0 * sy),
@@ -620,7 +573,6 @@ class _SplashPinPainter extends CustomPainter {
       );
     }
 
-    // Node 2 (right)
     if (node2Scale > 0.001) {
       canvas.drawCircle(
         Offset(27.0 * sx, 15.0 * sy),
@@ -629,7 +581,6 @@ class _SplashPinPainter extends CustomPainter {
       );
     }
 
-    // Node 3 (bottom)
     if (node3Scale > 0.001) {
       canvas.drawCircle(
         Offset(20.0 * sx, 28.0 * sy),

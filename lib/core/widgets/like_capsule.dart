@@ -4,13 +4,8 @@ import 'package:flutter/services.dart';
 import '../motion.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
+import '../../theme/app_colors.dart';
 
-/// 🚀 Ultra-Fast Interactive Like Capsule Widget
-/// Features:
-/// 1. 0ms instant optimistic UI state & number transition.
-/// 2. Instagram-grade heart pulse pop animation.
-/// 3. Tactile haptic feedback.
-/// 4. Non-blocking background network synchronization.
 class LikeCapsule extends StatefulWidget {
   final Post post;
   final PostRepository repository;
@@ -35,9 +30,9 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
-  // Local optimistic state for 0ms instantaneous UI updates
   bool? _optimisticIsLiked;
   int? _optimisticCount;
+  bool _isToggling = false;
 
   @override
   void initState() {
@@ -55,11 +50,13 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
   @override
   void didUpdateWidget(LikeCapsule oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.post.id != widget.post.id ||
-        oldWidget.post.userVote != widget.post.userVote ||
-        oldWidget.post.upvotes != widget.post.upvotes) {
+    if (oldWidget.post.id != widget.post.id) {
       _optimisticIsLiked = null;
       _optimisticCount = null;
+    } else if (!_isToggling) {
+      final repoVote = widget.repository.getUserVote(widget.post.id);
+      _optimisticIsLiked = (repoVote == 1 || widget.post.userVote == 1);
+      _optimisticCount = widget.post.upvotes > 0 ? widget.post.upvotes : 0;
     }
   }
 
@@ -70,13 +67,16 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
   }
 
   void _handleToggleLike() {
-    final bool currentLiked = _optimisticIsLiked ?? (widget.post.userVote == 1);
+    if (_isToggling) return;
+    _isToggling = true;
+
+    final repoVote = widget.repository.getUserVote(widget.post.id);
+    final bool currentLiked = _optimisticIsLiked ?? (repoVote == 1 || widget.post.userVote == 1);
     final int currentCount = _optimisticCount ?? (widget.post.upvotes > 0 ? widget.post.upvotes : 0);
 
     final bool newLiked = !currentLiked;
     final int newCount = (currentCount + (newLiked ? 1 : -1)).clamp(0, 9999999);
 
-    // ⚡ 0ms Tactile & Visual Reaction
     HapticFeedback.lightImpact();
 
     if (newLiked) {
@@ -91,13 +91,11 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
     widget.onLikeSuccess?.call();
     widget.onVoteSuccess?.call();
 
-    // Fire background non-blocking server call
     unawaited(() async {
       try {
         await widget.repository.votePost(widget.post.id, 1);
       } catch (e) {
         if (mounted) {
-          // Rollback on genuine network failure
           setState(() {
             _optimisticIsLiked = currentLiked;
             _optimisticCount = currentCount;
@@ -105,7 +103,7 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               behavior: SnackBarBehavior.floating,
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: AppColors.textPrimary,
               content: Text(
                 'Like update failed: ${e.toString().replaceAll("Exception: ", "")}',
                 style: const TextStyle(fontSize: 12, color: Colors.white),
@@ -114,46 +112,38 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
             ),
           );
         }
+      } finally {
+        _isToggling = false;
       }
     }());
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isLiked = _optimisticIsLiked ?? (widget.post.userVote == 1);
+    final repoVote = widget.repository.getUserVote(widget.post.id);
+    final bool isLiked = _optimisticIsLiked ?? (repoVote == 1 || widget.post.userVote == 1);
     final int likeCount = _optimisticCount ?? (widget.post.upvotes > 0 ? widget.post.upvotes : 0);
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final double height = widget.isCompact ? 32 : 36;
     final double iconSize = widget.isCompact ? 16 : 18;
     final double fontSize = widget.isCompact ? 12 : 13;
     final double horizontalPadding = widget.isCompact ? 10 : 12;
 
-    const Color likeRed = Color(0xFFEF4444);
-    final Color unlikedColor = isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E);
-
-    final Color capsuleBg = isDark
-        ? (isLiked ? const Color(0xFF261316) : const Color(0xFF1A1A1A))
-        : (isLiked ? const Color(0xFFFEE2E2) : const Color(0xFFF4F4F4));
-
-    final Color capsuleBorder = isDark
-        ? (isLiked ? const Color(0xFF5A2028) : const Color(0xFF262626))
-        : (isLiked ? const Color(0xFFFECACA) : const Color(0xFFE6E6E6));
-
-    final Color contentColor = isLiked ? likeRed : unlikedColor;
+    final Color capsuleBg = isLiked ? AppColors.primarySoft : AppColors.likeBg;
+    final Color capsuleBorder = isLiked ? AppColors.primarySoft : AppColors.divider;
+    final Color contentColor = isLiked ? AppColors.primaryText : AppColors.textMuted;
 
     return Semantics(
       button: true,
       label: isLiked ? 'Unlike post' : 'Like post',
-      value: '$likeCount likes',
+      value: likeCount == 1 ? '1 like' : '$likeCount likes',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: _handleToggleLike,
           borderRadius: BorderRadius.circular(18),
-          splashColor: likeRed.withValues(alpha: 0.15),
-          highlightColor: likeRed.withValues(alpha: 0.08),
+          splashColor: AppColors.primary.withValues(alpha: 0.12),
+          highlightColor: AppColors.primary.withValues(alpha: 0.06),
           child: AnimatedContainer(
             duration: AppMotion.durationMicro,
             height: height,

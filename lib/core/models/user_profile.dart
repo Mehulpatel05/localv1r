@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show immutable;
 @immutable
 class UserProfile {
   final String handle;
+  final String? displayName;
   final String? phone;
   final String? email;
   final int joinedYear;
@@ -11,6 +12,7 @@ class UserProfile {
 
   const UserProfile({
     required this.handle,
+    this.displayName,
     this.phone,
     this.email,
     required this.joinedYear,
@@ -37,6 +39,7 @@ class UserProfile {
     String fallbackHandle = '',
   }) {
     final handle = (data['handle'] as String?)?.trim() ?? fallbackHandle;
+    final rawName = (data['displayName'] ?? data['name'] ?? data['fullName']) as String?;
     final rawPhone = (data['phone'] ?? data['phoneNumber'] ?? data['mobile'] as String?)?.toString().trim();
     final rawEmail = (data['email'] as String?)?.trim();
     final createdAt = data['createdAt'];
@@ -62,6 +65,7 @@ class UserProfile {
 
     return UserProfile(
       handle: handle,
+      displayName: (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : null,
       phone: (rawPhone == null || rawPhone.isEmpty) ? null : rawPhone,
       email: (rawEmail == null || rawEmail.isEmpty) ? null : rawEmail,
       joinedYear: year,
@@ -71,9 +75,21 @@ class UserProfile {
 
   String get displayHandle => handle.displayHandle;
   String get cleanHandle => handle.cleanHandle;
+  String get effectiveName {
+    if (displayName != null && displayName!.trim().isNotEmpty) {
+      return displayName!.trim();
+    }
+    final clean = cleanHandle;
+    if (clean.isNotEmpty) {
+      return clean[0].toUpperCase() + clean.substring(1);
+    }
+    return '';
+  }
+  bool get hasCustomName => displayName != null && displayName!.trim().isNotEmpty;
 
   UserProfile copyWith({
     String? handle,
+    String? displayName,
     String? phone,
     String? email,
     int? joinedYear,
@@ -81,6 +97,7 @@ class UserProfile {
   }) {
     return UserProfile(
       handle: handle ?? this.handle,
+      displayName: displayName ?? this.displayName,
       phone: phone ?? this.phone,
       email: email ?? this.email,
       joinedYear: joinedYear ?? this.joinedYear,
@@ -90,15 +107,14 @@ class UserProfile {
 }
 
 extension HandleFormattingExt on String {
-  /// Returns handle with exactly ONE leading '@' (e.g. '@skyking')
   String get displayHandle {
     final trimmed = trim();
     if (trimmed.isEmpty) return '';
     final clean = trimmed.replaceAll(RegExp(r'^@+'), '');
-    return clean.isEmpty ? '' : '@$clean';
+    if (clean.isEmpty) return '';
+    return clean[0].toUpperCase() + clean.substring(1);
   }
 
-  /// Returns handle with NO leading '@' (e.g. 'skyking')
   String get cleanHandle {
     return trim().replaceAll(RegExp(r'^@+'), '');
   }

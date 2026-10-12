@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme.dart';
+import '../../../theme/app_colors.dart';
 
-/// A single row inside a [SettingsGroup] card.
-///
-/// Spec: padding 14, gap 14, InkWell press tint = field color (no ripple),
-/// leading 44×44 circle, icon size 20, ink color.
-/// Title 15.5 / w700 / ink. Description 13 / muted / h1.35.
-/// Trailing chevron 18 / muted. Min height 72, min tap 48.
 class SettingsTile extends StatefulWidget {
   const SettingsTile({
     super.key,
@@ -21,8 +15,6 @@ class SettingsTile extends StatefulWidget {
   final String title;
   final String description;
   final VoidCallback onTap;
-
-  /// Custom semantics label. Defaults to "$title, $description, button".
   final String? semanticsLabel;
 
   @override
@@ -34,10 +26,8 @@ class _SettingsTileState extends State<SettingsTile> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
-
-    final bg = _pressed && !disableAnimations ? c.field : Colors.transparent;
+    final bg = _pressed && !disableAnimations ? AppColors.chipBg : Colors.transparent;
 
     return Semantics(
       label: widget.semanticsLabel ??
@@ -63,24 +53,22 @@ class _SettingsTileState extends State<SettingsTile> {
                 padding: const EdgeInsets.all(14),
                 decoration: hasFocus
                     ? BoxDecoration(
-                        border: Border.all(color: c.ink, width: 2),
+                        border: Border.all(color: AppColors.primary, width: 2),
                       )
                     : null,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Leading circle icon
                     Container(
                       width: 44,
                       height: 44,
-                      decoration: BoxDecoration(
-                        color: c.field,
+                      decoration: const BoxDecoration(
+                        color: AppColors.chipBg,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(widget.icon, size: 20, color: c.ink),
+                      child: Icon(widget.icon, size: 20, color: AppColors.textPrimary),
                     ),
                     const SizedBox(width: 14),
-                    // Text column — Expanded so it wraps on small screens
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,19 +76,19 @@ class _SettingsTileState extends State<SettingsTile> {
                         children: [
                           Text(
                             widget.title,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15.5,
                               fontWeight: FontWeight.w700,
-                              color: c.ink,
+                              color: AppColors.textPrimary,
                               height: 1.3,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             widget.description,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 13,
-                              color: c.muted,
+                              color: AppColors.textMuted,
                               height: 1.35,
                             ),
                           ),
@@ -108,8 +96,7 @@ class _SettingsTileState extends State<SettingsTile> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Trailing chevron
-                    Icon(Icons.chevron_right, size: 18, color: c.muted),
+                    const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
                   ],
                 ),
               ),

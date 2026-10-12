@@ -1,8 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../motion.dart';
 
-/// Lightweight press feedback widget that scales to 0.97 on press-down
-/// and returns to 1.0 on release or cancel, acknowledging touch within 1 frame.
 class PressableScale extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;

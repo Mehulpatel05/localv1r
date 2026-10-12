@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
@@ -11,14 +12,20 @@ import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/personal_chat_screen.dart';
 import '../screens/detail/post_detail_screen.dart';
 import '../screens/friends/friends_screen.dart';
+import '../screens/friends/friend_requests_screen.dart';
 import '../services/auth_service.dart';
 import '../services/friend_repository.dart';
 import '../services/post_repository.dart';
-import '../core/location/location_service.dart';
 import '../core/widgets/in_app_notification_banner.dart';
 import '../models/call_model.dart';
+import '../models/post_model.dart';
 import '../screens/chat/incoming_call_screen.dart';
-import '../screens/profile/other_user_profile_sheet.dart';
+import '../screens/profile/widgets/support_request_sheet.dart';
+import '../screens/notifications/notifications_screen.dart';
+import '../screens/profile/profile_screen.dart';
+import '../core/services/name_cache_service.dart';
+import '../screens/rewards/rewards_hub_screen.dart';
+import '../core/splash_controller.dart';
 import 'chat_preferences_service.dart';
 
 /// Top-level background message handler (must be top-level function)
@@ -27,7 +34,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('BG message received: ${message.notification?.title} | data: ${message.data}');
   final type = message.data['type']?.toString();
 
-  // Handle call cancellation / end signals silently
   if (type == 'call_cancelled' || type == 'call_ended') {
     final callId = message.data['callId']?.toString();
     if (callId != null && callId.isNotEmpty) {
@@ -37,11 +43,47 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  // NOTE: Android OS automatically shows the system tray notification from the
-  // FCM message's "notification" field when the app is in background/killed.
-  // We do NOT call localNotifs.show() here to avoid duplicate notifications.
-  // The OS-rendered notification is sufficient and correct.
-  debugPrint('BG FCM notification auto-handled by Android OS: $type');
+  if (message.notification == null && type != 'call') {
+    final rawTitle = (message.data['title'] as String?)?.trim() ?? '';
+    final rawBody = (message.data['body'] as String?)?.trim() ?? '';
+    final title = rawTitle.isNotEmpty ? rawTitle : 'Nearhood';
+    final body = rawBody.isNotEmpty
+        ? rawBody
+        : (type == 'chat' || type == 'message'
+            ? 'Sent you a message'
+            : (type == 'post_comment'
+                ? 'Commented on your post'
+                : (type == 'post_like'
+                    ? 'Liked your post'
+                    : (type == 'friend_request'
+                        ? 'Sent you a friend request'
+                        : (type == 'friend_accept' || type == 'friend_accepted'
+                            ? 'Accepted your friend request'
+                            : (type == 'post_upload'
+                                ? 'Your post is now live in Nearhood!'
+                                : 'You have a new notification'))))));
+    final localNotifs = FlutterLocalNotificationsPlugin();
+    const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
+    await localNotifs.initialize(settings: const InitializationSettings(android: androidInit));
+    await localNotifs.show(
+      id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          NotificationService.channel.id,
+          NotificationService.channel.name,
+          channelDescription: NotificationService.channel.description,
+          importance: Importance.max,
+          priority: Priority.max,
+          icon: '@drawable/ic_notification',
+        ),
+      ),
+      payload: jsonEncode(message.data),
+    );
+  }
+
+  debugPrint('BG FCM notification handled: $type');
 }
 
 class NotificationService {
@@ -54,6 +96,13 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   Timer? _pollingTimer;
+
+  /// Guards against a second initialize() registering duplicate FCM stream
+  /// listeners. main.dart calls initialize() from two places (cold-start
+  /// bootstrap and the onLoggedIn callback); without this guard a re-login in
+  /// the same process would attach onMessage/onMessageOpenedApp twice and every
+  /// notification tap would push the destination screen twice.
+  bool _initialized = false;
 
   /// Currently open chat partner handle (to suppress heads-up notification while chatting)
   String? activeChatPartnerHandle;
@@ -92,8 +141,7 @@ class NotificationService {
     return unreadBadgeNotifier.value;
   }
 
-  // Android notification channel for general messages & posts
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  static const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'nearhood_channel',
     'Nearhood Notifications',
     description: 'Notifications for friend requests, messages, posts, and communities',
@@ -102,6 +150,7 @@ class NotificationService {
     enableVibration: true,
     showBadge: true,
   );
+  static const AndroidNotificationChannel _channel = channel;
 
   // Dedicated high-priority Call channel for Voice & Video calls
   static const AndroidNotificationChannel _callChannel = AndroidNotificationChannel(
@@ -118,65 +167,101 @@ class NotificationService {
   /// Initialize the notification service. Call once at app start.
   Future<void> initialize() async {
     try {
-      // 1. Request FCM permission
-      final settings = await _fcm.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-      debugPrint('Notification permission: ${settings.authorizationStatus}');
+      // ── One-time setup: permissions, channels and stream listeners ──
+      // Re-running these would attach a second onMessage/onMessageOpenedApp
+      // listener and every tap would navigate twice.
+      if (!_initialized) {
+        // 0. Read the launch message FIRST.
+        //    When the app was terminated and the user taps a notification,
+        //    Android starts MainActivity with the FCM payload attached and this
+        //    is the only way to recover it. It must be read before
+        //    requestPermission() below, because on a fresh install that call
+        //    blocks on the OS permission dialog — if the user leaves the dialog
+        //    sitting there, the tap that launched the app would never be handled.
+        final initialMessage = await _fcm.getInitialMessage();
 
-      // 2. Initialize local notifications
-      const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
-      await _localNotifications.initialize(
-        settings: const InitializationSettings(android: androidInit),
-        onDidReceiveNotificationResponse: _onNotificationTapped,
-      );
+        // 1. Request FCM permission
+        final settings = await _fcm.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
+        debugPrint('Notification permission: ${settings.authorizationStatus}');
 
-      // 3. Request Android 13+ runtime notification permission & create channels
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.requestNotificationsPermission();
-      await androidPlugin?.createNotificationChannel(_channel);
-      await androidPlugin?.createNotificationChannel(_callChannel);
+        // 2. Initialize local notifications
+        const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
+        await _localNotifications.initialize(
+          settings: const InitializationSettings(android: androidInit),
+          onDidReceiveNotificationResponse: _onNotificationTapped,
+        );
 
-      // 4. Set foreground notification presentation
-      await _fcm.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+        final localLaunchDetails = await _localNotifications.getNotificationAppLaunchDetails();
 
-      // 5. Listen for foreground FCM messages
-      FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+        // 3. Request Android 13+ runtime notification permission & create channels
+        final androidPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        await androidPlugin?.requestNotificationsPermission();
+        await androidPlugin?.createNotificationChannel(_channel);
+        await androidPlugin?.createNotificationChannel(_callChannel);
 
-      // 6. Listen for notification taps when app is in background
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+        // 4. Set foreground notification presentation options.
+        //    alert: FALSE — prevents FCM from auto-showing a system-tray banner
+        //    in the foreground. We show our own in-app banner via onMessage listener.
+        //    (On iOS alert:true would show a system notification AND our local one → duplicates)
+        await _fcm.setForegroundNotificationPresentationOptions(
+          alert: false,
+          badge: true,
+          sound: false,
+        );
 
-      // 7. Check if app was opened from a terminated-state notification
-      final initialMessage = await _fcm.getInitialMessage();
-      if (initialMessage != null) {
-        _handleNotificationTap(initialMessage);
+        // 5. Listen for foreground FCM messages
+        FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+
+        // 6. Listen for notification taps while the app is in the background
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
+        // 7. Keep the backend's copy of the token current
+        _fcm.onTokenRefresh.listen((newToken) {
+          debugPrint('[NotificationService] Refreshed FCM Token: $newToken');
+          _syncFcmToken(newToken);
+        });
+
+        _initialized = true;
+
+        if (initialMessage != null) {
+          debugPrint('[NotificationService] Cold-start launch message: ${initialMessage.data}');
+          _handleNotificationTap(initialMessage);
+        } else if (localLaunchDetails?.didNotificationLaunchApp ?? false) {
+          final payload = localLaunchDetails?.notificationResponse?.payload;
+          if (payload != null && payload.isNotEmpty) {
+            try {
+              final raw = jsonDecode(payload) as Map<String, dynamic>;
+              final normalized = _normalizePayload(raw);
+              _navigateWhenReady(normalized);
+            } catch (e) {
+              debugPrint('[NotificationService] Error parsing launch payload: $e');
+            }
+          }
+        }
       }
 
-      // 8. Retrieve and sync device FCM Token to backend for push notifications
+      // ── Per-call: bind the *current* user ──
+      // This must run on every initialize(), including the second call made
+      // after a fresh login, otherwise that user's device token is never
+      // registered and they receive no pushes at all.
       try {
         final fcmToken = await _fcm.getToken();
         if (fcmToken != null && fcmToken.isNotEmpty) {
           debugPrint('[NotificationService] Registered FCM Token: $fcmToken');
           _syncFcmToken(fcmToken);
         }
-
-        _fcm.onTokenRefresh.listen((newToken) {
-          debugPrint('[NotificationService] Refreshed FCM Token: $newToken');
-          _syncFcmToken(newToken);
-        });
       } catch (e) {
         debugPrint('[NotificationService] Error retrieving FCM token: $e');
       }
 
-      // 9. Start listening to realtime notifications for logged in user
+      // Start polling realtime notifications for the logged-in user.
+      // startListening() cancels any previous timer, so this is safe to repeat.
       final currentHandle = await AuthService.instance.getUserHandle();
       if (currentHandle != null && currentHandle.isNotEmpty) {
         startListening(currentHandle);
@@ -186,51 +271,60 @@ class NotificationService {
     }
   }
 
-  /// Sync FCM device token to backend for push notifications when app is closed
   Future<void> _syncFcmToken(String fcmToken) async {
     try {
       final currentHandle = await AuthService.instance.getUserHandle();
       final cleanHandle = currentHandle?.replaceAll('@', '').trim();
       if (cleanHandle == null || cleanHandle.isEmpty || cleanHandle == 'Guest') return;
 
-      final token = await AuthService.instance.getAccessToken();
+      var token = await AuthService.instance.getAccessToken();
+      if (token == null || token.isEmpty) {
+        token = await AuthService.instance.refreshToken();
+      }
+      if (token == null || token.isEmpty) return;
+
       final uri = Uri.parse('${AuthService.baseUrl}/users/fcm-token');
       await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
           'handle': cleanHandle,
           'fcm_token': fcmToken,
         }),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('[NotificationService] _syncFcmToken error: $e');
     }
   }
 
-  /// Public helper to register FCM token whenever a user session is active
   Future<void> syncFcmTokenForUser(String userHandle) async {
     try {
       final fcmToken = await _fcm.getToken();
       if (fcmToken != null && fcmToken.isNotEmpty) {
         final cleanHandle = userHandle.replaceAll('@', '').trim();
         if (cleanHandle.isEmpty || cleanHandle == 'Guest') return;
-        final token = await AuthService.instance.getAccessToken();
+
+        var token = await AuthService.instance.getAccessToken();
+        if (token == null || token.isEmpty) {
+          token = await AuthService.instance.refreshToken();
+        }
+        if (token == null || token.isEmpty) return;
+
         final uri = Uri.parse('${AuthService.baseUrl}/users/fcm-token');
         await http.post(
           uri,
           headers: {
             'Content-Type': 'application/json',
-            if (token != null) 'Authorization': 'Bearer $token',
+            'Authorization': 'Bearer $token',
           },
           body: jsonEncode({
             'handle': cleanHandle,
             'fcm_token': fcmToken,
           }),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(seconds: 10));
       }
     } catch (e) {
       debugPrint('[NotificationService] syncFcmTokenForUser error: $e');
@@ -252,16 +346,29 @@ class NotificationService {
     return true;
   }
 
+  // Tracks IDs of notifications already shown — prevents duplicates between
+  // FCM foreground handler and the 3-sec polling loop.
+  // Capped at 500 entries to avoid unbounded memory growth.
   final Set<String> _processedNotificationIds = {};
+
+  void _addProcessed(String id) {
+    if (_processedNotificationIds.length >= 500) {
+      // Remove oldest ~100 entries (Set doesn't have index, so take/skip trick)
+      final toRemove = _processedNotificationIds.take(100).toList();
+      _processedNotificationIds.removeAll(toRemove);
+    }
+    _processedNotificationIds.add(id);
+  }
 
   String _extractNotifId(Map<String, dynamic> notif) {
     final id = notif['id'] ?? notif['_id'] ?? notif['notification_id'] ?? notif['doc_id'];
     if (id != null && id.toString().trim().isNotEmpty) {
       return id.toString().trim();
     }
+    // Fallback: composite key from content + timestamp
     final title = notif['title'] ?? '';
-    final body = notif['body'] ?? '';
-    final time = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'] ?? '';
+    final body  = notif['body']  ?? '';
+    final time  = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'] ?? '';
     return '${title}_${body}_$time';
   }
 
@@ -295,11 +402,13 @@ class NotificationService {
           final notifs = (data['notifications'] as List<dynamic>?) ?? [];
 
           if (isInitialTick) {
+            // Seed the dedup set with all existing notifications on first load
+            // so we don't show old notifications as new on app start
             for (final raw in notifs) {
               final notif = raw as Map<String, dynamic>;
               final docId = _extractNotifId(notif);
               if (docId.isNotEmpty) {
-                _processedNotificationIds.add(docId);
+                _addProcessed(docId);
               }
             }
             isInitialTick = false;
@@ -310,7 +419,7 @@ class NotificationService {
             final notif = raw as Map<String, dynamic>;
             final docId = _extractNotifId(notif);
             if (_processedNotificationIds.contains(docId)) continue;
-            _processedNotificationIds.add(docId);
+            _addProcessed(docId); // ← use capped helper, not raw .add()
 
             final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
             if (isRead) continue;
@@ -322,17 +431,37 @@ class NotificationService {
                   ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
                   : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
             } else if (rawCreated is String) {
-              createdAt = DateTime.tryParse(rawCreated);
+              String str = rawCreated.trim();
+              if (!str.endsWith('Z') && !str.contains('+')) {
+                str = '${str.replaceAll(' ', 'T')}Z';
+              }
+              createdAt = DateTime.tryParse(str)?.toLocal() ?? DateTime.tryParse(rawCreated);
             }
 
             if (createdAt != null && createdAt.isBefore(sessionThreshold)) {
               continue;
             }
 
-            final title = notif['title'] as String? ?? 'Nearhood';
-            final body = notif['body'] as String? ?? '';
             final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
             final type = payloadData['type'] as String? ?? notif['type'] as String?;
+            final rawTitle = (notif['title'] as String?)?.trim() ?? '';
+            final title = rawTitle.isNotEmpty ? rawTitle : 'Nearhood';
+            final rawBody = (notif['body'] as String?)?.trim() ?? '';
+            final body = rawBody.isNotEmpty
+                ? rawBody
+                : (type == 'chat' || type == 'message'
+                    ? 'Sent you a message'
+                    : (type == 'post_comment'
+                        ? 'Commented on your post'
+                        : (type == 'post_like'
+                            ? 'Liked your post'
+                            : (type == 'friend_request'
+                                ? 'Sent you a friend request'
+                                : (type == 'friend_accept' || type == 'friend_accepted'
+                                    ? 'Accepted your friend request'
+                                    : (type == 'post_upload'
+                                        ? 'Your post is now live in Nearhood!'
+                                        : 'You have a new notification'))))));
 
             if (type == 'call_cancelled' || type == 'call_ended') {
               final callId = (payloadData['callId'] ?? notif['callId'])?.toString();
@@ -369,6 +498,17 @@ class NotificationService {
               }
             }
 
+            final isEmergency = type == 'safety_alert' ||
+                payloadData['isEmergency'] == true ||
+                payloadData['isEmergency'] == 'true' ||
+                notif['isEmergency'] == true ||
+                notif['isEmergency'] == 'true';
+
+            if (isEmergency) {
+              HapticFeedback.heavyImpact();
+              SystemSound.play(SystemSoundType.alert);
+            }
+
             final currentContext = navigatorKey.currentContext;
             if (type != 'call' && currentContext != null && currentContext.mounted) {
               final sender = (payloadData['senderHandle'] ?? payloadData['partnerHandle'] as String?)?.replaceAll('@', '').trim();
@@ -377,7 +517,8 @@ class NotificationService {
                 title: title,
                 body: body,
                 handle: sender,
-                onTap: () => navigateToScreen(payloadData),
+                isEmergency: isEmergency,
+                onTap: () => navigateToScreen(payloadData.isNotEmpty ? payloadData : notif),
               );
             }
 
@@ -397,9 +538,9 @@ class NotificationService {
     unreadBadgeNotifier.value = 0;
   }
 
-  /// Show a local notification when an FCM message arrives in the foreground
   void _showForegroundNotification(RemoteMessage message) {
     final type = message.data['type']?.toString();
+
     if (type == 'call_cancelled' || type == 'call_ended') {
       final callId = message.data['callId']?.toString();
       if (callId != null && callId.isNotEmpty) {
@@ -409,51 +550,182 @@ class NotificationService {
       return;
     }
 
+    final fcmMsgId = message.messageId ?? '';
+    if (fcmMsgId.isNotEmpty) {
+      _addProcessed(fcmMsgId);
+    }
+
     final notification = message.notification;
-    final title = notification?.title ?? (message.data['title'] as String?);
-    final body = notification?.body ?? (message.data['body'] as String?);
+    final rawTitle = (notification?.title ?? (message.data['title'] as String?))?.trim() ?? '';
+    final title = rawTitle.isNotEmpty ? rawTitle : 'Nearhood';
+    final rawBody = (notification?.body ?? (message.data['body'] as String?))?.trim() ?? '';
+    final body = rawBody.isNotEmpty
+        ? rawBody
+        : (type == 'chat' || type == 'message'
+            ? 'Sent you a message'
+            : (type == 'post_comment'
+                ? 'Commented on your post'
+                : (type == 'post_like'
+                    ? 'Liked your post'
+                    : (type == 'friend_request'
+                        ? 'Sent you a friend request'
+                        : (type == 'friend_accept' || type == 'friend_accepted'
+                            ? 'Accepted your friend request'
+                            : (type == 'post_upload'
+                                ? 'Your post is now live in Nearhood!'
+                                : 'You have a new notification'))))));
 
-    if (title == null && body == null) return;
-
-    _localNotifications.show(
-      id: notification?.hashCode ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@drawable/ic_notification',
-          color: const Color(0xFF000000),
+    if (type == 'call') {
+      _localNotifications.show(
+        id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _callChannel.id, _callChannel.name,
+            channelDescription: _callChannel.description,
+            importance: Importance.max,
+            priority: Priority.max,
+            icon: '@drawable/ic_notification',
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.call,
+            audioAttributesUsage: AudioAttributesUsage.voiceCommunication,
+          ),
         ),
-      ),
-      payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
-    );
+        payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
+      );
+      return;
+    }
+
+    final isEmergency = type == 'safety_alert' ||
+        message.data['isEmergency'] == true ||
+        message.data['isEmergency'] == 'true';
+
+    if (isEmergency) {
+      HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.alert);
+    }
+
+    final currentContext = navigatorKey.currentContext;
+    if (currentContext != null && currentContext.mounted) {
+      final sender = (message.data['senderHandle'] ?? message.data['partnerHandle'] as String?)
+          ?.replaceAll('@', '')
+          .trim();
+
+      if ((type == 'chat' || type == 'message') &&
+          sender != null &&
+          sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
+        return;
+      }
+
+      _localNotifications.show(
+        id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            channel.id,
+            channel.name,
+            channelDescription: channel.description,
+            importance: Importance.max,
+            priority: Priority.max,
+            icon: '@drawable/ic_notification',
+          ),
+        ),
+        payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
+      );
+
+      InAppNotificationBanner.show(
+        currentContext,
+        title: title,
+        body: body,
+        handle: sender,
+        isEmergency: isEmergency,
+        onTap: () => navigateToScreen(message.data),
+      );
+    }
   }
 
   /// Called when user taps a notification (foreground local notification)
   void _onNotificationTapped(NotificationResponse response) {
     if (response.payload != null) {
       try {
-        final data = jsonDecode(response.payload!) as Map<String, dynamic>;
-        debugPrint('Notification tapped with data: $data');
-        navigateToScreen(data);
+        final raw = jsonDecode(response.payload!) as Map<String, dynamic>;
+        debugPrint('[NotificationService] Local notification tapped. Raw: $raw');
+        final normalized = _normalizePayload(raw);
+        _navigateWhenReady(normalized);
       } catch (e) {
-        debugPrint('Error parsing notification payload: $e');
+        debugPrint('[NotificationService] Error parsing notification payload: $e');
       }
     }
   }
 
-  /// Called when user taps a notification (background/terminated FCM)
   void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('Notification opened: ${message.data}');
-    navigateToScreen(message.data);
+    debugPrint('[NotificationService] Notification tapped. Raw data: ${message.data}');
+    final normalized = _normalizePayload(message.data);
+    debugPrint('[NotificationService] Normalized payload: $normalized');
+    _navigateWhenReady(normalized);
   }
 
-  /// Get stream of unread social notifications count for badge
+  Map<String, dynamic> _normalizePayload(Map<String, dynamic> raw) {
+    final result = Map<String, dynamic>.from(raw);
+
+    final nestedRaw = raw['data'] ?? raw['payload'] ?? raw['payload_json'];
+    if (nestedRaw is Map<String, dynamic> && nestedRaw.isNotEmpty) {
+      nestedRaw.forEach((k, v) => result.putIfAbsent(k, () => v));
+    } else if (nestedRaw is String && nestedRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(nestedRaw);
+        if (decoded is Map<String, dynamic>) {
+          decoded.forEach((k, v) => result.putIfAbsent(k, () => v));
+        }
+      } catch (_) {}
+    }
+
+    if (result['type'] == null) {
+      final topType = raw['type']?.toString() ??
+          raw['notification_type']?.toString() ??
+          raw['category']?.toString();
+      if (topType != null) result['type'] = topType;
+    }
+
+    return result;
+  }
+
+  void _navigateWhenReady(Map<String, dynamic> data, {int attempts = 0}) async {
+    final navState = navigatorKey.currentState;
+    var userHandle = await AuthService.instance.getUserHandle();
+    if (userHandle == null || userHandle.isEmpty || userHandle == 'Guest') {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        userHandle = prefs.getString('user_handle') ??
+            prefs.getString('current_user_handle') ??
+            prefs.getString('active_user_handle');
+      } catch (_) {}
+    }
+    if (userHandle == null || userHandle.isEmpty || userHandle == 'Guest') {
+      final repoHandle = PostRepository.instance.currentUserHandle;
+      if (repoHandle.isNotEmpty && repoHandle != 'Guest') {
+        userHandle = repoHandle;
+      }
+    }
+
+    final hasUser = userHandle != null && userHandle.isNotEmpty && userHandle != 'Guest';
+    final isFlowReady = SplashController.instance.isMainFlowVisible;
+
+    if (navState != null && hasUser && isFlowReady) {
+      navigateToScreen(data);
+    } else if (attempts < 30) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        _navigateWhenReady(data, attempts: attempts + 1);
+      });
+    } else if (navState != null && hasUser) {
+      navigateToScreen(data);
+    } else {
+      debugPrint('[NotificationService] Navigator not ready after retries, skipping tap navigation.');
+    }
+  }
+
   Stream<int> getUnreadNotificationCount(String handle) async* {
     final clean = handle.replaceAll('@', '').trim();
     if (clean.isEmpty) {
@@ -492,7 +764,6 @@ class NotificationService {
     }
   }
 
-  /// Get stream of total unread chat messages count across all conversations
   Stream<int> getUnreadChatCount(String handle) async* {
     final clean = handle.replaceAll('@', '').trim();
     if (clean.isEmpty) {
@@ -510,7 +781,6 @@ class NotificationService {
             'Accept': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
           },
-
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
@@ -529,37 +799,88 @@ class NotificationService {
     }
   }
 
-  /// Deep linking router
-  Future<void> navigateToScreen(Map<String, dynamic> data) async {
-    final context = navigatorKey.currentContext;
-    if (context == null) return;
+  Future<void> navigateToScreen(Map<String, dynamic> data, {bool fromNotificationCenter = false}) async {
+    final navState = navigatorKey.currentState;
+    if (navState == null) return;
 
-    final type = data['type'] as String?;
-    
-    final currentHandle = await AuthService.instance.getUserHandle() ?? 'Guest';
-    final cleanCurrentHandle = currentHandle.replaceAll('@', '').trim();
+    final type = (data['type'] ?? data['notification_type'] ?? data['category'])?.toString().toLowerCase().trim();
 
-    if (!context.mounted) return;
+    var currentHandle = await AuthService.instance.getUserHandle();
+    if (currentHandle == null || currentHandle.isEmpty || currentHandle == 'Guest') {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        currentHandle = prefs.getString('user_handle') ??
+            prefs.getString('current_user_handle') ??
+            prefs.getString('active_user_handle');
+      } catch (_) {}
+    }
+    if (currentHandle == null || currentHandle.isEmpty || currentHandle == 'Guest') {
+      final repoHandle = PostRepository.instance.currentUserHandle;
+      if (repoHandle.isNotEmpty && repoHandle != 'Guest') {
+        currentHandle = repoHandle;
+      }
+    }
+    final cleanCurrentHandle = (currentHandle ?? 'Guest').replaceAll('@', '').trim();
 
-    // ── 1. Post Interactions ──
+    if (cleanCurrentHandle.isEmpty || cleanCurrentHandle == 'Guest') {
+      debugPrint('[NotificationService] Tap ignored — no signed-in user.');
+      return;
+    }
+
+    final partnerHandle = (data['senderHandle'] ??
+            data['sender_handle'] ??
+            data['partnerHandle'] ??
+            data['partner_handle'] ??
+            data['callerHandle'] ??
+            data['caller_handle'] ??
+            data['authorHandle'] ??
+            data['author_handle'] ??
+            data['sender'] ??
+            data['from'] ??
+            data['handle'] ??
+            data['userHandle'] ??
+            data['user_handle'])
+        ?.toString()
+        .replaceAll('@', '')
+        .trim();
+
+    final postId = (data['postId'] ??
+            data['post_id'] ??
+            data['targetId'] ??
+            data['target_id'] ??
+            data['id'])
+        ?.toString()
+        .trim();
+
+    void goToNotifications() {
+      if (fromNotificationCenter) return;
+      navState.push(
+        MaterialPageRoute<void>(
+          builder: (_) => NotificationsScreen(currentUserHandle: cleanCurrentHandle),
+        ),
+      );
+    }
+
     if (type == 'post' ||
         type == 'new_post' ||
         type == 'post_like' ||
+        type == 'comment_like' ||
         type == 'post_comment' ||
         type == 'post_upload' ||
-        type == 'mention') {
-      final postId = data['postId'] as String?;
+        type == 'mention' ||
+        type == 'like' ||
+        type == 'comment') {
       if (postId != null && postId.isNotEmpty) {
         try {
-          final locService = LocationService();
-          final postRepo = PostRepository(locService);
+          final postRepo = PostRepository.instance;
           postRepo.currentUserHandle = cleanCurrentHandle;
-          final post = postRepo.getPostById(postId);
-          if (post != null && context.mounted) {
-            await Navigator.of(context).push(
+          Post? post = postRepo.getPostById(postId);
+          post ??= await postRepo.fetchPostById(postId);
+          if (post != null) {
+            navState.push(
               MaterialPageRoute<void>(
                 builder: (_) => PostDetailScreen(
-                  post: post,
+                  post: post!,
                   repository: postRepo,
                   currentUserHandle: cleanCurrentHandle,
                 ),
@@ -571,48 +892,21 @@ class NotificationService {
           debugPrint('Error navigating to post detail: $e');
         }
       }
-    }
-    // ── 2. Friend Request ──
-    else if (type == 'friend_request') {
+      goToNotifications();
+    } else if (type == 'friend_request' || type == 'friend_req') {
       final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
-      await Navigator.of(context).push(
+      navState.push(
         MaterialPageRoute<void>(
-          builder: (_) => FriendsScreen(
+          builder: (_) => FriendRequestsScreen(
             repository: friendRepo,
             currentUserHandle: cleanCurrentHandle,
+            initialTab: FriendRequestsTab.requests,
           ),
         ),
       );
-    }
-    // ── 3. Friend Request Accepted ──
-    else if (type == 'friend_accepted') {
-      final senderHandle = (data['senderHandle'] as String?)?.replaceAll('@', '').trim();
-      if (senderHandle != null && senderHandle.isNotEmpty) {
-        final locService = LocationService();
-        final postRepo = PostRepository(locService)..currentUserHandle = cleanCurrentHandle;
-        await showOtherUserProfileSheet(
-          context,
-          partnerHandle: senderHandle,
-          currentUserHandle: cleanCurrentHandle,
-          repository: postRepo,
-        );
-      } else {
-        final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => FriendsScreen(
-              repository: friendRepo,
-              currentUserHandle: cleanCurrentHandle,
-            ),
-          ),
-        );
-      }
-    }
-    // ── 4. Direct / Private Chat ──
-    else if (type == 'chat' || type == 'message') {
-      final partnerHandle = (data['senderHandle'] ?? data['partnerHandle'] ?? data['handle'] as String?)?.replaceAll('@', '').trim();
+    } else if (type == 'friend_accepted' || type == 'friend_accept' || type == 'friend') {
       if (partnerHandle != null && partnerHandle.isNotEmpty) {
-        await Navigator.of(context).push(
+        navState.push(
           MaterialPageRoute<void>(
             builder: (_) => PersonalChatScreen(
               currentUserHandle: cleanCurrentHandle,
@@ -621,7 +915,32 @@ class NotificationService {
           ),
         );
       } else {
-        await Navigator.of(context).push(
+        final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
+        navState.push(
+          MaterialPageRoute<void>(
+            builder: (_) => FriendsScreen(
+              repository: friendRepo,
+              currentUserHandle: cleanCurrentHandle,
+              initialTab: FriendsTab.friends,
+            ),
+          ),
+        );
+      }
+    } else if (type == 'chat' || type == 'message' || type == 'personal_chat' || type == 'direct_chat') {
+      if (partnerHandle != null && partnerHandle.isNotEmpty) {
+        if (activeChatPartnerHandle?.toLowerCase() == partnerHandle.toLowerCase()) {
+          return;
+        }
+        navState.push(
+          MaterialPageRoute<void>(
+            builder: (_) => PersonalChatScreen(
+              currentUserHandle: cleanCurrentHandle,
+              partnerHandle: partnerHandle,
+            ),
+          ),
+        );
+      } else {
+        navState.push(
           MaterialPageRoute<void>(
             builder: (_) => ChatListScreen(
               currentUserHandle: cleanCurrentHandle,
@@ -629,12 +948,16 @@ class NotificationService {
           ),
         );
       }
-    }
-
-    // ── 5. Incoming Call ──
-    else if (type == 'call') {
-      final callId = data['callId'] as String?;
-      final callerHandle = (data['callerHandle'] as String?)?.replaceAll('@', '').trim();
+    } else if (type == 'community_message' || type == 'community' || type == 'group_chat') {
+      navState.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatListScreen(
+            currentUserHandle: cleanCurrentHandle,
+          ),
+        ),
+      );
+    } else if (type == 'call') {
+      final callId = data['callId']?.toString();
       if (callId != null && callId.isNotEmpty) {
         try {
           final res = await http.get(
@@ -645,10 +968,10 @@ class NotificationService {
           if (res.statusCode == 200) {
             final json = jsonDecode(res.body);
             final callData = json['call'] as Map<String, dynamic>?;
-            if (callData != null && context.mounted) {
+            if (callData != null) {
               final call = CallModel.fromJson(callData);
               if (call.status == CallStatus.calling || call.status == CallStatus.ringing) {
-                await Navigator.of(context).push(
+                navState.push(
                   MaterialPageRoute<void>(
                     builder: (_) => IncomingCallScreen(
                       call: call,
@@ -666,22 +989,142 @@ class NotificationService {
         }
       }
 
-      if (callerHandle != null && callerHandle.isNotEmpty && context.mounted) {
-        await Navigator.of(context).push(
+      if (partnerHandle != null && partnerHandle.isNotEmpty) {
+        navState.push(
           MaterialPageRoute<void>(
             builder: (_) => PersonalChatScreen(
               currentUserHandle: cleanCurrentHandle,
-              partnerHandle: callerHandle,
+              partnerHandle: partnerHandle,
             ),
           ),
         );
+      } else {
+        goToNotifications();
+      }
+    } else if (type == 'support' || type == 'ticket' || type == 'support_ticket' || type == 'feedback') {
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        SupportRequestSheet.show(
+          ctx,
+          userHandle: cleanCurrentHandle,
+          initialTab: 1,
+        );
+      } else {
+        goToNotifications();
+      }
+    } else if (type == 'broadcast' || type == 'safety_alert' || type == 'alert') {
+      final broadcastTitle = data['title'] as String? ?? 'Nearhood City Alert';
+      final broadcastBody = data['body'] as String? ?? data['message'] as String? ?? '';
+      final broadcastArea = data['area'] as String? ?? 'All Vadodara';
+      final isEmergency = type == 'safety_alert' || data['isEmergency'] == true || data['isEmergency'] == 'true';
+
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        showDialog<void>(
+          context: ctx,
+          builder: (dialogCtx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: isEmergency ? const Color(0xFF1E0707) : null,
+            title: Row(
+              children: [
+                Icon(
+                  isEmergency ? Icons.warning_amber_rounded : Icons.campaign_rounded,
+                  color: isEmergency ? const Color(0xFFFF5252) : const Color(0xFF2DD4BF),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    broadcastTitle,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isEmergency ? const Color(0xFFFF5252) : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  broadcastBody,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isEmergency ? const Color(0xFFFFCDD2) : null,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isEmergency ? const Color(0xFF451111) : Colors.black12,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Area: $broadcastArea',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isEmergency ? const Color(0xFFFF8A80) : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: Text(
+                  'Dismiss',
+                  style: TextStyle(
+                    color: isEmergency ? const Color(0xFFFF5252) : const Color(0xFF2DD4BF),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        if (!fromNotificationCenter) {
+          goToNotifications();
+        }
+      }
+    } else if (type == 'reward' ||
+        type == 'badge' ||
+        type == 'streak' ||
+        type == 'points' ||
+        type == 'rewards' ||
+        type == 'helpful') {
+      navState.push(
+        MaterialPageRoute<void>(
+          builder: (_) => RewardsHubScreen(currentUserHandle: cleanCurrentHandle),
+        ),
+      );
+    } else if (type == 'founding_approved' ||
+        type == 'founding_rejected' ||
+        type == 'founding' ||
+        type == 'founder') {
+      navState.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProfileScreen(
+            repository: PostRepository.instance,
+            currentUserHandle: cleanCurrentHandle,
+          ),
+        ),
+      );
+    } else {
+      if (!fromNotificationCenter) {
+        goToNotifications();
       }
     }
   }
 
+
   // ── Dispatch & Helper Methods ──
 
-  /// Dispatch an in-app notification via D1 REST API
   Future<void> sendNotification({
     required String targetHandle,
     String? targetUid,
@@ -694,14 +1137,26 @@ class NotificationService {
 
     try {
       final token = await AuthService.instance.getAccessToken();
-      final sender = data['senderHandle'] ?? data['partnerHandle'] ?? '';
+      final sender = (data['senderHandle'] ?? data['partnerHandle'] ?? '').toString();
+      final type = (data['type'] ?? 'general').toString();
+
+      final flatData = <String, String>{
+        'type': type,
+        if (sender.isNotEmpty) 'senderHandle': sender,
+        if (sender.isNotEmpty) 'partnerHandle': sender,
+      };
+      data.forEach((k, v) {
+        if (v != null) flatData[k] = v.toString();
+      });
+      flatData['data'] = jsonEncode(data);
+
       final payload = {
         'target_handle': cleanTarget,
         'title': title,
         'body': body,
-        'type': data['type'] ?? 'general',
+        'type': type,
         'sender_handle': sender,
-        'data': data,
+        'data': flatData,
       };
 
       await http.post(
@@ -711,7 +1166,6 @@ class NotificationService {
           'Accept': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
-
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
@@ -770,7 +1224,7 @@ class NotificationService {
     final notifId = call.callId.hashCode & 0x7FFFFFFF;
     final callerClean = call.callerHandle.replaceAll('@', '').trim();
     final isVideo = call.callType == CallType.video;
-    final title = '@$callerClean';
+    final title = getDisplayName(callerClean);
     final body = 'Incoming ${isVideo ? 'video' : 'voice'} call...';
 
     try {

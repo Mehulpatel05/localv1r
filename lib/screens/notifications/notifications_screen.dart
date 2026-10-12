@@ -2,15 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../../core/theme.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
-import '../../core/models/user_profile.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../theme/app_colors.dart';
+import '../../services/post_repository.dart';
+import '../main/main_screen.dart';
 
-enum NotificationFilter { all, unread, likes, comments, requests, uploads }
+enum NotificationFilter { all, unread, likes, comments, requests, rewards, uploads }
 
 class NotificationsScreen extends StatefulWidget {
   final String currentUserHandle;
@@ -27,7 +29,6 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   NotificationFilter _selectedFilter = NotificationFilter.all;
   final Set<String> _acceptingFriendHandles = {};
-  final Set<String> _animatingOutDocIds = {};
   StreamSubscription<List<Friendship>>? _friendsSub;
   final Set<String> _friendHandles = {};
 
@@ -77,19 +78,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final res = await http.get(
         Uri.parse('${AuthService.baseUrl}/notifications?handle=$cleanHandle'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       ).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['notifications'] as List<dynamic>?) ?? [];
         if (mounted) {
-          setState(() {
-            _notifications = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-            _isLoading = false;
-          });
+          final incoming = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          final bool hasChanged = _notifications.length != incoming.length ||
+              !_areNotificationsEqual(_notifications, incoming);
+          if (hasChanged) {
+            setState(() {
+              _notifications = incoming;
+              _isLoading = false;
+            });
+          } else if (_isLoading) {
+            setState(() => _isLoading = false);
+          }
+          final unreadCount = incoming.where((n) {
+            final payload = (n['data'] as Map<String, dynamic>?) ?? {};
+            final type = payload['type'] as String? ?? n['type'] as String?;
+            if (type == 'chat' || type == 'message') return false;
+            return n['isRead'] != true;
+          }).length;
+          NotificationService.instance.unreadBadgeNotifier.value = unreadCount;
         }
       }
     } catch (_) {
@@ -117,23 +137,69 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return '${dt.day}/${dt.month}';
   }
 
+  bool _areNotificationsEqual(List<Map<String, dynamic>> oldList, List<Map<String, dynamic>> newList) {
+    if (oldList.length != newList.length) return false;
+    for (int i = 0; i < oldList.length; i++) {
+      final a = oldList[i];
+      final b = newList[i];
+      if (a['id'] != b['id'] || a['isRead'] != b['isRead'] || a['status'] != b['status']) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> _deleteNotification(String notifId) async {
     setState(() {
       _notifications.removeWhere((n) => n['id'] == notifId);
     });
+    final unreadCount = _notifications.where((n) {
+      final payload = (n['data'] as Map<String, dynamic>?) ?? {};
+      final type = payload['type'] as String? ?? n['type'] as String?;
+      if (type == 'chat' || type == 'message') return false;
+      return n['isRead'] != true;
+    }).length;
+    NotificationService.instance.unreadBadgeNotifier.value = unreadCount;
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      http.delete(
+        Uri.parse('${AuthService.baseUrl}/notifications/$notifId'),
+        headers: headers,
+      ).catchError((_) => http.Response('', 500));
+    } catch (_) {}
   }
 
   Future<void> _clearReadNotifications(String cleanHandle) async {
     setState(() {
       _notifications.removeWhere((n) => n['isRead'] == true);
     });
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      http.delete(
+        Uri.parse('${AuthService.baseUrl}/notifications/clear-read'),
+        headers: headers,
+      ).catchError((_) => http.Response('', 500));
+    } catch (_) {}
   }
 
   Future<void> _markAllAsRead(String cleanHandle) async {
     try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       await http.post(
         Uri.parse('${AuthService.baseUrl}/notifications/read-all?handle=$cleanHandle'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       );
 
       setState(() {
@@ -141,19 +207,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           n['isRead'] = true;
         }
       });
+      NotificationService.instance.unreadBadgeNotifier.value = 0;
 
       if (mounted) {
-        final c = context.nearhoodColors;
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
           ..showSnackBar(
             SnackBar(
-              content: Text(
+              content: const Text(
                 'All marked as read',
-                style: TextStyle(color: c.btnink, fontWeight: FontWeight.w600, fontSize: 13.5),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
                 textAlign: TextAlign.center,
               ),
-              backgroundColor: c.btn,
+              backgroundColor: AppColors.primary,
               behavior: SnackBarBehavior.floating,
               shape: const StadiumBorder(),
               duration: const Duration(milliseconds: 1600),
@@ -167,35 +233,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _clearAllNotifications(String cleanHandle) async {
-    final c = context.nearhoodColors;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: c.bg,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: c.line),
+          side: BorderSide(color: AppColors.divider),
         ),
         title: Text(
           'Clear all notifications?',
           style: TextStyle(
-            color: c.ink,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
             fontSize: 18,
           ),
         ),
         content: Text(
           'All your activity history will be deleted. This cannot be undone.',
-          style: TextStyle(color: c.muted, fontSize: 14, height: 1.45),
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.45),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: c.muted, fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: c.danger,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               elevation: 0,
@@ -212,6 +277,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     setState(() {
       _notifications.clear();
     });
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      http.delete(
+        Uri.parse('${AuthService.baseUrl}/notifications'),
+        headers: headers,
+      ).catchError((_) => http.Response('', 500));
+    } catch (_) {}
   }
 
   void _onNotificationTapped(Map<String, dynamic> notif) async {
@@ -220,13 +296,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       if (notif['isRead'] == false) {
+        final token = await AuthService.instance.getAccessToken();
+        final headers = <String, String>{'Content-Type': 'application/json'};
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
         http.post(
           Uri.parse('${AuthService.baseUrl}/notifications/$notifId/read?handle=$cleanHandle'),
-          headers: {'Content-Type': 'application/json'},
+          headers: headers,
         ).catchError((_) => http.Response('', 500));
         setState(() {
           notif['isRead'] = true;
         });
+        if (NotificationService.instance.unreadBadgeNotifier.value > 0) {
+          NotificationService.instance.unreadBadgeNotifier.value--;
+        }
       }
     } catch (_) {}
 
@@ -236,20 +320,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!routerData.containsKey('type') && notif['type'] != null) {
         routerData['type'] = notif['type'];
       }
-      await NotificationService().navigateToScreen(routerData);
-    }
-
-    if (mounted) {
-      setState(() {
-        _animatingOutDocIds.add(notifId);
-      });
-
-      await Future.delayed(const Duration(milliseconds: 320));
-
-      setState(() {
-        _notifications.removeWhere((n) => n['id'] == notifId);
-        _animatingOutDocIds.remove(notifId);
-      });
+      await NotificationService().navigateToScreen(routerData, fromNotificationCenter: true);
+      if (mounted) {
+        _loadNotifications(silent: true);
+      }
     }
   }
 
@@ -276,11 +350,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF10B981),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Text(
-              'You and @$cleanSender are now friends!',
+              'You and ${getDisplayName(cleanSender)} are now friends!',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ),
@@ -290,7 +364,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Text('Failed to accept: $e'),
@@ -304,37 +378,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  void _handleBackNavigation() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => MainScreen(
+            repository: PostRepository.instance,
+            currentUserHandle: widget.currentUserHandle,
+          ),
+        ),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-              child: Row(
-                children: [
-                  Semantics(
-                    label: 'Back',
-                    button: true,
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackNavigation();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+                child: Row(
+                  children: [
+                    Semantics(
+                      label: 'Back',
+                      button: true,
+                      child: GestureDetector(
+                        onTap: _handleBackNavigation,
                       child: Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: c.field,
+                          color: AppColors.chipBg,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.arrow_back,
                           size: 19,
-                          color: c.ink,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -347,7 +441,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.03 * 22,
-                        color: c.ink,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -356,15 +450,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: c.field,
+                        color: AppColors.chipBg,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.more_horiz, size: 20, color: c.ink),
+                      child: Icon(Icons.more_horiz, size: 20, color: AppColors.textPrimary),
                     ),
-                    color: c.bg,
+                    color: AppColors.surface,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: c.line),
+                      side: BorderSide(color: AppColors.divider),
                     ),
                     onSelected: (val) {
                       if (val == 'read_all') {
@@ -380,9 +474,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         value: 'read_all',
                         child: Row(
                           children: [
-                            Icon(Icons.done_all_rounded, size: 18, color: c.ink),
+                            Icon(Icons.done_all_rounded, size: 18, color: AppColors.textPrimary),
                             const SizedBox(width: 10),
-                            Text('Mark all as read', style: TextStyle(color: c.ink, fontSize: 14)),
+                            Text('Mark all as read', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
                           ],
                         ),
                       ),
@@ -390,9 +484,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         value: 'clear_read',
                         child: Row(
                           children: [
-                            Icon(Icons.cleaning_services_rounded, size: 18, color: c.ink),
+                            Icon(Icons.cleaning_services_rounded, size: 18, color: AppColors.textPrimary),
                             const SizedBox(width: 10),
-                            Text('Clear read', style: TextStyle(color: c.ink, fontSize: 14)),
+                            Text('Clear read', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
                           ],
                         ),
                       ),
@@ -400,9 +494,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         value: 'clear_all',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded, size: 18, color: c.danger),
+                            Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
                             const SizedBox(width: 10),
-                            Text('Clear all', style: TextStyle(color: c.danger, fontSize: 14)),
+                            Text('Clear all', style: TextStyle(color: AppColors.error, fontSize: 14)),
                           ],
                         ),
                       ),
@@ -411,51 +505,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ],
               ),
             ),
-
-            // Filter Pills
             SizedBox(
               height: 40,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 children: [
-                  _buildFilterChip('All', NotificationFilter.all, c),
-                  _buildFilterChip('Unread', NotificationFilter.unread, c),
-                  _buildFilterChip('Likes', NotificationFilter.likes, c),
-                  _buildFilterChip('Comments', NotificationFilter.comments, c),
-                  _buildFilterChip('Requests', NotificationFilter.requests, c),
-                  _buildFilterChip('Uploads', NotificationFilter.uploads, c),
+                  _buildFilterChip('All', NotificationFilter.all),
+                  _buildFilterChip('Unread', NotificationFilter.unread),
+                  _buildFilterChip('Likes', NotificationFilter.likes),
+                  _buildFilterChip('Comments', NotificationFilter.comments),
+                  _buildFilterChip('Requests', NotificationFilter.requests),
+                  _buildFilterChip('Rewards', NotificationFilter.rewards),
+                  _buildFilterChip('Uploads', NotificationFilter.uploads),
                 ],
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // Notification List
             Expanded(
               child: _isLoading
                   ? Center(
-                      child: CircularProgressIndicator(color: c.ink, strokeWidth: 2.5),
+                      child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
                     )
-                  : _buildNotificationList(c),
+                  : _buildNotificationList(),
             ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildNotificationList(NearhoodColors c) {
+  Widget _buildNotificationList() {
     var items = List<Map<String, dynamic>>.from(_notifications);
 
-    // Exclude regular chat messages
+    final seenFriendRequests = <String>{};
     items = items.where((n) {
       final payload = (n['data'] as Map<String, dynamic>?) ?? {};
       final type = payload['type'] as String? ?? n['type'] as String?;
-      return type != 'chat' && type != 'message';
+      if (type == 'chat' || type == 'message') return false;
+      if (type == 'friend_request') {
+        final sender = (payload['senderHandle'] ?? n['senderHandle'] ?? '').toString().toLowerCase();
+        if (sender.isNotEmpty) {
+          if (seenFriendRequests.contains(sender)) {
+            return false;
+          }
+          seenFriendRequests.add(sender);
+        }
+      }
+      return true;
     }).toList();
 
-    // Filter by category
     if (_selectedFilter != NotificationFilter.all) {
       items = items.where((n) {
         final isRead = n['isRead'] == true;
@@ -465,11 +565,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final payload = (n['data'] as Map<String, dynamic>?) ?? {};
         final type = payload['type'] as String? ?? n['type'] as String?;
         if (_selectedFilter == NotificationFilter.likes) {
-          return type == 'post_like';
+          return type == 'post_like' || type == 'comment_like' || type == 'like';
         } else if (_selectedFilter == NotificationFilter.comments) {
           return type == 'post_comment' || type == 'mention';
         } else if (_selectedFilter == NotificationFilter.requests) {
           return type == 'friend_request' || type == 'friend_accepted';
+        } else if (_selectedFilter == NotificationFilter.rewards) {
+          return type == 'reward' || type == 'badge' || type == 'streak' || type == 'points' || type == 'helpful' || type == 'founding_approved' || type == 'founding_rejected';
         } else if (_selectedFilter == NotificationFilter.uploads) {
           return type == 'post_upload' || type == 'post' || type == 'new_post';
         }
@@ -478,7 +580,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (items.isEmpty) {
-      return _buildEmptyState(c);
+      return _buildEmptyState();
     }
 
     return ListView.separated(
@@ -488,7 +590,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       itemBuilder: (context, index) {
         final notif = items[index];
         final notifId = (notif['id'] ?? index.toString()).toString();
-        final isAnimatingOut = _animatingOutDocIds.contains(notifId);
         final title = notif['title'] as String? ?? 'Nearhood';
         final body = notif['body'] as String? ?? '';
         final isRead = notif['isRead'] == true;
@@ -497,48 +598,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final type = payload['type'] as String? ?? notif['type'] as String?;
         final sender = (payload['senderHandle'] ?? payload['partnerHandle'] ?? notif['senderHandle'] as String?)?.replaceAll('@', '').trim();
 
-        return AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.topCenter,
-          child: isAnimatingOut
-              ? const SizedBox(width: double.infinity, height: 0)
-              : AnimatedOpacity(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  opacity: isAnimatingOut ? 0.0 : 1.0,
-                  child: Dismissible(
-                    key: ValueKey('notif_$notifId'),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      decoration: BoxDecoration(
-                        color: c.danger,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    onDismissed: (_) {
-                      _deleteNotification(notifId);
-                    },
-                    child: _buildNotificationCard(
-                      notif: notif,
-                      notifId: notifId,
-                      title: title,
-                      body: body,
-                      isRead: isRead,
-                      timestamp: timestamp,
-                      type: type,
-                      sender: sender,
-                      c: c,
-                    ),
-                  ),
-                ),
+        return Dismissible(
+          key: ValueKey('notif_$notifId'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            decoration: BoxDecoration(
+              color: AppColors.error,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.delete_outline_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          onDismissed: (_) {
+            _deleteNotification(notifId);
+          },
+          child: _buildNotificationCard(
+            notif: notif,
+            notifId: notifId,
+            title: title,
+            body: body,
+            isRead: isRead,
+            timestamp: timestamp,
+            type: type,
+            sender: sender,
+          ),
         );
       },
     );
@@ -553,7 +641,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     required dynamic timestamp,
     required String? type,
     required String? sender,
-    required NearhoodColors c,
   }) {
     final cleanSender = (sender ?? '').replaceAll('@', '').trim();
     final isFriendRequest = type == 'friend_request';
@@ -569,11 +656,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isRead ? c.bg : c.field,
+          color: isRead ? AppColors.surface : AppColors.primarySoft.withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isRead ? c.line : c.ink.withValues(alpha: 0.16),
-            width: isRead ? 1 : 1.3,
+            color: isRead ? AppColors.divider : AppColors.primary.withValues(alpha: 0.3),
+            width: isRead ? 1 : 1.2,
           ),
         ),
         child: Row(
@@ -589,10 +676,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: c.field,
+                      color: AppColors.chipBg,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(_getTypeIcon(type), size: 22, color: c.ink),
+                    child: Icon(_getTypeIcon(type), size: 22, color: AppColors.textPrimary),
                   ),
                 Positioned(
                   right: -2,
@@ -602,7 +689,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     decoration: BoxDecoration(
                       color: _getTypeColor(type),
                       shape: BoxShape.circle,
-                      border: Border.all(color: c.bg, width: 1.5),
+                      border: Border.all(color: AppColors.surface, width: 1.5),
                     ),
                     child: Icon(
                       _getTypeIcon(type),
@@ -614,7 +701,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
             const SizedBox(width: 14),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -626,23 +712,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     text: TextSpan(
                       style: TextStyle(
                         fontSize: 13.5,
-                        color: c.ink,
+                        color: AppColors.textPrimary,
                         height: 1.35,
                       ),
                       children: [
                         if (sender != null && sender.isNotEmpty)
                           TextSpan(
-                            text: '${sender.displayHandle} ',
+                            text: '${getDisplayName(sender)} ',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: c.ink,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         TextSpan(
                           text: _getFormattedBody(type, body, sender),
                           style: TextStyle(
                             fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
-                            color: isRead ? c.muted : c.ink,
+                            color: isRead ? AppColors.textMuted : AppColors.textPrimary,
                           ),
                         ),
                       ],
@@ -651,34 +737,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const SizedBox(height: 3),
                   Text(
                     _formatTime(timestamp),
-                    style: TextStyle(fontSize: 11.5, color: c.muted),
+                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(width: 8),
-
             if (isFriendRequest && cleanSender.isNotEmpty) ...[
               if (isAlreadyFriend)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: c.field,
+                    color: AppColors.chipBg,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: c.line),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_rounded, size: 14, color: c.muted),
+                      Icon(Icons.check_rounded, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
                         'Friends',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: c.muted,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -687,8 +771,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               else
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: c.btn,
-                    foregroundColor: c.btnink,
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -698,11 +782,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ? null
                       : () => _handleAcceptFriendRequest(cleanSender, notif),
                   child: isAccepting
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 14,
                           height: 14,
                           child: CircularProgressIndicator(
-                            color: c.btnink,
+                            color: Colors.white,
                             strokeWidth: 2,
                           ),
                         )
@@ -717,7 +801,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: c.btn,
+                    color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
                 )
@@ -725,7 +809,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
-                  color: c.muted,
+                  color: AppColors.textMuted,
                 ),
             ],
           ],
@@ -739,48 +823,65 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return 'liked your post.';
     } else if (type == 'post_comment') {
       if (sender != null && sender.isNotEmpty) {
-        final disp = sender.displayHandle;
+        final clean = sender.replaceAll('@', '').trim();
+        final disp = getDisplayName(clean);
         if (body.startsWith('$disp commented: ')) {
           return body.replaceFirst('$disp ', '');
         }
-        if (body.startsWith('@$sender commented: ')) {
-          return body.replaceFirst('@$sender ', '');
+        if (body.startsWith('@$clean commented: ')) {
+          return body.replaceFirst('@$clean ', '');
+        }
+        if (body.startsWith('$clean commented: ')) {
+          return body.replaceFirst('$clean ', '');
         }
       }
-      return body;
+      return body.trim().isNotEmpty ? body : 'commented on your post.';
     } else if (type == 'friend_request') {
       return 'sent you a friend request.';
-    } else if (type == 'friend_accepted') {
+    } else if (type == 'friend_accepted' || type == 'friend_accept') {
       return 'accepted your friend request.';
     } else if (type == 'post_upload') {
       return 'Your post was published successfully.';
     } else if (type == 'mention') {
       return 'mentioned you in a comment.';
+    } else if (type == 'chat' || type == 'message') {
+      return body.trim().isNotEmpty ? body : 'sent you a message.';
     }
-    return body;
+    return body.trim().isNotEmpty ? body : 'New activity on your account.';
   }
 
   Color _getTypeColor(String? type) {
-    if (type == 'post_like') return const Color(0xFFEF4444);
+    if (type == 'post_like') return AppColors.error;
     if (type == 'post_comment') return const Color(0xFF3B82F6);
     if (type == 'friend_request') return const Color(0xFF8B5CF6);
-    if (type == 'friend_accepted') return const Color(0xFF10B981);
-    if (type == 'post_upload') return const Color(0xFF10B981);
+    if (type == 'friend_accepted') return AppColors.primary;
+    if (type == 'post_upload') return AppColors.primary;
     if (type == 'mention') return const Color(0xFFF59E0B);
-    return const Color(0xFF0F172A);
+    if (type == 'founding_approved') return const Color(0xFFD97706);
+    if (type == 'founding_rejected') return AppColors.error;
+    if (type == 'reward' || type == 'badge' || type == 'streak' || type == 'points' || type == 'helpful') {
+      return const Color(0xFFF59E0B);
+    }
+    return AppColors.textPrimary;
   }
 
   IconData _getTypeIcon(String? type) {
-    if (type == 'post_like') return Icons.favorite_rounded;
+    if (type == 'post_like' || type == 'comment_like' || type == 'like') return Icons.favorite_rounded;
     if (type == 'post_comment') return Icons.chat_bubble_rounded;
     if (type == 'friend_request') return Icons.person_add_rounded;
     if (type == 'friend_accepted') return Icons.how_to_reg_rounded;
     if (type == 'post_upload') return Icons.check_circle_rounded;
     if (type == 'mention') return Icons.alternate_email_rounded;
+    if (type == 'founding_approved') return Icons.workspace_premium_rounded;
+    if (type == 'founding_rejected') return Icons.info_outline_rounded;
+    if (type == 'badge') return Icons.emoji_events_rounded;
+    if (type == 'reward' || type == 'streak' || type == 'points' || type == 'helpful') {
+      return Icons.star_rounded;
+    }
     return Icons.notifications_rounded;
   }
 
-  Widget _buildFilterChip(String label, NotificationFilter filter, NearhoodColors c) {
+  Widget _buildFilterChip(String label, NotificationFilter filter) {
     final isSelected = _selectedFilter == filter;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -789,10 +890,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? c.btn : c.field,
+            color: isSelected ? AppColors.primary : AppColors.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? c.btn : c.line,
+              color: isSelected ? AppColors.primary : AppColors.divider,
               width: 1,
             ),
           ),
@@ -802,7 +903,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              color: isSelected ? c.btnink : c.ink,
+              color: isSelected ? Colors.white : AppColors.textPrimary,
             ),
           ),
         ),
@@ -810,7 +911,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _buildEmptyState(NearhoodColors c) {
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -819,20 +920,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: c.field,
+              color: AppColors.chipBg,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.notifications_none_rounded,
               size: 32,
-              color: c.muted,
+              color: AppColors.textMuted,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             'No activity yet',
             style: TextStyle(
-              color: c.ink,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 16.5,
             ),
@@ -842,7 +943,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             "When someone likes or comments on your post, it will show up here.",
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: c.muted,
+              color: AppColors.textMuted,
               fontSize: 13.5,
             ),
           ),

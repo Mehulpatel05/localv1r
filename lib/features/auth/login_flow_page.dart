@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/auth_repository.dart';
 import '../../core/splash_controller.dart';
 import '../../core/location/location_service.dart';
-import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/post_repository.dart';
 import '../../screens/auth/create_handle_screen.dart';
@@ -14,7 +13,6 @@ import 'widgets/phone_step.dart';
 
 enum AuthStep { phone, otp }
 
-/// Production-quality Login Flow matching the exact Nearhood Black & White design.
 class LoginFlowPage extends StatefulWidget {
   final AuthRepository authRepository;
   final PostRepository? postRepository;
@@ -97,83 +95,105 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.nearhoodColors;
     final isOtp = _currentStep == AuthStep.otp;
     final disableAnimations =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: colors.bg,
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            // Top Section (300px for Login, 210px for OTP)
-            AnimatedContainer(
-              duration: disableAnimations
-                  ? Duration.zero
-                  : const Duration(milliseconds: 220),
-              curve: Curves.ease,
-              child: TopSection(
-                key: ValueKey(isOtp),
-                isOtp: isOtp,
-              ),
-            ),
-
-            // Form Area (Scrollable to prevent keyboard overflow)
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: AnimatedSwitcher(
-                  duration: disableAnimations
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.ease,
-                  switchOutCurve: const Threshold(0),
-                  transitionBuilder: (child, animation) {
-                    if (disableAnimations) return child;
-
-                    final isIncoming = child.key == ValueKey(_currentStep);
-                    if (!isIncoming) {
-                      return const SizedBox.shrink();
-                    }
-
-                    // Matching CSS @keyframes in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
-                    return AnimatedBuilder(
-                      animation: animation,
-                      builder: (context, childWidget) {
-                        final progress = Curves.ease.transform(animation.value);
-                        final dx = (1.0 - progress) * 8.0;
-                        return Opacity(
-                          opacity: animation.value.clamp(0.0, 1.0),
-                          child: Transform.translate(
-                            offset: Offset(dx, 0),
-                            child: childWidget,
-                          ),
-                        );
-                      },
-                      child: child,
-                    );
-                  },
-                  child: isOtp
-                      ? OtpStep(
-                          key: const ValueKey(AuthStep.otp),
-                          phone: _phone,
-                          authRepository: widget.authRepository,
-                          onChangeNumber: _onChangeNumber,
-                          onVerified: _onOtpVerified,
-                        )
-                      : PhoneStep(
-                          key: const ValueKey(AuthStep.phone),
-                          authRepository: widget.authRepository,
-                          onPhoneSubmitted: _onPhoneSubmitted,
-                        ),
+    return PopScope(
+      canPop: _currentStep == AuthStep.phone && Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentStep == AuthStep.otp) {
+          setState(() {
+            _currentStep = AuthStep.phone;
+          });
+        }
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: const Color(0xFF096832),
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: disableAnimations
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                curve: Curves.ease,
+                child: TopSection(
+                  key: ValueKey(isOtp),
+                  isOtp: isOtp,
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: AnimatedSwitcher(
+                        duration: disableAnimations
+                            ? Duration.zero
+                            : const Duration(milliseconds: 220),
+                        switchInCurve: Curves.ease,
+                        switchOutCurve: const Threshold(0),
+                        transitionBuilder: (child, animation) {
+                          if (disableAnimations) return child;
+
+                          final isIncoming = child.key == ValueKey(_currentStep);
+                          if (!isIncoming) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return AnimatedBuilder(
+                            animation: animation,
+                            builder: (context, childWidget) {
+                              final progress = Curves.ease.transform(animation.value);
+                              final dx = (1.0 - progress) * 8.0;
+                              return Opacity(
+                                opacity: animation.value.clamp(0.0, 1.0),
+                                child: Transform.translate(
+                                  offset: Offset(dx, 0),
+                                  child: childWidget,
+                                ),
+                              );
+                            },
+                            child: child,
+                          );
+                        },
+                        child: isOtp
+                            ? OtpStep(
+                                key: const ValueKey(AuthStep.otp),
+                                phone: _phone,
+                                authRepository: widget.authRepository,
+                                onChangeNumber: _onChangeNumber,
+                                onVerified: _onOtpVerified,
+                              )
+                            : PhoneStep(
+                                key: const ValueKey(AuthStep.phone),
+                                authRepository: widget.authRepository,
+                                onPhoneSubmitted: _onPhoneSubmitted,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

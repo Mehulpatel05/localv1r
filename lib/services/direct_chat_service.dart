@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_conversation_model.dart';
+import '../core/utils/api_error.dart';
 import 'auth_service.dart';
 
 class DirectChatService {
@@ -51,8 +52,6 @@ class DirectChatService {
     return unreadCountNotifier.value;
   }
 
-  static const String _kDirectMessagesPrefix = 'cache_dm_messages_';
-
   static String _getUserChatsKey(String userHandle) {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     return clean.isNotEmpty ? 'cache_direct_chats_$clean' : 'cache_direct_chats_default';
@@ -78,7 +77,16 @@ class DirectChatService {
         final loaded = list
             .map((item) => ChatConversation.fromJson(item as Map<String, dynamic>))
             .toList();
-        _lastKnownChats = loaded;
+        final seenPartners = <String>{};
+        final deduped = <ChatConversation>[];
+        for (final chat in loaded) {
+          final partner = chat.getPartnerHandle(userHandle).replaceAll('@', '').trim().toLowerCase();
+          if (partner.isNotEmpty && !seenPartners.contains(partner)) {
+            seenPartners.add(partner);
+            deduped.add(chat);
+          }
+        }
+        _lastKnownChats = deduped;
       } else {
         _lastKnownChats = [];
       }
@@ -98,10 +106,17 @@ class DirectChatService {
     }
   }
 
-  Future<void> _loadMessagesFromPrefs(String chatId) async {
+  static String _getUserMessagesKey(String chatId, [String? userHandle]) {
+    final clean = (userHandle ?? '').replaceAll('@', '').trim().toLowerCase();
+    final userPart = clean.isNotEmpty ? '${clean}_' : '';
+    return 'cache_dm_messages_$userPart$chatId';
+  }
+
+  Future<void> _loadMessagesFromPrefs(String chatId, [String? userHandle]) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString('$_kDirectMessagesPrefix$chatId');
+      final key = _getUserMessagesKey(chatId, userHandle);
+      final jsonStr = prefs.getString(key) ?? prefs.getString('cache_dm_messages_$chatId');
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(jsonStr);
         final loaded = list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
@@ -114,11 +129,12 @@ class DirectChatService {
     }
   }
 
-  Future<void> _saveMessagesToPrefs(String chatId, List<Map<String, dynamic>> messages) async {
+  Future<void> _saveMessagesToPrefs(String chatId, List<Map<String, dynamic>> messages, [String? userHandle]) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final toSave = messages.take(40).toList();
-      await prefs.setString('$_kDirectMessagesPrefix$chatId', jsonEncode(toSave));
+      final toSave = messages.take(50).toList();
+      final key = _getUserMessagesKey(chatId, userHandle);
+      await prefs.setString(key, jsonEncode(toSave));
     } catch (e) {
       debugPrint('[DirectChatService] _saveMessagesToPrefs error: $e');
     }
@@ -153,9 +169,18 @@ class DirectChatService {
         final body = jsonDecode(res.body);
         final list = body['chats'] as List<dynamic>? ?? [];
         final parsed = list.map((json) => ChatConversation.fromJson(json as Map<String, dynamic>)).toList();
-        _lastKnownChats = parsed;
-        await _saveChatsToPrefs(clean, parsed);
-        return parsed;
+        final seenPartners = <String>{};
+        final deduped = <ChatConversation>[];
+        for (final chat in parsed) {
+          final partner = chat.getPartnerHandle(clean).replaceAll('@', '').trim().toLowerCase();
+          if (partner.isNotEmpty && !seenPartners.contains(partner)) {
+            seenPartners.add(partner);
+            deduped.add(chat);
+          }
+        }
+        _lastKnownChats = deduped;
+        await _saveChatsToPrefs(clean, deduped);
+        return deduped;
       }
     } catch (e) {
       debugPrint('[DirectChatService] Error getting chats: $e');
@@ -183,7 +208,7 @@ class DirectChatService {
     if (cleanId.isEmpty) return [];
 
     if (!_lastKnownMessages.containsKey(cleanId) || _lastKnownMessages[cleanId]!.isEmpty) {
-      await _loadMessagesFromPrefs(cleanId);
+      await _loadMessagesFromPrefs(cleanId, userHandle);
     }
 
     try {
@@ -207,7 +232,7 @@ class DirectChatService {
         final list = body['messages'] as List<dynamic>? ?? [];
         final parsed = list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
         _lastKnownMessages[cleanId] = parsed;
-        _saveMessagesToPrefs(cleanId, parsed);
+        _saveMessagesToPrefs(cleanId, parsed, userHandle);
         return parsed;
       }
     } catch (e) {
@@ -393,8 +418,11 @@ class DirectChatService {
       if (res.statusCode == 200) {
         return jsonDecode(res.body) as Map<String, dynamic>;
       } else {
-        final body = jsonDecode(res.body);
-        final detail = body['detail'] ?? 'Edit window expired or forbidden';
+        dynamic body;
+        try {
+          body = jsonDecode(res.body);
+        } catch (_) {}
+        final detail = extractApiError(body, 'Edit window expired or forbidden');
         debugPrint('[DirectChatService] Edit message failed: $detail');
         throw Exception(detail);
       }
@@ -429,8 +457,11 @@ class DirectChatService {
       if (res.statusCode == 200) {
         return true;
       } else {
-        final body = jsonDecode(res.body);
-        final detail = body['detail'] ?? 'Failed to delete message';
+        dynamic body;
+        try {
+          body = jsonDecode(res.body);
+        } catch (_) {}
+        final detail = extractApiError(body, 'Failed to delete message');
         throw Exception(detail);
       }
     } catch (e) {

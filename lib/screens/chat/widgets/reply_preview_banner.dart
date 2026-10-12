@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/services/name_cache_service.dart';
+import '../../../theme/app_colors.dart';
 
-/// Shown above the chat input bar when the user swipes to reply a message.
 class ReplyPreviewBanner extends StatelessWidget {
   final String senderHandle;
   final String previewText;
@@ -18,22 +19,22 @@ class ReplyPreviewBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cleanSender = senderHandle.replaceAll('@', '').trim();
+    final cachedName = NameCacheService.instance.getDisplayName(cleanSender);
     final displayName = (isMe || cleanSender.toLowerCase() == 'you')
         ? 'You'
-        : '@$cleanSender';
+        : (cachedName.isNotEmpty ? cachedName : cleanSender);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : const Color(0xFFF1F5F9),
+        color: AppColors.primarySoft,
         border: Border(
           top: BorderSide(
-            color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+            color: AppColors.divider,
             width: 1,
           ),
-          left: const BorderSide(color: Color(0xFF2563EB), width: 3.5),
+          left: BorderSide(color: AppColors.primary, width: 3.5),
         ),
       ),
       child: Row(
@@ -41,7 +42,7 @@ class ReplyPreviewBanner extends StatelessWidget {
           Icon(
             Icons.reply_rounded,
             size: 18,
-            color: const Color(0xFF2563EB),
+            color: AppColors.primary,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -51,8 +52,8 @@ class ReplyPreviewBanner extends StatelessWidget {
               children: [
                 Text(
                   'Replying to $displayName',
-                  style: const TextStyle(
-                    color: Color(0xFF2563EB),
+                  style: TextStyle(
+                    color: AppColors.primaryText,
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                     letterSpacing: -0.1,
@@ -62,9 +63,7 @@ class ReplyPreviewBanner extends StatelessWidget {
                 Text(
                   previewText,
                   style: TextStyle(
-                    color: isDark
-                        ? const Color(0xFF9A9A9A)
-                        : const Color(0xFF64748B),
+                    color: AppColors.textMuted,
                     fontSize: 12.5,
                   ),
                   maxLines: 1,
@@ -84,9 +83,7 @@ class ReplyPreviewBanner extends StatelessWidget {
               child: Icon(
                 Icons.close_rounded,
                 size: 18,
-                color: isDark
-                    ? const Color(0xFF9A9A9A)
-                    : const Color(0xFF64748B),
+                color: AppColors.textMuted,
               ),
             ),
           ),

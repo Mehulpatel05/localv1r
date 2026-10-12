@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/name_cache_service.dart';
+import '../../../theme/app_colors.dart';
 
-/// Shows a quoted message preview inside a chat bubble (reply reference).
 class QuotedMessageWidget extends StatelessWidget {
   final String senderHandle;
   final String previewText;
@@ -19,41 +20,24 @@ class QuotedMessageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cleanSender = senderHandle.replaceAll('@', '').trim();
+    final cachedName = NameCacheService.instance.getDisplayName(cleanSender);
     final displayName = (isQuotedFromMe || cleanSender.toLowerCase() == 'you')
         ? 'You'
-        : '@$cleanSender';
+        : (cachedName.isNotEmpty ? cachedName : cleanSender);
 
-    // Clean contrast matching sent (white in dark, black in light) and received bubbles
     final Color pillBg;
     final Color senderColor;
     final Color textColor;
 
     if (isMe) {
-      if (isDark) {
-        // Sent bubble in dark mode is white container
-        pillBg = const Color(0xFFF1F5F9);
-        senderColor = const Color(0xFF1D4ED8);
-        textColor = const Color(0xFF334155);
-      } else {
-        // Sent bubble in light mode is black container
-        pillBg = Colors.white.withValues(alpha: 0.12);
-        senderColor = const Color(0xFF93C5FD);
-        textColor = Colors.white.withValues(alpha: 0.85);
-      }
+      pillBg = Colors.white.withValues(alpha: 0.18);
+      senderColor = Colors.white;
+      textColor = Colors.white.withValues(alpha: 0.9);
     } else {
-      if (isDark) {
-        // Received bubble in dark mode is dark charcoal container
-        pillBg = const Color(0xFF141414);
-        senderColor = const Color(0xFF60A5FA);
-        textColor = const Color(0xFF94A3B8);
-      } else {
-        // Received bubble in light mode is light grey container
-        pillBg = const Color(0xFFE2E8F0);
-        senderColor = const Color(0xFF2563EB);
-        textColor = const Color(0xFF475569);
-      }
+      pillBg = AppColors.chipBg;
+      senderColor = AppColors.primaryText;
+      textColor = AppColors.textMuted;
     }
 
     return GestureDetector(

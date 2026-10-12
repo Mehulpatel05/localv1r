@@ -12,6 +12,7 @@ import '../services/presence_service.dart';
 import '../core/action_state/action_state_provider.dart';
 import '../core/location/location_service.dart';
 import '../core/widgets/user_avatar.dart';
+import '../services/founding_service.dart';
 
 class BootstrapResult {
   final bool isLoggedIn;
@@ -47,6 +48,7 @@ class SplashController {
   factory SplashController() => _instance;
   static SplashController get instance => _instance;
   SplashController._internal();
+  bool isMainFlowVisible = false;
 
   /// Stage A: Cold Start Pipeline (Executed concurrently at startup)
   Future<BootstrapResult> runColdStartPipeline({
@@ -60,6 +62,7 @@ class SplashController {
         locationService.ensureLocationPermissionAndAutoDetect(),
         AvatarCacheService.instance.ensureInitialized(),
         _pingServerHealth(),
+        FoundingService.instance.fetchCounts(),
       ]);
 
       final authData = results[0] as Map<String, dynamic>;
@@ -67,7 +70,7 @@ class SplashController {
       final isNewUser = authData['isNewUser'] == true;
       final userId = authData['userId'] as String? ?? '';
       final userHandle = authData['handle'] as String? ?? 'Guest';
-      final cityId = locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat';
+      final cityId = locationService.cityId.isNotEmpty ? locationService.cityId : 'GJ-VAD';
 
       // 2. Stage B: Token Resolve & Background Warm Fetch (Non-blocking)
       if (isLoggedIn && !isNewUser && userHandle != 'Guest') {
@@ -93,7 +96,7 @@ class SplashController {
         isNewUser: false,
         userId: '',
         userHandle: 'Guest',
-        cityId: 'surat_gujarat',
+        cityId: 'GJ-VAD',
       );
     }
   }
@@ -133,6 +136,7 @@ class SplashController {
 
       // 7. Pre-warm full precomputed user action document (likes, saves, votes)
       ActionStateProvider.instance.prefetchActionStateDocument(),
+      FoundingService.instance.fetchCounts(),
     ];
 
     unawaited(

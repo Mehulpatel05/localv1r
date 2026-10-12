@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../services/bazar_repository.dart';
 import '../../bazar/shop_detail_screen.dart';
+import '../../../theme/app_colors.dart';
 
 class ShopInsightsScreen extends StatefulWidget {
   final LocalShop shop;
@@ -72,15 +73,12 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg = Color(0xFF0A2E33);
-    const borderColor = Color(0xFF0F4E56);
-
     final maxViews = _dailyViews.map((d) => (d['views'] as num).toDouble()).fold<double>(0.0, max);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -88,40 +86,39 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
           child: GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
           ),
         ),
         centerTitle: true,
-        title: const Text(
+        title: Text(
           'Shop insights',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w700,
           ),
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF14B8A6)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Section: Views, last 7 days
-                  const Text(
+                  Text(
                     'Views, last 7 days',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.3,
@@ -130,7 +127,6 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
 
                   const SizedBox(height: 24),
 
-                  // 7 Days Custom Bar Chart
                   Container(
                     height: 170,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -152,39 +148,27 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: Text(
                                   count.toInt().toString(),
-                                  style: const TextStyle(
-                                    color: Color(0xFF2DD4BF),
+                                  style: TextStyle(
+                                    color: AppColors.primary,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
-                            // Bar
                             Container(
                               width: 38,
                               height: 120 * heightFactor,
                               decoration: BoxDecoration(
-                                color: count > 0 ? const Color(0xFF0E766E) : const Color(0xFF0A2E33),
+                                color: count > 0 ? AppColors.primary : AppColors.chipBg,
                                 borderRadius: BorderRadius.circular(6),
-                                gradient: count > 0
-                                    ? const LinearGradient(
-                                        begin: Alignment.bottomCenter,
-                                        end: Alignment.topCenter,
-                                        colors: [
-                                          Color(0xFF0F4E56),
-                                          Color(0xFF14B8A6),
-                                        ],
-                                      )
-                                    : null,
-                                border: count == 0 ? Border.all(color: const Color(0xFF0F4E56).withValues(alpha: 0.4)) : null,
+                                border: count == 0 ? Border.all(color: AppColors.divider) : null,
                               ),
                             ),
                             const SizedBox(height: 10),
-                            // Day letter
                             Text(
                               dayLabel,
-                              style: const TextStyle(
-                                color: Color(0xFF94A3B8),
+                              style: TextStyle(
+                                color: AppColors.textMuted,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -197,20 +181,19 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Insight Card 1: Top Product
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                     decoration: BoxDecoration(
-                      color: cardBg,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: borderColor),
+                      border: Border.all(color: AppColors.divider),
                     ),
                     child: _topProductTitle != null && _topProductTitle!.isNotEmpty
                         ? RichText(
                             text: TextSpan(
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
                                 fontSize: 15,
                                 height: 1.45,
                               ),
@@ -224,14 +207,14 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
                               ],
                             ),
                           )
-                        : const Row(
+                        : Row(
                             children: [
-                              Text('🏆 ', style: TextStyle(fontSize: 16)),
+                              const Text('🏆 ', style: TextStyle(fontSize: 16)),
                               Expanded(
                                 child: Text(
                                   'No products added yet. Add products to start tracking views.',
                                   style: TextStyle(
-                                    color: Color(0xFF94A3B8),
+                                    color: AppColors.textMuted,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -243,21 +226,20 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
 
                   const SizedBox(height: 14),
 
-                  // Insight Card 2: Chats Growth
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                     decoration: BoxDecoration(
-                      color: cardBg,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: borderColor),
+                      border: Border.all(color: AppColors.divider),
                     ),
                     child: Text(
                       _chatsThisWeek > 0
                           ? '💬 $_chatsThisWeek chats this week, up from $_chatsLastWeek last week'
                           : '💬 0 chats this week. Share your shop on WhatsApp to get direct customer inquiries.',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         height: 1.4,
                         fontWeight: FontWeight.w500,
@@ -267,21 +249,20 @@ class _ShopInsightsScreenState extends State<ShopInsightsScreen> {
 
                   const SizedBox(height: 14),
 
-                  // Insight Card 3: AI Dynamic Smart Growth Tip
                   ..._tips.map(
                     (tip) => Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 14),
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: AppColors.divider),
                       ),
                       child: Text(
                         tip.startsWith('💡') || tip.startsWith('Tip') ? tip : '💡 $tip',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
                           fontSize: 15,
                           height: 1.45,
                           fontWeight: FontWeight.w500,

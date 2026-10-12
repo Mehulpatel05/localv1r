@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../services/r2_storage_service.dart';
+import '../../theme/app_colors.dart';
 
 class UniversalMediaView extends StatefulWidget {
   final String? url;
@@ -232,8 +233,6 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
               child: VideoPlayer(_videoController!),
             ),
           ),
-
-          // Play/Pause Overlay Icon
           if (!_isPlaying && widget.showControls)
             Center(
               child: Container(
@@ -245,10 +244,7 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
                 child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
               ),
             ),
-
-          // Video Controls Overlay
           if (widget.showControls) ...[
-            // Mute Button (Top Right)
             Positioned(
               top: 8,
               right: 8,
@@ -256,7 +252,7 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
                 onTap: _toggleMute,
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.black54,
                     shape: BoxShape.circle,
                   ),
@@ -268,8 +264,6 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
                 ),
               ),
             ),
-
-            // Fullscreen Button (Bottom Right)
             Positioned(
               bottom: 8,
               right: 8,
@@ -285,8 +279,6 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
                 ),
               ),
             ),
-
-            // Video Duration / Time Tag (Bottom Left)
             Positioned(
               bottom: 8,
               left: 8,
@@ -338,7 +330,6 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
   }
 }
 
-/// Standalone Fullscreen Video Player Modal
 class FullscreenVideoPlayerModal extends StatefulWidget {
   final String? url;
   final File? file;
@@ -407,8 +398,6 @@ class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal>
                     )
                   : const CircularProgressIndicator(color: Colors.white),
             ),
-
-            // Top Bar with Close Button
             Positioned(
               top: 10,
               left: 10,
@@ -417,8 +406,6 @@ class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal>
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-
-            // Center Play / Pause toggle on tap
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -437,7 +424,7 @@ class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal>
                     ? Center(
                         child: Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.black54,
                             shape: BoxShape.circle,
                           ),
@@ -447,8 +434,6 @@ class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal>
                     : const SizedBox.shrink(),
               ),
             ),
-
-            // Bottom Progress Scrubber Bar
             if (_isInitialized && _controller != null)
               Positioned(
                 bottom: 16,
@@ -458,7 +443,7 @@ class _FullscreenVideoPlayerModalState extends State<FullscreenVideoPlayerModal>
                   _controller!,
                   allowScrubbing: true,
                   colors: const VideoProgressColors(
-                    playedColor: Color(0xFF2563EB),
+                    playedColor: AppColors.primary,
                     bufferedColor: Colors.white24,
                     backgroundColor: Colors.white10,
                   ),

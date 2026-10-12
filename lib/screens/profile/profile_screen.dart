@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
@@ -8,7 +10,6 @@ import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/auth_repository.dart';
-import '../../core/theme.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
@@ -16,6 +17,8 @@ import '../../services/auth_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/friendship_model.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/services/badge_cache_service.dart';
 import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
 import '../../core/location/city_picker_screen.dart';
@@ -24,6 +27,14 @@ import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
 import '../shop/manage/my_shop_dashboard_screen.dart';
 import '../../services/bazar_repository.dart';
+import '../shop/widgets/shop_status_sheet.dart';
+import '../../theme/app_colors.dart';
+import '../../models/rewards_model.dart';
+import '../../services/rewards_service.dart';
+import '../../models/founding_model.dart';
+import '../../services/founding_service.dart';
+import '../rewards/rewards_hub_screen.dart';
+import 'widgets/profile_hero_painter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -46,17 +57,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSavingBio = false;
   bool _isUploadingPhoto = false;
   late TextEditingController _bioController;
+  late TextEditingController _nameController;
+  late TextEditingController _handleController;
   late final FriendRepository _friendRepository;
   LocalShop? _myRegisteredShop;
 
   @override
   void initState() {
     super.initState();
+    RewardsService.instance.fetchSummary(forceRefresh: true);
     _bioController = TextEditingController();
+    _nameController = TextEditingController();
+    _handleController = TextEditingController();
     _friendRepository = FriendRepository()
       ..currentUserHandle = widget.currentUserHandle;
 
-    // ⚡ Instant 0ms initial state from local cache
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     final cachedPhoto = AvatarCacheService.instance.getCachedUrl(cleanHandle);
     _userData = {
@@ -71,7 +86,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'createdAt': DateTime.now(),
     };
 
-    // Pre-populate posts from in-memory repository cache
     _userPosts = widget.repository.posts
         .where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == cleanHandle.toLowerCase())
         .toList();
@@ -83,13 +97,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _bioController.dispose();
+    _nameController.dispose();
+    _handleController.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfileData() async {
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
 
-    // 1. Fast local check if photo was missing in memory cache
     if (_userData?['photoUrl'] == null) {
       final localPhoto = await AvatarCacheService.instance.getMyPhotoUrlLocally();
       if (localPhoto != null && localPhoto.isNotEmpty && mounted) {
@@ -101,7 +116,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      // 2. Background cloud profile sync
       final cloudProfile = await AuthService.instance.syncCloudProfile();
 
       String? photoUrl = cloudProfile?['photoUrl'] as String?;
@@ -112,22 +126,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final rawPhone = cloudProfile?['phoneNumber'] ?? (await AuthService.instance.getPhoneNumber()) ?? '';
       final resolvedHandle = (cloudProfile?['handle'] ?? widget.currentUserHandle).toString().trim();
+      final resolvedName = (cloudProfile?['displayName'] ?? cloudProfile?['display_name'] ?? cloudProfile?['name'] ?? cloudProfile?['fullName'] ?? NameCacheService.instance.getMyNameLocally())?.toString().trim();
 
       if (mounted) {
         setState(() {
-          // Merge-update: only update fields that have new values, never clear existing data
           _userData = {
             ...?_userData,
             'handle': resolvedHandle,
+            if (resolvedName != null && resolvedName.isNotEmpty) 'displayName': resolvedName,
+            if (resolvedName != null && resolvedName.isNotEmpty) 'name': resolvedName,
             'phone': rawPhone,
             if (cloudProfile?['bio'] != null) 'bio': cloudProfile!['bio'],
+            if (cloudProfile?['isVerified'] != null) 'isVerified': cloudProfile!['isVerified'],
             if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
             if (cloudProfile?['reputation'] != null) 'reputation': cloudProfile!['reputation'],
             if (cloudProfile?['upvotes'] != null) 'upvotes': cloudProfile!['upvotes'],
             if (cloudProfile?['friendCount'] != null) 'friendCount': cloudProfile!['friendCount'],
+            if (cloudProfile?['nameUpdatedAt'] != null) 'nameUpdatedAt': cloudProfile!['nameUpdatedAt'],
+            if (cloudProfile?['name_updated_at'] != null) 'nameUpdatedAt': cloudProfile!['name_updated_at'],
+            if (cloudProfile?['handleUpdatedAt'] != null) 'handleUpdatedAt': cloudProfile!['handleUpdatedAt'],
+            if (cloudProfile?['handle_updated_at'] != null) 'handleUpdatedAt': cloudProfile!['handle_updated_at'],
+            if (cloudProfile?['canChangeName'] != null) 'canChangeName': cloudProfile!['canChangeName'],
+            if (cloudProfile?['can_change_name'] != null) 'canChangeName': cloudProfile!['can_change_name'],
+            if (cloudProfile?['canChangeHandle'] != null) 'canChangeHandle': cloudProfile!['canChangeHandle'],
+            if (cloudProfile?['can_change_handle'] != null) 'canChangeHandle': cloudProfile!['can_change_handle'],
+            if (cloudProfile?['nameDaysRemaining'] != null) 'nameDaysRemaining': cloudProfile!['nameDaysRemaining'],
+            if (cloudProfile?['name_days_remaining'] != null) 'nameDaysRemaining': cloudProfile!['name_days_remaining'],
+            if (cloudProfile?['handleDaysRemaining'] != null) 'handleDaysRemaining': cloudProfile!['handleDaysRemaining'],
+            if (cloudProfile?['handle_days_remaining'] != null) 'handleDaysRemaining': cloudProfile!['handle_days_remaining'],
+            if (cloudProfile?['nextNameChangeAt'] != null) 'nextNameChangeAt': cloudProfile!['nextNameChangeAt'],
+            if (cloudProfile?['next_name_change_at'] != null) 'nextNameChangeAt': cloudProfile!['next_name_change_at'],
+            if (cloudProfile?['nextHandleChangeAt'] != null) 'nextHandleChangeAt': cloudProfile!['nextHandleChangeAt'],
+            if (cloudProfile?['next_handle_change_at'] != null) 'nextHandleChangeAt': cloudProfile!['next_handle_change_at'],
           };
           if (!_isSavingBio && (_bioController.text.isEmpty || _bioController.text == _userData!['bio'])) {
             _bioController.text = (_userData!['bio'] as String?) ?? '';
+          }
+          if (_nameController.text.isEmpty && resolvedName != null && resolvedName.isNotEmpty) {
+            _nameController.text = resolvedName;
+          }
+          if (_handleController.text.isEmpty && resolvedHandle.isNotEmpty) {
+            _handleController.text = resolvedHandle.replaceAll('@', '').trim();
           }
         });
       }
@@ -138,6 +177,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final freshPosts = await widget.repository.fetchPostsByUser(widget.currentUserHandle);
       final shop = await BazarRepository.instance.fetchMyShop();
+      final loc = widget.repository.locationService;
+      final currentAreaId = loc.area?.id ?? loc.city.id;
+      await FoundingService.instance.fetchMyStatus(cityId: loc.city.id, areaId: currentAreaId);
+      await RewardsService.instance.fetchSummary(forceRefresh: true);
+
       if (mounted) {
         setState(() {
           _userPosts = freshPosts;
@@ -160,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Material(
-        color: const Color(0xFF072E33),
+        color: AppColors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         clipBehavior: Clip.antiAlias,
         child: Padding(
@@ -175,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -185,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -195,13 +239,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 44,
                   height: 44,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF5F3FF),
+                    color: AppColors.primarySoft,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF8B5CF6), size: 22),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
                 ),
-                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                subtitle: const Text('Select a photo from your photo library', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                subtitle: const Text('Select a photo from your photo library', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickAndUploadPhoto(ImageSource.gallery);
@@ -214,13 +258,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 44,
                   height: 44,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFEFF6FF),
+                    color: AppColors.chipBg,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF3B82F6), size: 22),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.textPrimary, size: 22),
                 ),
-                title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                subtitle: const Text('Open camera to snap a new photo', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                subtitle: const Text('Open camera to snap a new photo', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickAndUploadPhoto(ImageSource.camera);
@@ -234,13 +278,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF0FDF4),
+                      color: AppColors.primarySoft,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.visibility_outlined, color: Color(0xFF16A34A), size: 22),
+                    child: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 22),
                   ),
-                  title: const Text('View Profile Picture', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                  subtitle: const Text('See full size profile photo', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                  title: const Text('View Profile Picture', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                  subtitle: const Text('See full size profile photo', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
                   onTap: () {
                     Navigator.pop(ctx);
                     UserAvatar.showFullAvatar(context, handle: handle, photoUrl: currentPhoto);
@@ -253,13 +297,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFEF2F2),
+                      color: AppColors.errorSoft,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
+                    child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 22),
                   ),
-                  title: const Text('Remove Current Picture', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFFEF4444))),
-                  subtitle: const Text('Revert back to your initials avatar', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                  title: const Text('Remove Current Picture', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.error)),
+                  subtitle: const Text('Revert back to your initials avatar', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _removeProfilePhoto();
@@ -292,22 +336,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
 
-      // Open Instagram Move and Scale interactive cropper
       final croppedFile = await InstagramAvatarCropper.cropImage(
         context,
         imageFile: rawFile,
       );
 
-      if (croppedFile == null) return; // User cancelled cropping
+      if (croppedFile == null) return;
 
-      // ⚡ Optimistic UI: Immediately render the new cropped photo locally with 0ms lag
       setState(() {
         _isUploadingPhoto = true;
         _userData?['photoUrl'] = croppedFile.path;
       });
       AvatarCacheService.instance.setCachedUrl(handle, croppedFile.path);
 
-      // Fast background network upload
       final uploadedUrl = await R2StorageService.uploadImage(croppedFile);
 
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
@@ -321,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              backgroundColor: Color(0xFF10B981),
+              backgroundColor: Color(0xFF0E8A3E),
               behavior: SnackBarBehavior.floating,
               content: Text('Profile photo updated successfully!'),
             ),
@@ -336,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to upload image. Please check your network and try again.'),
-              backgroundColor: Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -351,7 +392,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error uploading profile photo: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -371,7 +412,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF10B981),
+            backgroundColor: Color(0xFF0E8A3E),
             behavior: SnackBarBehavior.floating,
             content: Text('Profile photo removed.'),
           ),
@@ -382,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to remove profile photo: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -392,10 +433,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveBio() async {
+  String _formatDateShort(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${dt.day} ${months[dt.month - 1]}';
+  }
+
+  Future<void> _saveProfile({
+    required String newName,
+    required String newHandle,
+    required String newBio,
+    required Function(String? error) onError,
+  }) async {
+    final cleanName = newName.trim();
+    final cleanHandle = newHandle.replaceAll('@', '').trim().toLowerCase();
+    final cleanBio = newBio.trim();
+
+    if (cleanHandle.isEmpty) {
+      onError('Username cannot be empty');
+      return;
+    }
+
+    if (!RegExp(r'^[a-z0-9_]{3,30}$').hasMatch(cleanHandle)) {
+      onError('Username must be 3-30 characters (letters, numbers, underscores only)');
+      return;
+    }
+
     setState(() => _isSavingBio = true);
     try {
-      final bioText = _bioController.text.trim();
       final token = await AuthService.instance.getAccessToken();
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('${AuthService.baseUrl}/profile');
@@ -405,786 +469,2264 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           },
-          body: jsonEncode({'bio': bioText}),
-        ).timeout(const Duration(seconds: 10));
+          body: jsonEncode({
+            'handle': cleanHandle,
+            'displayName': cleanName.isNotEmpty ? cleanName : cleanHandle,
+            'bio': cleanBio,
+          }),
+        ).timeout(const Duration(seconds: 25));
+
+        final body = jsonDecode(response.body);
+
+        if (response.statusCode == 409) {
+          onError(body['error'] ?? 'Username $cleanHandle is already taken. Please choose another.');
+          return;
+        }
 
         if (response.statusCode != 200) {
-          final err = jsonDecode(response.body);
-          throw Exception(err['error'] ?? 'Failed to update profile');
+          final err = body['error'] ?? body['message'] ?? 'Failed to update profile';
+          onError(err.toString());
+          return;
+        }
+
+        final profileData = body['profile'] as Map<String, dynamic>?;
+        if (profileData != null) {
+          _userData?['canChangeName'] = profileData['canChangeName'] ?? profileData['can_change_name'];
+          _userData?['canChangeHandle'] = profileData['canChangeHandle'] ?? profileData['can_change_handle'];
+          _userData?['nameDaysRemaining'] = profileData['nameDaysRemaining'] ?? profileData['name_days_remaining'];
+          _userData?['handleDaysRemaining'] = profileData['handleDaysRemaining'] ?? profileData['handle_days_remaining'];
+          _userData?['nameUpdatedAt'] = profileData['nameUpdatedAt'] ?? profileData['name_updated_at'];
+          _userData?['handleUpdatedAt'] = profileData['handleUpdatedAt'] ?? profileData['handle_updated_at'];
+          _userData?['nextNameChangeAt'] = profileData['nextNameChangeAt'] ?? profileData['next_name_change_at'];
+          _userData?['nextHandleChangeAt'] = profileData['nextHandleChangeAt'] ?? profileData['next_handle_change_at'];
         }
       }
 
+      await AuthService.instance.updateLocalUserCredentials(
+        handle: cleanHandle,
+        displayName: cleanName.isNotEmpty ? cleanName : null,
+      );
+
+      if (cleanName.isNotEmpty) {
+        NameCacheService.instance.setCachedName(cleanHandle, cleanName);
+        await NameCacheService.instance.saveMyNameLocally(cleanName);
+      }
+
+      final isVer = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
+      final badge = (_userData?['authorBadge'] ?? _userData?['badge']) as String?;
+      BadgeCacheService.instance.setBadge(cleanHandle, isVerified: isVer, badgeText: badge);
+
+      widget.repository.currentUserHandle = cleanHandle;
+      _friendRepository.currentUserHandle = cleanHandle;
+      widget.repository.refresh();
+
       setState(() {
         if (_userData != null) {
-          _userData!['bio'] = bioText;
+          _userData!['handle'] = cleanHandle;
+          _userData!['displayName'] = cleanName.isNotEmpty ? cleanName : cleanHandle;
+          _userData!['name'] = cleanName.isNotEmpty ? cleanName : cleanHandle;
+          _userData!['bio'] = cleanBio;
         }
       });
+
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF10B981),
+            backgroundColor: Color(0xFF0E8A3E),
             behavior: SnackBarBehavior.floating,
-            content: Text('Bio saved successfully!'),
+            content: Text('Profile updated successfully!'),
           ),
         );
       }
+    } on TimeoutException {
+      onError('Network request timed out. Please check your connection and tap Save changes again.');
+    } on SocketException {
+      onError('Unable to reach server. Please check your internet connection and try again.');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save bio: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      onError('Failed to save profile: $e');
     } finally {
       if (mounted) setState(() => _isSavingBio = false);
     }
   }
 
-
-  void _showEditBioDialog() {
+  void _showEditProfileSheet() {
+    final currentName = (_userData?['displayName'] ?? _userData?['name'] ?? NameCacheService.instance.getMyNameLocally()) as String?;
+    if (currentName != null && currentName.isNotEmpty) {
+      _nameController.text = currentName;
+    }
+    final currentHandle = (_userData?['handle'] ?? widget.currentUserHandle).toString().replaceAll('@', '').trim();
+    if (currentHandle.isNotEmpty) {
+      _handleController.text = currentHandle;
+    }
     _bioController.text = _userData?['bio'] ?? '';
-    showDialog(
+
+    final initialName = (currentName ?? '').trim();
+    final initialHandle = currentHandle.trim().toLowerCase();
+
+    final nameUpdatedAtStr = _userData?['nameUpdatedAt'] ?? _userData?['name_updated_at'];
+    final DateTime? nameUpdatedAt = nameUpdatedAtStr != null ? DateTime.tryParse(nameUpdatedAtStr.toString()) : null;
+    const nameCooldown = Duration(days: 14);
+    final bool isNameOnCooldown;
+    final int nameDaysRemaining;
+    final DateTime? nextNameChangeDate;
+
+    if (nameUpdatedAt != null) {
+      final elapsed = DateTime.now().difference(nameUpdatedAt);
+      if (elapsed < nameCooldown) {
+        isNameOnCooldown = true;
+        nameDaysRemaining = (nameCooldown.inDays - elapsed.inDays).clamp(1, 14);
+        nextNameChangeDate = nameUpdatedAt.add(nameCooldown);
+      } else {
+        isNameOnCooldown = false;
+        nameDaysRemaining = 0;
+        nextNameChangeDate = null;
+      }
+    } else {
+      final rawCanChangeName = _userData?['canChangeName'] ?? _userData?['can_change_name'];
+      final rawDaysRemaining = _userData?['nameDaysRemaining'] ?? _userData?['name_days_remaining'] ?? 0;
+      if (rawCanChangeName == false && rawDaysRemaining > 0) {
+        isNameOnCooldown = true;
+        nameDaysRemaining = (rawDaysRemaining as num).toInt();
+        nextNameChangeDate = DateTime.now().add(Duration(days: nameDaysRemaining));
+      } else {
+        isNameOnCooldown = false;
+        nameDaysRemaining = 0;
+        nextNameChangeDate = null;
+      }
+    }
+
+    final handleUpdatedAtStr = _userData?['handleUpdatedAt'] ?? _userData?['handle_updated_at'];
+    final DateTime? handleUpdatedAt = handleUpdatedAtStr != null ? DateTime.tryParse(handleUpdatedAtStr.toString()) : null;
+    const handleCooldown = Duration(days: 30);
+    final bool isHandleOnCooldown;
+    final int handleDaysRemaining;
+    final DateTime? nextHandleChangeDate;
+
+    if (handleUpdatedAt != null) {
+      final elapsed = DateTime.now().difference(handleUpdatedAt);
+      if (elapsed < handleCooldown) {
+        isHandleOnCooldown = true;
+        handleDaysRemaining = (handleCooldown.inDays - elapsed.inDays).clamp(1, 30);
+        nextHandleChangeDate = handleUpdatedAt.add(handleCooldown);
+      } else {
+        isHandleOnCooldown = false;
+        handleDaysRemaining = 0;
+        nextHandleChangeDate = null;
+      }
+    } else {
+      final rawCanChangeHandle = _userData?['canChangeHandle'] ?? _userData?['can_change_handle'];
+      final rawDaysRemaining = _userData?['handleDaysRemaining'] ?? _userData?['handle_days_remaining'] ?? 0;
+      if (rawCanChangeHandle == false && rawDaysRemaining > 0) {
+        isHandleOnCooldown = true;
+        handleDaysRemaining = (rawDaysRemaining as num).toInt();
+        nextHandleChangeDate = DateTime.now().add(Duration(days: handleDaysRemaining));
+      } else {
+        isHandleOnCooldown = false;
+        handleDaysRemaining = 0;
+        nextHandleChangeDate = null;
+      }
+    }
+
+    const quickBioTags = [
+      '+ Friendly neighbour',
+      '+ Shop owner',
+      '+ New here',
+      '+ Pet lover',
+    ];
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF072E33),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Edit Bio',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
-        ),
-        content: TextField(
-          controller: _bioController,
-          maxLines: 4,
-          maxLength: 200,
-          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Tell neighbors about yourself...',
-            hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black,
-                width: 1.5,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String? inlineError;
+
+        return StatefulBuilder(
+          builder: (modalContext, setSheetState) {
+            final textLength = _bioController.text.length;
+            final progressRatio = (textLength / 200).clamp(0.0, 1.0);
+            final activeHandle = (_userData?['handle'] ?? widget.currentUserHandle).toString();
+            final currentPhoto = _userData?['photoUrl'] as String?;
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border(
+                  top: BorderSide(color: AppColors.divider, width: 1.2),
+                ),
               ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF64748B))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : Colors.black,
-              foregroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.black
-                  : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 14,
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
               ),
-            ),
-            onPressed: _isSavingBio ? null : _saveBio,
-            child: _isSavingBio
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black
-                          : Colors.white,
-                      strokeWidth: 2,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4.5,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
-                  )
-                : const Text('Save'),
-          ),
-        ],
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Edit profile',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 22),
+                          onPressed: () => Navigator.pop(modalContext),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Stack(
+                        children: [
+                          UserAvatar(
+                            handle: activeHandle,
+                            photoUrl: currentPhoto,
+                            size: 76,
+                            fontSize: 26,
+                            onTap: () {
+                              Navigator.pop(modalContext);
+                              _showChangeProfilePhotoSheet();
+                            },
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.pop(modalContext);
+                                _showChangeProfilePhotoSheet();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.pop(modalContext);
+                          _showChangeProfilePhotoSheet();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text(
+                          'Change photo',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Full Name',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (isNameOnCooldown)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.schedule_rounded, color: Color(0xFFB45309), size: 11),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$nameDaysRemaining days left',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB45309),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: (inlineError != null && inlineError!.toLowerCase().contains('name'))
+                              ? AppColors.error
+                              : AppColors.divider,
+                          width: 1.2,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                      child: TextField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        maxLength: 50,
+                        buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.textMuted, size: 20),
+                          prefixIconConstraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                          hintText: 'Your name (e.g. Rajesh Varma)',
+                          hintStyle: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                          ),
+                        ),
+                        onChanged: (val) {
+                          final clean = val.trim();
+                          if (isNameOnCooldown && clean.isNotEmpty && clean.toLowerCase() != initialName.toLowerCase()) {
+                            setSheetState(() {
+                              inlineError = 'Full name can only be changed once every 14 days. Next change in $nameDaysRemaining day(s).';
+                            });
+                          } else if (inlineError != null && inlineError!.toLowerCase().contains('name')) {
+                            setSheetState(() => inlineError = null);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (isNameOnCooldown)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(
+                          'Full name can only be changed once every 14 days. Available in $nameDaysRemaining day(s)${nextNameChangeDate != null ? ' (${_formatDateShort(nextNameChangeDate)})' : ''}.',
+                          style: const TextStyle(
+                            color: Color(0xFFB45309),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.info_outline_rounded, color: AppColors.textMuted, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              'You can change your full name once every 14 days.',
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Username',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (isHandleOnCooldown)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.schedule_rounded, color: Color(0xFFB45309), size: 11),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$handleDaysRemaining days left',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB45309),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: (inlineError != null && inlineError!.toLowerCase().contains('username'))
+                              ? AppColors.error
+                              : AppColors.divider,
+                          width: 1.2,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                      child: TextField(
+                        controller: _handleController,
+                        keyboardType: TextInputType.text,
+                        maxLength: 30,
+                        buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.alternate_email_rounded, color: AppColors.primary, size: 20),
+                          prefixIconConstraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                          hintText: 'username',
+                          hintStyle: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        onChanged: (val) {
+                          final clean = val.replaceAll('@', '').toLowerCase();
+                          if (clean != val) {
+                            _handleController.value = TextEditingValue(
+                              text: clean,
+                              selection: TextSelection.collapsed(offset: clean.length),
+                            );
+                          }
+                          if (isHandleOnCooldown && clean.isNotEmpty && clean != initialHandle) {
+                            setSheetState(() {
+                              inlineError = 'Username can only be changed once every 30 days. Next change in $handleDaysRemaining day(s).';
+                            });
+                          } else if (inlineError != null && inlineError!.toLowerCase().contains('username')) {
+                            setSheetState(() => inlineError = null);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (isHandleOnCooldown)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(
+                          'Username can only be changed once every 30 days (1 month). Available in $handleDaysRemaining day(s)${nextHandleChangeDate != null ? ' (${_formatDateShort(nextHandleChangeDate)})' : ''}.',
+                          style: const TextStyle(
+                            color: Color(0xFFB45309),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.info_outline_rounded, color: AppColors.textMuted, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              'You can change your username once every 30 days (1 month).',
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Bio',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.divider,
+                          width: 1.2,
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _bioController,
+                            maxLines: 3,
+                            maxLength: 200,
+                            buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14.5,
+                              height: 1.4,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                              hintText: 'Apne pados ko batao aap kaun ho...',
+                              hintStyle: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 14,
+                              ),
+                            ),
+                            onChanged: (_) {
+                              setSheetState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: SizedBox(
+                                  width: 80,
+                                  height: 3.5,
+                                  child: LinearProgressIndicator(
+                                    value: progressRatio,
+                                    backgroundColor: AppColors.divider,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0E8A3E)),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '$textLength/200',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: quickBioTags.map((tag) {
+                        return GestureDetector(
+                          onTap: () {
+                            final cleanTag = tag.replaceFirst('+ ', '').trim();
+                            final current = _bioController.text.trim();
+                            if (current.isEmpty) {
+                              _bioController.text = cleanTag;
+                            } else if (!current.toLowerCase().contains(cleanTag.toLowerCase())) {
+                              final candidate = '$current, $cleanTag';
+                              _bioController.text = candidate.length > 200
+                                  ? candidate.substring(0, 200)
+                                  : candidate;
+                            }
+                            _bioController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _bioController.text.length),
+                            );
+                            setSheetState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.chipBg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.divider,
+                                width: 1.1,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    if (inlineError != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFF87171).withValues(alpha: 0.6),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                inlineError!,
+                                style: const TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: AppColors.chipBg,
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(color: AppColors.divider, width: 1.2),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: () => Navigator.pop(modalContext),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0E8A3E),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: _isSavingBio
+                                  ? null
+                                  : () async {
+                                      final typedName = _nameController.text.trim();
+                                      final typedHandle = _handleController.text.replaceAll('@', '').trim().toLowerCase();
+
+                                      if (typedName.isNotEmpty && typedName.toLowerCase() != initialName.toLowerCase() && isNameOnCooldown) {
+                                        setSheetState(() {
+                                          inlineError = 'Full name can only be changed once every 14 days. You can change it again in $nameDaysRemaining day(s).';
+                                        });
+                                        return;
+                                      }
+
+                                      if (typedHandle.isNotEmpty && typedHandle != initialHandle && isHandleOnCooldown) {
+                                        setSheetState(() {
+                                          inlineError = 'Username can only be changed once every 30 days. You can change it again in $handleDaysRemaining day(s).';
+                                        });
+                                        return;
+                                      }
+
+                                      setSheetState(() => _isSavingBio = true);
+                                      await _saveProfile(
+                                        newName: _nameController.text,
+                                        newHandle: _handleController.text,
+                                        newBio: _bioController.text,
+                                        onError: (err) {
+                                          if (mounted) {
+                                            setSheetState(() {
+                                              inlineError = err;
+                                              _isSavingBio = false;
+                                            });
+                                          }
+                                        },
+                                      );
+                                      if (mounted) {
+                                        setSheetState(() => _isSavingBio = false);
+                                      }
+                                    },
+                              child: _isSavingBio
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save changes',
+                                      style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showMyQrModal() {
+    final handle = _userData?['handle'] ?? widget.currentUserHandle;
+    final cleanHandle = handle.toString().replaceAll('@', '').trim();
+    final profileUrl = 'https://nearhood.in/u/$cleanHandle';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD5ECDD),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              'My Nearhood QR',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF16243A),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              getDisplayName(cleanHandle),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0E8A3E),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 180,
+              height: 180,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFD5ECDD), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0E8A3E).withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEEF8F1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_2_rounded,
+                        size: 88,
+                        color: Color(0xFF0E8A3E),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Scan in Nearhood',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF16243A).withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFD5ECDD), width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF16243A))),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0E8A3E),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.share_rounded, size: 18),
+                      label: const Text('Share Link', style: TextStyle(fontWeight: FontWeight.w700)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        SharePlus.instance.share(
+                          ShareParams(
+                            text: 'Connect with ${getDisplayName(cleanHandle)} on Nearhood: $profileUrl',
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  String _getJoinedYear() {
-    final raw = _userData?['createdAt'];
-    if (raw is DateTime) {
-      return '${raw.year}';
-    } else if (raw is String) {
-      final dt = DateTime.tryParse(raw);
-      if (dt != null) return '${dt.year}';
-    } else if (raw is int) {
-      final dt = raw > 1000000000000
-          ? DateTime.fromMillisecondsSinceEpoch(raw)
-          : DateTime.fromMillisecondsSinceEpoch(raw * 1000);
-      return '${dt.year}';
+  void _openSettings() {
+    final userHandle = (_userData?['handle'] as String?) ?? widget.currentUserHandle;
+    final phone = _userData?['phone'] as String?;
+    final userEmail = _userData?['email'] as String?;
+    DateTime? joinedDate;
+    final rawCreated = _userData?['createdAt'];
+    if (rawCreated is DateTime) {
+      joinedDate = rawCreated;
+    } else if (rawCreated is String) {
+      joinedDate = DateTime.tryParse(rawCreated);
+    } else if (rawCreated is int) {
+      joinedDate = rawCreated > 1000000000000
+          ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
+          : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
     }
-    return '${DateTime.now().year}';
+    final clean = userHandle.replaceAll('@', '').trim();
+    final profile = UserProfile(
+      handle: clean,
+      displayName: (_userData?['name'] ?? _userData?['displayName']) as String? ??
+          NameCacheService.instance.getCachedName(clean),
+      phone: (phone == null || phone.isEmpty) ? null : phone,
+      email: (userEmail == null || userEmail.isEmpty) ? null : userEmail,
+      joinedYear: joinedDate?.year ?? DateTime.now().year,
+      joinedDate: joinedDate,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsPage(
+          authRepository: BackendAuthRepository(),
+          profile: profile,
+        ),
+      ),
+    );
+  }
+
+  void _shareProfile() {
+    final handle = _userData?['handle'] ?? widget.currentUserHandle;
+    SharePlus.instance.share(
+      ShareParams(
+        text: 'Connect with ${getDisplayName(handle)} on Nearhood — the local community app for Vadodara!',
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xFFEEF8F1),
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+          child: CircularProgressIndicator(color: Color(0xFF0E8A3E)),
         ),
       );
     }
 
     final handle = _userData?['handle'] ?? widget.currentUserHandle;
-    final email = _userData?['email'] ?? '';
     final bio = _userData?['bio'] ?? '';
+    final areaLabel = widget.repository.locationService.displayLabel;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = const Color(0xFF072E33);
-    final borderColor = const Color(0xFF0E4B52);
-
-    return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
-        title: Text(
-          'Profile',
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
-            fontWeight: FontWeight.w800,
-            fontSize: 22,
-            letterSpacing: -0.4,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Semantics(
-              label: 'Settings',
-              button: true,
-              child: GestureDetector(
-                onTap: () {
-                  final handle = (_userData?['handle'] as String?) ??
-                      widget.currentUserHandle;
-                  final phone = _userData?['phone'] as String?;
-                  final email = _userData?['email'] as String?;
-                  DateTime? joinedDate;
-                  final rawCreated = _userData?['createdAt'];
-                  if (rawCreated is DateTime) {
-                    joinedDate = rawCreated;
-                  } else if (rawCreated is String) {
-                    joinedDate = DateTime.tryParse(rawCreated);
-                  } else if (rawCreated is int) {
-                    joinedDate = rawCreated > 1000000000000
-                        ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
-                        : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
-                  }
-                  final profile = UserProfile(
-                    handle: handle.replaceAll('@', '').trim(),
-                    phone: (phone == null || phone.isEmpty) ? null : phone,
-                    email: (email == null || email.isEmpty) ? null : email,
-                    joinedYear: joinedDate?.year ??
-                        int.tryParse(_getJoinedYear()) ??
-                        DateTime.now().year,
-                    joinedDate: joinedDate,
-                  );
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => SettingsPage(
-                        authRepository: BackendAuthRepository(),
-                        profile: profile,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: RefreshIndicator(
+          onRefresh: _loadProfileData,
+          color: const Color(0xFF0E8A3E),
+          child: ListenableBuilder(
+            listenable: widget.repository,
+            builder: (context, _) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: EdgeInsets.only(
+                bottom: 88 + MediaQuery.paddingOf(context).bottom,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF085A2B),
+                          Color(0xFF0C6E35),
+                          Color(0xFF0A632F),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(32),
+                        bottomRight: Radius.circular(32),
                       ),
                     ),
-                  );
-                },
-                child: Builder(builder: (ctx) {
-                  final c = ctx.nearhoodColors;
-                  return Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: c.field,
-                      shape: BoxShape.circle,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(32),
+                              bottomRight: Radius.circular(32),
+                            ),
+                            child: const CustomPaint(
+                              painter: ProfileHeaderBackgroundPainter(),
+                            ),
+                          ),
+                        ),
+                        SafeArea(
+                          bottom: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 26),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (Navigator.canPop(context)) ...[
+                                          GestureDetector(
+                                            onTap: () => Navigator.pop(context),
+                                            child: Container(
+                                              width: 36,
+                                              height: 36,
+                                              margin: const EdgeInsets.only(right: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(alpha: 0.16),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white.withValues(alpha: 0.22),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.arrow_back_rounded,
+                                                size: 18,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        GestureDetector(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => const CityPickerScreen(),
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.16),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.22),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.location_on_rounded,
+                                                  size: 15,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 5),
+                                                ConstrainedBox(
+                                                  constraints: const BoxConstraints(maxWidth: 160),
+                                                  child: Text(
+                                                    areaLabel,
+                                                    style: const TextStyle(
+                                                      fontSize: 12.5,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.white,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: _shareProfile,
+                                          child: Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.16),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.22),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.share_outlined,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: _openSettings,
+                                          child: Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.16),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.22),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.settings_outlined,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 18),
+                                Builder(
+                                  builder: (context) {
+                                    final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
+                                    final cachedName = NameCacheService.instance.getCachedName(handle.toString());
+                                    final effectiveName = (rawName != null && rawName.trim().isNotEmpty)
+                                        ? rawName.trim()
+                                        : (cachedName != null && cachedName.trim().isNotEmpty ? cachedName.trim() : null);
+
+                                    final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
+
+                                    return Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 82,
+                                          height: 82,
+                                          child: Stack(
+                                            clipBehavior: Clip.none,
+                                            alignment: Alignment.center,
+                                            children: [
+                                              UserAvatar(
+                                                handle: handle,
+                                                photoUrl: _userData?['photoUrl'] as String?,
+                                                size: 82,
+                                                showRing: true,
+                                                ringGradient: const LinearGradient(
+                                                  colors: [Colors.white, Colors.white],
+                                                ),
+                                                ringWidth: 3.5,
+                                                ringGap: 0,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black.withValues(alpha: 0.15),
+                                                    blurRadius: 12,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
+                                                fontSize: 26,
+                                                onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                              ),
+                                              Positioned(
+                                                bottom: 0,
+                                                right: 0,
+                                                child: GestureDetector(
+                                                  onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                                  child: Container(
+                                                    width: 26,
+                                                    height: 26,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFF59E0B),
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: Colors.white,
+                                                        width: 2,
+                                                      ),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black.withValues(alpha: 0.12),
+                                                          blurRadius: 6,
+                                                          offset: const Offset(0, 2),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.camera_alt_rounded,
+                                                      color: Colors.white,
+                                                      size: 13,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (_isUploadingPhoto)
+                                                Positioned.fill(
+                                                  child: ClipOval(
+                                                    child: Container(
+                                                      color: Colors.black54,
+                                                      child: const Center(
+                                                        child: SizedBox(
+                                                          width: 22,
+                                                          height: 22,
+                                                          child: CircularProgressIndicator(
+                                                            color: Colors.white,
+                                                            strokeWidth: 2,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Flexible(
+                                                    child: Text(
+                                                      getDisplayName(effectiveName ?? handle, fallback: handle.toString()),
+                                                      style: const TextStyle(
+                                                        fontSize: 22,
+                                                        fontWeight: FontWeight.w800,
+                                                        color: Colors.white,
+                                                        letterSpacing: -0.4,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  if (isVerified) ...[
+                                                    const SizedBox(width: 5),
+                                                    const Icon(
+                                                      Icons.verified_rounded,
+                                                      color: Colors.white,
+                                                      size: 18,
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    isVerified ? 'Verified Citizen · Vadodara' : 'Nearhood member · Vadodara',
+                                                    style: TextStyle(
+                                                      fontSize: 12.5,
+                                                      color: Colors.white.withValues(alpha: 0.88),
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    width: 7,
+                                                    height: 7,
+                                                    decoration: const BoxDecoration(
+                                                      color: Color(0xFF4ADE80),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Icon(
-                      Icons.settings_outlined,
-                      size: 20,
-                      color: c.ink,
+                  ),
+
+                  if (bio.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          bio,
+                          textAlign: TextAlign.left,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            color: Color(0xFF64748B),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
                     ),
-                  );
-                }),
+                  ],
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0E8A3E),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              icon: const Icon(Icons.edit_outlined, size: 16),
+                              label: const Text(
+                                'Edit profile',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              onPressed: _showEditProfileSheet,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF0F172A),
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                  width: 1.2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              icon: const Icon(
+                                Icons.qr_code_rounded,
+                                size: 17,
+                                color: Color(0xFF0F172A),
+                              ),
+                              label: const Text(
+                                'My QR',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              onPressed: _showMyQrModal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                    const SizedBox(height: 18),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Builder(
+                        builder: (context) {
+                          final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
+                          final postListings = _userPosts.where((p) =>
+                            p.category == PostCategory.shop ||
+                            p.category == PostCategory.rooms ||
+                            p.category == PostCategory.services ||
+                            p.category == PostCategory.events ||
+                            p.shopTitle != null ||
+                            p.roomTitle != null
+                          ).length;
+                          final listingsCount = bazarListings > 0 ? bazarListings : postListings;
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatCard(
+                                  count: '${_userPosts.length}',
+                                  label: 'Posts',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildStatCard(
+                                  count: '$listingsCount',
+                                  label: 'Listings',
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => BazarScreen(
+                                          initialShowMyListings: true,
+                                          currentUserHandle: widget.currentUserHandle,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: StreamBuilder<List<Friendship>>(
+                                  stream: _friendRepository.getFriendsList(),
+                                  builder: (context, snapshot) {
+                                    final count = snapshot.hasData
+                                        ? snapshot.data!.length
+                                        : (_userData?['friendCount'] as int? ?? 0);
+                                    return _buildStatCard(
+                                      count: '$count',
+                                      label: 'Neighbours',
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => FriendsScreen(
+                                              repository: _friendRepository,
+                                              currentUserHandle: widget.currentUserHandle,
+                                              initialTab: FriendsTab.friends,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ListenableBuilder(
+                        listenable: RewardsService.instance,
+                        builder: (context, _) {
+                          final summary = RewardsService.instance.summary ?? const RewardsSummary();
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
+                                ),
+                              ).then((_) => setState(() {}));
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFF59E0B), width: 1.0),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF59E0B),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.star_rounded, color: Colors.white, size: 18),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Rewards',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF78350F),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${summary.balance} pts · ${summary.streakCount}-day streak',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right_rounded, color: Color(0xFFB45309), size: 22),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+                      child: _buildFoundingCard(),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildActionGridCard(
+                                  icon: Icons.shopping_bag_outlined,
+                                  iconBgColor: const Color(0xFFE0F2F1),
+                                  iconColor: const Color(0xFF00897B),
+                                  title: 'My listings',
+                                  subtitle: 'Manage your items',
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => BazarScreen(
+                                          initialShowMyListings: true,
+                                          currentUserHandle: widget.currentUserHandle,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildActionGridCard(
+                                  icon: Icons.favorite_border_rounded,
+                                  iconBgColor: const Color(0xFFFCE4EC),
+                                  iconColor: const Color(0xFFD81B60),
+                                  title: 'Saved items',
+                                  subtitle: 'Coming soon',
+                                  onTap: () {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.stars_rounded,
+                                              color: Color(0xFF0E8A3E),
+                                              size: 20,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Saved items feature is coming soon! ✨',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: const Color(0xFF16243A),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildActionGridCard(
+                                  icon: Icons.location_on_outlined,
+                                  iconBgColor: const Color(0xFFFFF8E1),
+                                  iconColor: const Color(0xFFD97706),
+                                  title: 'Change area',
+                                  subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const CityPickerScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildDynamicShopCard(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
+            ),
+          ),
+        ),
+      );
+  }
+
+  Widget _buildStatCard({
+    required String count,
+    required String label,
+    VoidCallback? onTap,
+  }) {
+    final card = Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            count,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
             ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadProfileData,
-        color: isDark ? Colors.white : Colors.black,
-        child: ListenableBuilder(
-          listenable: widget.repository,
-          builder: (context, _) => SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-              // 1. Profile Avatar with Clean Ring and Camera Edit Badge
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  UserAvatar(
-                    handle: handle,
-                    photoUrl: _userData?['photoUrl'] as String?,
-                    size: 96,
-                    showRing: true,
-                    ringGradient: LinearGradient(
-                      colors: isDark
-                          ? const [Colors.white, Colors.white70]
-                          : const [Colors.black, Color(0xFF4B5563)],
-                    ),
-                    ringWidth: 2.5,
-                    ringGap: 3.0,
-                    fontSize: 28,
-                    onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                    editBadge: GestureDetector(
-                      onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt_outlined,
-                          color: Colors.white,
-                          size: 15,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_isUploadingPhoto)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // 2. Handle & Subtitle
-              Text(
-                handle.toString().displayHandle,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Nearhood member',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (email.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: isDark ? const Color(0xFF808080) : const Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 24),
-
-              // 3. Stats Card (Posts | Listings | Neighbours)
-              Builder(
-                builder: (context) {
-                  final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
-                  final postListings = _userPosts.where((p) =>
-                    p.category == PostCategory.shop ||
-                    p.category == PostCategory.rooms ||
-                    p.category == PostCategory.services ||
-                    p.category == PostCategory.events ||
-                    p.shopTitle != null ||
-                    p.roomTitle != null
-                  ).length;
-                  final listingsCount = bazarListings > 0 ? bazarListings : postListings;
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildStatItem('${_userPosts.length}', 'Posts', isDark),
-                        Container(
-                          height: 30,
-                          width: 1,
-                          color: borderColor,
-                        ),
-                        _buildStatItem(
-                          '$listingsCount',
-                          'Listings',
-                          isDark,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => BazarScreen(
-                                  initialShowMyListings: true,
-                                  currentUserHandle: widget.currentUserHandle,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        Container(
-                          height: 30,
-                          width: 1,
-                          color: borderColor,
-                        ),
-                        StreamBuilder<List<Friendship>>(
-                          stream: _friendRepository.getFriendsList(),
-                          builder: (context, snapshot) {
-                            final count = snapshot.hasData
-                                ? snapshot.data!.length
-                                : (_userData?['friendCount'] as int? ?? 0);
-                            return _buildStatItem(
-                              '$count',
-                              'Neighbours',
-                              isDark,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FriendsScreen(
-                                      repository: _friendRepository,
-                                      currentUserHandle: widget.currentUserHandle,
-                                      initialTab: FriendsTab.friends,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 20),
-
-              // 4. Action Buttons Row (Edit Bio | Share)
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? Colors.white : Colors.black,
-                        foregroundColor: isDark ? Colors.black : Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: const StadiumBorder(),
-                      ),
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text(
-                        'Edit Bio',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      onPressed: _showEditBioDialog,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: cardBg,
-                        foregroundColor: isDark ? Colors.white : Colors.black,
-                        side: BorderSide(color: borderColor, width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: const StadiumBorder(),
-                      ),
-                      icon: const Icon(Icons.share_outlined, size: 16),
-                      label: const Text(
-                        'Share',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      onPressed: () {
-                        SharePlus.instance.share(
-                          ShareParams(
-                            text:
-                                'Connect with ${handle.toString().displayHandle} on Nearhood — the local community app for Vadodara!',
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // 5. About Me Section Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: borderColor),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'About Me',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: _showEditBioDialog,
-                          child: Text(
-                            'Edit',
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      bio.trim().isEmpty
-                          ? 'No bio added yet. Tap edit to write something about yourself.'
-                          : bio,
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-                        fontSize: 13.5,
-                        height: 1.5,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // 6. Action Menu Items Card (My listings, Saved items, Change area, Register your shop)
-              Container(
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Column(
-                  children: [
-                    // 1. My listings
-                    _buildProfileMenuItem(
-                      icon: Icons.shopping_bag_outlined,
-                      title: 'My listings',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BazarScreen(
-                              initialShowMyListings: true,
-                              currentUserHandle: widget.currentUserHandle,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    Divider(height: 1, color: borderColor),
-
-                    // 2. Saved items
-                    _buildProfileMenuItem(
-                      icon: Icons.favorite_border_rounded,
-                      title: 'Saved items',
-                      badgeText: 'COMING SOON',
-                      onTap: () {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Row(
-                              children: [
-                                Icon(Icons.stars_rounded, color: Color(0xFF2DD4BF), size: 20),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Saved items feature is coming soon! ✨',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: const Color(0xFF072E33),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: const BorderSide(color: Color(0xFF14B8A6), width: 1),
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                    Divider(height: 1, color: borderColor),
-
-                    // 3. Change area
-                    _buildProfileMenuItem(
-                      icon: Icons.push_pin_outlined,
-                      title: 'Change area',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CityPickerScreen()),
-                        );
-                      },
-                    ),
-                    Divider(height: 1, color: borderColor),
-
-                    // 4. Register your shop OR Manage my shop
-                    if (_myRegisteredShop != null)
-                      _buildProfileMenuItem(
-                        icon: Icons.store_mall_directory_rounded,
-                        title: 'Manage my shop',
-                        subtitle: '${_myRegisteredShop!.name} · Live 🟢',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MyShopDashboardScreen(
-                                initialShop: _myRegisteredShop,
-                                currentUserHandle: widget.currentUserHandle,
-                              ),
-                            ),
-                          ).then((_) => _loadProfileData());
-                        },
-                      )
-                    else
-                      _buildProfileMenuItem(
-                        icon: Icons.store_mall_directory_outlined,
-                        title: 'Register your shop',
-                        subtitle: 'For local businesses',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
-                          ).then((_) => _loadProfileData());
-                        },
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-  Widget _buildStatItem(
-    String count,
-    String label,
-    bool isDark, {
-    VoidCallback? onTap,
-  }) {
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          count,
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-            letterSpacing: -0.4,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
 
     if (onTap != null) {
       return GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: content,
+        child: card,
       );
     }
-    return content;
+    return card;
   }
 
-  Widget _buildProfileMenuItem({
+  Widget _buildActionGridCard({
     required IconData icon,
+    required Color iconBgColor,
+    required Color iconColor,
     required String title,
-    String? subtitle,
-    String? badgeText,
-    Widget? trailing,
+    required String subtitle,
+    Color? borderColor,
+    double borderWidth = 1.0,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 104,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: borderColor ?? const Color(0xFFE2E8F0),
+            width: borderWidth,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF90B4B6),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ],
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 20,
               ),
             ),
-            if (badgeText != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0E766E).withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF14B8A6), width: 0.8),
-                ),
-                child: Text(
-                  badgeText,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
                   style: const TextStyle(
-                    color: Color(0xFF2DD4BF),
-                    fontSize: 10,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                    color: Color(0xFF0F172A),
+                    height: 1.15,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            trailing ??
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF90B4B6),
-                  size: 20,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF64748B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+              ],
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFoundingCard() {
+    final loc = widget.repository.locationService;
+    final cityId = loc.city.id;
+    final cityName = loc.city.name;
+    final areaId = loc.area?.id ?? cityId;
+
+    return ListenableBuilder(
+      listenable: FoundingService.instance,
+      builder: (context, _) {
+        final status = FoundingService.instance.myStatus;
+        if (status == null) {
+          return const SizedBox.shrink();
+        }
+
+        if (status.state == FoundingUserState.approved) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF59E0B),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Founding Neighbour #${status.seq ?? 1}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF78350F),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${status.cityName ?? cityName} · 1 of 100 city founders',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'PERMANENT',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (status.state == FoundingUserState.locked) {
+          return GestureDetector(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Publish at least 1 post in $cityName to request the Founding Neighbour badge.'),
+                  backgroundColor: AppColors.textPrimary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFCBD5E1), width: 1.0),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF94A3B8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Request Founding badge for $cityName',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Post once in $cityName to request · 0 posts',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (status.state == FoundingUserState.pending) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.0),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF64748B),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request sent · ${status.cityName ?? cityName}',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Pending admin review · Queue active',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (status.state == FoundingUserState.rejected) {
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFFECDD3), width: 1.0),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE11D48),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Founding request rejected',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF9F1239),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Reason: ${status.reason ?? "Requirements not met"}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFFBE123C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 36,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: status.canReapply ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: status.canReapply
+                        ? () => _submitFoundingRequest(cityId, areaId)
+                        : null,
+                    child: Text(
+                      status.canReapply ? 'Request again' : 'Request again in ${status.daysRemaining} days',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return GestureDetector(
+          onTap: () => _submitFoundingRequest(cityId, areaId),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFD97706),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request Founding badge for $cityName',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF78350F),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'First come first serve · 100 spots in $cityName',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Request',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _submitFoundingRequest(String cityId, String? areaId) async {
+    final loc = widget.repository.locationService;
+    final cityName = loc.city.name;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Request Founding Badge', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.5)),
+        content: Text('Would you like to request the Founding Neighbour badge for $cityName? Only 100 Founding spots are available in $cityName.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0E8A3E), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Submit Request'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final res = await FoundingService.instance.submitRequest(cityId: cityId, areaId: areaId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? ''),
+            backgroundColor: res['success'] == true ? const Color(0xFF0E8A3E) : AppColors.error,
+          ),
+        );
+        _loadProfileData();
+      }
+    }
+  }
+
+  Widget _buildDynamicShopCard() {
+    final shop = _myRegisteredShop;
+    final handle = (_userData?['handle'] as String?) ?? widget.currentUserHandle;
+
+    if (shop == null) {
+      return _buildActionGridCard(
+        icon: Icons.storefront_rounded,
+        iconBgColor: const Color(0xFF0E8A3E),
+        iconColor: Colors.white,
+        title: 'Register shop',
+        subtitle: 'Start selling locally',
+        borderColor: const Color(0xFF1BA24F),
+        borderWidth: 1.5,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
+          ).then((_) => _loadProfileData());
+        },
+      );
+    }
+
+    if (shop.status == 'pending') {
+      return _buildActionGridCard(
+        icon: Icons.hourglass_top_rounded,
+        iconBgColor: const Color(0xFFFEF3C7),
+        iconColor: const Color(0xFFD97706),
+        title: 'Shop under review',
+        subtitle: shop.name.isNotEmpty ? shop.name : 'Under review',
+        borderColor: const Color(0xFFF59E0B),
+        borderWidth: 1.5,
+        onTap: () {
+          ShopStatusSheet.showUnderReview(
+            context,
+            shop: shop,
+            userHandle: handle,
+          );
+        },
+      );
+    }
+
+    if (shop.status == 'rejected') {
+      return _buildActionGridCard(
+        icon: Icons.highlight_off_rounded,
+        iconBgColor: const Color(0xFFFEE2E2),
+        iconColor: const Color(0xFFDC2626),
+        title: 'Fix and resubmit',
+        subtitle: shop.name.isNotEmpty ? shop.name : 'Action required',
+        borderColor: const Color(0xFFEF4444),
+        borderWidth: 1.5,
+        onTap: () {
+          ShopStatusSheet.showRejected(
+            context,
+            shop: shop,
+            userHandle: handle,
+            onReapplied: _loadProfileData,
+          );
+        },
+      );
+    }
+
+    return _buildActionGridCard(
+      icon: Icons.store_rounded,
+      iconBgColor: const Color(0xFFE8F6EF),
+      iconColor: const Color(0xFF0E8A3E),
+      title: 'My shop',
+      subtitle: shop.name.isNotEmpty ? shop.name : 'Live in Bazar',
+      borderColor: const Color(0xFF1BA24F),
+      borderWidth: 1.5,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MyShopDashboardScreen(
+              initialShop: shop,
+              currentUserHandle: widget.currentUserHandle,
+            ),
+          ),
+        ).then((_) => _loadProfileData());
+      },
     );
   }
 }

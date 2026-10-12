@@ -6,12 +6,6 @@ import 'safe_image.dart';
 import 'universal_media_view.dart';
 import '../../services/r2_storage_service.dart';
 
-/// Full-screen image viewer supporting:
-/// - Hero transition animation
-/// - Pinch-to-zoom & double-tap to zoom
-/// - Swipe-down to dismiss with interactive background opacity fade
-/// - Multi-image swipeable gallery
-/// - Share action and clean close button
 class PostFullScreenViewer extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
@@ -36,7 +30,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
   late int _currentIndex;
   final Map<int, TransformationController> _transformControllers = {};
 
-  // Swipe down to dismiss state
   double _dragOffsetY = 0.0;
   bool _isDraggingDown = false;
   late final AnimationController _resetAnimController;
@@ -91,7 +84,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
   void _onVerticalDragUpdate(DragUpdateDetails details) {
     final controller = _getController(_currentIndex);
     final scale = controller.value.getMaxScaleOnAxis();
-    // Only allow drag-to-dismiss when not zoomed in
     if (scale <= 1.05) {
       if (details.delta.dy > 0 || _dragOffsetY > 0) {
         setState(() {
@@ -110,7 +102,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
     if (_dragOffsetY > 110 || velocity > 450) {
       Navigator.pop(context);
     } else {
-      // Animate back to resting position
       _resetAnimation = Tween<double>(
         begin: _dragOffsetY,
         end: 0.0,
@@ -126,12 +117,10 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
 
   void _shareCurrentImage() {
     final url = widget.imageUrls[_currentIndex];
-    // ignore: deprecated_member_use
-    Share.share(
-      widget.caption != null && widget.caption!.isNotEmpty
-          ? '${widget.caption}\n$url'
-          : url,
-    );
+    final text = widget.caption != null && widget.caption!.isNotEmpty
+        ? '${widget.caption}\n$url'
+        : url;
+    SharePlus.instance.share(ShareParams(text: text));
   }
 
   @override
@@ -141,10 +130,9 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
     final backgroundOpacity = (1.0 - (dismissRatio * 0.75)).clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: Colors.black.withValues(alpha: backgroundOpacity),
+      backgroundColor: Colors.white.withValues(alpha: backgroundOpacity),
       body: Stack(
         children: [
-          // Swipeable Image Content
           GestureDetector(
             onVerticalDragUpdate: _onVerticalDragUpdate,
             onVerticalDragEnd: _onVerticalDragEnd,
@@ -207,8 +195,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
               ),
             ),
           ),
-
-          // Top Header Bar
           Positioned(
             top: 0,
             left: 0,
@@ -232,14 +218,12 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
               ),
               child: Row(
                 children: [
-                  // Close button
                   IconButton(
                     icon: const Icon(Icons.close_rounded,
                         color: Colors.white, size: 26),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Spacer(),
-                  // Image Counter (if multiple)
                   if (total > 1)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -259,7 +243,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
                       ),
                     ),
                   const Spacer(),
-                  // Share button
                   IconButton(
                     icon: const Icon(Icons.share_rounded,
                         color: Colors.white, size: 22),
@@ -269,8 +252,6 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
               ),
             ),
           ),
-
-          // Optional caption at bottom
           if (widget.caption != null && widget.caption!.trim().isNotEmpty)
             Positioned(
               bottom: 0,

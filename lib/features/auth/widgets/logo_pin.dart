@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme.dart';
+import '../../../theme/app_colors.dart';
 
-/// Exact Brand Logo Pin matching the HTML/SVG specification (28x36):
-/// Black pin in light mode (white in dark mode) containing an inner
-/// inverted triangle and 3 node circles.
 class LogoPinPainter extends CustomPainter {
   final Color pinColor;
   final Color innerColor;
@@ -15,11 +12,9 @@ class LogoPinPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Canonical SVG viewBox: 0 0 40 50
     final sx = size.width / 40.0;
     final sy = size.height / 50.0;
 
-    // 1. Draw the map-pin silhouette: M20 1 C9.5 1 1 9.3 1 19.5 C1 33 20 49 20 49 s19 -16 19 -29.5 C39 9.3 30.5 1 20 1 Z
     final pinPaint = Paint()
       ..color = pinColor
       ..style = PaintingStyle.fill
@@ -35,7 +30,6 @@ class LogoPinPainter extends CustomPainter {
 
     canvas.drawPath(pinPath, pinPaint);
 
-    // 2. Inner Triangle: M13 15 L27 15 L20 28 Z (stroke-width: 2)
     final trianglePaint = Paint()
       ..color = innerColor
       ..strokeWidth = 2.0 * sx
@@ -52,7 +46,6 @@ class LogoPinPainter extends CustomPainter {
 
     canvas.drawPath(trianglePath, trianglePaint);
 
-    // 3. Three Node Circles: (13,15), (27,15), (20,28), r: 3
     final nodePaint = Paint()
       ..color = innerColor
       ..style = PaintingStyle.fill
@@ -81,12 +74,11 @@ class LogoPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.nearhoodColors;
     return CustomPaint(
       size: Size(width, height),
       painter: LogoPinPainter(
-        pinColor: colors.ink,
-        innerColor: colors.bg,
+        pinColor: AppColors.primary,
+        innerColor: Colors.white,
       ),
     );
   }

@@ -9,7 +9,9 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../core/models/user_profile.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/services/badge_cache_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/audio_upload_service.dart';
 import '../../services/presence_service.dart';
@@ -22,6 +24,9 @@ import '../../services/token_decision_engine.dart';
 import '../../core/action_state/action_state_provider.dart';
 import '../../core/widgets/media_attachment_picker.dart';
 import '../../main.dart';
+import '../../services/post_repository.dart';
+import '../main/main_screen.dart';
+import '../../theme/app_colors.dart';
 import 'call_screen.dart';
 import '../profile/other_user_profile_sheet.dart';
 import 'widgets/image_group_bubble.dart';
@@ -106,11 +111,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   final List<_OptimisticTextMessage> _optimisticMessages = [];
   final List<_PendingImageUpload> _pendingUploads = [];
 
-  // Streams
   Stream<List<Map<String, dynamic>>>? _messagesStream;
   Stream<UserPresence>? _presenceStream;
 
-  // Voice note recording state (ValueNotifiers decoupled from whole screen setState)
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
   bool _isSendingVoice = false;
@@ -120,10 +123,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   final ValueNotifier<List<double>> _recordingAmplitudesNotifier = ValueNotifier<List<double>>([]);
   StreamSubscription<Amplitude>? _amplitudeSubscription;
 
-  // Swipe-to-reply state
-  Map<String, dynamic>? _replyingTo; // {messageId, senderHandle, previewText}
+  Map<String, dynamic>? _replyingTo;
 
-  // Multi-Message Selection State
   final Set<String> _selectedMessageIds = {};
   final Map<String, Map<String, dynamic>> _selectedMessagesData = {};
   String? _editingMessageId;
@@ -131,24 +132,18 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
   bool get _isSelectionMode => _selectedMessageIds.isNotEmpty;
 
-  // Track message doc IDs for scroll-to-reply
   final Map<String, int> _messageIndexMap = {};
   String? _highlightedMessageId;
 
-  // Pre-cached chat metadata for zero-latency sending
   bool _isBlocked = false;
 
-  // Track already-animated messages to eliminate screen flickering / re-animation on polling
   final Set<String> _animatedMessageIds = {};
 
-  // Live typing state
   Timer? _typingDebounceTimer;
   bool _isTypingReported = false;
 
-  // Media picker animation state
   bool _isMediaPickerOpen = false;
 
-  // Call log pulse animation state
   String? _pulsingCallLogId;
 
   @override
@@ -173,12 +168,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       _chatId,
       limit: _messageLimit,
       userHandle: widget.currentUserHandle,
-    );
+    ).asBroadcastStream();
     _presenceStream = PresenceService.instance.getPresenceStream(widget.partnerHandle);
   }
 
   void _onTextChanged() {
-    // Note: Do NOT call setState here! The send/mic toggle uses ValueListenableBuilder
     final text = _messageController.text.trim();
     if (text.isNotEmpty) {
       if (!_isTypingReported) {
@@ -201,9 +195,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
   }
 
-  void _updateTypingStatus(bool isTyping) {
-    // Typing status via presence if needed
-  }
+  void _updateTypingStatus(bool isTyping) {}
 
   Future<void> _initChatCache() async {
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
@@ -286,7 +278,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     if (cleanPartner.isEmpty) return;
 
-    // ⚡ Phase 1 & 3: 2-Step calling check (JWT ban check + in-memory block check)
     final canCall = TokenDecisionEngine.instance.canCallUserSync(cleanPartner);
     final isBlockedInState = ActionStateProvider.instance.isBlocked(cleanPartner);
     if (!canCall || isBlockedInState || _isBlocked) {
@@ -294,7 +285,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Cannot initiate call. You or the recipient may be restricted or blocked.'),
-            backgroundColor: Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -304,7 +295,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
     HapticFeedback.lightImpact();
 
-    // 1. Generate callId synchronously in memory (<1ms)
     final callId = 'call_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(999999)}';
 
     final initialCall = CallModel(
@@ -318,7 +308,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       createdAt: DateTime.now(),
     );
 
-    // 2. Transition immediately into CallScreen (<16ms) with zero perceived latency
     if (mounted) {
       Navigator.push(
         context,
@@ -333,7 +322,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       );
     }
 
-    // 3. Trigger makeCall in background with pre-allocated callId
     () async {
       try {
         await WebRtcCallService.instance.makeCall(
@@ -354,7 +342,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           ScaffoldMessenger.of(currentCtx).showSnackBar(
             SnackBar(
               content: Text(displayMsg),
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -369,11 +357,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    final replySnapshot = _replyingTo; // snapshot before async gap
+    final replySnapshot = _replyingTo;
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
-    // 1. Instant optimistic UI feedback (<10ms)
     final tempId = 'temp_${DateTime.now().microsecondsSinceEpoch}';
     final optimisticMsg = _OptimisticTextMessage(
       id: tempId,
@@ -406,7 +393,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       _updateTypingStatus(false);
     }
 
-    // 2. Perform write in background (non-blocking)
     _performSendMessageBackground(optimisticMsg, text, replySnapshot, cleanMe, cleanPartner);
   }
 
@@ -426,7 +412,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Cannot send message. User is blocked.'),
-              backgroundColor: Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -459,19 +445,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           });
         }
       }
-
-      // Dispatch notification
-      NotificationService().sendNotification(
-        targetHandle: cleanPartner,
-        title: '@$cleanMe',
-        body: text,
-        data: {
-          'type': 'chat',
-          'senderHandle': cleanMe,
-          'partnerHandle': cleanMe,
-          'chatId': _chatId,
-        },
-      );
     } catch (e) {
       debugPrint('[Chat] Send message background error: $e');
       if (mounted) {
@@ -482,7 +455,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
   }
 
-  // ⚡ Fix 7: Retry failed optimistic message
   void _retrySendMessage(String msgId) {
     final idx = _optimisticMessages.indexWhere((m) => m.id == msgId);
     if (idx != -1) {
@@ -496,7 +468,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
   }
 
-  // ⚡ Fix 9: Voice note checkpointing keys & methods
   static const String _kVoiceCheckpointPathKey = 'voice_note_checkpoint_path';
   static const String _kVoiceCheckpointChatIdKey = 'voice_note_checkpoint_chat_id';
   static const String _kVoiceCheckpointTimeKey = 'voice_note_checkpoint_time';
@@ -517,7 +488,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               : const Duration(hours: 2);
 
           if (length == 0 || age.inHours >= 1) {
-            // Clean up stale or zero-byte temp file
             try { await file.delete(); } catch (_) {}
             await prefs.remove(_kVoiceCheckpointPathKey);
             await prefs.remove(_kVoiceCheckpointChatIdKey);
@@ -549,7 +519,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       debugPrint('[VoiceNote] Checkpoint check error: $e');
     }
   }
-
 
   Future<void> _pickAndSendImages() async {
     setState(() => _isMediaPickerOpen = true);
@@ -603,9 +572,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       }
 
       final isGroup = validUrls.length > 1;
-      final summaryText = uploadItem.caption.isNotEmpty
-          ? uploadItem.caption
-          : (isGroup ? '📷 ${validUrls.length} photos' : '📷 Photo');
 
       final res = await DirectChatService.instance.sendMessage(
         sender: cleanMe,
@@ -625,18 +591,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       } else {
         throw Exception('Failed to send image message');
       }
-
-      NotificationService().sendNotification(
-        targetHandle: cleanPartner,
-        title: '@$cleanMe',
-        body: summaryText,
-        data: {
-          'type': 'chat',
-          'senderHandle': cleanMe,
-          'partnerHandle': cleanMe,
-          'chatId': _chatId,
-        },
-      );
     } catch (e) {
       debugPrint('[ImageUpload] Error: $e');
       if (mounted) {
@@ -660,7 +614,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   Widget _buildPendingUploadBubble(_PendingImageUpload item) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final timeStr = DateFormat('hh:mm a').format(item.timestamp);
     final isMultiple = item.files.length > 1;
 
@@ -670,7 +623,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         constraints: const BoxConstraints(maxWidth: 260),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+          color: AppColors.surface,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(18),
             topRight: Radius.circular(18),
@@ -678,7 +631,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             bottomRight: Radius.circular(4),
           ),
           border: Border.all(
-            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: AppColors.divider,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -731,7 +684,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.9),
+                        color: AppColors.error.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
@@ -791,8 +744,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
                 child: Text(
                   item.caption,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
                     fontSize: 14,
                   ),
                 ),
@@ -804,8 +757,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 children: [
                   Text(
                     timeStr,
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
                       fontSize: 10.5,
                     ),
                   ),
@@ -816,8 +769,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                         : Icons.access_time_rounded,
                     size: 13,
                     color: item.isFailed
-                        ? const Color(0xFFEF4444)
-                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                        ? AppColors.error
+                        : AppColors.textMuted,
                   ),
                 ],
               ),
@@ -829,22 +782,38 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   DateTime _parseTimestamp(dynamic timestamp) {
-    if (timestamp is DateTime) return timestamp.isUtc ? timestamp.toLocal() : timestamp;
+    if (timestamp is DateTime) {
+      return timestamp.isUtc ? timestamp.toLocal() : timestamp;
+    }
     if (timestamp is int) {
       return timestamp > 1000000000000
           ? DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal()
           : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true).toLocal();
     }
     if (timestamp is String) {
-      final numVal = int.tryParse(timestamp);
+      final trimmed = timestamp.trim();
+      if (trimmed.isEmpty) return DateTime.now();
+
+      final numVal = int.tryParse(trimmed);
       if (numVal != null) {
         return numVal > 1000000000000
             ? DateTime.fromMillisecondsSinceEpoch(numVal, isUtc: true).toLocal()
             : DateTime.fromMillisecondsSinceEpoch(numVal * 1000, isUtc: true).toLocal();
       }
-      final parsed = DateTime.tryParse(timestamp);
-      if (parsed != null) {
-        return parsed.isUtc ? parsed.toLocal() : parsed;
+
+      final hasTimezone = trimmed.endsWith('Z') ||
+          trimmed.contains('+') ||
+          (trimmed.length > 19 && trimmed[19] == '-' && trimmed.contains('T'));
+
+      if (hasTimezone) {
+        final parsed = DateTime.tryParse(trimmed);
+        if (parsed != null) return parsed.toLocal();
+      } else {
+        final withZ = '${trimmed.replaceAll(' ', 'T')}Z';
+        final parsed = DateTime.tryParse(withZ);
+        if (parsed != null) return parsed.toLocal();
+        final parsedFallback = DateTime.tryParse(trimmed);
+        if (parsedFallback != null) return parsedFallback.toLocal();
       }
       return DateTime.now();
     }
@@ -854,7 +823,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   String _formatMsgTime(dynamic timestamp) {
     if (timestamp == null) return '';
     final dt = _parseTimestamp(timestamp);
-    return DateFormat('hh:mm a').format(dt);
+    return DateFormat('h:mm a').format(dt);
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
@@ -863,14 +832,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
   Widget _buildDateSeparator(DateTime date) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final msgDay = DateTime(date.year, date.month, date.day);
-    final diff = today.difference(msgDay).inDays;
 
     String label;
-    if (diff == 0) {
+    if (_isSameDay(date, now)) {
       label = 'Today';
-    } else if (diff == 1) {
+    } else if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
       label = 'Yesterday';
     } else {
       label = DateFormat('MMMM d, y').format(date);
@@ -882,13 +848,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
+            color: AppColors.chipBg,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF475569),
+              color: AppColors.textMuted,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.2,
@@ -899,8 +865,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
-  // ── Voice Note Methods ─────────────────────────────────────────────────────
-
   Future<void> _startRecording() async {
     FocusScope.of(context).unfocus();
     final status = await Permission.microphone.request();
@@ -909,7 +873,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Microphone permission required to record voice notes.'),
-            backgroundColor: Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -930,12 +894,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       _recordingSecondsNotifier.value = 0;
       _recordingPath = path;
 
-      // Listen to amplitude for waveform
       _amplitudeSubscription?.cancel();
       _amplitudeSubscription =
           _audioRecorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
         if (!mounted) return;
-        // Normalize dBFS (-60..0) to 0..1
         final normalized = ((amp.current + 60) / 60).clamp(0.0, 1.0);
         final list = List<double>.from(_recordingAmplitudesNotifier.value)..add(normalized);
         if (list.length > 40) {
@@ -944,18 +906,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         _recordingAmplitudesNotifier.value = list;
       });
 
-      // Timer for seconds counter
       _recordingTimer?.cancel();
       _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         _recordingSecondsNotifier.value++;
         if (_recordingSecondsNotifier.value >= 120) {
-          // Max 2 min
           _stopAndSendVoiceNote();
         }
       });
 
-      // ⚡ Fix 9: Save temp file checkpoint to survive process kill
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kVoiceCheckpointPathKey, path);
       await prefs.setString(_kVoiceCheckpointChatIdKey, _chatId);
@@ -969,7 +928,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not start recording: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -982,13 +941,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _amplitudeSubscription?.cancel();
     await _audioRecorder.stop();
 
-    // ⚡ Fix 9: Clear checkpoint on cancel
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kVoiceCheckpointPathKey);
     await prefs.remove(_kVoiceCheckpointChatIdKey);
     await prefs.remove(_kVoiceCheckpointTimeKey);
 
-    // Delete temp file
     if (_recordingPath != null) {
       final f = File(_recordingPath!);
       if (await f.exists()) await f.delete();
@@ -1037,7 +994,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Cannot send message. User is blocked.'),
-              backgroundColor: Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -1045,7 +1002,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         return;
       }
 
-      // Upload audio
       final audioUrl = await AudioUploadService.uploadVoiceNote(file);
       await file.delete();
 
@@ -1065,26 +1021,18 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       if (res == null || res['success'] != true) {
         throw Exception('Failed to send voice note');
       }
-
-      NotificationService().sendNotification(
-        targetHandle: cleanPartner,
-        title: '@$cleanMe',
-        body: '🎤 Voice note',
-        data: {'type': 'chat', 'senderHandle': cleanMe, 'partnerHandle': cleanMe, 'chatId': _chatId},
-      );
     } catch (e) {
       debugPrint('[VoiceNote] Send error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send voice note: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } finally {
-      // ⚡ Fix 9: Clear checkpoint on send finish
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_kVoiceCheckpointPathKey);
@@ -1100,8 +1048,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final s = seconds % 60;
     return '${m.toString().padLeft(1, '0')}:${s.toString().padLeft(2, '0')}';
   }
-
-  // ── Swipe-to-Reply Helper ──────────────────────────────────────────────────
 
   void _onSwipeToReply(Map<String, dynamic> msg, String msgId) {
     final type = (msg['type'] ?? 'text') as String;
@@ -1137,7 +1083,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     });
     HapticFeedback.lightImpact();
 
-    // Automatically focus input field & open keyboard (WhatsApp/Instagram UX)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         if (!_focusNode.hasFocus) {
@@ -1191,7 +1136,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final type = (msg['type'] ?? 'text') as String;
     if (!isMe || type != 'text') return false;
 
-    // ⚡ Fix 5: 15-minute hard limit client validation
     final msgTime = _parseTimestamp(msg['timestamp'] ?? msg['createdAt']);
     final diff = DateTime.now().difference(msgTime);
     if (diff.inSeconds > (15 * 60)) {
@@ -1249,7 +1193,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _cancelEditing();
 
     try {
-      // ⚡ Fix 5: Server-validated 15-minute edit API call
       await DirectChatService.instance.editMessage(
         messageId: editId,
         userHandle: cleanMe,
@@ -1272,7 +1215,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Cannot edit message: $errText'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
@@ -1355,7 +1298,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   void _deleteSelectedMessages() {
     if (_selectedMessageIds.isEmpty) return;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
 
     bool allFromMe = true;
@@ -1378,14 +1320,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Delete $count message${count > 1 ? 's' : ''}?',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
           ),
         ),
         content: Text(
@@ -1394,19 +1336,19 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               : (allFromMe && !allWithin48Hours
                   ? 'Messages older than 48 hours cannot be deleted for everyone. They will be removed from your chat view.'
                   : 'These messages will be removed from your chat view.'),
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: AppColors.textMuted,
           ),
         ),
         actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(
+            child: const Text(
               'Cancel',
               style: TextStyle(
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: AppColors.textMuted,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1419,7 +1361,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             child: const Text(
               'Delete for me',
               style: TextStyle(
-                color: Color(0xFF2563EB),
+                color: AppColors.primary,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1433,7 +1375,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               child: const Text(
                 'Delete for everyone',
                 style: TextStyle(
-                  color: Color(0xFFEF4444),
+                  color: AppColors.error,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1447,7 +1389,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _clearSelection();
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
-    // Immediately remove from optimistic messages if present
     if (mounted) {
       setState(() {
         _optimisticMessages.removeWhere((m) => msgIds.contains(m.id));
@@ -1478,7 +1419,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete messages: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
@@ -1488,7 +1429,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   Widget _buildCallLogBubble(Map<String, dynamic> msg, String msgId, bool isMe) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = _selectedMessageIds.contains(msgId);
     final isSelectionActive = _isSelectionMode;
 
@@ -1503,7 +1443,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final isBusy = callStatus == 'busy';
     final isOutgoing = isMe;
 
-    // Title formulation matching user screenshot exactly
     String title;
     if (isOutgoing) {
       if (isMissed || isDeclined) {
@@ -1525,7 +1464,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       }
     }
 
-    // Subtitle formatting: "01:44 PM . 11s" or "02:01 PM"
     String subtitle = timeStr;
     if (durationSeconds > 0) {
       final m = durationSeconds ~/ 60;
@@ -1534,58 +1472,46 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       subtitle = '$timeStr . $durStr';
     }
 
-    // Determine colors & styling per user screenshot
     final bool showMissedStyle = !isOutgoing && (isMissed || isDeclined || isBusy);
 
-    // Bubble Background
     final Color bubbleColor;
     if (isOutgoing) {
-      // Outgoing caller: sleek dark charcoal/black container
-      bubbleColor = const Color(0xFF18181B);
+      bubbleColor = AppColors.primary;
     } else if (showMissedStyle) {
-      // Missed incoming calls: soft pastel red/pink
-      bubbleColor = isDark ? const Color(0xFF2C1518) : const Color(0xFFFEE2E2);
+      bubbleColor = AppColors.errorSoft;
     } else {
-      // Answered incoming calls: soft grey-blue/off-white
-      bubbleColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+      bubbleColor = AppColors.surface;
     }
 
-    // Icon circle badge background
     final Color badgeColor;
     final Color iconColor;
     final IconData iconData;
 
     if (isOutgoing) {
-      badgeColor = const Color(0xFF27272A);
-      if (isMissed || isDeclined || isBusy) {
-        iconColor = const Color(0xFF94A3B8);
-        iconData = isVideo ? Icons.videocam_rounded : Icons.call_made_rounded;
-      } else {
-        iconColor = const Color(0xFF10B981);
-        iconData = isVideo ? Icons.videocam_rounded : Icons.call_made_rounded;
-      }
+      badgeColor = AppColors.primarySoft;
+      iconColor = AppColors.primary;
+      iconData = isVideo ? Icons.videocam_rounded : Icons.call_made_rounded;
     } else if (showMissedStyle) {
-      badgeColor = isDark ? const Color(0xFF4C1D24) : const Color(0xFFFECDD3);
-      iconColor = const Color(0xFFDC2626);
+      badgeColor = AppColors.errorSoft;
+      iconColor = AppColors.error;
       iconData = isVideo ? Icons.videocam_off_rounded : Icons.phone_missed_rounded;
     } else {
-      badgeColor = const Color(0xFFD1FAE5);
-      iconColor = const Color(0xFF059669);
+      badgeColor = AppColors.primarySoft;
+      iconColor = AppColors.primary;
       iconData = isVideo ? Icons.videocam_rounded : Icons.call_received_rounded;
     }
 
-    // Typography colors
     final Color titleColor;
     final Color subtitleColor;
     if (isOutgoing) {
       titleColor = Colors.white;
-      subtitleColor = const Color(0xFFA1A1AA);
+      subtitleColor = Colors.white70;
     } else if (showMissedStyle) {
-      titleColor = isDark ? const Color(0xFFFFB4AB) : const Color(0xFF0F172A);
-      subtitleColor = isDark ? const Color(0xFFF87171) : const Color(0xFF64748B);
+      titleColor = AppColors.textPrimary;
+      subtitleColor = AppColors.error;
     } else {
-      titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
-      subtitleColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+      titleColor = AppColors.textPrimary;
+      subtitleColor = AppColors.textMuted;
     }
 
     final bubbleBody = Align(
@@ -1611,6 +1537,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           decoration: BoxDecoration(
             color: bubbleColor,
             borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: isOutgoing ? AppColors.primary : AppColors.divider),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1676,11 +1603,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+                color: isSelected ? AppColors.primary : Colors.transparent,
                 border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF2563EB)
-                      : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                  color: isSelected ? AppColors.primary : AppColors.divider,
                   width: 1.8,
                 ),
               ),
@@ -1699,19 +1624,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       ],
     );
 
-    final selectedBgColor = isSelected
-        ? (isDark
-            ? const Color(0xFF1E293B).withValues(alpha: 0.7)
-            : const Color(0xFFEBF4FF))
-        : Colors.transparent;
+    final selectedBgColor = isSelected ? AppColors.primarySoft : Colors.transparent;
 
     return Material(
       color: selectedBgColor,
       child: InkWell(
         onTap: isSelectionActive ? () => _toggleMessageSelection(msgId, msg) : null,
         onLongPress: () => _toggleMessageSelection(msgId, msg),
-        splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
-        highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
+        splashColor: AppColors.primary.withValues(alpha: 0.1),
+        highlightColor: AppColors.primary.withValues(alpha: 0.05),
         child: rowContent,
       ),
     );
@@ -1722,10 +1643,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       return _buildCallLogBubble(msg, msgId, isMe);
     }
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cleanMe = widget.currentUserHandle.replaceAll('@', '').trim();
 
-    // 1. If deleted for me, hide completely
     final deletedForUsers = (msg['deletedForUsers'] as List?)
         ?.map((u) => u.toString().replaceAll('@', '').trim().toLowerCase())
         .toList();
@@ -1733,7 +1652,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       return const SizedBox.shrink();
     }
 
-    // 2. If revoked / deleted for everyone, show WhatsApp-style placeholder
     final isDeleted = msg['isDeleted'] == true || msg['deletedForEveryone'] == true;
     if (isDeleted) {
       final isSelected = _selectedMessageIds.contains(msgId);
@@ -1746,17 +1664,17 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.block_rounded,
               size: 15,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: AppColors.textMuted,
             ),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
                 isMe ? 'You deleted this message' : 'This message was deleted',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                style: const TextStyle(
+                  color: AppColors.textMuted,
                   fontSize: 13.5,
                   fontStyle: FontStyle.italic,
                 ),
@@ -1766,8 +1684,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               const SizedBox(width: 8),
               Text(
                 timeStr,
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                style: const TextStyle(
+                  color: AppColors.textMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1785,7 +1703,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             maxWidth: MediaQuery.of(context).size.width * 0.78,
           ),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF1F5F9),
+            color: AppColors.chipBg,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(18),
               topRight: const Radius.circular(18),
@@ -1793,7 +1711,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
             ),
             border: Border.all(
-              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              color: AppColors.divider,
               width: 1.0,
             ),
           ),
@@ -1816,11 +1734,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 height: 22,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+                  color: isSelected ? AppColors.primary : Colors.transparent,
                   border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFF2563EB)
-                        : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                    color: isSelected ? AppColors.primary : AppColors.divider,
                     width: 1.8,
                   ),
                 ),
@@ -1839,19 +1755,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ],
       );
 
-      final selectedBgColor = isSelected
-          ? (isDark
-              ? const Color(0xFF1E293B).withValues(alpha: 0.7)
-              : const Color(0xFFEBF4FF))
-          : Colors.transparent;
+      final selectedBgColor = isSelected ? AppColors.primarySoft : Colors.transparent;
 
       return Material(
         color: selectedBgColor,
         child: InkWell(
           onTap: isSelectionActive ? () => _toggleMessageSelection(msgId, msg) : null,
           onLongPress: () => _toggleMessageSelection(msgId, msg),
-          splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
-          highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
+          splashColor: AppColors.primary.withValues(alpha: 0.1),
+          highlightColor: AppColors.primary.withValues(alpha: 0.05),
           child: rowContent,
         ),
       );
@@ -1890,14 +1802,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
     );
 
-    // Reply-to data
     final replyToRaw = msg['replyTo'];
     final replyTo = replyToRaw is Map<String, dynamic> ? replyToRaw : null;
     final quotedSenderRaw = (replyTo?['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
     final isQuotedFromMe = quotedSenderRaw.isNotEmpty &&
         quotedSenderRaw.toLowerCase() == cleanMe.toLowerCase();
 
-    // Build the inner content of the bubble
     Widget bubbleContent;
     if (isVoiceNote) {
       final audioUrl = (msg['audioUrl'] ?? '') as String;
@@ -1916,7 +1826,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isForwarded)
-              _buildForwardedLabel(isMe, isDark),
+              _buildForwardedLabel(isMe),
             if (replyTo != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
@@ -1948,7 +1858,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           if (isForwarded)
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-              child: _buildForwardedLabel(isMe, isDark),
+              child: _buildForwardedLabel(isMe),
             ),
           if (replyTo != null)
             Padding(
@@ -1981,7 +1891,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isForwarded)
-              _buildForwardedLabel(isMe, isDark),
+              _buildForwardedLabel(isMe),
             if (replyTo != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -1996,9 +1906,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             Text(
               content,
               style: TextStyle(
-                color: isMe
-                    ? (isDark ? Colors.black : Colors.white)
-                    : (isDark ? Colors.white : const Color(0xFF0F172A)),
+                color: isMe ? Colors.white : AppColors.textPrimary,
                 fontSize: 14.5,
                 height: 1.35,
               ),
@@ -2012,9 +1920,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                     Text(
                       'edited  ',
                       style: TextStyle(
-                        color: isMe
-                            ? (isDark ? Colors.black45 : Colors.white60)
-                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                        color: isMe ? Colors.white60 : AppColors.textMuted,
                         fontSize: 10,
                         fontStyle: FontStyle.italic,
                       ),
@@ -2023,9 +1929,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   Text(
                     timeStr,
                     style: TextStyle(
-                      color: isMe
-                          ? (isDark ? Colors.black54 : Colors.white70)
-                          : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF94A3B8)),
+                      color: isMe ? Colors.white70 : AppColors.textMuted,
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
@@ -2036,19 +1940,19 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                       GestureDetector(
                         onTap: () => _retrySendMessage(msgId),
                         behavior: HitTestBehavior.opaque,
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
+                          children: [
                             Icon(
                               Icons.error_outline_rounded,
                               size: 13,
-                              color: Color(0xFFEF4444),
+                              color: AppColors.error,
                             ),
                             SizedBox(width: 2),
                             Text(
                               'Retry',
                               style: TextStyle(
-                                color: Color(0xFFEF4444),
+                                color: AppColors.error,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -2058,10 +1962,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                       ),
                     ] else if (status == 'sending') ...[
                       const SizedBox(width: 4),
-                      Icon(
+                      const Icon(
                         Icons.access_time_rounded,
                         size: 12,
-                        color: isDark ? Colors.black54 : Colors.white70,
+                        color: Colors.white70,
                       ),
                     ] else ...[
                       const SizedBox(width: 4),
@@ -2072,9 +1976,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                 ? Icons.done_all_rounded
                                 : Icons.done_rounded),
                         size: 14,
-                        color: isRead
-                            ? const Color(0xFF93C5FD)
-                            : (isDark ? Colors.black54 : Colors.white70),
+                        color: isRead ? AppColors.primarySoft : Colors.white70,
                       ),
                     ],
                   ],
@@ -2098,23 +2000,19 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ),
         decoration: BoxDecoration(
           color: isHighlighted
-              ? const Color(0xFF2563EB).withValues(alpha: isDark ? 0.25 : 0.12)
-              : (isMe
-                  ? (isDark ? Colors.white : Colors.black)
-                  : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF4F4F4))),
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : (isMe ? AppColors.primary : AppColors.surface),
           borderRadius: bubbleRadius,
           border: Border.all(
             color: isHighlighted
-                ? const Color(0xFF2563EB)
-                : (isMe
-                    ? (isDark ? Colors.white : Colors.black)
-                    : (isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6))),
+                ? AppColors.primary
+                : (isMe ? AppColors.primary : AppColors.divider),
             width: isHighlighted ? 2.0 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: isHighlighted
-                  ? const Color(0xFF2563EB).withValues(alpha: 0.3)
+                  ? AppColors.primary.withValues(alpha: 0.3)
                   : Colors.black.withValues(alpha: 0.03),
               offset: const Offset(0, 1),
               blurRadius: isHighlighted ? 8 : 3,
@@ -2140,11 +2038,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+                color: isSelected ? AppColors.primary : Colors.transparent,
                 border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF2563EB)
-                      : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                  color: isSelected ? AppColors.primary : AppColors.divider,
                   width: 1.8,
                 ),
               ),
@@ -2163,11 +2059,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       ],
     );
 
-    final selectedBgColor = isSelected
-        ? (isDark
-            ? const Color(0xFF1E293B).withValues(alpha: 0.7)
-            : const Color(0xFFEBF4FF))
-        : Colors.transparent;
+    final selectedBgColor = isSelected ? AppColors.primarySoft : Colors.transparent;
 
     final tappableRow = Material(
       color: selectedBgColor,
@@ -2176,8 +2068,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             ? () => _toggleMessageSelection(msgId, msg)
             : (status == 'failed' ? () => _retrySendMessage(msgId) : null),
         onLongPress: () => _toggleMessageSelection(msgId, msg),
-        splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
-        highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
+        splashColor: AppColors.primary.withValues(alpha: 0.1),
+        highlightColor: AppColors.primary.withValues(alpha: 0.05),
         child: rowContent,
       ),
     );
@@ -2219,9 +2111,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     }
   }
 
-
-
   Widget _buildEmptyChatPlaceholder() {
+    final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
+    final name = NameCacheService.instance.getDisplayName(cleanPartner);
+    final greetingName = name.isNotEmpty ? name : cleanPartner;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -2232,20 +2125,20 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               width: 64,
               height: 64,
               decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+                color: AppColors.primarySoft,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.chat_bubble_outline_rounded,
-                color: Color(0xFF2563EB),
+                color: AppColors.primary,
                 size: 28,
               ),
             ),
             const SizedBox(height: 14),
             Text(
-              'Say hi to @${widget.partnerHandle.replaceAll('@', '')}!',
+              'Say hi to $greetingName!',
               style: const TextStyle(
-                color: Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
               ),
@@ -2254,7 +2147,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
             const Text(
               'Send a message to start connecting with your neighbor.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ],
         ),
@@ -2263,7 +2156,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   Widget _buildMessagesList(List<Map<String, dynamic>> messages) {
-    // Automatically evict optimistic messages that have been confirmed in synced messages
     _optimisticMessages.removeWhere((opt) => messages.any((doc) {
       final docId = (doc['id'] ?? doc['messageId'] ?? '').toString();
       if (docId.isNotEmpty && docId == opt.id) return true;
@@ -2289,7 +2181,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       itemCount: totalCount,
       itemBuilder: (context, index) {
-        // 1. In-flight Optimistic Text Messages (newest, shown immediately)
         if (index < _optimisticMessages.length) {
           final optMsg = _optimisticMessages[index];
           final bubble = _buildMessageBubble(optMsg.toMap(), optMsg.id, true);
@@ -2304,7 +2195,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
         final adjustedIndex = index - _optimisticMessages.length;
 
-        // 2. Pending Image Uploads
         if (adjustedIndex < _pendingUploads.length) {
           final pendingItem = _pendingUploads[adjustedIndex];
           return KeyedSubtree(
@@ -2313,7 +2203,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           );
         }
 
-        // 3. Synced D1 Messages
         final docIndex = adjustedIndex - _pendingUploads.length;
         final msg = messages[docIndex];
         final msgId = (msg['id'] ?? msg['messageId'] ?? 'msg_$docIndex').toString();
@@ -2341,13 +2230,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           itemWidget = Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              bubble,
               _buildDateSeparator(currentTimestamp),
+              bubble,
             ],
           );
         }
 
-        // Only animate NEW incoming or sent messages on first arrival, NEVER re-animate during polling
         if (isNew && index == 0) {
           itemWidget = _AnimatedMessageEntry(child: itemWidget);
         }
@@ -2360,24 +2248,24 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildSelectionAppBar(bool isDark) {
+  PreferredSizeWidget _buildSelectionAppBar() {
     return AppBar(
       key: const ValueKey('selection_app_bar'),
-      backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+      backgroundColor: AppColors.surface,
       elevation: 0.5,
       scrolledUnderElevation: 0.5,
       leading: IconButton(
-        icon: Icon(
+        icon: const Icon(
           Icons.close_rounded,
-          color: isDark ? Colors.white : const Color(0xFF0F172A),
+          color: AppColors.textPrimary,
         ),
         tooltip: 'Clear selection',
         onPressed: _clearSelection,
       ),
       title: Text(
         '${_selectedMessageIds.length} Selected',
-        style: TextStyle(
-          color: isDark ? Colors.white : const Color(0xFF0F172A),
+        style: const TextStyle(
+          color: AppColors.textPrimary,
           fontSize: 17,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
@@ -2386,18 +2274,18 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       actions: [
         if (_canEditSelectedMessage())
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.edit_outlined,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               size: 22,
             ),
             tooltip: 'Edit message',
             onPressed: _startEditingMessage,
           ),
         IconButton(
-          icon: Icon(
+          icon: const Icon(
             Icons.copy_rounded,
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             size: 21,
           ),
           tooltip: 'Copy',
@@ -2406,9 +2294,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         IconButton(
           icon: Transform.flip(
             flipX: true,
-            child: Icon(
+            child: const Icon(
               Icons.reply_rounded,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               size: 22,
             ),
           ),
@@ -2418,7 +2306,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         IconButton(
           icon: const Icon(
             Icons.delete_outline_rounded,
-            color: Color(0xFFEF4444),
+            color: AppColors.error,
             size: 22,
           ),
           tooltip: 'Delete',
@@ -2429,22 +2317,36 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildNormalAppBar(bool isDark) {
+  void _handleBackNavigation() {
+    _fireMarkChatRead();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => MainScreen(
+            repository: PostRepository.instance,
+            currentUserHandle: widget.currentUserHandle,
+          ),
+        ),
+        (route) => false,
+      );
+    }
+  }
+
+  PreferredSizeWidget _buildNormalAppBar() {
     return AppBar(
       key: const ValueKey('normal_app_bar'),
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: AppColors.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: 0,
       leading: IconButton(
-        icon: Icon(
+        icon: const Icon(
           Icons.arrow_back_rounded,
-          color: isDark ? Colors.white : const Color(0xFF0F172A),
+          color: AppColors.textPrimary,
         ),
-        onPressed: () {
-          _fireMarkChatRead();
-          Navigator.pop(context);
-        },
+        onPressed: _handleBackNavigation,
       ),
       title: InkWell(
         onTap: () {
@@ -2474,23 +2376,43 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   initialData: PresenceService.instance.getCachedPresence(widget.partnerHandle),
                   builder: (context, snapshot) {
                     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
-                    final presence = snapshot.data;
+                    final presence = snapshot.data ?? PresenceService.instance.getCachedPresence(widget.partnerHandle);
                     final statusText = PresenceService.formatLastSeen(presence);
                     final isOnline = presence?.isOnline == true;
+
+                    final isPartnerVerified = BadgeCacheService.instance.isUserVerified(cleanPartner);
+                    final partnerBadge = BadgeCacheService.instance.getUserBadge(cleanPartner);
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '@$cleanPartner',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                getDisplayName(cleanPartner),
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.3,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isPartnerVerified || (partnerBadge != null && partnerBadge.isNotEmpty)) ...[
+                              const SizedBox(width: 4),
+                              VerifiedBadge(
+                                isVerified: isPartnerVerified,
+                                badgeText: partnerBadge,
+                                iconSize: 14,
+                                fontSize: 9,
+                                compact: true,
+                              ),
+                            ],
+                          ],
                         ),
                         Row(
                           children: [
@@ -2499,7 +2421,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               child: Text(
                                 statusText,
                                 style: TextStyle(
-                                  color: isOnline ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                  color: isOnline ? AppColors.primary : AppColors.textMuted,
                                   fontSize: 11.5,
                                   fontWeight: isOnline ? FontWeight.w700 : FontWeight.w500,
                                 ),
@@ -2518,7 +2440,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         ),
       ),
       actions: const [
-        // Voice and Video call system hidden for now
         SizedBox(width: 8),
       ],
     );
@@ -2526,10 +2447,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return PopScope(
-      canPop: !_isSelectionMode && _editingMessageId == null,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) {
           _fireMarkChatRead();
@@ -2539,22 +2458,24 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           _clearSelection();
         } else if (_editingMessageId != null) {
           _cancelEditing();
+        } else {
+          _handleBackNavigation();
         }
       },
       child: Scaffold(
-        backgroundColor: isDark ? Colors.black : Colors.white,
+        backgroundColor: AppColors.background,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             child: _isSelectionMode
-                ? _buildSelectionAppBar(isDark)
-                : _buildNormalAppBar(isDark),
+                ? _buildSelectionAppBar()
+                : _buildNormalAppBar(),
           ),
         ),
         body: Column(
           children: [
-            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+            const Divider(height: 1, thickness: 1, color: AppColors.divider),
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _messagesStream,
@@ -2564,7 +2485,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                     return const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                      child: CircularProgressIndicator(color: AppColors.primary),
                     );
                   }
 
@@ -2589,7 +2510,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                     return bId.compareTo(aId);
                   });
 
-                  // 🚀 Instant 0ms Chat Image Prefetch
                   final List<String> chatImages = [];
                   for (final doc in sortedDocs.take(20)) {
                     final img = doc['imageUrl'] as String?;
@@ -2615,12 +2535,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               ),
             ),
             if (_isSendingVoice)
-              LinearProgressIndicator(
-                backgroundColor: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
-                color: isDark ? Colors.white : Colors.black,
+              const LinearProgressIndicator(
+                backgroundColor: AppColors.chipBg,
+                color: AppColors.primary,
               ),
 
-            // ── Edit Message Banner (200ms Slide Down + Fade) ───────────────────
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) {
@@ -2644,11 +2563,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   ? Container(
                       key: const ValueKey('active_edit_banner'),
                       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+                      decoration: const BoxDecoration(
+                        color: AppColors.primarySoft,
                         border: Border(
                           top: BorderSide(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+                            color: AppColors.divider,
                             width: 1,
                           ),
                         ),
@@ -2659,7 +2578,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                             width: 3.5,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -2667,7 +2586,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                           const Icon(
                             Icons.edit_rounded,
                             size: 18,
-                            color: Color(0xFF2563EB),
+                            color: AppColors.primary,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -2680,7 +2599,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                   style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF2563EB),
+                                    color: AppColors.primary,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -2688,9 +2607,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                   _editingOriginalContent ?? '',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 13,
-                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                    color: AppColors.textMuted,
                                   ),
                                 ),
                               ],
@@ -2698,7 +2617,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.close_rounded, size: 20),
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            color: AppColors.textMuted,
                             onPressed: _cancelEditing,
                           ),
                         ],
@@ -2707,7 +2626,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   : const SizedBox.shrink(key: ValueKey('empty_edit_banner')),
             ),
 
-            // ── Reply Banner ────────────────────────────────────────────────────
             AnimatedSize(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeInOut,
@@ -2723,15 +2641,12 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                   : const SizedBox.shrink(),
             ),
 
-            // ── Input Bar (normal or recording) ────────────────────────────────
             Container(
               decoration: BoxDecoration(
-                color: isDark ? Colors.black : Colors.white,
-                border: Border(
+                color: AppColors.surface,
+                border: const Border(
                   top: BorderSide(
-                    color: isDark
-                        ? const Color(0xFF262626)
-                        : const Color(0xFFF1F5F9),
+                    color: AppColors.divider,
                     width: 1,
                   ),
                 ),
@@ -2746,12 +2661,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               child: SafeArea(
                 top: false,
                 child: _isRecording
-                    // ── Recording State Bar ──────────────────────────────────
                     ? Container(
                         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                         child: Row(
                           children: [
-                            // Animated red dot
                             TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0.3, end: 1.0),
                               duration: const Duration(milliseconds: 600),
@@ -2759,7 +2672,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                 opacity: val,
                                 child: const Icon(
                                   Icons.circle,
-                                  color: Color(0xFFEF4444),
+                                  color: AppColors.error,
                                   size: 12,
                                 ),
                               ),
@@ -2771,7 +2684,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                 return Text(
                                   'REC  ${_formatRecordingTime(seconds)}',
                                   style: const TextStyle(
-                                    color: Color(0xFFEF4444),
+                                    color: AppColors.error,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                     letterSpacing: 0.5,
@@ -2780,7 +2693,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               },
                             ),
                             const SizedBox(width: 10),
-                            // Mini waveform preview
                             Expanded(
                               child: SizedBox(
                                 height: 28,
@@ -2806,8 +2718,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                             width: 3,
                                             height: (28 * h).clamp(4.0, 28.0),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFEF4444)
-                                                  .withValues(alpha: 0.7),
+                                              color: AppColors.error.withValues(alpha: 0.7),
                                               borderRadius:
                                                   BorderRadius.circular(2),
                                             ),
@@ -2820,39 +2731,33 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            // Cancel
                             GestureDetector(
                               onTap: _stopAndCancelRecording,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 7),
                                 decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF262626)
-                                      : const Color(0xFFF1F5F9),
+                                  color: AppColors.chipBg,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: Text(
+                                child: const Text(
                                   'Cancel',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white
-                                        : const Color(0xFF374151),
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
-                            // Send recording
                             GestureDetector(
                               onTap: _stopAndSendVoiceNote,
                               child: Container(
                                 width: 42,
                                 height: 42,
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFEF4444),
+                                  color: AppColors.error,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -2865,7 +2770,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                           ],
                         ),
                       )
-                    // ── Normal Input Bar ─────────────────────────────────────
                     : Padding(
                         padding: const EdgeInsets.fromLTRB(10, 8, 12, 12),
                         child: Row(
@@ -2875,11 +2779,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeInOut,
                               child: IconButton(
-                                icon: Icon(
+                                icon: const Icon(
                                   Icons.add_photo_alternate_rounded,
-                                  color: isDark
-                                      ? const Color(0xFF9A9A9A)
-                                      : const Color(0xFF6E6E6E),
+                                  color: AppColors.textMuted,
                                   size: 24,
                                 ),
                                 onPressed: _editingMessageId != null ? null : _pickAndSendImages,
@@ -2894,10 +2796,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                 onSubmitted: (_) => _editingMessageId != null
                                     ? _saveEditedMessage()
                                     : _sendMessage(),
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
                                   fontSize: 14.5,
                                 ),
                                 decoration: InputDecoration(
@@ -2906,12 +2806,15 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                       : (_replyingTo != null
                                           ? (_replyingTo!['isMe'] == true
                                               ? 'Reply to yourself...'
-                                              : 'Reply to @${(_replyingTo!['senderHandle'] ?? '').toString().replaceAll('@', '')}...')
+                                              : () {
+                                                  final h = (_replyingTo!['senderHandle'] ?? '').toString().replaceAll('@', '').trim();
+                                                  final n = NameCacheService.instance.getDisplayName(h);
+                                                  final label = n.isNotEmpty ? n : h;
+                                                  return 'Reply to $label...';
+                                                }())
                                           : 'Type a message...'),
-                                  hintStyle: TextStyle(
-                                    color: isDark
-                                        ? const Color(0xFF6E6E6E)
-                                        : const Color(0xFF94A3B8),
+                                  hintStyle: const TextStyle(
+                                    color: AppColors.textMuted,
                                     fontSize: 14,
                                   ),
                                   border: OutlineInputBorder(
@@ -2919,9 +2822,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
-                                  fillColor: isDark
-                                      ? const Color(0xFF141414)
-                                      : const Color(0xFFF8FAFC),
+                                  fillColor: AppColors.chipBg,
                                   contentPadding:
                                       const EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 10),
@@ -2929,7 +2830,6 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            // Send button OR mic button / save button
                             ValueListenableBuilder<TextEditingValue>(
                               valueListenable: _messageController,
                               builder: (context, textVal, _) {
@@ -2944,7 +2844,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                           width: 42,
                                           height: 42,
                                           decoration: const BoxDecoration(
-                                            color: Color(0xFF2563EB),
+                                            color: AppColors.primary,
                                             shape: BoxShape.circle,
                                           ),
                                           child: IconButton(
@@ -2961,18 +2861,14 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                               key: const ValueKey('send'),
                                               width: 42,
                                               height: 42,
-                                              decoration: BoxDecoration(
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : Colors.black,
+                                              decoration: const BoxDecoration(
+                                                color: AppColors.primary,
                                                 shape: BoxShape.circle,
                                               ),
                                               child: IconButton(
-                                                icon: Icon(
+                                                icon: const Icon(
                                                   Icons.send_rounded,
-                                                  color: isDark
-                                                      ? Colors.black
-                                                      : Colors.white,
+                                                  color: Colors.white,
                                                   size: 19,
                                                 ),
                                                 onPressed: _sendMessage,
@@ -2988,17 +2884,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                                               child: Container(
                                                 width: 42,
                                                 height: 42,
-                                                decoration: BoxDecoration(
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : Colors.black,
+                                                decoration: const BoxDecoration(
+                                                  color: AppColors.primary,
                                                   shape: BoxShape.circle,
                                                 ),
-                                                child: Icon(
+                                                child: const Icon(
                                                   Icons.mic_rounded,
-                                                  color: isDark
-                                                      ? Colors.black
-                                                      : Colors.white,
+                                                  color: Colors.white,
                                                   size: 20,
                                                 ),
                                               ),
@@ -3017,7 +2909,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
-  Widget _buildForwardedLabel(bool isMe, bool isDark) {
+  Widget _buildForwardedLabel(bool isMe) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4, left: 2),
       child: Row(
@@ -3026,17 +2918,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           Icon(
             Icons.shortcut_rounded,
             size: 13,
-            color: isMe
-                ? (isDark ? Colors.black45 : Colors.white60)
-                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+            color: isMe ? Colors.white60 : AppColors.textMuted,
           ),
           const SizedBox(width: 4),
           Text(
             'Forwarded',
             style: TextStyle(
-              color: isMe
-                  ? (isDark ? Colors.black45 : Colors.white70)
-                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+              color: isMe ? Colors.white70 : AppColors.textMuted,
               fontSize: 11,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w600,
@@ -3091,7 +2979,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
     try {
       final partners = <String>{};
 
-      // 1. Load from recent chats
       final chats = await DirectChatService.instance.getChats(cleanHandle);
       for (final conv in chats) {
         final partner = conv.getPartnerHandle(cleanHandle).replaceAll('@', '').trim();
@@ -3100,7 +2987,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
         }
       }
 
-      // 2. Load from friends
       try {
         final repo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
         final friends = await repo.fetchFriends();
@@ -3133,7 +3019,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
 
     for (final target in _selectedHandles) {
       final cleanTarget = target.replaceAll('@', '').trim();
-      final targetChatId = DirectChatService.getChatId(cleanMe, cleanTarget);
 
       try {
         for (final msg in widget.messagesToForward) {
@@ -3154,7 +3039,7 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
             }
           }
 
-          final res = await DirectChatService.instance.sendMessage(
+          await DirectChatService.instance.sendMessage(
             sender: cleanMe,
             receiver: cleanTarget,
             content: content,
@@ -3162,20 +3047,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
             mediaUrls: mediaUrls,
             messageType: forwardType,
           );
-
-          if (res != null && res['success'] == true) {
-            NotificationService().sendNotification(
-              targetHandle: cleanTarget,
-              title: '@$cleanMe',
-              body: summary,
-              data: {
-                'type': 'chat',
-                'senderHandle': cleanMe,
-                'partnerHandle': cleanMe,
-                'chatId': targetChatId,
-              },
-            );
-          }
         }
         successCount++;
       } catch (e) {
@@ -3188,7 +3059,7 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Forwarded to $successCount chat${successCount > 1 ? 's' : ''}'),
-          backgroundColor: const Color(0xFF16A34A),
+          backgroundColor: AppColors.primary,
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
         ),
@@ -3198,7 +3069,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final filteredPartners = _chatPartners.where((handle) {
       if (_searchQuery.isEmpty) return true;
       return handle.toLowerCase().contains(_searchQuery);
@@ -3206,33 +3076,31 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
-          // Drag handle
           Container(
             margin: const EdgeInsets.only(top: 10, bottom: 8),
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: isDark ? Colors.white24 : Colors.black12,
+              color: AppColors.divider,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
               children: [
-                Text(
+                const Text(
                   'Forward to...',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const Spacer(),
@@ -3240,7 +3108,7 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                      color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -3248,27 +3116,26 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF2563EB),
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          // Search Box
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search friends or recent chats...',
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   fontSize: 13.5,
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  color: AppColors.textMuted,
                 ),
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                fillColor: AppColors.chipBg,
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -3277,17 +3144,16 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
               ),
             ),
           ),
-          const Divider(height: 1),
-          // List of Partners
+          const Divider(height: 1, color: AppColors.divider),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : filteredPartners.isEmpty
                     ? Center(
                         child: Text(
                           _searchQuery.isEmpty ? 'No recent chats found' : 'No matches found',
-                          style: TextStyle(
-                            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
                             fontSize: 14,
                           ),
                         ),
@@ -3315,14 +3181,19 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                                   UserAvatar(handle: handle, size: 44, fontSize: 16),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: Text(
-                                      handle.displayHandle,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                      ),
-                                    ),
+                                    child: () {
+                                      final cleanH = handle.replaceAll('@', '').trim();
+                                      final dn = NameCacheService.instance.getDisplayName(cleanH);
+                                      final label = dn.isNotEmpty ? dn : cleanH;
+                                      return Text(
+                                        label,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      );
+                                    }(),
                                   ),
                                   Container(
                                     width: 24,
@@ -3330,12 +3201,12 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: isSelected
-                                          ? const Color(0xFF2563EB)
+                                          ? AppColors.primary
                                           : Colors.transparent,
                                       border: Border.all(
                                         color: isSelected
-                                            ? const Color(0xFF2563EB)
-                                            : (isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
+                                            ? AppColors.primary
+                                            : AppColors.divider,
                                         width: 2,
                                       ),
                                     ),
@@ -3350,7 +3221,6 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                         },
                       ),
           ),
-          // Bottom Forward Button
           SafeArea(
             top: false,
             child: Padding(
@@ -3363,14 +3233,10 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
                       ? _forwardToSelected
                       : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: isDark
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFFE2E8F0),
-                    disabledForegroundColor: isDark
-                        ? const Color(0xFF475569)
-                        : const Color(0xFF94A3B8),
+                    disabledBackgroundColor: AppColors.chipBg,
+                    disabledForegroundColor: AppColors.textMuted,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -3462,7 +3328,7 @@ class _PulsingOnlineDotState extends State<_PulsingOnlineDot>
           height: 7,
           margin: const EdgeInsets.only(right: 5),
           decoration: const BoxDecoration(
-            color: Color(0xFF16A34A),
+            color: AppColors.primary,
             shape: BoxShape.circle,
           ),
         ),
@@ -3473,7 +3339,7 @@ class _PulsingOnlineDotState extends State<_PulsingOnlineDot>
       height: 7,
       margin: const EdgeInsets.only(right: 5),
       decoration: const BoxDecoration(
-        color: Color(0xFF94A3B8),
+        color: AppColors.textMuted,
         shape: BoxShape.circle,
       ),
     );
@@ -3536,6 +3402,3 @@ class _AnimatedMessageEntryState extends State<_AnimatedMessageEntry>
     );
   }
 }
-
-
-

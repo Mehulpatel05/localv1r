@@ -47,12 +47,10 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
 
   void _shareCurrentImage() {
     final url = widget.imageUrls[_currentIndex];
-    // ignore: deprecated_member_use
-    Share.share(
-      widget.caption != null && widget.caption!.isNotEmpty
-          ? '${widget.caption}\n$url'
-          : url,
-    );
+    final text = widget.caption != null && widget.caption!.isNotEmpty
+        ? '${widget.caption}\n$url'
+        : url;
+    SharePlus.instance.share(ShareParams(text: text));
   }
 
   @override
@@ -63,7 +61,6 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Swipeable Image / Video PageView
           GestureDetector(
             onTap: _toggleUi,
             child: PageView.builder(
@@ -129,8 +126,6 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
               },
             ),
           ),
-
-          // Top Header Bar
           AnimatedPositioned(
             duration: AppMotion.durationStandard,
             curve: AppMotion.interactiveCurve,
@@ -179,8 +174,6 @@ class _MultiImageGalleryViewerState extends State<MultiImageGalleryViewer> {
               ),
             ),
           ),
-
-          // Bottom Caption Bar
           if (widget.caption != null && widget.caption!.isNotEmpty)
             AnimatedPositioned(
               duration: AppMotion.durationStandard,

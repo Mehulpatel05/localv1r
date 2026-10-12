@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/bazar_repository.dart';
 import '../../bazar/shop_detail_screen.dart';
+import '../../../theme/app_colors.dart';
 
 class EditShopDetailsScreen extends StatefulWidget {
   final LocalShop shop;
@@ -46,7 +47,6 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
     _sameWhatsapp = widget.shop.sameWhatsapp;
     _homeDelivery = widget.shop.homeDelivery;
 
-    // Parse timings
     _openingTime = const TimeOfDay(hour: 9, minute: 0);
     _closingTime = const TimeOfDay(hour: 21, minute: 0);
     if (widget.shop.timings.contains('-')) {
@@ -98,12 +98,12 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
       initialTime: isOpening ? _openingTime : _closingTime,
       builder: (context, child) {
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF14B8A6),
-              onPrimary: Colors.black,
-              surface: Color(0xFF0A2E33),
-              onSurface: Colors.white,
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: AppColors.surface,
+              onSurface: AppColors.textPrimary,
             ),
           ),
           child: child!,
@@ -128,9 +128,9 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
     if (name.isEmpty || address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter valid Shop Name and Address'),
-          backgroundColor: Color(0xFFEF4444),
+        SnackBar(
+          content: const Text('Please enter valid Shop Name and Address'),
+          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -175,9 +175,9 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
     if (mounted) {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Shop details updated successfully!'),
-          backgroundColor: Color(0xFF0D5E56),
+        SnackBar(
+          content: const Text('✅ Shop details updated successfully!'),
+          backgroundColor: AppColors.textPrimary,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -187,12 +187,10 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg = Color(0xFF0A2E33);
-
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -200,23 +198,23 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
           child: GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
           ),
         ),
         centerTitle: true,
-        title: const Text(
+        title: Text(
           'Edit shop details',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 19,
             fontWeight: FontWeight.w700,
           ),
@@ -227,15 +225,15 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
             child: TextButton(
               onPressed: _isSaving ? null : _saveChanges,
               child: _isSaving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
                     )
-                  : const Text(
+                  : Text(
                       'Save',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -249,21 +247,20 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. BASIC INFO SECTION
-            const Text(
+            Text(
               'Basic info',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 14),
 
-            const Text(
+            Text(
               'SHOP NAME',
               style: TextStyle(
-                color: Color(0xFF94A3B8),
+                color: AppColors.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -273,28 +270,28 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
             Container(
               decoration: BoxDecoration(
-                color: cardBg,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF0F4E56)),
+                border: Border.all(color: AppColors.divider),
               ),
               child: TextField(
                 controller: _nameController,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                decoration: const InputDecoration(
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
                   hintText: 'Enter shop name',
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                  hintStyle: TextStyle(color: AppColors.textMuted),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                 ),
               ),
             ),
 
             const SizedBox(height: 18),
 
-            const Text(
+            Text(
               'CATEGORY',
               style: TextStyle(
-                color: Color(0xFF94A3B8),
+                color: AppColors.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -302,7 +299,6 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
             ),
             const SizedBox(height: 10),
 
-            // Category Chips Row
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -315,10 +311,10 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : cardBg,
+                          color: isSelected ? AppColors.primary : AppColors.surface,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isSelected ? Colors.white : const Color(0xFF0F4E56),
+                            color: isSelected ? AppColors.primary : AppColors.divider,
                           ),
                         ),
                         child: Row(
@@ -328,7 +324,7 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                             Text(
                               cat['name']!,
                               style: TextStyle(
-                                color: isSelected ? Colors.black : Colors.white,
+                                color: isSelected ? Colors.white : AppColors.textPrimary,
                                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -344,11 +340,10 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
             const SizedBox(height: 28),
 
-            // 2. LOCATION & CONTACT SECTION
-            const Text(
+            Text(
               'Location & contact',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
@@ -357,32 +352,31 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
             Container(
               decoration: BoxDecoration(
-                color: cardBg,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF0F4E56)),
+                border: Border.all(color: AppColors.divider),
               ),
               child: TextField(
                 controller: _addressController,
-                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
-                decoration: const InputDecoration(
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w500),
+                decoration: InputDecoration(
                   hintText: 'Shop address, e.g. Shop 4, Alkapuri Main Road',
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                  hintStyle: TextStyle(color: AppColors.textMuted),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                 ),
               ),
             ),
 
             const SizedBox(height: 18),
 
-            // Same number on WhatsApp toggle
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Same number on WhatsApp',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 15.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -392,10 +386,10 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                   child: Switch(
                     value: _sameWhatsapp,
                     onChanged: (val) => setState(() => _sameWhatsapp = val),
-                    activeTrackColor: const Color(0xFF14B8A6),
+                    activeTrackColor: AppColors.primary,
                     activeThumbColor: Colors.white,
-                    inactiveTrackColor: const Color(0xFF1E293B),
-                    inactiveThumbColor: Colors.grey,
+                    inactiveTrackColor: AppColors.chipBg,
+                    inactiveThumbColor: AppColors.textMuted,
                   ),
                 ),
               ],
@@ -403,18 +397,16 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
             const SizedBox(height: 28),
 
-            // 3. TIMINGS & DELIVERY SECTION
-            const Text(
+            Text(
               'Timings & delivery',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 14),
 
-            // Opening & Closing Time Pickers Row
             Row(
               children: [
                 Expanded(
@@ -423,15 +415,15 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF0F4E56)),
+                        border: Border.all(color: AppColors.divider),
                       ),
                       child: Center(
                         child: Text(
                           _formatTimeOfDay(_openingTime),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -447,15 +439,15 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF0F4E56)),
+                        border: Border.all(color: AppColors.divider),
                       ),
                       child: Center(
                         child: Text(
                           _formatTimeOfDay(_closingTime),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -469,14 +461,13 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
             const SizedBox(height: 18),
 
-            // Home delivery toggle
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Home delivery',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 15.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -486,10 +477,10 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                   child: Switch(
                     value: _homeDelivery,
                     onChanged: (val) => setState(() => _homeDelivery = val),
-                    activeTrackColor: const Color(0xFF14B8A6),
+                    activeTrackColor: AppColors.primary,
                     activeThumbColor: Colors.white,
-                    inactiveTrackColor: const Color(0xFF1E293B),
-                    inactiveThumbColor: Colors.grey,
+                    inactiveTrackColor: AppColors.chipBg,
+                    inactiveThumbColor: AppColors.textMuted,
                   ),
                 ),
               ],
@@ -501,14 +492,14 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-        color: Colors.black,
+        color: AppColors.surface,
         child: SizedBox(
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
               shape: const StadiumBorder(),
               elevation: 0,
             ),
@@ -517,7 +508,7 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
                 : const Text(
                     'Save changes',

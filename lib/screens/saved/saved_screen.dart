@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/post_repository.dart';
+import '../../core/services/name_cache_service.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -13,7 +15,7 @@ class SavedScreen extends StatefulWidget {
 }
 
 class _SavedScreenState extends State<SavedScreen> {
-  String _selectedTab = 'Items'; // 'Items', 'Posts', 'Shops'
+  String _selectedTab = 'Items';
 
   List<BazarProduct> _savedItems = [];
   List<LocalShop> _savedShops = [];
@@ -47,20 +49,19 @@ class _SavedScreenState extends State<SavedScreen> {
           .where((p) => p.isSaved)
           .map((p) => {
                 'id': p.id,
-                'title': p.content.isNotEmpty ? (p.content.length > 50 ? '${p.content.substring(0, 50)}...' : p.content) : 'Post by @${p.authorHandle}',
-                'author': '@${p.authorHandle}',
+                'title': p.content.isNotEmpty ? (p.content.length > 50 ? '${p.content.substring(0, 50)}...' : p.content) : 'Post by ${getDisplayName(p.authorHandle)}',
+                'author': getDisplayName(p.authorHandle),
                 'time': p.timeAgo,
               })
           .toList();
     });
   }
 
-
   void _unsaveItem(BazarProduct product) {
     BazarRepository.instance.toggleSaveProduct(product.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF072E33),
+        backgroundColor: AppColors.primary,
         content: Text('Removed "${product.title}" from saved items.'),
         behavior: SnackBarBehavior.floating,
       ),
@@ -71,7 +72,7 @@ class _SavedScreenState extends State<SavedScreen> {
     BazarRepository.instance.toggleSaveShop(shop.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF072E33),
+        backgroundColor: AppColors.primary,
         content: Text('Removed "${shop.name}" from saved shops.'),
         behavior: SnackBarBehavior.floating,
       ),
@@ -81,9 +82,9 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -92,12 +93,12 @@ class _SavedScreenState extends State<SavedScreen> {
             onTap: () => Navigator.pop(context),
             child: Container(
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
@@ -107,7 +108,7 @@ class _SavedScreenState extends State<SavedScreen> {
         title: const Text(
           'Saved',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -116,12 +117,12 @@ class _SavedScreenState extends State<SavedScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // View Tabs (Items | Posts | Shops) matching media_1790655700167.png
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: const BoxDecoration(
+              color: AppColors.surface,
               border: Border(
-                bottom: BorderSide(color: Color(0xFF072E33), width: 1.5),
+                bottom: BorderSide(color: AppColors.divider, width: 1.0),
               ),
             ),
             child: Row(
@@ -139,7 +140,7 @@ class _SavedScreenState extends State<SavedScreen> {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: isSelected ? Colors.white : Colors.transparent,
+                          color: isSelected ? AppColors.primary : Colors.transparent,
                           width: 2.5,
                         ),
                       ),
@@ -147,7 +148,7 @@ class _SavedScreenState extends State<SavedScreen> {
                     child: Text(
                       tab,
                       style: TextStyle(
-                        color: isSelected ? Colors.white : const Color(0xFF90B4B6),
+                        color: isSelected ? AppColors.primary : AppColors.textMuted,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                         fontSize: 16,
                       ),
@@ -157,8 +158,6 @@ class _SavedScreenState extends State<SavedScreen> {
               }).toList(),
             ),
           ),
-
-          // Tab Body View
           Expanded(
             child: _buildTabBody(),
           ),
@@ -197,19 +196,19 @@ class _SavedScreenState extends State<SavedScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF0E525B)),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0E525B),
+                          color: AppColors.primarySoft,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.bookmark_rounded, color: Colors.white, size: 22),
+                        child: const Icon(Icons.bookmark_rounded, color: AppColors.primary, size: 22),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -219,7 +218,7 @@ class _SavedScreenState extends State<SavedScreen> {
                             Text(
                               post['title']!,
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 14.5,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -227,7 +226,7 @@ class _SavedScreenState extends State<SavedScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '${post['author']}  •  ${post['time']}',
-                              style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
+                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                             ),
                           ],
                         ),
@@ -238,7 +237,6 @@ class _SavedScreenState extends State<SavedScreen> {
               },
             );
     } else {
-      // Shops tab
       return _savedShops.isEmpty
           ? _buildEmptyState('No saved shops yet.', Icons.storefront_rounded)
           : ListView.builder(
@@ -250,9 +248,9 @@ class _SavedScreenState extends State<SavedScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF0E525B)),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   child: Row(
                     children: [
@@ -260,7 +258,7 @@ class _SavedScreenState extends State<SavedScreen> {
                         width: 52,
                         height: 52,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF0E525B),
+                          color: AppColors.primarySoft,
                           shape: BoxShape.circle,
                         ),
                         alignment: Alignment.center,
@@ -276,27 +274,27 @@ class _SavedScreenState extends State<SavedScreen> {
                                 Text(
                                   shop.name,
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.textPrimary,
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 if (shop.isVerified) ...[
                                   const SizedBox(width: 6),
-                                  const Icon(Icons.check_circle, color: Color(0xFF14B8A6), size: 16),
+                                  const Icon(Icons.check_circle, color: AppColors.primary, size: 16),
                                 ],
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${shop.category}  •  ${shop.location}',
-                              style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
+                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.favorite_rounded, color: Colors.white),
+                        icon: const Icon(Icons.favorite_rounded, color: AppColors.error),
                         onPressed: () => _unsaveShop(shop),
                       ),
                     ],
@@ -307,19 +305,17 @@ class _SavedScreenState extends State<SavedScreen> {
     }
   }
 
-  // Saved Item Card (Matching media_1790655700167.png)
   Widget _buildSavedItemCard(BazarProduct product) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF072E33),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF0E525B)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image Container with Heart Icon top right
           Expanded(
             child: Stack(
               children: [
@@ -329,9 +325,9 @@ class _SavedScreenState extends State<SavedScreen> {
                           ? Image.network(product.imageUrl, fit: BoxFit.cover)
                           : Image.file(File(product.imageUrl), fit: BoxFit.cover))
                       : Container(
-                          color: const Color(0xFF0E525B),
+                          color: AppColors.chipBg,
                           alignment: Alignment.center,
-                          child: const Icon(Icons.shopping_bag_outlined, color: Colors.white54, size: 40),
+                          child: const Icon(Icons.shopping_bag_outlined, color: AppColors.textMuted, size: 40),
                         ),
                 ),
                 Positioned(
@@ -343,7 +339,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: const Color(0xA6000000),
+                        color: Colors.black.withValues(alpha: 0.4),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white24, width: 1),
                       ),
@@ -359,8 +355,6 @@ class _SavedScreenState extends State<SavedScreen> {
               ],
             ),
           ),
-
-          // Details Container
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -371,7 +365,7 @@ class _SavedScreenState extends State<SavedScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -382,16 +376,16 @@ class _SavedScreenState extends State<SavedScreen> {
                     Text(
                       '₹${product.price}',
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.primaryText,
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       '${product.distanceKm} km',
                       style: const TextStyle(
-                        color: Color(0xFF90B4B6),
+                        color: AppColors.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -410,12 +404,12 @@ class _SavedScreenState extends State<SavedScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: const Color(0xFF90B4B6), size: 48),
+          Icon(icon, color: AppColors.textMuted, size: 48),
           const SizedBox(height: 14),
           Text(
             message,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),

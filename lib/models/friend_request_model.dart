@@ -3,7 +3,9 @@ enum FriendRequestStatus { pending, accepted, rejected }
 class FriendRequest {
   final String id;
   final String senderHandle;
+  final String? senderName;
   final String receiverHandle;
+  final String? receiverName;
   final FriendRequestStatus status;
   final String? senderAvatarUrl;
   final String? receiverAvatarUrl;
@@ -13,7 +15,9 @@ class FriendRequest {
   FriendRequest({
     required this.id,
     required this.senderHandle,
+    this.senderName,
     required this.receiverHandle,
+    this.receiverName,
     required this.status,
     this.senderAvatarUrl,
     this.receiverAvatarUrl,
@@ -39,25 +43,34 @@ class FriendRequest {
       return DateTime.now();
     }
 
+    final rawSenderName = (map['senderName'] ?? map['senderDisplayName'] ?? map['name'] ?? map['displayName']) as String?;
+    final rawReceiverName = (map['receiverName'] ?? map['receiverDisplayName'] ?? map['displayName']) as String?;
+
     return FriendRequest(
       id: id,
       senderHandle: (map['senderHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
+      senderName: (rawSenderName != null && rawSenderName.trim().isNotEmpty) ? rawSenderName.trim() : null,
       receiverHandle: (map['receiverHandle'] as String?)?.replaceAll('@', '').trim() ?? '',
+      receiverName: (rawReceiverName != null && rawReceiverName.trim().isNotEmpty) ? rawReceiverName.trim() : null,
       status: FriendRequestStatus.values.firstWhere(
         (e) => e.name == (map['status'] ?? 'pending'),
         orElse: () => FriendRequestStatus.pending,
       ),
-      senderAvatarUrl: (map['senderAvatarUrl'] ?? map['senderAvatar']) as String?,
-      receiverAvatarUrl: (map['receiverAvatarUrl'] ?? map['receiverAvatar']) as String?,
+      senderAvatarUrl: (map['senderAvatarUrl'] ?? map['senderAvatar'] ?? map['avatarUrl']) as String?,
+      receiverAvatarUrl: (map['receiverAvatarUrl'] ?? map['receiverAvatar'] ?? map['avatarUrl']) as String?,
       createdAt: parseDateTime(map['createdAt']),
       updatedAt: parseDateTime(map['updatedAt']),
     );
   }
 
+  String get displaySenderName => (senderName != null && senderName!.trim().isNotEmpty) ? senderName!.trim() : senderHandle;
+
   Map<String, dynamic> toMap() {
     return {
       'senderHandle': senderHandle,
+      'senderName': senderName,
       'receiverHandle': receiverHandle,
+      'receiverName': receiverName,
       'status': status.name,
       'senderAvatarUrl': senderAvatarUrl,
       'receiverAvatarUrl': receiverAvatarUrl,

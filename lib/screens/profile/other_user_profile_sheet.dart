@@ -7,8 +7,11 @@ import '../../services/auth_service.dart';
 import '../chat/personal_chat_screen.dart';
 import '../../core/action_state/action_state_provider.dart';
 import '../../services/user_action_state_service.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/services/badge_cache_service.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../theme/app_colors.dart';
 
-/// Shows a bottom sheet with another user's profile
 Future<void> showOtherUserProfileSheet(
   BuildContext context, {
   required String partnerHandle,
@@ -45,7 +48,6 @@ class OtherUserProfileSheet extends StatefulWidget {
   @override
   State<OtherUserProfileSheet> createState() => _OtherUserProfileSheetState();
 }
-
 
 class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   Map<String, dynamic>? _userData;
@@ -95,6 +97,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
       if (user != null) {
         _userData = user;
         _likeCount = (user['reputation'] as num?)?.toInt() ?? 0;
+        final isVer = user['isVerified'] == true || user['is_verified'] == 1;
+        final bText = (user['authorBadge'] ?? user['author_badge'] ?? user['badge']) as String?;
+        final fSeq = user['founderSeq'] as int?;
+        BadgeCacheService.instance.setBadge(
+          _targetHandle,
+          isVerified: isVer,
+          badgeText: bText,
+          founderSeq: fSeq,
+        );
       }
       _postCount = posts.length;
       int totalLikes = 0;
@@ -120,12 +131,10 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           SnackBar(
             content: Text(
               newStatus == RelationshipStatus.friends
-                  ? 'You and @$_targetHandle are now friends! 🎉'
-                  : 'Friend request sent to @$_targetHandle!',
+                  ? 'You and ${getDisplayName(_targetHandle)} are now friends! 🎉'
+                  : 'Friend request sent to ${getDisplayName(_targetHandle)}!',
             ),
-            backgroundColor: newStatus == RelationshipStatus.friends
-                ? const Color(0xFF10B981)
-                : const Color(0xFF3B82F6),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -135,7 +144,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -153,8 +162,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         setState(() => _relationshipStatus = RelationshipStatus.friends);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('You and @$_targetHandle are now friends! 🎉'),
-            backgroundColor: const Color(0xFF10B981),
+            content: Text('You and ${getDisplayName(_targetHandle)} are now friends! 🎉'),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -164,7 +173,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -183,7 +192,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Friend request cancelled'),
-            backgroundColor: Color(0xFF475569),
+            backgroundColor: AppColors.textMuted,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -193,7 +202,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -207,27 +216,27 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
-          'Unfriend @$_targetHandle?',
+          'Unfriend ${getDisplayName(_targetHandle)}?',
           style: const TextStyle(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: const Text(
           'Are you sure you want to remove this person from your friends list?',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -247,8 +256,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         setState(() => _relationshipStatus = RelationshipStatus.none);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Removed @$_targetHandle from friends'),
-            backgroundColor: const Color(0xFF475569),
+            content: Text('Removed ${getDisplayName(_targetHandle)} from friends'),
+            backgroundColor: AppColors.textMuted,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -258,7 +267,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -282,8 +291,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('@$_targetHandle has been unblocked'),
-            backgroundColor: const Color(0xFF10B981),
+            content: Text('${getDisplayName(_targetHandle)} has been unblocked'),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -293,7 +302,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -307,27 +316,27 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
-          'Block @$_targetHandle?',
+          'Block ${getDisplayName(_targetHandle)}?',
           style: const TextStyle(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
-          'Block @$_targetHandle? They won\'t be able to send you friend requests or messages.',
-          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          'Block ${getDisplayName(_targetHandle)}? They won\'t be able to send you friend requests or messages.',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -346,8 +355,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('@$_targetHandle has been blocked'),
-                      backgroundColor: const Color(0xFFEF4444),
+                      content: Text('${getDisplayName(_targetHandle)} has been blocked'),
+                      backgroundColor: AppColors.error,
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -357,7 +366,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Error blocking user: $e'),
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: AppColors.error,
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -380,7 +389,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
       builder: (ctx) => Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
@@ -391,14 +400,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFCBD5E1),
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             if (_relationshipStatus == RelationshipStatus.blockedByMe) ...[
               ListTile(
-                leading: const Icon(Icons.lock_open_rounded, color: Color(0xFF10B981)),
-                title: const Text('Unblock User', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
+                leading: const Icon(Icons.lock_open_rounded, color: AppColors.primary),
+                title: const Text('Unblock User', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _unblockUser();
@@ -406,8 +415,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ] else ...[
               ListTile(
-                leading: const Icon(Icons.block_rounded, color: Color(0xFFEF4444)),
-                title: Text('Block @$_targetHandle', style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                leading: const Icon(Icons.block_rounded, color: AppColors.error),
+                title: Text('Block ${getDisplayName(_targetHandle)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showBlockDialog();
@@ -415,14 +424,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               ),
             ],
             ListTile(
-              leading: const Icon(Icons.flag_outlined, color: Color(0xFFF59E0B)),
-              title: Text('Report @$_targetHandle', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w600)),
+              leading: const Icon(Icons.flag_outlined, color: AppColors.textMuted),
+              title: Text('Report ${getDisplayName(_targetHandle)}', style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Report submitted. Our team will review this user.'),
-                    backgroundColor: Color(0xFF10B981),
+                    backgroundColor: AppColors.primary,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -434,11 +443,11 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               child: TextButton(
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  backgroundColor: const Color(0xFFF1F5F9),
+                  backgroundColor: AppColors.chipBg,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                child: const Text('Cancel', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -449,11 +458,18 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bio = ((_userData?['bio'] as String?) ?? '').trim();
+    final rawBio = ((_userData?['bio'] as String?) ?? '').trim();
+    final bio = rawBio.replaceAll('[Verified]', '').trim();
+    final bool isVerified = _userData != null
+        ? (_userData!['isVerified'] == true || _userData!['is_verified'] == 1 || rawBio.contains('[Verified]'))
+        : (rawBio.contains('[Verified]') || BadgeCacheService.instance.isVerified(_targetHandle));
+    final String? authorBadge = _userData != null
+        ? ((_userData!['authorBadge'] ?? _userData!['author_badge'] ?? _userData!['badge']) as String?)
+        : (BadgeCacheService.instance.getBadge(_targetHandle));
 
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
@@ -464,24 +480,23 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Top Drag Handle & 3-Dots Action Row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 22),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Container(
                     width: 38,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
+                      color: AppColors.divider,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF64748B), size: 24),
+                    icon: const Icon(Icons.more_horiz_rounded, color: AppColors.textMuted, size: 24),
                     onPressed: _showMoreActionsMenu,
                   ),
                 ],
@@ -492,16 +507,17 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               if (_isLoading) ...[
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 48),
-                  child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               ] else ...[
-                // Profile Avatar
                 UserAvatar(
                   handle: _targetHandle,
                   photoUrl: _userData?['photoUrl'] as String? ?? _userData?['avatar_url'] as String?,
                   size: 88,
                   showRing: true,
-                  ringGradient: UserAvatar.instagramGradient,
+                  ringGradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.primarySoft],
+                  ),
                   ringWidth: 2.8,
                   ringGap: 2.8,
                   fontSize: 28,
@@ -510,23 +526,51 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 const SizedBox(height: 14),
 
-                // Handle & Subtitle
-                Text(
-                  '@$_targetHandle',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.3,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
+                    final cachedName = NameCacheService.instance.getCachedName(_targetHandle);
+                    final effectiveName = (rawName != null && rawName.trim().isNotEmpty)
+                        ? rawName.trim()
+                        : (cachedName != null && cachedName.trim().isNotEmpty ? cachedName.trim() : null);
+
+                    final displayName = getDisplayName(effectiveName ?? _targetHandle);
+
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.4,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        VerifiedBadge(
+                          handle: _targetHandle,
+                          isVerified: isVerified,
+                          badgeText: authorBadge,
+                          size: 18,
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Vadodara Neighbor',
+                Text(
+                  (authorBadge != null && authorBadge.isNotEmpty)
+                      ? '$authorBadge · Vadodara'
+                      : (isVerified ? 'Verified Citizen · Vadodara' : 'Vadodara Neighbor'),
                   style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
+                    color: isVerified ? AppColors.primaryText : AppColors.textMuted,
+                    fontWeight: isVerified ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
 
@@ -538,7 +582,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                       bio,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: Color(0xFF475569),
+                        color: AppColors.textPrimary,
                         fontSize: 13,
                         height: 1.45,
                       ),
@@ -548,11 +592,10 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 const SizedBox(height: 16),
 
-                // Stats Row
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: AppColors.chipBg,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -560,12 +603,12 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF64748B)),
+                          const Icon(Icons.edit_note_rounded, size: 16, color: AppColors.textMuted),
                           const SizedBox(width: 4),
                           Text(
                             '$_postCount Posts',
                             style: const TextStyle(
-                              color: Color(0xFF1E293B),
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -573,16 +616,16 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                         ],
                       ),
                       const SizedBox(width: 16),
-                      Container(height: 14, width: 1, color: const Color(0xFFCBD5E1)),
+                      Container(height: 14, width: 1, color: AppColors.divider),
                       const SizedBox(width: 16),
                       Row(
                         children: [
-                          const Icon(Icons.favorite_rounded, size: 15, color: Color(0xFFEF4444)),
+                          const Icon(Icons.favorite_rounded, size: 15, color: AppColors.error),
                           const SizedBox(width: 4),
                           Text(
                             '$_likeCount Likes',
                             style: const TextStyle(
-                              color: Color(0xFF1E293B),
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -595,17 +638,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 const SizedBox(height: 22),
 
-                // Dynamic Relationship Button
                 _buildRelationshipButton(),
 
                 const SizedBox(height: 10),
 
-                // Message Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -627,7 +668,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Cannot message a blocked user.'),
-                                backgroundColor: Color(0xFFEF4444),
+                                backgroundColor: AppColors.error,
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -666,7 +707,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         width: double.infinity,
         height: 48,
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
+          color: AppColors.chipBg,
           borderRadius: BorderRadius.circular(14),
         ),
         alignment: Alignment.center,
@@ -675,7 +716,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           height: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Color(0xFF3B82F6),
+            color: AppColors.primary,
           ),
         ),
       );
@@ -687,7 +728,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -715,14 +756,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF475569),
-              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.divider, width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: const Icon(Icons.check_rounded, size: 18, color: Color(0xFF64748B)),
+            icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textMuted),
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
@@ -730,7 +771,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
-                  color: Color(0xFF475569),
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
@@ -743,7 +784,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -771,15 +812,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              backgroundColor: const Color(0xFFECFDF5),
-              foregroundColor: const Color(0xFF059669),
-              side: const BorderSide(color: Color(0xFFA7F3D0), width: 1.5),
+              backgroundColor: AppColors.primarySoft,
+              foregroundColor: AppColors.primaryText,
+              side: const BorderSide(color: AppColors.primary, width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+            icon: const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18),
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
@@ -787,7 +828,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
-                  color: Color(0xFF059669),
+                  color: AppColors.primaryText,
                 ),
               ),
             ),
@@ -800,15 +841,15 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              backgroundColor: const Color(0xFFFEF2F2),
-              foregroundColor: const Color(0xFFDC2626),
+              backgroundColor: AppColors.errorSoft,
+              foregroundColor: const Color(0xFFB3262A),
               side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 18),
+            icon: const Icon(Icons.block_rounded, color: AppColors.error, size: 18),
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
@@ -816,7 +857,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
-                  color: Color(0xFFDC2626),
+                  color: Color(0xFFB3262A),
                 ),
               ),
             ),
@@ -829,19 +870,19 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
+            color: AppColors.chipBg,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: AppColors.divider),
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.do_not_disturb_on_rounded, color: Color(0xFF94A3B8), size: 18),
+              Icon(Icons.do_not_disturb_on_rounded, color: AppColors.textMuted, size: 18),
               SizedBox(width: 8),
               Text(
                 'Unavailable',
                 style: TextStyle(
-                  color: Color(0xFF94A3B8),
+                  color: AppColors.textMuted,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),

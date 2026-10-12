@@ -9,6 +9,7 @@ class ChatConversation {
   final Map<String, bool> typing;
   final Map<String, int> typingTimestamps;
   final String? partnerAvatarUrl;
+  final String? partnerDisplayName;
 
   const ChatConversation({
     required this.id,
@@ -21,6 +22,7 @@ class ChatConversation {
     this.typing = const {},
     this.typingTimestamps = const {},
     this.partnerAvatarUrl,
+    this.partnerDisplayName,
   });
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
@@ -33,14 +35,23 @@ class ChatConversation {
           ? DateTime.fromMillisecondsSinceEpoch(rawTime, isUtc: true).toLocal()
           : DateTime.fromMillisecondsSinceEpoch(rawTime * 1000, isUtc: true).toLocal();
     } else if (rawTime is String) {
-      final numVal = int.tryParse(rawTime);
+      final trimmed = rawTime.trim();
+      final numVal = int.tryParse(trimmed);
       if (numVal != null) {
         updated = numVal > 1000000000000
             ? DateTime.fromMillisecondsSinceEpoch(numVal, isUtc: true).toLocal()
             : DateTime.fromMillisecondsSinceEpoch(numVal * 1000, isUtc: true).toLocal();
       } else {
-        final parsed = DateTime.tryParse(rawTime);
-        updated = parsed != null ? (parsed.isUtc ? parsed.toLocal() : parsed) : null;
+        final hasTimezone = trimmed.endsWith('Z') ||
+            trimmed.contains('+') ||
+            (trimmed.length > 19 && trimmed[19] == '-' && trimmed.contains('T'));
+        if (hasTimezone) {
+          final parsed = DateTime.tryParse(trimmed);
+          updated = parsed?.toLocal();
+        } else {
+          final withZ = '${trimmed.replaceAll(' ', 'T')}Z';
+          updated = DateTime.tryParse(withZ)?.toLocal() ?? DateTime.tryParse(trimmed)?.toLocal();
+        }
       }
     }
 
@@ -77,6 +88,8 @@ class ChatConversation {
     // chatId or canonicalId from backend, fallback to id
     final chatId = (json['chatId'] ?? json['canonicalId'] ?? json['id'] ?? '').toString();
 
+    final partnerDisplayName = (json['partnerDisplayName'] ?? json['partnerName'] ?? json['otherUserName'] ?? json['name'] ?? json['displayName']) as String?;
+
     return ChatConversation(
       id: chatId,
       participants: participants,
@@ -88,6 +101,7 @@ class ChatConversation {
       typing: typing,
       typingTimestamps: typingTimestamps,
       partnerAvatarUrl: json['partnerAvatarUrl'] as String?,
+      partnerDisplayName: (partnerDisplayName != null && partnerDisplayName.trim().isNotEmpty) ? partnerDisplayName.trim() : null,
     );
   }
 
@@ -104,6 +118,7 @@ class ChatConversation {
       'typing': typing,
       'typingTimestamps': typingTimestamps,
       'partnerAvatarUrl': partnerAvatarUrl,
+      'partnerDisplayName': partnerDisplayName,
     };
   }
 
@@ -130,6 +145,13 @@ class ChatConversation {
       (p) => p.replaceAll('@', '').trim().toLowerCase() != cleanCurrent,
       orElse: () => participants.isNotEmpty ? participants.first : 'Neighbor',
     );
+  }
+
+  String getPartnerDisplayName(String currentUserHandle) {
+    if (partnerDisplayName != null && partnerDisplayName!.trim().isNotEmpty) {
+      return partnerDisplayName!.trim();
+    }
+    return getPartnerHandle(currentUserHandle);
   }
 
   int getUnreadCount(String currentUserHandle) {

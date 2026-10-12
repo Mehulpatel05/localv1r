@@ -5,15 +5,20 @@ import '../../core/widgets/user_avatar.dart';
 import '../../services/friend_repository.dart';
 import '../../services/post_repository.dart';
 import '../profile/other_user_profile_sheet.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../theme/app_colors.dart';
 
 class DiscoverPeopleScreen extends StatefulWidget {
   final FriendRepository repository;
   final String currentUserHandle;
+  final String? initialQuery;
 
   const DiscoverPeopleScreen({
     super.key,
     required this.repository,
     required this.currentUserHandle,
+    this.initialQuery,
   });
 
   @override
@@ -22,10 +27,10 @@ class DiscoverPeopleScreen extends StatefulWidget {
 
 class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   Timer? _debounceTimer;
-  Timer? _liveRefreshTimer;
   List<Map<String, dynamic>> _people = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   final Set<String> _loadingHandles = {};
 
   @override
@@ -35,28 +40,35 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
     if (clean.isNotEmpty) {
       widget.repository.currentUserHandle = clean;
     }
-    _loadPeople();
-
-    // ⚡ Live auto-refresh while viewing Discover People screen
-    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted && _searchController.text.trim().isEmpty) {
-        _silentRefreshPeople();
-      }
-    });
+    final initial = widget.initialQuery?.trim() ?? '';
+    if (initial.isNotEmpty) {
+      _searchController.text = initial;
+      _loadPeople(query: initial);
+    }
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
-    _liveRefreshTimer?.cancel();
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadPeople({String query = ''}) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _people = [];
+          _isLoading = false;
+        });
+      }
+      return;
+    }
     setState(() => _isLoading = true);
     try {
-      final results = await widget.repository.discoverPeople(query: query);
+      final results = await widget.repository.discoverPeople(query: cleanQuery);
       if (mounted) {
         setState(() {
           _people = results;
@@ -69,21 +81,19 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
     }
   }
 
-  Future<void> _silentRefreshPeople() async {
-    try {
-      final results = await widget.repository.discoverPeople(query: '');
-      if (mounted && results.isNotEmpty) {
-        setState(() {
-          _people = results;
-        });
-      }
-    } catch (_) {}
-  }
-
   void _onSearchChanged(String val) {
     _debounceTimer?.cancel();
+    final trimmed = val.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _people = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    setState(() => _isLoading = true);
     _debounceTimer = Timer(const Duration(milliseconds: 350), () {
-      _loadPeople(query: val.trim());
+      _loadPeople(query: trimmed);
     });
   }
 
@@ -105,8 +115,8 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
         });
         _showToast(
           message: newRel == RelationshipStatus.friends
-              ? 'You and @$handle are now friends! 🎉'
-              : 'Friend request sent to @$handle',
+              ? 'You and ${getDisplayName(handle)} are now friends! 🎉'
+              : 'Friend request sent to ${getDisplayName(handle)}',
           isSuccess: true,
         );
       } else if (currentRel == 'requestSentByMe') {
@@ -120,7 +130,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
         setState(() {
           person['relationship'] = 'friends';
         });
-        _showToast(message: 'You and @$handle are now friends! 🎉', isSuccess: true);
+        _showToast(message: 'You and ${getDisplayName(handle)} are now friends! 🎉', isSuccess: true);
       }
       widget.repository.refreshAll().catchError((_) {});
     } catch (e) {
@@ -143,12 +153,11 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF0E525B),
+            color: AppColors.textPrimary,
             borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: const Color(0xFF14B8A6).withValues(alpha: 0.4)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -158,7 +167,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
             children: [
               Icon(
                 isSuccess ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                color: isSuccess ? const Color(0xFF14B8A6) : const Color(0xFF90B4B6),
+                color: isSuccess ? AppColors.primary : AppColors.error,
                 size: 18,
               ),
               const SizedBox(width: 10),
@@ -186,94 +195,125 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       currentUserHandle: widget.currentUserHandle,
       repository: context.read<PostRepository>(),
     ).then((_) {
-      // Refresh current discover list after returning from profile sheet
-      _loadPeople(query: _searchController.text.trim());
+      if (_searchController.text.trim().isNotEmpty) {
+        _loadPeople(query: _searchController.text.trim());
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: _searchController.text.isEmpty && !_searchFocusNode.hasFocus,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _searchController.clear();
+        _searchFocusNode.unfocus();
+        setState(() {
+          _people = [];
+          _isLoading = false;
+        });
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          titleSpacing: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            onPressed: () {
+              if (_searchController.text.isNotEmpty || _searchFocusNode.hasFocus) {
+                _searchController.clear();
+                _searchFocusNode.unfocus();
+                setState(() {
+                  _people = [];
+                  _isLoading = false;
+                });
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Discover People',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              Text(
+                'Connect with Vadodara neighbors',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Discover People',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.chipBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  onChanged: _onSearchChanged,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    hintText: 'Search people by name or @handle...',
+                    hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13.5),
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchFocusNode.unfocus();
+                              setState(() {
+                                _people = [];
+                                _isLoading = false;
+                              });
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
             ),
-            Text(
-              'Connect with Vadodara neighbors',
-              style: TextStyle(
-                color: Color(0xFF90B4B6),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+            Expanded(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                backgroundColor: AppColors.surface,
+                onRefresh: () async {
+                  if (_searchController.text.trim().isNotEmpty) {
+                    await _loadPeople(query: _searchController.text.trim());
+                  }
+                },
+                child: _buildBody(),
               ),
             ),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          // ── Search Input ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFF072E33),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF0E4B52)),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                cursorColor: const Color(0xFF14B8A6),
-                decoration: InputDecoration(
-                  hintText: 'Search people by name or @handle...',
-                  hintStyle: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13.5),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF90B4B6), size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFF90B4B6), size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            _loadPeople();
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
-          ),
-
-          // ── People List ──
-          Expanded(
-            child: RefreshIndicator(
-              color: const Color(0xFF14B8A6),
-              backgroundColor: const Color(0xFF072E33),
-              onRefresh: () => _loadPeople(query: _searchController.text.trim()),
-              child: _buildBody(),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -288,7 +328,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.18),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -297,21 +337,21 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.chipBg,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF0E4B52)),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   child: Icon(
-                    isSearching ? Icons.person_search_rounded : Icons.people_outline_rounded,
-                    color: const Color(0xFF14B8A6),
+                    isSearching ? Icons.person_search_rounded : Icons.search_rounded,
+                    color: AppColors.primary,
                     size: 34,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  isSearching ? 'No neighbors found' : 'No suggestions available',
+                  isSearching ? 'No neighbors found' : 'Search for neighbors',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -322,10 +362,10 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
                   child: Text(
                     isSearching
                         ? 'Try searching with a different name or @handle'
-                        : 'New community members will appear here as they join.',
+                        : 'Type a name or @handle above to find and connect with people in your neighborhood.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Color(0xFF90B4B6),
+                      color: AppColors.textMuted,
                       fontSize: 13,
                     ),
                   ),
@@ -359,12 +399,12 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF072E33),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0E4B52)),
+        border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -373,7 +413,6 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Avatar
           UserAvatar(
             handle: handle,
             photoUrl: person['avatarUrl'] as String?,
@@ -383,38 +422,40 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           ),
           const SizedBox(width: 12),
 
-          // User Info
           Expanded(
             child: GestureDetector(
               onTap: () => _openUserProfile(handle),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    displayName.isNotEmpty ? displayName : handle,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '@$handle',
-                    style: const TextStyle(
-                      color: Color(0xFF14B8A6),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          getDisplayName(handle, fallback: displayName),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      VerifiedBadge(
+                        handle: handle,
+                        isVerified: person['isVerified'] == true || person['is_verified'] == 1,
+                        badgeText: (person['authorBadge'] ?? person['badge']) as String?,
+                        size: 14,
+                      ),
+                    ],
                   ),
                   if (bio.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
                       bio,
                       style: const TextStyle(
-                        color: Color(0xFF90B4B6),
+                        color: AppColors.textMuted,
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -427,7 +468,6 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           ),
           const SizedBox(width: 10),
 
-          // Action Button
           _buildActionButton(person, relationship, isLoadingAction),
         ],
       ),
@@ -444,7 +484,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
         width: 90,
         height: 36,
         decoration: BoxDecoration(
-          color: const Color(0xFF0E525B),
+          color: AppColors.chipBg,
           borderRadius: BorderRadius.circular(18),
         ),
         alignment: Alignment.center,
@@ -453,7 +493,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           height: 16,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Color(0xFF14B8A6),
+            color: AppColors.primary,
           ),
         ),
       );
@@ -464,19 +504,19 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: const Color(0xFF0E525B).withValues(alpha: 0.5),
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFF14B8A6).withValues(alpha: 0.5)),
+            border: Border.all(color: AppColors.primary),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.check_rounded, color: Color(0xFF14B8A6), size: 14),
+            children: [
+              Icon(Icons.check_rounded, color: AppColors.primaryText, size: 14),
               SizedBox(width: 4),
               Text(
                 'Friends',
                 style: TextStyle(
-                  color: Color(0xFF14B8A6),
+                  color: AppColors.primaryText,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -490,14 +530,14 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             minimumSize: const Size(0, 36),
-            side: const BorderSide(color: Color(0xFF0E525B)),
+            side: const BorderSide(color: AppColors.divider),
             shape: const StadiumBorder(),
           ),
           onPressed: () => _handleFriendAction(person),
           child: const Text(
             'Requested',
             style: TextStyle(
-              color: Color(0xFF90B4B6),
+              color: AppColors.textMuted,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -507,7 +547,7 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       case 'requestReceivedByMe':
         return ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -527,8 +567,8 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       default:
         return ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF14B8A6),
-            foregroundColor: Colors.black,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             minimumSize: const Size(0, 36),
@@ -555,9 +595,9 @@ class _DiscoverPeopleScreenState extends State<DiscoverPeopleScreen> {
       itemBuilder: (_, _) => Container(
         height: 72,
         decoration: BoxDecoration(
-          color: const Color(0xFF072E33).withValues(alpha: 0.6),
+          color: AppColors.chipBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF0E4B52).withValues(alpha: 0.5)),
+          border: Border.all(color: AppColors.divider),
         ),
       ),
     );

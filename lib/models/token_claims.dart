@@ -24,7 +24,7 @@ class TokenClaims {
   factory TokenClaims.anonymous() => const TokenClaims(
         uid: '',
         role: 'guest',
-        cityId: 'surat_gujarat',
+        cityId: 'GJ-VAD',
         verified: false,
         handle: 'guest',
         planTier: 'free',
@@ -36,7 +36,7 @@ class TokenClaims {
     return TokenClaims(
       uid: json['uid']?.toString() ?? json['sub']?.toString() ?? '',
       role: json['role']?.toString() ?? 'user',
-      cityId: json['cityId']?.toString() ?? json['city_id']?.toString() ?? 'surat_gujarat',
+      cityId: json['cityId']?.toString() ?? json['city_id']?.toString() ?? 'GJ-VAD',
       verified: json['verified'] == true || json['verified'] == 1,
       handle: json['handle']?.toString() ?? '',
       planTier: json['planTier']?.toString() ?? json['plan_tier']?.toString() ?? 'free',

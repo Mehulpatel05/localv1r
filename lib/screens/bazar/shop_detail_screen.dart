@@ -5,6 +5,9 @@ import '../../services/auth_service.dart';
 import '../../services/bazar_repository.dart';
 import '../chat/personal_chat_screen.dart';
 import '../shop/manage/my_shop_dashboard_screen.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../core/services/badge_cache_service.dart';
+import '../../theme/app_colors.dart';
 
 class LocalShop {
   final String id;
@@ -15,6 +18,7 @@ class LocalShop {
   final String location;
   final double distanceKm;
   final bool isVerified;
+  final String? authorBadge;
   final String imageUrl;
   final String bannerUrl;
   final String phone;
@@ -38,7 +42,8 @@ class LocalShop {
     required this.categoryIcon,
     required this.location,
     required this.distanceKm,
-    this.isVerified = true,
+    this.isVerified = false,
+    this.authorBadge,
     required this.imageUrl,
     this.bannerUrl = '',
     this.phone = '',
@@ -64,6 +69,7 @@ class LocalShop {
         'location': location,
         'distanceKm': distanceKm,
         'isVerified': isVerified,
+        'authorBadge': authorBadge,
         'imageUrl': imageUrl,
         'bannerUrl': bannerUrl,
         'phone': phone,
@@ -80,33 +86,47 @@ class LocalShop {
         'products': products.map((p) => p.toJson()).toList(),
       };
 
-  factory LocalShop.fromJson(Map<String, dynamic> json) => LocalShop(
-        id: json['id'] ?? '',
-        ownerHandle: json['ownerHandle'] ?? json['owner_handle'] ?? '',
-        name: json['name'] ?? json['shop_name'] ?? json['shopName'] ?? '',
-        category: json['category'] ?? 'General',
-        categoryIcon: json['categoryIcon'] ?? (json['category'] == 'Pharmacy' ? '💊' : (json['category'] == 'Bakery' ? '🥐' : (json['category'] == 'Kirana' ? '🛒' : '🏪'))),
-        location: json['location'] ?? json['address'] ?? '',
-        distanceKm: json['distanceKm'] is num ? (json['distanceKm'] as num).toDouble() : 0.8,
-        isVerified: json['isVerified'] ?? true,
-        imageUrl: json['imageUrl'] ?? json['logo_r2_path'] ?? json['banner_r2_path'] ?? '',
-        bannerUrl: json['bannerUrl'] ?? json['banner_r2_path'] ?? '',
-        phone: json['phone'] ?? '',
-        deliveryInfo: json['deliveryInfo'] ?? '',
-        timings: json['timings'] ?? '9:00 AM - 9:00 PM',
-        aboutText: json['aboutText'] ?? json['description'] ?? '',
-        isOpen: json['isOpen'] ?? (json['status'] != 'inactive'),
-        sameWhatsapp: json['sameWhatsapp'] ?? true,
-        homeDelivery: json['homeDelivery'] ?? true,
-        viewsCount: json['viewsCount'] ?? (json['stats']?['viewsThisWeek'] ?? 0),
-        chatsCount: json['chatsCount'] ?? (json['stats']?['chatsCount'] ?? 0),
-        ordersCount: json['ordersCount'] ?? (json['stats']?['ordersCount'] ?? 0),
-        status: json['status'] ?? 'active',
-        products: (json['products'] as List<dynamic>?)
-                ?.map((p) => BazarProduct.fromJson(p as Map<String, dynamic>))
-                .toList() ??
-            [],
+  factory LocalShop.fromJson(Map<String, dynamic> json) {
+    final owner = (json['ownerHandle'] ?? json['owner_handle'] ?? '') as String;
+    final isVer = json['isVerified'] == true || json['is_verified'] == 1;
+    final badge = (json['authorBadge'] ?? json['author_badge'] ?? json['badge']) as String?;
+    if (owner.isNotEmpty) {
+      BadgeCacheService.instance.setBadge(
+        owner.replaceAll('@', ''),
+        isVerified: isVer,
+        badgeText: badge,
       );
+    }
+
+    return LocalShop(
+      id: json['id'] ?? '',
+      ownerHandle: owner,
+      name: json['name'] ?? json['shop_name'] ?? json['shopName'] ?? '',
+      category: json['category'] ?? 'General',
+      categoryIcon: json['categoryIcon'] ?? (json['category'] == 'Pharmacy' ? '💊' : (json['category'] == 'Bakery' ? '🥐' : (json['category'] == 'Kirana' ? '🛒' : '🏪'))),
+      location: json['location'] ?? json['address'] ?? '',
+      distanceKm: json['distanceKm'] is num ? (json['distanceKm'] as num).toDouble() : 0.8,
+      isVerified: isVer,
+      authorBadge: badge,
+      imageUrl: json['imageUrl'] ?? json['logo_r2_path'] ?? json['banner_r2_path'] ?? '',
+      bannerUrl: json['bannerUrl'] ?? json['banner_r2_path'] ?? '',
+      phone: json['phone'] ?? '',
+      deliveryInfo: json['deliveryInfo'] ?? '',
+      timings: json['timings'] ?? '9:00 AM - 9:00 PM',
+      aboutText: json['aboutText'] ?? json['description'] ?? '',
+      isOpen: json['isOpen'] ?? (json['status'] != 'inactive'),
+      sameWhatsapp: json['sameWhatsapp'] ?? true,
+      homeDelivery: json['homeDelivery'] ?? true,
+      viewsCount: json['viewsCount'] ?? (json['stats']?['viewsThisWeek'] ?? 0),
+      chatsCount: json['chatsCount'] ?? (json['stats']?['chatsCount'] ?? 0),
+      ordersCount: json['ordersCount'] ?? (json['stats']?['ordersCount'] ?? 0),
+      status: json['status'] ?? 'active',
+      products: (json['products'] as List<dynamic>?)
+              ?.map((p) => BazarProduct.fromJson(p as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
 }
 
 class ShopDetailScreen extends StatefulWidget {
@@ -122,16 +142,16 @@ class ShopDetailScreen extends StatefulWidget {
 }
 
 class _ShopDetailScreenState extends State<ShopDetailScreen> {
-  String _selectedTab = 'Products'; // 'Products', 'About', 'Reviews'
+  String _selectedTab = 'Products';
 
   @override
   Widget build(BuildContext context) {
     final shop = widget.shop;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -139,20 +159,19 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
           child: GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
           ),
         ),
         actions: [
-          // Manage Shop Button
           FutureBuilder<String?>(
             future: AuthService.instance.getUserHandle(),
             builder: (context, snapshot) {
@@ -179,19 +198,19 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F4E56),
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF14B8A6)),
+                    border: Border.all(color: AppColors.primary),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.settings_outlined, color: Color(0xFF2DD4BF), size: 16),
-                      SizedBox(width: 4),
+                      Icon(Icons.settings_outlined, color: AppColors.primaryText, size: 16),
+                      const SizedBox(width: 4),
                       Text(
                         'Manage',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.primaryText,
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -203,7 +222,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
             },
           ),
 
-          // Share Button
           GestureDetector(
             onTap: () {
               SharePlus.instance.share(
@@ -216,24 +234,23 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
               width: 40,
               height: 40,
               margin: const EdgeInsets.only(right: 10),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.ios_share_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 18,
               ),
             ),
           ),
 
-          // Call Button Top Right
           GestureDetector(
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  backgroundColor: const Color(0xFF072E33),
+                  backgroundColor: AppColors.textPrimary,
                   content: Text('📞 Calling ${shop.name} (${shop.phone})...'),
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -243,13 +260,13 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
               width: 40,
               height: 40,
               margin: const EdgeInsets.only(right: 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.call_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
@@ -266,10 +283,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 
           return Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            decoration: const BoxDecoration(
-              color: Colors.black,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
               border: Border(
-                top: BorderSide(color: Color(0xFF072E33), width: 1.5),
+                top: BorderSide(color: AppColors.divider, width: 1.5),
               ),
             ),
             child: isOwner
@@ -278,14 +295,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     height: 52,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F4E56),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.primarySoft,
+                        foregroundColor: AppColors.primaryText,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(26),
-                          side: const BorderSide(color: Color(0xFF14B8A6), width: 1.5),
+                          side: BorderSide(color: AppColors.primary, width: 1.5),
                         ),
                       ),
-                      icon: const Icon(Icons.dashboard_outlined, color: Color(0xFF2DD4BF), size: 20),
+                      icon: Icon(Icons.dashboard_outlined, color: AppColors.primaryText, size: 20),
                       label: const Text(
                         'Manage My Shop',
                         style: TextStyle(
@@ -308,15 +326,14 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   )
                 : Row(
                     children: [
-                      // Outlined Call Button
                       Expanded(
                         child: SizedBox(
                           height: 52,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white, width: 1.5),
+                              backgroundColor: AppColors.chipBg,
+                              foregroundColor: AppColors.textPrimary,
+                              side: BorderSide(color: AppColors.divider, width: 1.5),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(26),
                               ),
@@ -334,19 +351,19 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                                 showDialog(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
-                                    backgroundColor: const Color(0xFF0A1F22),
+                                    backgroundColor: AppColors.surface,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(20),
-                                      side: const BorderSide(color: Color(0xFF0F5A63)),
+                                      side: BorderSide(color: AppColors.divider),
                                     ),
                                     title: Row(
                                       children: [
-                                        const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF2DD4BF), size: 24),
+                                        Icon(Icons.phone_in_talk_rounded, color: AppColors.primary, size: 24),
                                         const SizedBox(width: 10),
                                         Expanded(
                                           child: Text(
                                             shop.name,
-                                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                            style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -357,31 +374,31 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Shop Contact Number:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                                        Text('Shop Contact Number:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
                                         const SizedBox(height: 6),
                                         Text(
                                           shop.phone,
-                                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                          style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                         ),
                                         if (shop.timings.isNotEmpty) ...[
                                           const SizedBox(height: 12),
-                                          Text('🕒 Timings: ${shop.timings}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                                          Text('🕒 Timings: ${shop.timings}', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
                                         ],
                                       ],
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(ctx),
-                                        child: const Text('Close', style: TextStyle(color: Colors.white70)),
+                                        child: Text('Close', style: TextStyle(color: AppColors.textMuted)),
                                       ),
                                     ],
                                   ),
                                 );
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Shop phone number not available.'),
-                                    backgroundColor: Color(0xFF072E33),
+                                  SnackBar(
+                                    content: const Text('Shop phone number not available.'),
+                                    backgroundColor: AppColors.textPrimary,
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
@@ -392,15 +409,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       ),
                       const SizedBox(width: 14),
 
-                      // Solid White Chat with Shop Button
                       Expanded(
                         flex: 2,
                         child: SizedBox(
                           height: 52,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(26),
                               ),
@@ -419,7 +436,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                                   ? shop.ownerHandle
                                   : shop.id.replaceAll('shop_', '');
 
-                              // Track shop chat inquiry in background
                               BazarRepository.instance.recordShopChatInquiry(shop.id);
 
                               if (!context.mounted) return;
@@ -444,20 +460,18 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Shop Header Card (Avatar + Title + Verified Badge + Subtitle)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Shop Circle Avatar
                 Container(
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.surface,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF0E525B), width: 1.5),
+                    border: Border.all(color: AppColors.divider, width: 1.5),
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -467,7 +481,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 ),
                 const SizedBox(width: 14),
 
-                // Shop Metadata
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,45 +490,26 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                           Flexible(
                             child: Text(
                               shop.name,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          if (shop.isVerified) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF094B52),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Icon(Icons.check, color: Colors.white, size: 12),
-                                  SizedBox(width: 3),
-                                  Text(
-                                    'Verified',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          VerifiedBadge(
+                            handle: shop.ownerHandle,
+                            isVerified: shop.isVerified,
+                            badgeText: shop.authorBadge,
+                            size: 16,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${shop.category}  •  ${shop.location}  •  ${shop.distanceKm} km away',
-                        style: const TextStyle(
-                          color: Color(0xFF90B4B6),
+                        style: TextStyle(
+                          color: AppColors.textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -529,11 +523,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 
           const SizedBox(height: 12),
 
-          // 2. Shop Navigation Tabs (Products | About | Reviews)
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: Color(0xFF072E33), width: 1.5),
+                bottom: BorderSide(color: AppColors.divider, width: 1.5),
               ),
             ),
             child: Row(
@@ -551,7 +544,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: isSelected ? Colors.white : Colors.transparent,
+                          color: isSelected ? AppColors.primary : Colors.transparent,
                           width: 2.5,
                         ),
                       ),
@@ -559,7 +552,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     child: Text(
                       tab,
                       style: TextStyle(
-                        color: isSelected ? Colors.white : const Color(0xFF90B4B6),
+                        color: isSelected ? AppColors.primaryText : AppColors.textMuted,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                         fontSize: 16,
                       ),
@@ -570,7 +563,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
             ),
           ),
 
-          // 3. Tab Body
           Expanded(
             child: _buildTabBody(shop),
           ),
@@ -588,18 +580,18 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
               alignment: Alignment.center,
-              child: const Column(
+              child: Column(
                 children: [
-                  Text('📦', style: TextStyle(fontSize: 40)),
-                  SizedBox(height: 12),
+                  const Text('📦', style: TextStyle(fontSize: 40)),
+                  const SizedBox(height: 12),
                   Text(
                     'No products listed yet',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     'This shop has not listed any catalog products yet.',
-                    style: TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -624,14 +616,13 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 
           const SizedBox(height: 16),
 
-          // Info Banner (🛵 Free home delivery / timings)
           if (shop.deliveryInfo.isNotEmpty || shop.timings.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFF072E33),
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF0E525B)),
+                border: Border.all(color: AppColors.divider),
               ),
               child: Row(
                 children: [
@@ -640,8 +631,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   Expanded(
                     child: Text(
                       '${shop.deliveryInfo.isNotEmpty ? shop.deliveryInfo : "Home delivery available"}  •  ${shop.timings.isNotEmpty ? shop.timings : "Open Today"}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w500,
                         height: 1.3,
@@ -661,13 +652,13 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('About this Shop', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('About this Shop', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
               shop.aboutText.isNotEmpty
                   ? shop.aboutText
                   : 'Local verified seller on Bazaar. Dedicated to serving neighbors with quality products.',
-              style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 14, height: 1.5),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 20),
             _buildAboutDetailCard('📍 Address', shop.location.isNotEmpty ? shop.location : 'Vadodara'),
@@ -683,28 +674,27 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
         ),
       );
     } else {
-      // Reviews Tab
       return ListView(
         padding: const EdgeInsets.all(18),
         children: [
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF072E33),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF0E525B)),
+              border: Border.all(color: AppColors.divider),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Text('⭐', style: TextStyle(fontSize: 26)),
-                SizedBox(width: 14),
+                const Text('⭐', style: TextStyle(fontSize: 26)),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Verified Bazaar Seller', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 2),
-                      Text('Customer ratings and verified reviews will appear here as orders complete.', style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12)),
+                      Text('Verified Bazaar Seller', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text('Customer ratings and verified reviews will appear here as orders complete.', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -712,13 +702,13 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Center(
+          Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
                 'No reviews written yet.\nBe the first neighbor to order & review!',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
               ),
             ),
           ),
@@ -732,16 +722,16 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF072E33),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0E525B)),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(title, style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(subtitle, style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -751,7 +741,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF072E33),
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -766,7 +756,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0E525B),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -792,12 +782,12 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 Expanded(
                   child: Text(
                     product.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 19, fontWeight: FontWeight.bold),
                   ),
                 ),
                 Text(
                   '₹${product.price}',
-                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
+                  style: TextStyle(color: AppColors.primary, fontSize: 22, fontWeight: FontWeight.w900),
                 ),
               ],
             ),
@@ -805,7 +795,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
               const SizedBox(height: 10),
               Text(
                 product.description,
-                style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13.5, height: 1.4),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
               ),
             ],
             const SizedBox(height: 20),
@@ -814,8 +804,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
               height: 48,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
@@ -857,18 +847,17 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       onTap: () => _openProductDetail(product),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF072E33),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF0E525B)),
+          border: Border.all(color: AppColors.divider),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image Container
             Expanded(
               child: Container(
-                color: const Color(0xFF052A2E),
+                color: AppColors.chipBg,
                 alignment: Alignment.center,
                 child: BazarProduct.buildProductImage(
                   product.imageUrl,
@@ -878,8 +867,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 ),
               ),
             ),
-
-            // Title & Price
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
@@ -889,8 +876,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     product.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -898,8 +885,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   const SizedBox(height: 4),
                   Text(
                     '₹${product.price}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.primary,
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                     ),

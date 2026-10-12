@@ -1,7 +1,6 @@
 import 'location_models.dart';
 import 'gujarat_data.dart';
 
-// ── 1. MAHARASHTRA ──────────────────────────────────────────────────────────
 const kMaharashtra = GeoState(
   id: 'MH',
   name: 'Maharashtra',
@@ -10,7 +9,7 @@ const kMaharashtra = GeoState(
       id: 'MH-MUM',
       stateId: 'MH',
       name: 'Mumbai',
-      enabled: true,
+      enabled: false,
       lat: 19.0760,
       lng: 72.8777,
       pincode: '400001',
@@ -34,7 +33,7 @@ const kMaharashtra = GeoState(
       id: 'MH-PUN',
       stateId: 'MH',
       name: 'Pune',
-      enabled: true,
+      enabled: false,
       lat: 18.5204,
       lng: 73.8567,
       pincode: '411001',
@@ -53,7 +52,7 @@ const kMaharashtra = GeoState(
       id: 'MH-NAG',
       stateId: 'MH',
       name: 'Nagpur',
-      enabled: true,
+      enabled: false,
       lat: 21.1458,
       lng: 79.0882,
       pincode: '440001',
@@ -66,7 +65,6 @@ const kMaharashtra = GeoState(
   ],
 );
 
-// ── 2. DELHI NCR ────────────────────────────────────────────────────────────
 const kDelhiNCR = GeoState(
   id: 'DL',
   name: 'Delhi NCR',
@@ -75,7 +73,7 @@ const kDelhiNCR = GeoState(
       id: 'DL-DEL',
       stateId: 'DL',
       name: 'New Delhi',
-      enabled: true,
+      enabled: false,
       lat: 28.6139,
       lng: 77.2090,
       pincode: '110001',
@@ -93,7 +91,7 @@ const kDelhiNCR = GeoState(
       id: 'DL-GUR',
       stateId: 'DL',
       name: 'Gurgaon (Gurugram)',
-      enabled: true,
+      enabled: false,
       lat: 28.4595,
       lng: 77.0266,
       pincode: '122001',
@@ -108,7 +106,7 @@ const kDelhiNCR = GeoState(
       id: 'DL-NOI',
       stateId: 'DL',
       name: 'Noida',
-      enabled: true,
+      enabled: false,
       lat: 28.5355,
       lng: 77.3910,
       pincode: '201301',
@@ -122,7 +120,6 @@ const kDelhiNCR = GeoState(
   ],
 );
 
-// ── 3. KARNATAKA ────────────────────────────────────────────────────────────
 const kKarnataka = GeoState(
   id: 'KA',
   name: 'Karnataka',
@@ -131,7 +128,7 @@ const kKarnataka = GeoState(
       id: 'KA-BLR',
       stateId: 'KA',
       name: 'Bengaluru (Bangalore)',
-      enabled: true,
+      enabled: false,
       lat: 12.9716,
       lng: 77.5946,
       pincode: '560001',
@@ -149,7 +146,6 @@ const kKarnataka = GeoState(
   ],
 );
 
-// ── 4. TELANGANA ────────────────────────────────────────────────────────────
 const kTelangana = GeoState(
   id: 'TS',
   name: 'Telangana',
@@ -158,7 +154,7 @@ const kTelangana = GeoState(
       id: 'TS-HYD',
       stateId: 'TS',
       name: 'Hyderabad',
-      enabled: true,
+      enabled: false,
       lat: 17.3850,
       lng: 78.4867,
       pincode: '500001',
@@ -174,7 +170,6 @@ const kTelangana = GeoState(
   ],
 );
 
-// ── 5. TAMIL NADU ───────────────────────────────────────────────────────────
 const kTamilNadu = GeoState(
   id: 'TN',
   name: 'Tamil Nadu',
@@ -183,7 +178,7 @@ const kTamilNadu = GeoState(
       id: 'TN-CHE',
       stateId: 'TN',
       name: 'Chennai',
-      enabled: true,
+      enabled: false,
       lat: 13.0827,
       lng: 80.2707,
       pincode: '600001',
@@ -198,7 +193,6 @@ const kTamilNadu = GeoState(
   ],
 );
 
-// ── 6. WEST BENGAL ──────────────────────────────────────────────────────────
 const kWestBengal = GeoState(
   id: 'WB',
   name: 'West Bengal',
@@ -207,7 +201,7 @@ const kWestBengal = GeoState(
       id: 'WB-KOL',
       stateId: 'WB',
       name: 'Kolkata',
-      enabled: true,
+      enabled: false,
       lat: 22.5726,
       lng: 88.3639,
       pincode: '700001',
@@ -221,7 +215,6 @@ const kWestBengal = GeoState(
   ],
 );
 
-// ── 7. RAJASTHAN ────────────────────────────────────────────────────────────
 const kRajasthan = GeoState(
   id: 'RJ',
   name: 'Rajasthan',
@@ -230,7 +223,7 @@ const kRajasthan = GeoState(
       id: 'RJ-JAI',
       stateId: 'RJ',
       name: 'Jaipur',
-      enabled: true,
+      enabled: false,
       lat: 26.9124,
       lng: 75.7873,
       pincode: '302001',
@@ -244,7 +237,6 @@ const kRajasthan = GeoState(
   ],
 );
 
-// ── 8. UTTAR PRADESH ────────────────────────────────────────────────────────
 const kUttarPradesh = GeoState(
   id: 'UP',
   name: 'Uttar Pradesh',
@@ -253,7 +245,7 @@ const kUttarPradesh = GeoState(
       id: 'UP-LKO',
       stateId: 'UP',
       name: 'Lucknow',
-      enabled: true,
+      enabled: false,
       lat: 26.8467,
       lng: 80.9462,
       pincode: '226001',
@@ -266,7 +258,6 @@ const kUttarPradesh = GeoState(
   ],
 );
 
-// ── ALL INDIA MASTER STATES LIST ────────────────────────────────────────────
 const kAllIndiaStates = [
   kGujarat,
   kMaharashtra,

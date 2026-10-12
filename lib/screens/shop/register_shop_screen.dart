@@ -8,7 +8,7 @@ import '../../services/bazar_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../core/location/location_engine.dart';
-import './manage/my_shop_dashboard_screen.dart';
+import '../../theme/app_colors.dart';
 
 class RegisterShopScreen extends StatefulWidget {
   const RegisterShopScreen({super.key});
@@ -18,10 +18,8 @@ class RegisterShopScreen extends StatefulWidget {
 }
 
 class _RegisterShopScreenState extends State<RegisterShopScreen> {
-  int _currentStep = 0; // 0 = Welcome screen, 1 = Step 1, 2 = Step 2, 3 = Step 3, 4 = Step 4
+  int _currentStep = 0;
 
-  // --- FORM DATA STATE ---
-  // Step 1: Shop details
   String? _shopLogoPath;
   final TextEditingController _shopNameController = TextEditingController();
   String _selectedCategory = 'Pharmacy';
@@ -39,7 +37,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     {'name': 'Other', 'icon': '🏪'},
   ];
 
-  // Step 2: Location & contact
   final TextEditingController _addressController = TextEditingController();
   String _selectedVisibilityKm = '2 km';
   final List<String> _visibilityKmOptions = ['1 km', '2 km', '5 km', '10 km', '30 km'];
@@ -47,7 +44,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   final TextEditingController _whatsAppController = TextEditingController();
   bool _sameNumberOnWhatsApp = true;
 
-  // Step 3: Timings & delivery
   final Set<String> _selectedOpenDays = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'};
   final List<Map<String, String>> _daysOfWeek = [
     {'id': 'Mon', 'label': 'M'},
@@ -63,7 +59,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   bool _homeDeliveryEnabled = true;
   final Set<String> _selectedPaymentMethods = {'Cash', 'UPI'};
 
-  // Step 4: Verify your shop
   String? _shopBoardPhotoPath;
   final TextEditingController _gstController = TextEditingController();
   bool _isSubmitting = false;
@@ -75,14 +70,13 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     setState(() => _isLocating = true);
 
     try {
-      // 1. Check if Device Location Services (GPS) is ON
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Please enable GPS / Location services on your device.'),
-              backgroundColor: Color(0xFFEF4444),
+            SnackBar(
+              content: const Text('⚠️ Please enable GPS / Location services on your device.'),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -90,7 +84,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         return;
       }
 
-      // 2. Check Permission
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -99,9 +92,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       if (permission == LocationPermission.denied) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Location permission was denied.'),
-              backgroundColor: Color(0xFFEF4444),
+            SnackBar(
+              content: const Text('⚠️ Location permission was denied.'),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -112,9 +105,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Location permission permanently denied. Please enable in Settings.'),
-              backgroundColor: Color(0xFFEF4444),
+            SnackBar(
+              content: const Text('⚠️ Location permission permanently denied. Please enable in Settings.'),
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -122,7 +115,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         return;
       }
 
-      // 3. Fetch FRESH Position
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -133,7 +125,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         onTimeout: () => throw TimeoutException('GPS signal timed out'),
       );
 
-      // 4. Perform Reverse Geocoding via LocationEngine
       final matchResult = LocationEngine.detectLocation(position.latitude, position.longitude);
 
       String detectedAddress = '';
@@ -152,7 +143,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF072E33),
+            backgroundColor: AppColors.textPrimary,
             content: Text('📍 Location updated to $detectedAddress'),
             behavior: SnackBarBehavior.floating,
           ),
@@ -163,7 +154,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not fetch GPS location: $e'),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -194,7 +185,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
             Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600))),
           ],
         ),
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 3),
@@ -325,7 +316,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       viewsCount: 0,
       chatsCount: 0,
       ordersCount: 0,
-      status: 'active',
+      status: 'pending',
       products: [],
     );
 
@@ -351,15 +342,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.background,
         appBar: _currentStep == 5
             ? AppBar(
-                backgroundColor: Colors.black,
+                backgroundColor: AppColors.surface,
                 elevation: 0,
                 automaticallyImplyLeading: false,
               )
             : AppBar(
-                backgroundColor: Colors.black,
+                backgroundColor: AppColors.surface,
                 elevation: 0,
                 scrolledUnderElevation: 0,
                 leading: Padding(
@@ -367,13 +358,13 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   child: GestureDetector(
                     onTap: _handleBackNavigation,
                     child: Container(
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: AppColors.chipBg,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_back_rounded,
-                        color: Colors.black,
+                        color: AppColors.textPrimary,
                         size: 20,
                       ),
                     ),
@@ -382,8 +373,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 centerTitle: true,
                 title: Text(
                   _getAppBarTitle(),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -419,8 +410,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       children: [
         Text(
           'Step $stepNumber of 4',
-          style: const TextStyle(
-            color: Color(0xFF90B4B6),
+          style: TextStyle(
+            color: AppColors.textMuted,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -430,8 +421,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: stepNumber / 4.0,
-            backgroundColor: const Color(0xFF072E33),
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            backgroundColor: AppColors.divider,
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
             minHeight: 4,
           ),
         ),
@@ -459,11 +450,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     }
   }
 
-  // --- WELCOME STEP (Image 1) ---
   Widget _buildWelcomeStep() {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-
     return Column(
       children: [
         Expanded(
@@ -474,14 +461,13 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 const SizedBox(height: 10),
 
-                // 24h Shop Icon Banner
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   child: const Center(
                     child: Text('🏪', style: TextStyle(fontSize: 42)),
@@ -490,12 +476,11 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // Headline
-                const Text(
+                Text(
                   'Grow your shop in your own neighbourhood',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     height: 1.3,
@@ -504,19 +489,17 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 8),
 
-                // Subtitle
-                const Text(
+                Text(
                   'Free listing, no app download needed for your customers.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Color(0xFF90B4B6),
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
-                // Feature Bullets
                 _buildFeatureBullet('🆓', 'Free for the first 60 days'),
                 const SizedBox(height: 12),
                 _buildFeatureBullet('📍', 'Shown first to neighbours within 2 km'),
@@ -529,7 +512,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           ),
         ),
 
-        // Bottom Action Button
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
           child: Column(
@@ -539,8 +521,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(26),
                     ),
@@ -557,9 +540,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Takes about 3 minutes',
-                style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
             ],
           ),
@@ -573,9 +556,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF072E33),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0E525B)),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Row(
         children: [
@@ -584,8 +567,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppColors.textPrimary,
                 fontSize: 14.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -596,12 +579,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     );
   }
 
-  // --- STEP 1: SHOP DETAILS (Image 2) ---
   Widget _buildStep1ShopDetails() {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-    const labelStyle = TextStyle(
-      color: Color(0xFF90B4B6),
+    final labelStyle = TextStyle(
+      color: AppColors.textMuted,
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 0.6,
@@ -617,7 +597,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 _buildProgressBar(1),
 
-                // Circular Photo Upload Button
                 Center(
                   child: GestureDetector(
                     onTap: _pickShopLogo,
@@ -625,9 +604,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       width: 84,
                       height: 84,
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         shape: BoxShape.circle,
-                        border: Border.all(color: borderColor, width: 1.5),
+                        border: Border.all(color: AppColors.divider, width: 1.5),
                         image: _shopLogoPath != null
                             ? DecorationImage(
                                 image: FileImage(File(_shopLogoPath!)),
@@ -636,9 +615,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                             : null,
                       ),
                       child: _shopLogoPath == null
-                          ? const Icon(
+                          ? Icon(
                               Icons.camera_alt_outlined,
-                              color: Color(0xFF90B4B6),
+                              color: AppColors.textMuted,
                               size: 32,
                             )
                           : null,
@@ -648,30 +627,29 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 24),
 
-                // SHOP NAME
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'SHOP NAME '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'SHOP NAME '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: TextField(
                     controller: _shopNameController,
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500),
+                    decoration: InputDecoration(
                       hintText: 'e.g. Mehta Pharmacy',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                       border: InputBorder.none,
                     ),
                   ),
@@ -679,13 +657,12 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // CATEGORY
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'CATEGORY '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'CATEGORY '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
@@ -712,9 +689,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : cardBg,
+                          color: isSelected ? AppColors.primary : AppColors.surface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isSelected ? Colors.white : borderColor),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
                         ),
                         alignment: Alignment.center,
                         child: Row(
@@ -728,7 +705,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: isSelected ? Colors.black : Colors.white,
+                                  color: isSelected ? Colors.white : AppColors.textPrimary,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                   fontSize: 13,
                                 ),
@@ -743,31 +720,30 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // SHORT DESCRIPTION
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'SHORT DESCRIPTION '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'SHORT DESCRIPTION '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextField(
                     controller: _shortDescController,
                     maxLines: 3,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
                       hintText: 'Medicines, health products, home delivery within 1 km.',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       border: InputBorder.none,
                     ),
                   ),
@@ -784,12 +760,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     );
   }
 
-  // --- STEP 2: LOCATION & CONTACT (Image 3) ---
   Widget _buildStep2LocationContact() {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-    const labelStyle = TextStyle(
-      color: Color(0xFF90B4B6),
+    final labelStyle = TextStyle(
+      color: AppColors.textMuted,
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 0.6,
@@ -805,30 +778,29 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 _buildProgressBar(2),
 
-                // SHOP ADDRESS
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'SHOP ADDRESS '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'SHOP ADDRESS '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: TextField(
                     controller: _addressController,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
                       hintText: 'Shop 4, Alkapuri Main Road',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
                       border: InputBorder.none,
                     ),
                   ),
@@ -836,23 +808,22 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 12),
 
-                // Use my current location Button
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1.5),
+                    backgroundColor: AppColors.surface,
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary, width: 1.5),
                     minimumSize: const Size(double.infinity, 48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
                   icon: _isLocating
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
-                            color: Colors.white,
+                            color: AppColors.primary,
                             strokeWidth: 2,
                           ),
                         )
@@ -866,8 +837,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // VISIBLE TO BUYERS WITHIN (Options up to 30 km as requested)
-                const Text('VISIBLE TO BUYERS WITHIN', style: labelStyle),
+                Text('VISIBLE TO BUYERS WITHIN', style: labelStyle),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 10,
@@ -883,14 +853,14 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : cardBg,
+                          color: isSelected ? AppColors.primary : AppColors.surface,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: isSelected ? Colors.white : borderColor),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
                         ),
                         child: Text(
                           opt,
                           style: TextStyle(
-                            color: isSelected ? Colors.black : Colors.white,
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -902,31 +872,30 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // CONTACT NUMBER
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'CONTACT NUMBER (10 DIGITS) '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'CONTACT NUMBER (10 DIGITS) '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: TextField(
                     controller: _contactController,
                     keyboardType: TextInputType.phone,
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
                       hintText: '98xxxxxx10',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                       border: InputBorder.none,
                     ),
                   ),
@@ -934,21 +903,20 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 16),
 
-                // Same number on WhatsApp Switch
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
                             'Same number on WhatsApp',
-                            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
                             'Customers can message you directly',
-                            style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -956,9 +924,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     Switch(
                       value: _sameNumberOnWhatsApp,
                       activeThumbColor: Colors.white,
-                      activeTrackColor: const Color(0xFF14B8A6),
-                      inactiveThumbColor: Colors.grey,
-                      inactiveTrackColor: cardBg,
+                      activeTrackColor: AppColors.primary,
+                      inactiveThumbColor: AppColors.textMuted,
+                      inactiveTrackColor: AppColors.chipBg,
                       onChanged: (val) {
                         setState(() {
                           _sameNumberOnWhatsApp = val;
@@ -971,29 +939,29 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 if (!_sameNumberOnWhatsApp) ...[
                   const SizedBox(height: 14),
                   RichText(
-                    text: const TextSpan(
+                    text: TextSpan(
                       style: labelStyle,
                       children: [
-                        TextSpan(text: 'WHATSAPP NUMBER (10 DIGITS) '),
-                        TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                        const TextSpan(text: 'WHATSAPP NUMBER (10 DIGITS) '),
+                        TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
-                      color: cardBg,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
+                      border: Border.all(color: AppColors.divider),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: TextField(
                       controller: _whatsAppController,
                       keyboardType: TextInputType.phone,
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
                         hintText: 'e.g. 98xxxxxx12',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                         border: InputBorder.none,
                       ),
                     ),
@@ -1011,12 +979,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     );
   }
 
-  // --- STEP 3: TIMINGS & DELIVERY (Image 4) ---
   Widget _buildStep3TimingsDelivery() {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-    const labelStyle = TextStyle(
-      color: Color(0xFF90B4B6),
+    final labelStyle = TextStyle(
+      color: AppColors.textMuted,
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 0.6,
@@ -1032,31 +997,29 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 _buildProgressBar(3),
 
-                // OPEN DAYS
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'OPEN DAYS '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'DAYS OPEN '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: _daysOfWeek.map((dayItem) {
-                    final dayId = dayItem['id']!;
-                    final dayLabel = dayItem['label']!;
-                    final isSelected = _selectedOpenDays.contains(dayId);
-
+                  children: _daysOfWeek.map((day) {
+                    final isSelected = _selectedOpenDays.contains(day['id']);
                     return GestureDetector(
                       onTap: () {
                         setState(() {
                           if (isSelected) {
-                            _selectedOpenDays.remove(dayId);
+                            if (_selectedOpenDays.length > 1) {
+                              _selectedOpenDays.remove(day['id']);
+                            }
                           } else {
-                            _selectedOpenDays.add(dayId);
+                            _selectedOpenDays.add(day['id']!);
                           }
                         });
                       },
@@ -1064,15 +1027,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : cardBg,
+                          color: isSelected ? AppColors.primary : AppColors.surface,
                           shape: BoxShape.circle,
-                          border: Border.all(color: isSelected ? Colors.white : borderColor),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          dayLabel,
+                          day['label']!,
                           style: TextStyle(
-                            color: isSelected ? Colors.black : Colors.white,
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                           ),
@@ -1082,74 +1045,57 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   }).toList(),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-                // OPENING TIME
-                RichText(
-                  text: const TextSpan(
-                    style: labelStyle,
-                    children: [
-                      TextSpan(text: 'OPENING & CLOSING TIMINGS '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
-                    ],
-                  ),
-                ),
+                const Text('TIMINGS', style: TextStyle(color: Color(0xFF5B6B7B), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.6)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: () async {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: const TimeOfDay(hour: 9, minute: 0),
-                          );
-                          if (time != null && mounted) {
-                            setState(() {
-                              _openingTime = time.format(context);
-                            });
-                          }
-                        },
+                        onTap: () => _pickTimeModal(isOpening: true),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
-                            color: cardBg,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderColor),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _openingTime,
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Opens at', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                              const SizedBox(height: 4),
+                              Text(
+                                _openingTime,
+                                style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () async {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: const TimeOfDay(hour: 21, minute: 0),
-                          );
-                          if (time != null && mounted) {
-                            setState(() {
-                              _closingTime = time.format(context);
-                            });
-                          }
-                        },
+                        onTap: () => _pickTimeModal(isOpening: false),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
-                            color: cardBg,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderColor),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _closingTime,
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Closes at', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                              const SizedBox(height: 4),
+                              Text(
+                                _closingTime,
+                                style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -1157,23 +1103,22 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-                // Home delivery Switch
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'Home delivery',
-                            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            'Home delivery available',
+                            style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Within your visible area',
-                            style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
+                            'Customers will see delivery icon on your shop',
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -1181,9 +1126,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     Switch(
                       value: _homeDeliveryEnabled,
                       activeThumbColor: Colors.white,
-                      activeTrackColor: const Color(0xFF14B8A6),
-                      inactiveThumbColor: Colors.grey,
-                      inactiveTrackColor: cardBg,
+                      activeTrackColor: AppColors.primary,
+                      inactiveThumbColor: AppColors.textMuted,
+                      inactiveTrackColor: AppColors.chipBg,
                       onChanged: (val) {
                         setState(() {
                           _homeDeliveryEnabled = val;
@@ -1195,25 +1140,50 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // PAYMENT ACCEPTED
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: labelStyle,
                     children: [
-                      TextSpan(text: 'PAYMENT ACCEPTED '),
-                      TextSpan(text: '*', style: TextStyle(color: Color(0xFFEF4444))),
+                      const TextSpan(text: 'PAYMENT METHODS ACCEPTED '),
+                      TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _buildPaymentChip('💵 Cash', 'Cash'),
-                    const SizedBox(width: 10),
-                    _buildPaymentChip('📲 UPI', 'UPI'),
-                    const SizedBox(width: 10),
-                    _buildPaymentChip('💳 Card', 'Card'),
-                  ],
+                Wrap(
+                  spacing: 10,
+                  children: ['Cash', 'UPI', 'Cards'].map((pm) {
+                    final isSelected = _selectedPaymentMethods.contains(pm);
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            if (_selectedPaymentMethods.length > 1) {
+                              _selectedPaymentMethods.remove(pm);
+                            }
+                          } else {
+                            _selectedPaymentMethods.add(pm);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                        ),
+                        child: Text(
+                          pm,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
 
                 const SizedBox(height: 20),
@@ -1227,49 +1197,31 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     );
   }
 
-  Widget _buildPaymentChip(String label, String value) {
-    final isSelected = _selectedPaymentMethods.contains(value);
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            if (isSelected) {
-              _selectedPaymentMethods.remove(value);
-            } else {
-              _selectedPaymentMethods.add(value);
-            }
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isSelected ? Colors.white : borderColor),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.black : Colors.white,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ),
+  void _pickTimeModal({required bool isOpening}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isOpening
+          ? const TimeOfDay(hour: 9, minute: 0)
+          : const TimeOfDay(hour: 21, minute: 0),
     );
+
+    if (picked != null) {
+      final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
+      final minute = picked.minute.toString().padLeft(2, '0');
+      final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
+      setState(() {
+        if (isOpening) {
+          _openingTime = '$hour:$minute $period';
+        } else {
+          _closingTime = '$hour:$minute $period';
+        }
+      });
+    }
   }
 
-  // --- STEP 4: VERIFY YOUR SHOP (Image 5) ---
   Widget _buildStep4VerifyShop() {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-    const labelStyle = TextStyle(
-      color: Color(0xFF90B4B6),
+    final labelStyle = TextStyle(
+      color: AppColors.textMuted,
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 0.6,
@@ -1285,23 +1237,17 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 _buildProgressBar(4),
 
-                const Text(
-                  'Optional, but verified shops get a badge and are shown higher in Bazaar.',
-                  style: TextStyle(color: Color(0xFF90B4B6), fontSize: 13.5, height: 1.4),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Photo of your shop board Button
+                Text('PHOTO OF SHOP FRONT / BOARD (OPTIONAL)', style: labelStyle),
+                const SizedBox(height: 10),
                 GestureDetector(
                   onTap: _pickShopBoardPhoto,
                   child: Container(
                     width: double.infinity,
-                    height: 80,
+                    height: 140,
                     decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: borderColor),
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.divider),
                       image: _shopBoardPhotoPath != null
                           ? DecorationImage(
                               image: FileImage(File(_shopBoardPhotoPath!)),
@@ -1309,20 +1255,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                             )
                           : null,
                     ),
-                    alignment: Alignment.center,
                     child: _shopBoardPhotoPath == null
-                        ? Row(
+                        ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Text('📷', style: TextStyle(fontSize: 20)),
-                              SizedBox(width: 10),
+                            children: [
+                              Icon(Icons.add_a_photo_outlined, color: AppColors.textMuted, size: 36),
+                              const SizedBox(height: 8),
                               Text(
-                                'Photo of your shop board',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                'Tap to upload shop photo',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                             ],
                           )
@@ -1332,48 +1273,45 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
                 const SizedBox(height: 20),
 
-                // GST NUMBER (OPTIONAL)
-                const Text('GST NUMBER (OPTIONAL)', style: labelStyle),
+                Text('GST OR BUSINESS REGISTRATION NUMBER (OPTIONAL)', style: labelStyle),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: TextField(
                     controller: _gstController,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    decoration: const InputDecoration(
-                      hintText: '—',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. 24AAAAA0000A1Z5',
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
                       border: InputBorder.none,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                // Security Note Card
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: cardBg,
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
                   ),
                   child: Row(
-                    children: const [
-                      Text('🛡️', style: TextStyle(fontSize: 18)),
-                      SizedBox(width: 12),
+                    children: [
+                      Icon(Icons.shield_outlined, color: AppColors.primaryText, size: 24),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'We only use this to confirm the shop is real. It is never shown publicly.',
+                          'Verified shops get 3x more orders and customer trust.',
                           style: TextStyle(
-                            color: Color(0xFF90B4B6),
+                            color: AppColors.primaryText,
                             fontSize: 13,
-                            height: 1.35,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1387,60 +1325,110 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           ),
         ),
 
-        // Submit Button
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-          child: Column(
-            children: [
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                  onPressed: _isSubmitting ? null : _submitRegistration,
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.black,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : const Text(
-                          'Submit for review',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+          child: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(26),
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Review usually takes under 24 hours',
-                style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12),
-              ),
-            ],
+              onPressed: _isSubmitting ? null : _submitRegistration,
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text(
+                      'Submit for review',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+            ),
           ),
         ),
       ],
     );
   }
 
+  Widget _buildStep5ShopSubmitted() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check_rounded, color: AppColors.primary, size: 48),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Shop Submitted!',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'We review shops within 24 hours. You will receive a notification as soon as your shop goes live in Vadodara Bazar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Done', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildContinueBottomButton() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
       child: SizedBox(
         width: double.infinity,
         height: 52,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(26),
             ),
@@ -1458,322 +1446,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // --- STEP 5: SHOP SUBMITTED SUCCESS SCREEN (Matching media_1790654844118.png) ---
-  Widget _buildStep5ShopSubmitted() {
-    final shopName = _shopNameController.text.trim().isEmpty ? 'My Shop' : _shopNameController.text.trim();
-    final categoryIcon = _categories.firstWhere(
-      (c) => c['name'] == _selectedCategory,
-      orElse: () => {'icon': '🏪'},
-    )['icon']!;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-      child: Column(
-        children: [
-          const Spacer(),
-
-          // Top Teal Checkmark Circle
-          Container(
-            width: 80,
-            height: 80,
-            decoration: const BoxDecoration(
-              color: Color(0xFF14B8A6),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.check_rounded,
-              color: Colors.black,
-              size: 46,
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Headline: Shop submitted!
-          const Text(
-            'Shop registered!',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Subtitle
-          Text(
-            "Congratulations! $shopName is now live in your neighbourhood. Start adding your products now!",
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF90B4B6),
-              fontSize: 14.5,
-              height: 1.4,
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // Shop Preview Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF072E33),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF0E525B), width: 1.5),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF073F46),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(
-                      categoryIcon,
-                      style: const TextStyle(fontSize: 28),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shopName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$_selectedCategory  •  ${_addressController.text.trim().split(',').first}',
-                        style: const TextStyle(
-                          color: Color(0xFF90B4B6),
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D5E56),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          '🟢 Live in Bazaar',
-                          style: TextStyle(
-                            color: Color(0xFF2DD4BF),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // Action Buttons
-          Column(
-            children: [
-              // Solid Button: Go to My Shop Dashboard
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                  icon: const Icon(Icons.dashboard_outlined, size: 20),
-                  label: const Text(
-                    'Go to My Shop Dashboard',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
-                  onPressed: () async {
-                    final handle = await AuthService.instance.getUserHandle() ?? '@me';
-                    if (!mounted) return;
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MyShopDashboardScreen(
-                          currentUserHandle: handle,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Outlined Button: Preview my shop page
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                  onPressed: _openShopPreviewSheet,
-                  child: const Text(
-                    'Preview my shop page',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openShopPreviewSheet() {
-    final shopName = _shopNameController.text.trim().isEmpty ? 'My Shop' : _shopNameController.text.trim();
-    final address = _addressController.text.trim().isEmpty ? 'Location N/A' : _addressController.text.trim();
-    final phone = _contactController.text.trim().isEmpty ? 'Phone N/A' : _contactController.text.trim();
-    final desc = _shortDescController.text.trim();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF072E33),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border(
-            top: BorderSide(color: Color(0xFF0E525B), width: 1.5),
-          ),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0E525B),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('🏪', style: TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shopName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$_selectedCategory  •  Visible within $_selectedVisibilityKm',
-                        style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Color(0xFF0E525B)),
-            const SizedBox(height: 12),
-            _buildPreviewDetailRow('📍 Address', address),
-            const SizedBox(height: 8),
-            _buildPreviewDetailRow('📞 Contact', '$phone (${_sameNumberOnWhatsApp ? 'WhatsApp Enabled' : 'Calls Only'})'),
-            const SizedBox(height: 8),
-            _buildPreviewDetailRow('🕒 Timings', '$_openingTime - $_closingTime'),
-            const SizedBox(height: 8),
-            _buildPreviewDetailRow('🚚 Delivery', _homeDeliveryEnabled ? 'Home delivery available' : 'In-store pickup only'),
-            const SizedBox(height: 8),
-            _buildPreviewDetailRow('💳 Payments', _selectedPaymentMethods.join(', ')),
-            if (desc.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text('Description', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 4),
-              Text(desc, style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13)),
-            ],
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close Preview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreviewDetailRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
     );
   }
 }

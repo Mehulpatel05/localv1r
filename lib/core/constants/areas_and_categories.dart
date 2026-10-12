@@ -1,10 +1,13 @@
 enum PostCategory {
-  general('General Chat', '💬'),
+  general('General', '💬'),
+  question('Question', '❓'),
+  events('Events', '🎉'),
+  alerts('Alerts', '⚠️'),
+  safety('Safety', '🛡️'),
   services('Local Services', '🔧'),
   food('Restaurants', '🍲'),
   rooms('Rentals & PG', '🏠'),
   shop('Shop', '🛍️'),
-  events('Events', '🎉'),
   jobs('Jobs & Referrals', '💼'),
   safetyAlert('Safety Alert', '🚨');
 

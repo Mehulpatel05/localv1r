@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-
 import '../../core/models/user_profile.dart';
-import '../../core/theme.dart';
+import '../../core/services/name_cache_service.dart';
 import '../../services/auth_service.dart';
+import '../../theme/app_colors.dart';
 
 enum FeedbackCategory {
   bug('Report a Bug', Icons.bug_report_outlined),
@@ -18,7 +18,6 @@ enum FeedbackCategory {
   final IconData icon;
 }
 
-/// Production-ready Feedback & Support page strictly adhering to Nearhood B&W design system.
 class FeedbackSupportPage extends StatefulWidget {
   const FeedbackSupportPage({
     super.key,
@@ -43,7 +42,6 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill contact with user's phone or email if available
     _contactController.text = widget.profile.phone ?? widget.profile.email ?? '';
   }
 
@@ -102,19 +100,17 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
     }
   }
 
-
   void _showErrorSnackBar(String text) {
-    final c = context.nearhoodColors;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
           content: Text(
             text,
-            style: TextStyle(color: c.btnink, fontWeight: FontWeight.w600, fontSize: 13.5),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
             textAlign: TextAlign.center,
           ),
-          backgroundColor: c.danger,
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: const StadiumBorder(),
           margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
@@ -126,27 +122,25 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
   void _shareViaEmail() {
     SharePlus.instance.share(
       ShareParams(
-        text: 'Nearhood Support Query from ${widget.profile.displayHandle}:\n'
+        text: 'Nearhood Support Query from ${getDisplayName(widget.profile)}:\n'
             'Category: ${_selectedCategory.label}\n'
             'Message: ${_messageController.text.trim().isNotEmpty ? _messageController.text.trim() : "[Your question/feedback here]"}',
-        subject: 'Nearhood Support - ${widget.profile.displayHandle}',
+        subject: 'Nearhood Support - ${getDisplayName(widget.profile)}',
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
-
     return Scaffold(
-      backgroundColor: c.bg,
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: _isSubmitted ? _buildSuccessView(c) : _buildFormView(c),
+        child: _isSubmitted ? _buildSuccessView() : _buildFormView(),
       ),
     );
   }
 
-  Widget _buildSuccessView(NearhoodColors c) {
+  Widget _buildSuccessView() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -156,34 +150,33 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
             Container(
               width: 72,
               height: 72,
-              decoration: BoxDecoration(
-                color: c.field,
+              decoration: const BoxDecoration(
+                color: AppColors.primarySoft,
                 shape: BoxShape.circle,
-                border: Border.all(color: c.line, width: 1.5),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.check_rounded,
                 size: 38,
-                color: c.ink,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 20),
-            Text(
+            const Text(
               'Thank You!',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.03 * 22,
-                color: c.ink,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'Your feedback has been received. We review every submission carefully to make Nearhood better for everyone.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14.5,
-                color: c.muted,
+                color: AppColors.textMuted,
                 height: 1.45,
               ),
             ),
@@ -193,8 +186,8 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: c.btn,
-                  foregroundColor: c.btnink,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -213,12 +206,11 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
     );
   }
 
-  Widget _buildFormView(NearhoodColors c) {
+  Widget _buildFormView() {
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Column(
       children: [
-        // Top Bar
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
           child: Row(
@@ -231,55 +223,53 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                   child: Container(
                     width: 40,
                     height: 40,
-                    decoration: BoxDecoration(
-                      color: c.field,
+                    decoration: const BoxDecoration(
+                      color: AppColors.chipBg,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.arrow_back,
                       size: 19,
-                      color: c.ink,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
+              const Text(
                 'Feedback & Support',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.03 * 22,
-                  color: c.ink,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
           ),
         ),
 
-        // Scrollable Body
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
             children: [
-              // User info badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: c.field,
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.account_circle_outlined, size: 20, color: c.muted),
+                    const Icon(Icons.account_circle_outlined, size: 20, color: AppColors.textMuted),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Submitting as ${widget.profile.displayHandle}',
-                        style: TextStyle(
+                        'Submitting as ${getDisplayName(widget.profile)}',
+                        style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
-                          color: c.ink,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -289,19 +279,17 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
 
               const SizedBox(height: 20),
 
-              // Category Label
-              Text(
+              const Text(
                 'Category',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: c.muted,
+                  color: AppColors.textMuted,
                 ),
               ),
 
               const SizedBox(height: 10),
 
-              // Category Selector (Wrap of chips)
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -318,10 +306,10 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: isSelected ? c.btn : c.bg,
+                        color: isSelected ? AppColors.primary : AppColors.surface,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isSelected ? c.btn : c.line,
+                          color: isSelected ? AppColors.primary : AppColors.divider,
                           width: 1.2,
                         ),
                       ),
@@ -331,7 +319,7 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                           Icon(
                             cat.icon,
                             size: 17,
-                            color: isSelected ? c.btnink : c.ink,
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -339,7 +327,7 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                              color: isSelected ? c.btnink : c.ink,
+                              color: isSelected ? Colors.white : AppColors.textPrimary,
                             ),
                           ),
                         ],
@@ -351,45 +339,47 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
 
               const SizedBox(height: 22),
 
-              // Subject Field
-              Text(
+              const Text(
                 'Subject (Optional)',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: c.muted,
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _subjectController,
-                style: TextStyle(fontSize: 15, color: c.ink, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
                 decoration: InputDecoration(
                   hintText: 'e.g. Map issue in Alkapuri',
-                  hintStyle: TextStyle(fontSize: 14.5, color: c.muted),
+                  hintStyle: const TextStyle(fontSize: 14.5, color: AppColors.textMuted),
                   filled: true,
-                  fillColor: c.field,
+                  fillColor: AppColors.surface,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: c.ink, width: 1.5),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               ),
 
               const SizedBox(height: 18),
 
-              // Message Field
-              Text(
+              const Text(
                 'Description / Message',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: c.muted,
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 8),
@@ -397,59 +387,65 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                 controller: _messageController,
                 maxLines: 5,
                 maxLength: 600,
-                style: TextStyle(fontSize: 15, color: c.ink, height: 1.4),
+                style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, height: 1.4),
                 decoration: InputDecoration(
                   hintText: 'Tell us in detail what happened or your idea...',
-                  hintStyle: TextStyle(fontSize: 14.5, color: c.muted),
+                  hintStyle: const TextStyle(fontSize: 14.5, color: AppColors.textMuted),
                   filled: true,
-                  fillColor: c.field,
+                  fillColor: AppColors.surface,
                   contentPadding: const EdgeInsets.all(16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: c.ink, width: 1.5),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               ),
 
               const SizedBox(height: 12),
 
-              // Contact Field
-              Text(
+              const Text(
                 'Contact Phone / Email',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: c.muted,
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _contactController,
-                style: TextStyle(fontSize: 15, color: c.ink, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
                 decoration: InputDecoration(
                   hintText: 'For follow-up updates',
-                  hintStyle: TextStyle(fontSize: 14.5, color: c.muted),
+                  hintStyle: const TextStyle(fontSize: 14.5, color: AppColors.textMuted),
                   filled: true,
-                  fillColor: c.field,
+                  fillColor: AppColors.surface,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: c.ink, width: 1.5),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               ),
 
               const SizedBox(height: 28),
 
-              // Submit Button
               _SubmitButton(
                 onTap: _isSubmitting ? () {} : _submitFeedback,
                 isLoading: _isSubmitting,
@@ -457,31 +453,30 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
 
               const SizedBox(height: 32),
 
-              // Quick Help Section
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: c.bg,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.line),
+                  border: Border.all(color: AppColors.divider),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Direct Support',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: c.ink,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    const Text(
                       'Need instant help or want to share logs with the development team?',
                       style: TextStyle(
                         fontSize: 13,
-                        color: c.muted,
+                        color: AppColors.textMuted,
                         height: 1.35,
                       ),
                     ),
@@ -492,24 +487,24 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: c.field,
+                          color: AppColors.chipBg,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Row(
+                        child: const Row(
                           children: [
-                            Icon(Icons.mail_outline, size: 19, color: c.ink),
-                            const SizedBox(width: 10),
+                            Icon(Icons.mail_outline, size: 19, color: AppColors.textPrimary),
+                            SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 'Share directly via App / Email',
                                 style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
-                                  color: c.ink,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                             ),
-                            Icon(Icons.chevron_right, size: 18, color: c.muted),
+                            Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
                           ],
                         ),
                       ),
@@ -539,7 +534,6 @@ class _SubmitButtonState extends State<_SubmitButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Semantics(
@@ -563,25 +557,25 @@ class _SubmitButtonState extends State<_SubmitButton> {
             height: 54,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: c.btn,
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(16),
             ),
             alignment: Alignment.center,
             child: widget.isLoading
-                ? SizedBox(
+                ? const SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      color: c.btnink,
+                      color: Colors.white,
                     ),
                   )
-                : Text(
+                : const Text(
                     'Submit Feedback',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: c.btnink,
+                      color: Colors.white,
                     ),
                   ),
           ),

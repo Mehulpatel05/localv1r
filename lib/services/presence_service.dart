@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -70,10 +69,10 @@ class PresenceService with WidgetsBindingObserver {
   String? _currentUserHandle;
   bool _isInitialized = false;
   Timer? _heartbeatTimer;
-  bool _hasInternet = true;
 
-  // Local cache to eliminate UI loading flicker
   final Map<String, UserPresence> _memoryCache = {};
+  final Map<String, StreamController<UserPresence>> _presenceControllers = {};
+  final Map<String, Timer?> _presencePollTimers = {};
 
   void init(String? userHandle) {
     if (userHandle == null || userHandle.isEmpty) return;
@@ -110,17 +109,7 @@ class PresenceService with WidgetsBindingObserver {
   }
 
   Future<void> _checkInternetAndHeartbeat() async {
-    try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 4));
-      _hasInternet = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } catch (_) {
-      _hasInternet = false;
-    }
-
-    if (_hasInternet) {
-      setOnline();
-    }
+    await setOnline();
   }
 
   Future<void> setOnline() async {
@@ -128,10 +117,15 @@ class PresenceService with WidgetsBindingObserver {
     final now = DateTime.now();
 
     try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
       final payload = {'handle': _currentUserHandle, 'isOnline': true};
       await http.post(
         Uri.parse('${AuthService.baseUrl}/presence/heartbeat'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
 
@@ -149,10 +143,15 @@ class PresenceService with WidgetsBindingObserver {
     final now = DateTime.now();
 
     try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
       final payload = {'handle': _currentUserHandle, 'isOnline': false};
       await http.post(
         Uri.parse('${AuthService.baseUrl}/presence/heartbeat'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
 
@@ -165,49 +164,72 @@ class PresenceService with WidgetsBindingObserver {
     }
   }
 
-  /// Live Stream of a partner's presence via periodic REST polling
-  Stream<UserPresence> getPresenceStream(String handle) async* {
+  Stream<UserPresence> getPresenceStream(String handle) {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty) {
-      yield const UserPresence(isOnline: false);
-      return;
+      return Stream.value(const UserPresence(isOnline: false));
     }
 
-    // Yield initial cached value
-    if (_memoryCache.containsKey(cleanHandle)) {
-      yield _memoryCache[cleanHandle]!;
+    final existingController = _presenceControllers[cleanHandle];
+    if (existingController != null && !existingController.isClosed) {
+      return existingController.stream;
     }
 
-    while (true) {
-      try {
-        final token = await AuthService.instance.getAccessToken();
-        final res = await http.get(
-          Uri.parse('${AuthService.baseUrl}/presence/$cleanHandle'),
-          headers: {
-            'Content-Type': 'application/json',
-            if (token != null) 'Authorization': 'Bearer $token',
-          },
-        ).timeout(const Duration(seconds: 4));
-
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final presence = UserPresence.fromMap(data);
-          _memoryCache[cleanHandle] = presence;
-          yield presence;
+    late StreamController<UserPresence> controller;
+    controller = StreamController<UserPresence>.broadcast(
+      onListen: () {
+        if (_memoryCache.containsKey(cleanHandle)) {
+          controller.add(_memoryCache[cleanHandle]!);
         }
-      } catch (_) {}
-
-      await Future.delayed(const Duration(seconds: 10));
-    }
+        _fetchPresence(cleanHandle, controller);
+        _presencePollTimers[cleanHandle]?.cancel();
+        _presencePollTimers[cleanHandle] = Timer.periodic(
+          const Duration(seconds: 10),
+          (_) => _fetchPresence(cleanHandle, controller),
+        );
+      },
+      onCancel: () {
+        if (!controller.hasListener) {
+          _presencePollTimers[cleanHandle]?.cancel();
+          _presencePollTimers.remove(cleanHandle);
+          _presenceControllers.remove(cleanHandle);
+          controller.close();
+        }
+      },
+    );
+    _presenceControllers[cleanHandle] = controller;
+    return controller.stream;
   }
 
-  /// Get cached presence synchronously for zero flicker
+  Future<void> _fetchPresence(
+    String cleanHandle,
+    StreamController<UserPresence> controller,
+  ) async {
+    if (controller.isClosed) return;
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/presence/$cleanHandle'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200 && !controller.isClosed) {
+        final data = jsonDecode(res.body);
+        final presence = UserPresence.fromMap(data);
+        _memoryCache[cleanHandle] = presence;
+        controller.add(presence);
+      }
+    } catch (_) {}
+  }
+
   UserPresence? getCachedPresence(String handle) {
     final cleanHandle = handle.replaceAll('@', '').trim();
     return _memoryCache[cleanHandle];
   }
 
-  /// WhatsApp-style Last Seen Formatter
   static String formatLastSeen(
     UserPresence? presence, {
     bool myPrivacyAllowed = true,
@@ -218,7 +240,6 @@ class PresenceService with WidgetsBindingObserver {
       return 'Online';
     }
 
-    // If partner has disabled last seen OR current user has disabled their own last seen (WhatsApp reciprocal rule)
     if (!presence.showLastSeen || !myPrivacyAllowed) {
       return 'Offline';
     }
@@ -252,6 +273,16 @@ class PresenceService with WidgetsBindingObserver {
     _memoryCache.clear();
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    for (final timer in _presencePollTimers.values) {
+      timer?.cancel();
+    }
+    _presencePollTimers.clear();
+    for (final controller in _presenceControllers.values) {
+      if (!controller.isClosed) {
+        controller.close();
+      }
+    }
+    _presenceControllers.clear();
     _currentUserHandle = '';
   }
 

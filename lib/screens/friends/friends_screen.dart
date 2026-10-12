@@ -1,29 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/motion.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../services/friend_repository.dart';
 import '../../services/post_repository.dart';
-import '../../models/friend_request_model.dart';
 import '../../models/friendship_model.dart';
+import '../../models/friend_request_model.dart';
 import '../../core/models/user_profile.dart';
+import '../../core/services/name_cache_service.dart';
 import '../chat/personal_chat_screen.dart';
 import '../profile/other_user_profile_sheet.dart';
 import 'discover_people_screen.dart';
+import 'friend_requests_screen.dart';
+import '../rewards/invite_earn_screen.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../theme/app_colors.dart';
 
 enum FriendsTab { requests, friends, sent }
 
-/// Completely upgraded Friends & Connections Screen matching Images 1, 2, & 3
 class FriendsScreen extends StatefulWidget {
   final FriendRepository repository;
   final String currentUserHandle;
   final FriendsTab initialTab;
+  final bool showTabBar;
 
   const FriendsScreen({
     super.key,
     required this.repository,
     required this.currentUserHandle,
-    this.initialTab = FriendsTab.requests,
+    this.initialTab = FriendsTab.friends,
+    this.showTabBar = true,
   });
 
   @override
@@ -31,15 +36,14 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  late FriendsTab _activeTab;
   final TextEditingController _searchController = TextEditingController();
-  bool _isSearchOpen = false;
+  final FocusNode _searchFocusNode = FocusNode();
+  final Set<String> _processingHandles = {};
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _activeTab = widget.initialTab;
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     if (cleanHandle.isNotEmpty) {
       widget.repository.currentUserHandle = cleanHandle;
@@ -49,15 +53,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _searchQuery = _searchController.text.trim().toLowerCase();
       });
     });
+    widget.repository.refreshAll();
   }
 
   @override
   void dispose() {
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  // ── Custom Dark Pill Feedback Toast (Image 3 Row 4) ──────────────────────
   void _showDarkPillToast({
     required String message,
     required IconData icon,
@@ -75,11 +80,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B), // Dark navy
+            color: AppColors.textPrimary,
             borderRadius: BorderRadius.circular(25),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -113,11 +118,70 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  // ── Bottom Sheets: Menu & Confirmations (Image 3 Row 3) ───────────────────
+  Future<void> _acceptInlineRequest(FriendRequest req) async {
+    final handle = req.senderHandle;
+    if (_processingHandles.contains(handle)) return;
+
+    setState(() {
+      _processingHandles.add(handle);
+    });
+
+    try {
+      await widget.repository.acceptFriendRequest(handle);
+      _showDarkPillToast(
+        message: "You're now friends with ${getDisplayName(handle)}",
+        icon: Icons.check_circle_rounded,
+        iconColor: AppColors.primary,
+      );
+    } catch (e) {
+      _showDarkPillToast(
+        message: 'Failed to accept: $e',
+        icon: Icons.error_outline_rounded,
+        iconColor: AppColors.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingHandles.remove(handle);
+        });
+      }
+    }
+  }
+
+  Future<void> _declineInlineRequest(FriendRequest req) async {
+    final handle = req.senderHandle;
+    if (_processingHandles.contains(handle)) return;
+
+    setState(() {
+      _processingHandles.add(handle);
+    });
+
+    try {
+      await widget.repository.rejectFriendRequest(handle);
+      _showDarkPillToast(
+        message: 'Request removed',
+        icon: Icons.check_circle_rounded,
+        iconColor: AppColors.textMuted,
+      );
+    } catch (e) {
+      _showDarkPillToast(
+        message: 'Failed to ignore: $e',
+        icon: Icons.error_outline_rounded,
+        iconColor: AppColors.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingHandles.remove(handle);
+        });
+      }
+    }
+  }
+
   void _showFriendMoreMenu(String handle) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -127,13 +191,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Drag Handle
               Container(
                 width: 38,
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -141,15 +204,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF1F5F9),
+                    color: AppColors.chipBg,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.person_remove_outlined, color: Color(0xFF1E293B), size: 20),
+                  child: const Icon(Icons.person_remove_outlined, color: AppColors.textPrimary, size: 20),
                 ),
                 title: const Text(
                   'Unfriend',
                   style: TextStyle(
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -163,15 +226,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFFEF2F2),
+                    color: AppColors.errorSoft,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.block_flipped, color: Color(0xFFEF4444), size: 20),
+                  child: const Icon(Icons.block_flipped, color: AppColors.error, size: 20),
                 ),
                 title: const Text(
                   'Block',
                   style: TextStyle(
-                    color: Color(0xFFEF4444),
+                    color: AppColors.error,
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -191,7 +254,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void _showUnfriendConfirmationSheet(String handle) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -206,14 +269,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const Text(
                 'Remove friend?',
                 style: TextStyle(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
@@ -223,7 +286,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 '${handle.displayHandle} will be removed from your friends.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Color(0xFF64748B),
+                  color: AppColors.textMuted,
                   fontSize: 13.5,
                 ),
               ),
@@ -234,7 +297,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 13),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        side: const BorderSide(color: AppColors.divider),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -243,7 +306,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Color(0xFF475569),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -254,7 +317,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444),
+                        backgroundColor: AppColors.error,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -269,13 +332,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           _showDarkPillToast(
                             message: '${handle.displayHandle} removed from your friends',
                             icon: Icons.check_circle_rounded,
-                            iconColor: const Color(0xFFF59E0B),
+                            iconColor: AppColors.primary,
                           );
                         } catch (e) {
                           _showDarkPillToast(
                             message: 'Error: $e',
                             icon: Icons.error_outline_rounded,
-                            iconColor: const Color(0xFFEF4444),
+                            iconColor: AppColors.error,
                           );
                         }
                       },
@@ -300,7 +363,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void _showBlockConfirmationSheet(String handle) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -315,14 +378,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               Text(
-                'Block @$handle?',
+                'Block ${getDisplayName(handle)}?',
                 style: const TextStyle(
-                  color: Color(0xFFEF4444),
+                  color: AppColors.error,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
@@ -332,7 +395,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 "They won't be able to send you friend requests or messages.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF64748B),
+                  color: AppColors.textMuted,
                   fontSize: 13.5,
                 ),
               ),
@@ -343,7 +406,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 13),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        side: const BorderSide(color: AppColors.divider),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -352,7 +415,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Color(0xFF475569),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -363,7 +426,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444),
+                        backgroundColor: AppColors.error,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -378,13 +441,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           _showDarkPillToast(
                             message: '${handle.displayHandle} has been blocked',
                             icon: Icons.check_circle_rounded,
-                            iconColor: const Color(0xFFEF4444),
+                            iconColor: AppColors.error,
                           );
                         } catch (e) {
                           _showDarkPillToast(
                             message: 'Error: $e',
                             icon: Icons.error_outline_rounded,
-                            iconColor: const Color(0xFFEF4444),
+                            iconColor: AppColors.error,
                           );
                         }
                       },
@@ -406,404 +469,422 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  void _openDiscoverPeople() {
+  void _openDiscoverPeople({String? initialQuery}) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DiscoverPeopleScreen(
           repository: widget.repository,
           currentUserHandle: widget.currentUserHandle,
+          initialQuery: initialQuery,
         ),
       ),
-    );
+    ).then((_) {
+      widget.repository.refreshAll();
+    });
   }
 
-  // ── Actions: Accept / Decline / Cancel ────────────────────────────────────
-  Future<void> _acceptRequest(String senderHandle) async {
-    try {
-      await widget.repository.acceptFriendRequest(senderHandle);
-      _showDarkPillToast(
-        message: "You're now friends with @$senderHandle",
-        icon: Icons.check_circle_rounded,
-        iconColor: const Color(0xFF10B981),
-      );
-    } catch (e) {
-      _showDarkPillToast(
-        message: 'Error: $e',
-        icon: Icons.error_outline_rounded,
-        iconColor: const Color(0xFFEF4444),
-      );
-    }
+  void _openFriendRequestsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FriendRequestsScreen(
+          repository: widget.repository,
+          currentUserHandle: widget.currentUserHandle,
+        ),
+      ),
+    ).then((_) {
+      widget.repository.refreshAll();
+    });
   }
 
-  Future<void> _declineRequest(String senderHandle) async {
-    try {
-      await widget.repository.rejectFriendRequest(senderHandle);
-      _showDarkPillToast(
-        message: 'Request declined',
-        icon: Icons.remove_circle_outline_rounded,
-        iconColor: const Color(0xFF94A3B8),
-      );
-    } catch (e) {
-      _showDarkPillToast(
-        message: 'Error: $e',
-        icon: Icons.error_outline_rounded,
-        iconColor: const Color(0xFFEF4444),
-      );
-    }
-  }
-
-  Future<void> _cancelSentRequest(String receiverHandle) async {
-    try {
-      await widget.repository.cancelFriendRequest(receiverHandle);
-      _showDarkPillToast(
-        message: 'Friend request cancelled',
-        icon: Icons.check_circle_rounded,
-        iconColor: const Color(0xFF94A3B8),
-      );
-    } catch (e) {
-      _showDarkPillToast(
-        message: 'Error: $e',
-        icon: Icons.error_outline_rounded,
-        iconColor: const Color(0xFFEF4444),
-      );
-    }
-  }
-
-  // ── Header & Main Build ───────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Friends',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
-            Text(
-              'Your Nearhood connections',
-              style: TextStyle(
-                color: Color(0xFF90B4B6),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // Quick Discover People Button
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF14B8A6), size: 22),
-            tooltip: 'Discover People',
-            onPressed: _openDiscoverPeople,
-          ),
-          // Search Toggle Button
-          IconButton(
-            icon: Icon(
-              _isSearchOpen ? Icons.close_rounded : Icons.search_rounded,
-              color: Colors.white,
-            ),
+    return PopScope(
+      canPop: _searchQuery.isEmpty && !_searchFocusNode.hasFocus,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _searchController.clear();
+        _searchFocusNode.unfocus();
+        setState(() {
+          _searchQuery = '';
+        });
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
             onPressed: () {
-              setState(() {
-                _isSearchOpen = !_isSearchOpen;
-                if (!_isSearchOpen) {
-                  _searchController.clear();
+              if (_searchController.text.isNotEmpty || _searchFocusNode.hasFocus) {
+                _searchController.clear();
+                _searchFocusNode.unfocus();
+                setState(() {
                   _searchQuery = '';
-                }
-              });
-            },
-          ),
-          // 3-Dots More Options
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
-            color: const Color(0xFF072E33),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Color(0xFF0E4B52)),
-            ),
-            onSelected: (val) {
-              if (val == 'discover') {
-                _openDiscoverPeople();
+                });
+              } else {
+                Navigator.pop(context);
               }
             },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'discover',
-                child: Row(
-                  children: const [
-                    Icon(Icons.explore_outlined, color: Colors.white, size: 18),
-                    SizedBox(width: 10),
-                    Text(
-                      'Discover People',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+          ),
+          titleSpacing: 0,
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Friends',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              Text(
+                'Your Nearhood connections',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Expandable Search Bar
-          if (_isSearchOpen)
+          actions: [
+            IconButton(
+              icon: const Icon(
+                Icons.card_giftcard_rounded,
+                color: Color(0xFFD97706),
+                size: 22,
+              ),
+              tooltip: 'Invite friends & earn points',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => InviteEarnScreen(currentUserHandle: widget.currentUserHandle),
+                  ),
+                );
+              },
+            ),
+            StreamBuilder<List<FriendRequest>>(
+              stream: widget.repository.getPendingRequests(limit: 100),
+              builder: (context, snapshot) {
+                final count = snapshot.data?.length ?? 0;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.person_add_alt_1_rounded,
+                        color: AppColors.primary,
+                        size: 22,
+                      ),
+                      tooltip: 'Search new people',
+                      onPressed: () => _openDiscoverPeople(),
+                    ),
+                    if (count > 0)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0E8A3E),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.surface,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(width: 6),
+          ],
+        ),
+        body: Column(
+          children: [
             Container(
-              color: Colors.black,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Container(
+                height: 46,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF072E33),
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF0E4B52)),
+                  border: Border.all(color: AppColors.divider),
                 ),
                 child: TextField(
                   controller: _searchController,
-                  autofocus: true,
-                  style: const TextStyle(fontSize: 14, color: Colors.white),
-                  decoration: const InputDecoration(
-                    hintText: 'Filter by handle...',
-                    hintStyle: TextStyle(color: Color(0xFF90B4B6)),
-                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: Color(0xFF90B4B6)),
+                  focusNode: _searchFocusNode,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    hintText: 'Search friends, handle or name...',
+                    hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13.5),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchFocusNode.unfocus();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
             ),
-
-          // ── Segmented Navigation Capsule (Image 1 Header) ────────
-          Container(
-            color: Colors.black,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF072E33),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF0E4B52)),
-              ),
-              child: Row(
-                children: [
-                  // Tab 1: Requests
-                  Expanded(
-                    child: StreamBuilder<int>(
-                      stream: widget.repository.getPendingRequestCount(),
-                      builder: (context, snap) {
-                        final count = snap.data ?? 0;
-                        final isSelected = _activeTab == FriendsTab.requests;
-                        return _buildSegmentItem(
-                          title: 'Requests',
-                          isSelected: isSelected,
-                          badgeCount: count,
-                          onTap: () => setState(() => _activeTab = FriendsTab.requests),
-                        );
-                      },
-                    ),
-                  ),
-                  // Tab 2: Friends
-                  Expanded(
-                    child: _buildSegmentItem(
-                      title: 'Friends',
-                      isSelected: _activeTab == FriendsTab.friends,
-                      onTap: () => setState(() => _activeTab = FriendsTab.friends),
-                    ),
-                  ),
-                  // Tab 3: Sent
-                  Expanded(
-                    child: _buildSegmentItem(
-                      title: 'Sent',
-                      isSelected: _activeTab == FriendsTab.sent,
-                      onTap: () => setState(() => _activeTab = FriendsTab.sent),
-                    ),
-                  ),
-                ],
-              ),
+            Expanded(
+              child: _buildFriendsTab(),
             ),
-          ),
-
-          // ── Active Tab View ──────────────────────────────────────
-          Expanded(
-            child: _buildCurrentTabContent(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Segment Navigation Pill Item ──────────────────────────────────────────
-  Widget _buildSegmentItem({
-    required String title,
-    required bool isSelected,
-    int badgeCount = 0,
-    required VoidCallback onTap,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppMotion.durationMicro,
-        curve: AppMotion.interactiveCurve,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? Colors.white : Colors.black)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: isSelected
-                          ? (isDark ? Colors.black : Colors.white)
-                          : (isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B)),
-                      fontSize: 13.5,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                  if (badgeCount > 0) ...[
-                    const SizedBox(width: 5),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '$badgeCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCurrentTabContent() {
-    switch (_activeTab) {
-      case FriendsTab.requests:
-        return _buildRequestsTab();
-      case FriendsTab.friends:
-        return _buildFriendsTab();
-      case FriendsTab.sent:
-        return _buildSentTab();
-    }
-  }
-
-  // ── Tab 1: Requests (Incoming Requests - Image 1) ──────────────────────────
-  Widget _buildRequestsTab() {
+  Widget _buildFriendsTab() {
     return StreamBuilder<List<FriendRequest>>(
       stream: widget.repository.getPendingRequests(limit: 100),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('Error loading incoming friend requests: ${snapshot.error}');
-          return _buildErrorState();
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingSkeleton();
-        }
+      builder: (context, reqSnapshot) {
+        final pendingRequests = reqSnapshot.data ?? [];
 
-        var requests = snapshot.data ?? [];
-        if (_searchQuery.isNotEmpty) {
-          requests = requests
-              .where((r) => r.senderHandle.toLowerCase().contains(_searchQuery))
-              .toList();
-        }
+        return StreamBuilder<List<Friendship>>(
+          stream: widget.repository.getFriendsList(limit: 200),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              debugPrint('Error loading friends list: ${snapshot.error}');
+              return _buildErrorState();
+            }
+            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              return _buildLoadingSkeleton();
+            }
 
-        if (requests.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.person_add_outlined,
-            title: 'No new requests',
-            subtitle: 'When someone wants to connect with you, their request will appear here.',
-            actionLabel: 'Discover people',
-            onAction: _openDiscoverPeople,
-          );
-        }
+            var friendships = snapshot.data ?? [];
+            if (_searchQuery.isNotEmpty) {
+              friendships = friendships.where((f) {
+                final other = f.getOtherUser(widget.currentUserHandle);
+                final otherName = f.getOtherUserName(widget.currentUserHandle);
+                final cachedName = NameCacheService.instance.getCachedName(other) ?? '';
+                return other.toLowerCase().contains(_searchQuery) ||
+                    otherName.toLowerCase().contains(_searchQuery) ||
+                    cachedName.toLowerCase().contains(_searchQuery);
+              }).toList();
+            }
 
-        return ListView.separated(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: requests.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, i) {
-            final req = requests[i];
-            return _buildRequestCard(req);
+            final hasInlineRequests = _searchQuery.isEmpty && pendingRequests.isNotEmpty;
+
+            if (friendships.isEmpty) {
+              if (_searchQuery.isNotEmpty) {
+                return ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
+                  children: [
+                    _buildSearchDiscoverPrompt(),
+                  ],
+                );
+              }
+              if (hasInlineRequests) {
+                return ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+                  children: [
+                    _buildInlineRequestsSection(pendingRequests),
+                    const SizedBox(height: 12),
+                    _buildEmptyState(
+                      icon: Icons.people_outline_rounded,
+                      title: 'No friends yet',
+                      subtitle: 'Accept incoming requests above or find new neighbors to connect with.',
+                      actionLabel: 'Find people',
+                      onAction: _openDiscoverPeople,
+                    ),
+                  ],
+                );
+              }
+              return _buildEmptyState(
+                icon: Icons.people_outline_rounded,
+                title: 'Build your local network',
+                subtitle: 'Connect with people from your community and start conversations.',
+                actionLabel: 'Find people',
+                onAction: _openDiscoverPeople,
+              );
+            }
+
+            final totalItems = (hasInlineRequests ? 1 : 0) + 1 + friendships.length + (_searchQuery.isNotEmpty ? 1 : 0);
+
+            return ListView.separated(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+              itemCount: totalItems,
+              separatorBuilder: (_, index) {
+                if (hasInlineRequests && index == 0) {
+                  return const SizedBox(height: 6);
+                }
+                if ((hasInlineRequests && index == 1) || (!hasInlineRequests && index == 0)) {
+                  return const SizedBox(height: 10);
+                }
+                return const SizedBox(height: 10);
+              },
+              itemBuilder: (context, i) {
+                int cursor = 0;
+                if (hasInlineRequests) {
+                  if (i == cursor) {
+                    return _buildInlineRequestsSection(pendingRequests);
+                  }
+                  cursor++;
+                }
+
+                if (i == cursor) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 2, top: 4),
+                    child: Text(
+                      _searchQuery.isEmpty
+                          ? 'Your friends · ${friendships.length}'
+                          : 'Matching friends · ${friendships.length}',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                }
+                cursor++;
+
+                final friendIndex = i - cursor;
+                if (friendIndex < friendships.length) {
+                  final friendship = friendships[friendIndex];
+                  return _buildFriendCard(friendship);
+                }
+
+                return _buildSearchDiscoverPrompt();
+              },
+            );
           },
         );
       },
     );
   }
 
-  Widget _buildRequestCard(FriendRequest req) {
-    final handle = req.senderHandle;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildInlineRequestsSection(List<FriendRequest> requests) {
+    if (requests.isEmpty || _searchQuery.isNotEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final displayRequests = requests.take(3).toList();
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User Info Row
-          InkWell(
+          Row(
+            children: [
+              const Text(
+                'Friend requests',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E8A3E),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${requests.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _openFriendRequestsScreen,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View all',
+                        style: TextStyle(
+                          color: Color(0xFF0E8A3E),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Color(0xFF0E8A3E),
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Column(
+            children: displayRequests.map((req) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _buildInlineRequestRow(req),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineRequestRow(FriendRequest req) {
+    final handle = req.senderHandle;
+    final displayName = NameCacheService.instance.getDisplayName(
+      handle,
+      fallback: req.senderName,
+    );
+    final isProcessing = _processingHandles.contains(handle);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FAF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF0E8A3E).withValues(alpha: 0.20),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
             onTap: () {
               showOtherUserProfileSheet(
                 context,
@@ -812,173 +893,208 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 repository: context.read<PostRepository>(),
               );
             },
-            borderRadius: BorderRadius.circular(10),
-            child: Row(
-              children: [
-                // Circular Avatar with Photo/Gradient
-                UserAvatar(
-                  handle: handle,
-                  size: 52,
-                  fontSize: 18,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: UserAvatar(
+              handle: handle,
+              size: 44,
+              fontSize: 15.5,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                showOtherUserProfileSheet(
+                  context,
+                  partnerHandle: handle,
+                  currentUserHandle: widget.currentUserHandle,
+                  repository: context.read<PostRepository>(),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        handle.displayHandle,
-                        style: TextStyle(
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Wants to connect with you',
-                        style: TextStyle(
-                          color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      // Monochrome Pill Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF262626) : const Color(0xFFF4F4F4),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                      Flexible(
                         child: Text(
-                          'New connection',
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : Colors.black87,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
+                          getDisplayName(handle, fallback: displayName),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      VerifiedBadge(handle: handle, size: 14),
                     ],
                   ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Wants to connect',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isProcessing)
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: Color(0xFF0E8A3E),
+              ),
+            )
+          else
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0E8A3E),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: () => _acceptInlineRequest(req),
+                  child: const Text(
+                    'Accept',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textMuted,
+                    size: 18,
+                  ),
+                  onPressed: () => _declineInlineRequest(req),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
+        ],
+      ),
+    );
+  }
 
-          // Action Buttons: Accept & Decline
+  Widget _buildSearchDiscoverPrompt() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Row(
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.white : Colors.black,
-                    foregroundColor: isDark ? Colors.black : Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: const StadiumBorder(),
-                  ),
-                  onPressed: () => _acceptRequest(handle),
-                  child: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Accept',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: AppColors.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_search_rounded,
+                  color: AppColors.primary,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
               Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
-                    shape: const StadiumBorder(),
-                  ),
-                  onPressed: () => _declineRequest(handle),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Decline',
-                      style: TextStyle(
-                        color: isDark ? Colors.white70 : const Color(0xFF475569),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Search "$_searchQuery" on Nearhood',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Find new neighbors to connect with',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => _openDiscoverPeople(initialQuery: _searchQuery),
+              icon: const Icon(Icons.search_rounded, size: 18),
+              label: const Text(
+                'Search new people',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ── Tab 2: Friends (Image 2 Left) ─────────────────────────────────────────
-  Widget _buildFriendsTab() {
-    return StreamBuilder<List<Friendship>>(
-      stream: widget.repository.getFriendsList(limit: 200),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('Error loading friends list: ${snapshot.error}');
-          return _buildErrorState();
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingSkeleton();
-        }
-
-        var friendships = snapshot.data ?? [];
-        if (_searchQuery.isNotEmpty) {
-          friendships = friendships.where((f) {
-            final other = f.getOtherUser(widget.currentUserHandle);
-            return other.toLowerCase().contains(_searchQuery);
-          }).toList();
-        }
-
-        if (friendships.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.people_outline_rounded,
-            title: 'Build your local network',
-            subtitle: 'Connect with people from your community and start conversations.',
-            actionLabel: 'Find people',
-            onAction: _openDiscoverPeople,
-          );
-        }
-
-        return ListView.separated(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: friendships.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (context, i) {
-            final friendship = friendships[i];
-            final otherHandle = friendship.getOtherUser(widget.currentUserHandle);
-            return _buildFriendCard(otherHandle);
-          },
-        );
-      },
+  Widget _buildFriendCard(Friendship friendship) {
+    final handle = friendship.getOtherUser(widget.currentUserHandle);
+    final displayName = NameCacheService.instance.getDisplayName(
+      handle,
+      fallback: friendship.otherUserName,
     );
-  }
-
-  Widget _buildFriendCard(String handle) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -986,7 +1102,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
       child: Row(
         children: [
-          // Avatar
           UserAvatar(
             handle: handle,
             size: 48,
@@ -1002,7 +1117,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(width: 12),
 
-          // Text details
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -1016,21 +1130,28 @@ class _FriendsScreenState extends State<FriendsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    handle.displayHandle,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          getDisplayName(handle, fallback: displayName),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      VerifiedBadge(handle: handle, size: 14),
+                    ],
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    'Your friend',
+                  const Text(
+                    'Friend',
                     style: TextStyle(
-                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                      color: AppColors.textMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -1040,11 +1161,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(width: 8),
 
-          // Message Button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: isDark ? Colors.white : Colors.black,
-              foregroundColor: isDark ? Colors.black : Colors.white,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: const Size(0, 36),
@@ -1073,11 +1193,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(width: 2),
 
-          // 3-Dots Action Button
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textMuted, size: 18),
             onPressed: () => _showFriendMoreMenu(handle),
           ),
         ],
@@ -1085,143 +1204,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  // ── Tab 3: Sent (Image 2 Right) ───────────────────────────────────────────
-  Widget _buildSentTab() {
-    return StreamBuilder<List<FriendRequest>>(
-      stream: widget.repository.getSentRequests(limit: 100),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('Error loading sent friend requests: ${snapshot.error}');
-          return _buildErrorState();
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingSkeleton();
-        }
-
-        var requests = snapshot.data ?? [];
-        if (_searchQuery.isNotEmpty) {
-          requests = requests
-              .where((r) => r.receiverHandle.toLowerCase().contains(_searchQuery))
-              .toList();
-        }
-
-        if (requests.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.access_time_rounded,
-            title: 'No pending requests',
-            subtitle: 'Friend requests you send will appear here.',
-            actionLabel: 'Find people',
-            onAction: _openDiscoverPeople,
-          );
-        }
-
-        return ListView.separated(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: requests.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (context, i) {
-            final req = requests[i];
-            return _buildSentCard(req.receiverHandle);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSentCard(String handle) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          UserAvatar(
-            handle: handle,
-            size: 48,
-            fontSize: 16.5,
-            onTap: () {
-              showOtherUserProfileSheet(
-                context,
-                partnerHandle: handle,
-                currentUserHandle: widget.currentUserHandle,
-                repository: context.read<PostRepository>(),
-              );
-            },
-          ),
-          const SizedBox(width: 12),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  handle.displayHandle,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.circle, size: 7, color: Color(0xFFF59E0B)),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Request pending',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Cancel Outlined Button
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              minimumSize: const Size(0, 34),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              side: BorderSide(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
-              shape: const StadiumBorder(),
-            ),
-            onPressed: () => _cancelSentRequest(handle),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark ? Colors.white70 : const Color(0xFF475569),
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Supporting States: Empty, Skeleton, Error (Image 3) ───────────────────
   Widget _buildEmptyState({
     required IconData icon,
     required String title,
@@ -1229,29 +1211,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Circular Icon Badge
             Container(
               width: 76,
               height: 76,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                  color: AppColors.divider,
                 ),
               ),
               child: Center(
                 child: Icon(
                   icon,
-                  color: isDark ? Colors.white : Colors.black,
+                  color: AppColors.primary,
                   size: 34,
                 ),
               ),
@@ -1259,8 +1238,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             const SizedBox(height: 18),
             Text(
               title,
-              style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              style: const TextStyle(
+                color: AppColors.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
@@ -1269,8 +1248,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+              style: const TextStyle(
+                color: AppColors.textMuted,
                 fontSize: 13.5,
                 height: 1.4,
               ),
@@ -1279,8 +1258,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? Colors.white : Colors.black,
-                  foregroundColor: isDark ? Colors.black : Colors.white,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   shape: const StadiumBorder(),
@@ -1302,8 +1281,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildLoadingSkeleton() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: 5,
@@ -1312,17 +1289,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF141414) : Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
+            border: Border.all(color: AppColors.divider),
           ),
           child: Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                decoration: const BoxDecoration(
+                  color: AppColors.chipBg,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1335,7 +1312,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       width: 110,
                       height: 13,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                        color: AppColors.chipBg,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -1344,7 +1321,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       width: 160,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                        color: AppColors.chipBg,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -1355,7 +1332,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 width: 70,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
@@ -1367,8 +1344,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildErrorState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1379,39 +1354,39 @@ class _FriendsScreenState extends State<FriendsScreen> {
               width: 70,
               height: 70,
               decoration: const BoxDecoration(
-                color: Color(0xFFFEF2F2),
+                color: AppColors.errorSoft,
                 shape: BoxShape.circle,
               ),
               child: const Center(
                 child: Icon(
                   Icons.warning_amber_rounded,
-                  color: Color(0xFFEF4444),
+                  color: AppColors.error,
                   size: 34,
                 ),
               ),
             ),
             const SizedBox(height: 18),
-            Text(
+            const Text(
               "Couldn't load connections",
               style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 6),
-            Text(
+            const Text(
               'Check your connection and try again.',
               style: TextStyle(
-                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                color: AppColors.textMuted,
                 fontSize: 13.5,
               ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? Colors.white : Colors.black,
-                foregroundColor: isDark ? Colors.black : Colors.white,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 shape: const StadiumBorder(),

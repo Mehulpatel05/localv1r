@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-
 import '../../core/auth_repository.dart';
 import '../../core/models/user_profile.dart';
-import '../../core/theme.dart';
 import '../../features/auth/login_flow_page.dart';
 import '../../screens/profile/blocked_users_screen.dart';
-import 'feedback_support_page.dart';
+import '../../screens/profile/widgets/support_request_sheet.dart';
+import '../../screens/friends/friend_requests_screen.dart';
+import '../../services/friend_repository.dart';
 import 'widgets/account_info_sheet.dart';
-import 'widgets/call_privacy_settings_sheet.dart';
 import 'widgets/confirm_sheet.dart';
 import 'widgets/notification_settings_sheet.dart';
 import 'widgets/settings_group.dart';
 import 'widgets/settings_tile.dart';
+import 'widgets/shorebird_update_tile.dart';
+import '../../screens/safety/legal_and_rules_screen.dart';
+import '../../screens/admin/founding_admin_screen.dart';
+import '../../screens/auth/create_handle_screen.dart';
+import '../../services/post_repository.dart';
+import '../../services/token_decision_engine.dart';
+import '../../theme/app_colors.dart';
+import '../account_deletion/account_deletion_coordinator.dart';
 
-/// Full-page Settings screen matching the Nearhood Black & White design spec.
-///
-/// Pushed as a [MaterialPageRoute] from the profile screen.
-/// No bottom navigation bar (above the main shell).
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.authRepository,
@@ -28,27 +31,35 @@ class SettingsPage extends StatelessWidget {
 
   final AuthRepository authRepository;
   final UserProfile profile;
-
-  /// City name shown in the footer. Defaults to 'Vadodara'.
   final String city;
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late final FriendRepository _friendRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _friendRepository = FriendRepository()
+      ..currentUserHandle = widget.profile.handle;
+  }
 
   void _navigateToLogin(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(
         builder: (_) => LoginFlowPage(
-          authRepository: authRepository,
+          authRepository: widget.authRepository,
         ),
       ),
       (route) => false,
     );
   }
 
-  // ── Sheet launchers ───────────────────────────────────────────────────────
-
   void _openAccountInfo(BuildContext context) {
-    showAccountInfoSheet(context, profile: profile);
+    showAccountInfoSheet(context, profile: widget.profile);
   }
 
   void _openLogoutSheet(BuildContext context) {
@@ -60,9 +71,9 @@ class SettingsPage extends StatelessWidget {
       cancelLabel: 'Cancel',
       isDanger: false,
       onConfirm: () async {
-        await authRepository.logout();
+        await widget.authRepository.logout();
         if (context.mounted) {
-          Navigator.of(context).pop(); // close sheet
+          Navigator.of(context).pop();
           _navigateToLogin(context);
         }
       },
@@ -70,21 +81,9 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _openDeleteSheet(BuildContext context) {
-    showConfirmSheet(
+    AccountDeletionCoordinator.startDeletionFlow(
       context,
-      title: 'Delete your account?',
-      body:
-          'Your profile, posts and messages will be removed permanently. This cannot be undone.',
-      confirmLabel: 'Delete My Account',
-      cancelLabel: 'Keep my account',
-      isDanger: true,
-      onConfirm: () async {
-        await authRepository.deleteAccount();
-        if (context.mounted) {
-          Navigator.of(context).pop(); // close sheet
-          _navigateToLogin(context);
-        }
-      },
+      authRepository: widget.authRepository,
     );
   }
 
@@ -97,54 +96,46 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-
-  // ── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
-
     return Scaffold(
-      backgroundColor: c.bg,
-      // No default AppBar — we build a custom top bar inside the body.
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 18).copyWith(bottom: 40),
           children: [
-            // ── Custom top bar ──────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 14, 0, 6),
               child: Row(
                 children: [
-                  // Back button
                   Semantics(
-                    label: 'Back',
                     button: true,
+                    label: 'Back to profile',
                     child: _CircleButton(
                       onTap: () => Navigator.of(context).pop(),
-                      child: Icon(
-                        Icons.arrow_back,
-                        size: 19,
-                        color: c.ink,
+                      child: const Center(
+                        child: Icon(
+                          Icons.arrow_back_ios_new,
+                          size: 16,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // Title
-                  Text(
+                  const SizedBox(width: 14),
+                  const Text(
                     'Settings',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.03 * 22,
-                      color: c.ink,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
               ),
             ),
 
-            // ── Account group ───────────────────────────────────────────────
             SettingsGroup(
               label: 'Account',
               isFirst: true,
@@ -158,22 +149,7 @@ class SettingsPage extends StatelessWidget {
                       'Account Info, View your handle, phone and join date, button',
                 ),
                 SettingsTile(
-                  icon: Icons.headset_mic_outlined,
-                  title: 'Feedback & Support',
-                  description: 'Rate, report bugs or suggest features',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => FeedbackSupportPage(
-                          profile: profile,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                SettingsTile(
-                  icon: Icons.block,
+                  icon: Icons.block_outlined,
                   title: 'Blocked Users',
                   description: "Manage users you've blocked",
                   onTap: () {
@@ -185,10 +161,27 @@ class SettingsPage extends StatelessWidget {
                     );
                   },
                 ),
+                _FriendsTile(friendRepository: _friendRepository, profile: widget.profile),
+                SettingsTile(
+                  icon: Icons.badge_outlined,
+                  title: 'Profile Setup Screen (Preview)',
+                  description: 'Preview username & name creation screen',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => CreateHandleScreen(
+                          repository: PostRepository.instance,
+                          userId: widget.profile.handle,
+                          phoneNumber: widget.profile.phone,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
 
-            // ── Preferences group ───────────────────────────────────────────
             SettingsGroup(
               label: 'Preferences',
               tiles: [
@@ -200,24 +193,25 @@ class SettingsPage extends StatelessWidget {
                   semanticsLabel:
                       'Notification Alerts, Manage push and chat alerts, button',
                 ),
-                SettingsTile(
-                  icon: Icons.phone_in_talk_outlined,
-                  title: 'Call Privacy',
-                  description: 'Control who can call you (Everyone, Friends, Nobody)',
-                  onTap: () => showCallPrivacySettingsSheet(
-                    context,
-                    userHandle: profile.handle,
-                  ),
-                  semanticsLabel:
-                      'Call Privacy, Control who can call you, button',
-                ),
               ],
             ),
 
-            // ── More group ──────────────────────────────────────────────────
             SettingsGroup(
-              label: 'More',
+              label: 'Help & Support',
               tiles: [
+                SettingsTile(
+                  icon: Icons.support_agent_rounded,
+                  title: 'Help & Support Desk',
+                  description: 'Contact Vadodara support or report an issue',
+                  onTap: () {
+                    SupportRequestSheet.show(
+                      context,
+                      userHandle: widget.profile.handle,
+                      initialPhone: widget.profile.phone,
+                    );
+                  },
+                  semanticsLabel: 'Help and Support Desk, button',
+                ),
                 SettingsTile(
                   icon: Icons.share_outlined,
                   title: 'Share Nearhood',
@@ -227,10 +221,61 @@ class SettingsPage extends StatelessWidget {
               ],
             ),
 
-            // ── Action buttons ──────────────────────────────────────────────
+            SettingsGroup(
+              label: 'Legal & Safety',
+              tiles: [
+                SettingsTile(
+                  icon: Icons.shield_outlined,
+                  title: 'Community Guidelines',
+                  description: 'Vadodara neighborhood house rules & standards',
+                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 0),
+                  semanticsLabel: 'Community Guidelines, button',
+                ),
+                SettingsTile(
+                  icon: Icons.description_outlined,
+                  title: 'Terms of Service',
+                  description: 'Intermediary safe harbor & legal agreement',
+                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 1),
+                  semanticsLabel: 'Terms of Service, button',
+                ),
+                SettingsTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy Policy',
+                  description: 'DPDP Act 2023 compliance & GPS privacy',
+                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 2),
+                  semanticsLabel: 'Privacy Policy, button',
+                ),
+              ],
+            ),
+
+            if (TokenDecisionEngine.instance.canSeeAdminPanel()) ...[
+              SettingsGroup(
+                label: 'Administration',
+                tiles: [
+                  SettingsTile(
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: 'Founding Badge Approvals',
+                    description: 'Review & manage area founding neighbour requests',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const FoundingAdminScreen(),
+                        ),
+                      );
+                    },
+                    semanticsLabel: 'Founding Badge Approvals, button',
+                  ),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 26),
 
-            // Log Out
+            const ShorebirdUpdateTile(),
+
+            const SizedBox(height: 14),
+
             _ActionButton(
               label: 'Log Out',
               icon: Icons.logout,
@@ -240,7 +285,6 @@ class SettingsPage extends StatelessWidget {
 
             const SizedBox(height: 10),
 
-            // Delete My Account
             _ActionButton(
               label: 'Delete My Account',
               icon: Icons.delete_outline,
@@ -249,13 +293,28 @@ class SettingsPage extends StatelessWidget {
               semanticsLabel: 'Delete My Account',
             ),
 
-            // ── Footer ──────────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.only(top: 26),
               child: Center(
-                child: Text(
-                  'Nearhood · $city',
-                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                child: Column(
+                  children: [
+                    Text(
+                      'Nearhood · ${widget.city}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Version 1.0.1 (Vadodara Live)',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textMuted.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -266,9 +325,152 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-// ─── Private reusable widgets ─────────────────────────────────────────────────
+class _FriendsTile extends StatelessWidget {
+  final FriendRepository friendRepository;
+  final UserProfile profile;
 
-/// 40×40 circle button (back button in the top bar).
+  const _FriendsTile({
+    required this.friendRepository,
+    required this.profile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: friendRepository.getPendingRequestCount(),
+      builder: (context, snap) {
+        final pendingCount = snap.data ?? 0;
+        final description = pendingCount > 0
+            ? '$pendingCount pending request${pendingCount > 1 ? 's' : ''}'
+            : 'View received & sent requests';
+        return _FriendsTileRow(
+          pendingCount: pendingCount,
+          description: description,
+          onTap: () {
+            final repo = FriendRepository()
+              ..currentUserHandle = profile.handle;
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => FriendRequestsScreen(
+                  repository: repo,
+                  currentUserHandle: profile.handle,
+                  initialTab: FriendRequestsTab.requests,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _FriendsTileRow extends StatefulWidget {
+  final int pendingCount;
+  final String description;
+  final VoidCallback onTap;
+
+  const _FriendsTileRow({
+    required this.pendingCount,
+    required this.description,
+    required this.onTap,
+  });
+
+  @override
+  State<_FriendsTileRow> createState() => _FriendsTileRowState();
+}
+
+class _FriendsTileRowState extends State<_FriendsTileRow> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    final bg = _pressed && !disableAnimations ? AppColors.chipBg : Colors.transparent;
+
+    return Semantics(
+      label: 'Friend Requests, ${widget.description}, button',
+      button: true,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: disableAnimations ? Duration.zero : const Duration(milliseconds: 80),
+          color: bg,
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: AppColors.chipBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(Icons.people_alt_rounded, size: 20, color: AppColors.textPrimary),
+                    if (widget.pendingCount > 0)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.error,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Friend Requests',
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.description,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CircleButton extends StatefulWidget {
   const _CircleButton({required this.onTap, required this.child});
 
@@ -284,7 +486,6 @@ class _CircleButtonState extends State<_CircleButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Focus(
@@ -305,10 +506,10 @@ class _CircleButtonState extends State<_CircleButton> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _pressed ? c.field2 : c.field,
+                color: _pressed ? AppColors.divider : AppColors.chipBg,
                 shape: BoxShape.circle,
                 border: hasFocus
-                    ? Border.all(color: c.ink, width: 2)
+                    ? Border.all(color: AppColors.primary, width: 2)
                     : null,
               ),
               child: widget.child,
@@ -320,11 +521,6 @@ class _CircleButtonState extends State<_CircleButton> {
   }
 }
 
-/// Full-width action button used for Log Out and Delete My Account.
-///
-/// Spec: height 54, radius 16, icon + text (gap 8), scale press 0.985.
-/// Danger variant: bg = danger@9%, text+icon = danger, border 1.5px danger@35%.
-/// Normal variant: bg = field, text+icon = ink.
 class _ActionButton extends StatefulWidget {
   const _ActionButton({
     required this.label,
@@ -349,25 +545,23 @@ class _ActionButtonState extends State<_ActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     final Color bg = widget.isDanger
-        ? c.danger.withValues(alpha: 0.09)
-        : (_pressed ? c.field2 : c.field);
+        ? AppColors.errorSoft
+        : (_pressed ? AppColors.divider : AppColors.surface);
 
-    final Color fg = widget.isDanger ? c.danger : c.ink;
+    final Color fg = widget.isDanger ? const Color(0xFFB3262A) : AppColors.textPrimary;
 
-    final Border? border = widget.isDanger
-        ? Border.all(color: c.danger.withValues(alpha: 0.35), width: 1.5)
-        : null;
+    final Border border = widget.isDanger
+        ? Border.all(color: const Color(0xFFFCA5A5), width: 1.5)
+        : Border.all(color: AppColors.divider);
 
     final scale = (_pressed && !disableAnimations) ? 0.985 : 1.0;
 
     return Semantics(
       button: true,
       label: widget.semanticsLabel ?? widget.label,
-      // Delete button should not be first in focus order — handled by placement
       child: Focus(
         child: Builder(
           builder: (ctx) {
@@ -387,14 +581,13 @@ class _ActionButtonState extends State<_ActionButton> {
                 child: AnimatedContainer(
                   duration: disableAnimations
                       ? Duration.zero
-                      : const Duration(milliseconds: 80),
+                      : const Duration(milliseconds: 100),
                   height: 54,
-                  width: double.infinity,
                   decoration: BoxDecoration(
                     color: bg,
                     borderRadius: BorderRadius.circular(16),
                     border: hasFocus
-                        ? Border.all(color: c.ink, width: 2)
+                        ? Border.all(color: AppColors.primary, width: 2)
                         : border,
                   ),
                   child: Row(
@@ -405,7 +598,7 @@ class _ActionButtonState extends State<_ActionButton> {
                       Text(
                         widget.label,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: fg,
                         ),

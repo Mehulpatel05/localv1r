@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../theme/app_colors.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_service.dart';
+import '../../core/location/location_banner.dart';
 import '../../core/location/city_picker_screen.dart';
 import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/like_capsule.dart';
 import '../../models/post_model.dart';
-import '../../core/models/user_profile.dart';
 import '../../services/post_repository.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
@@ -20,6 +22,11 @@ import '../notifications/notifications_screen.dart';
 import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../../core/services/app_image_cache_service.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/services/badge_cache_service.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../services/rewards_service.dart';
+import '../rewards/rewards_hub_screen.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository repository;
@@ -60,8 +67,7 @@ class _FeedScreenState extends State<FeedScreen> {
     return posts;
   }
 
-
-  Widget _buildFilterChipsRow(bool isDark) {
+  Widget _buildFilterChipsRow() {
     final chips = ['All', 'Questions', 'Events', 'Alerts'];
     return Container(
       height: 42,
@@ -75,20 +81,11 @@ class _FeedScreenState extends State<FeedScreen> {
           final chip = chips[index];
           final isSelected = chip == _selectedFilterChip;
 
-          final bg = isSelected
-              ? Colors.white
-              : const Color(0xFF072E33);
-
-          final fg = isSelected
-              ? Colors.black
-              : Colors.white;
-
+          final bg = isSelected ? AppColors.primary : AppColors.chipBg;
+          final fg = isSelected ? Colors.white : AppColors.textPrimary;
           final border = isSelected
               ? Border.all(color: Colors.transparent)
-              : Border.all(
-                  color: const Color(0xFF0E525B),
-                  width: 1.0,
-                );
+              : Border.all(color: AppColors.divider, width: 1.0);
 
           return PressableScale(
             onTap: () {
@@ -126,8 +123,9 @@ class _FeedScreenState extends State<FeedScreen> {
     _friendRepository = FriendRepository()..currentUserHandle = widget.currentUserHandle;
     _pendingRequestsStream = _friendRepository.getPendingRequestCount();
     widget.repository.addListener(_onRepositoryUpdated);
-    widget.repository.setCategory(PostCategory.general);
+    widget.repository.setCategory(null);
     _triggerFeedImagePrefetch();
+    RewardsService.instance.fetchSummary(forceRefresh: true);
   }
 
   @override
@@ -162,219 +160,217 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final repo = widget.repository;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        title: Builder(
-          builder: (context) {
-            final locService = context.watch<LocationService>();
-            final badgeText = locService.statusBadgeLabel;
+        titleSpacing: 16,
+        automaticallyImplyLeading: false,
+        toolbarHeight: 62,
+        title: Row(
+          children: [
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  final locService = context.watch<LocationService>();
+                  final areaName = (locService.area?.name != null && locService.area!.name != locService.city.name)
+                      ? locService.area!.name
+                      : (locService.city.areas.firstOrNull?.name ?? 'Waghodia Road');
+                  final cityName = locService.city.name;
+                  final badgeText = locService.statusBadgeLabel;
+                  final hasWarning = locService.isLocationOff || locService.isPermissionDenied;
 
-            return InkWell(
-              onTap: () async {
-                if (locService.isLocationOff) {
-                  showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Location ON Karein'),
-                      content: const Text('Auto-detection ke liye device Location Services (GPS) ON karein.'),
-                      actions: [
-                        TextButton(
-                          child: const Text('Manual City Chunein'),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
-                          },
-                        ),
-                        ElevatedButton(
-                          child: const Text('OK'),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            Geolocator.openLocationSettings();
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                } else if (locService.isPermissionDeniedForever) {
-                  showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Permission Needed'),
-                      content: const Text('Please allow location permission in App Settings for auto-detection.'),
-                      actions: [
-                        TextButton(
-                          child: const Text('Manual City Chunein'),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
-                          },
-                        ),
-                        ElevatedButton(
-                          child: const Text('Settings Kholo'),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            Geolocator.openAppSettings();
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CityPickerScreen()),
-                  );
-                }
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF072E33),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF0E525B),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.location_on_outlined,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            locService.displayLabel,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
+                  return InkWell(
+                    onTap: () async {
+                      if (locService.isLocationOff) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.surface,
+                            title: const Text('Location ON Karein', style: TextStyle(color: AppColors.textPrimary)),
+                            content: const Text('Auto-detection ke liye device Location Services (GPS) ON karein.', style: TextStyle(color: AppColors.textMuted)),
+                            actions: [
+                              TextButton(
+                                child: const Text('Manual City Chunein', style: TextStyle(color: AppColors.primary)),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
+                                },
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                                child: const Text('OK'),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  Geolocator.openLocationSettings();
+                                },
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: Colors.white70,
-                            size: 18,
+                        );
+                      } else if (locService.isPermissionDeniedForever) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.surface,
+                            title: const Text('Permission Needed', style: TextStyle(color: AppColors.textPrimary)),
+                            content: const Text('Please allow location permission in App Settings for auto-detection.', style: TextStyle(color: AppColors.textMuted)),
+                            actions: [
+                              TextButton(
+                                child: const Text('Manual City Chunein', style: TextStyle(color: AppColors.primary)),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
+                                },
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                                child: const Text('Settings Kholo'),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  Geolocator.openAppSettings();
+                                },
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      if (badgeText.isNotEmpty)
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          badgeText,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: locService.isLocationOff || locService.isPermissionDenied
-                                ? Colors.amber.shade700
-                                : const Color(0xFF90B4B6),
+                          areaName,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.4,
+                            height: 1.15,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        actions: [
-          // Notification bell icon & unread count
-          ValueListenableBuilder<int>(
-            valueListenable: NotificationService.instance.unreadBadgeNotifier,
-            builder: (context, count, _) {
-              return IconButton(
-                tooltip: 'Notifications',
-                icon: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF0E525B),
-                      width: 1,
-                    ),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      const Icon(
-                        Icons.notifications_rounded,
-                        color: Color(0xFFFACC15),
-                        size: 20,
-                      ),
-                      if (count > 0)
-                        Positioned(
-                          right: 4,
-                          top: 4,
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEF4444),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              count > 99 ? '99+' : '$count',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                hasWarning && badgeText.isNotEmpty
+                                    ? badgeText
+                                    : cityName,
+                                style: TextStyle(
+                                  color: hasWarning
+                                      ? Colors.amber.shade800
+                                      : AppColors.textMuted,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: hasWarning
+                                  ? Colors.amber.shade800
+                                  : AppColors.textMuted,
+                              size: 16,
+                            ),
+                          ],
                         ),
-                    ],
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => NotificationsScreen(
-                        currentUserHandle: widget.currentUserHandle,
-                      ),
+                      ],
                     ),
                   );
                 },
-              );
-            },
-          ),
-          // Friends stream count & icon (next to Bell)
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: StreamBuilder<int>(
-              stream: _pendingRequestsStream,
-              builder: (context, snap) {
-                final count = snap.data ?? 0;
-                return IconButton(
-                  tooltip: 'Friends',
-                  icon: Container(
-                    width: 38,
-                    height: 38,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ListenableBuilder(
+              listenable: RewardsService.instance,
+              builder: (context, _) {
+                final points = RewardsService.instance.summary?.balance ?? 0;
+                return PressableScale(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF072E33),
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFD97706),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$points',
+                          style: const TextStyle(
+                            color: Color(0xFFB45309),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+            ValueListenableBuilder<int>(
+              valueListenable: NotificationService.instance.unreadBadgeNotifier,
+              builder: (context, count, _) {
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NotificationsScreen(
+                          currentUserHandle: widget.currentUserHandle,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.chipBg,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFF0E525B),
+                        color: AppColors.divider,
                         width: 1,
                       ),
                     ),
@@ -382,8 +378,8 @@ class _FeedScreenState extends State<FeedScreen> {
                       alignment: Alignment.center,
                       children: [
                         const Icon(
-                          Icons.people_alt_rounded,
-                          color: Colors.white,
+                          Icons.notifications_rounded,
+                          color: AppColors.textPrimary,
                           size: 20,
                         ),
                         if (count > 0)
@@ -393,7 +389,69 @@ class _FeedScreenState extends State<FeedScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(3),
                               decoration: const BoxDecoration(
-                                color: Color(0xFFEF4444),
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                count > 99 ? '99+' : '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+            StreamBuilder<int>(
+              stream: _pendingRequestsStream,
+              builder: (context, snap) {
+                final count = snap.data ?? 0;
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FriendsScreen(
+                          repository: _friendRepository,
+                          currentUserHandle: widget.currentUserHandle,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.chipBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.divider,
+                        width: 1,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(
+                          Icons.people_alt_rounded,
+                          color: AppColors.textPrimary,
+                          size: 20,
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            right: 4,
+                            top: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
                                 shape: BoxShape.circle,
                               ),
                               child: Text(
@@ -409,26 +467,21 @@ class _FeedScreenState extends State<FeedScreen> {
                       ],
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FriendsScreen(
-                          repository: _friendRepository,
-                          currentUserHandle: widget.currentUserHandle,
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       body: Column(
         children: [
-          _buildFilterChipsRow(isDark),
+          LocationBanner(
+            onChooseCity: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+            ),
+          ),
+          _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
               duration: AppMotion.durationStandard,
@@ -444,60 +497,65 @@ class _FeedScreenState extends State<FeedScreen> {
                   ? _buildLoadingSkeleton()
                   : KeyedSubtree(
                       key: ValueKey('feed_general_chat_$_selectedFilterChip'),
-                child: RefreshIndicator(
-                  onRefresh: widget.repository.refresh,
-                  color: isDark ? Colors.white : Colors.black,
-                  child: () {
-                    final posts = _getFilteredPosts(repo.posts);
-                    if (posts.isEmpty) {
-                      return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.58,
-                          child: _buildEmptyState(),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      addRepaintBoundaries: true,
-                      addAutomaticKeepAlives: true,
-                      padding: const EdgeInsets.only(
-                        top: 8,
-                        bottom: 84,
-                        left: 16,
-                        right: 16,
-                      ),
-                      itemCount: posts.length,
-                      itemBuilder: (context, index) {
-                        final post = posts[index];
-                        return _PostCardItem(
-                          key: ValueKey('post_${post.id}'),
-                          post: post,
-                          repository: repo,
-                          currentUserHandle: widget.currentUserHandle,
-                          onDelete: () => _showDeleteConfirmation(context, post.id),
-                          onReport: () => _showReportContentSheet(post.id),
-                          onProfileTap: () {
-                            if (post.authorHandle != widget.currentUserHandle) {
-                              showOtherUserProfileSheet(
-                                context,
-                                partnerHandle: post.authorHandle,
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          await Future.wait([
+                            widget.repository.refresh(),
+                            RewardsService.instance.fetchSummary(forceRefresh: true),
+                          ]);
+                        },
+                        color: AppColors.primary,
+                        child: () {
+                          final posts = _getFilteredPosts(repo.posts);
+                          if (posts.isEmpty) {
+                            return SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: SizedBox(
+                                height: MediaQuery.of(context).size.height * 0.58,
+                                child: _buildEmptyState(),
+                              ),
+                            );
+                          }
+                          return ListView.builder(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            addRepaintBoundaries: true,
+                            addAutomaticKeepAlives: true,
+                            padding: EdgeInsets.only(
+                              top: 8,
+                              bottom: 88 + MediaQuery.paddingOf(context).bottom,
+                              left: 16,
+                              right: 16,
+                            ),
+                            itemCount: posts.length,
+                            itemBuilder: (context, index) {
+                              final post = posts[index];
+                              return _PostCardItem(
+                                key: ValueKey('post_${post.id}'),
+                                post: post,
+                                repository: repo,
                                 currentUserHandle: widget.currentUserHandle,
-                                repository: widget.repository,
+                                onDelete: () => _showDeleteConfirmation(context, post.id),
+                                onReport: () => _showReportContentSheet(post.id),
+                                onProfileTap: () {
+                                  if (post.authorHandle != widget.currentUserHandle) {
+                                    showOtherUserProfileSheet(
+                                      context,
+                                      partnerHandle: post.authorHandle,
+                                      currentUserHandle: widget.currentUserHandle,
+                                      repository: widget.repository,
+                                    );
+                                  } else {
+                                    widget.onOpenProfileTab?.call();
+                                  }
+                                },
                               );
-                            } else {
-                              widget.onOpenProfileTab?.call();
-                            }
-                          },
-                        );
-                      },
-                    );
-                  }(),
-                ),
-              ),
+                            },
+                          );
+                        }(),
+                      ),
+                    ),
             ),
           ),
         ],
@@ -515,21 +573,20 @@ class _FeedScreenState extends State<FeedScreen> {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: AppColors.divider),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Skeleton
               Row(
                 children: [
                   Container(
                     width: 40,
                     height: 40,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFE2E8F0),
+                      color: AppColors.chipBg,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -541,7 +598,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         width: 100,
                         height: 12,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0),
+                          color: AppColors.chipBg,
                           borderRadius: BorderRadius.circular(6),
                         ),
                       ),
@@ -550,7 +607,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         width: 60,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: AppColors.chipBg,
                           borderRadius: BorderRadius.circular(6),
                         ),
                       ),
@@ -561,19 +618,18 @@ class _FeedScreenState extends State<FeedScreen> {
                     width: 70,
                     height: 22,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: AppColors.chipBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              // Body Lines Skeleton
               Container(
                 width: double.infinity,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
@@ -582,29 +638,27 @@ class _FeedScreenState extends State<FeedScreen> {
                 width: 220,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
               const SizedBox(height: 14),
-              // Media Box Skeleton
               Container(
                 width: double.infinity,
                 height: 160,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: AppColors.chipBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               const SizedBox(height: 14),
-              // Bottom Bar Skeleton
               Row(
                 children: [
                   Container(
                     width: 80,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: AppColors.chipBg,
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
@@ -613,7 +667,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     width: 60,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: AppColors.chipBg,
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
@@ -622,7 +676,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     width: 32,
                     height: 32,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF1F5F9),
+                      color: AppColors.chipBg,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -636,80 +690,25 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildEmptyState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Minimalist geometric neighborhood illustration
             Container(
               width: 140,
               height: 140,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFF0F7FF),
+                color: AppColors.primarySoft,
               ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Little house on top
-                  Positioned(
-                    top: 28,
-                    right: 44,
-                    child: const Icon(
-                      Icons.home_rounded,
-                      size: 16,
-                      color: Color(0xFF93C5FD),
-                    ),
-                  ),
-                  // Geometric building shapes
-                  Positioned(
-                    bottom: 32,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Left blue building
-                        Container(
-                          width: 18,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white38 : Colors.black38,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        // Center tall slate building
-                        Container(
-                          width: 22,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        // Right purple building
-                        Container(
-                          width: 18,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              child: const Center(
+                child: Icon(
+                  Icons.home_work_outlined,
+                  size: 54,
+                  color: AppColors.primary,
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -717,7 +716,7 @@ class _FeedScreenState extends State<FeedScreen> {
               'Nothing happening here yet',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.3,
@@ -728,7 +727,7 @@ class _FeedScreenState extends State<FeedScreen> {
               'Be the first neighbor to share an update,\nask a question, or help your local\ncommunity.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF64748B),
+                color: AppColors.textMuted,
                 fontSize: 14,
                 height: 1.45,
                 fontWeight: FontWeight.w400,
@@ -737,10 +736,10 @@ class _FeedScreenState extends State<FeedScreen> {
             const SizedBox(height: 28),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                elevation: 4,
-                shadowColor: const Color(0xFF1E293B).withValues(alpha: 0.3),
+                elevation: 2,
+                shadowColor: AppColors.primary.withValues(alpha: 0.3),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
@@ -765,11 +764,11 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.primary,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: AppColors.primary.withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -778,10 +777,12 @@ class _FeedScreenState extends State<FeedScreen> {
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(Icons.add, color: Colors.white, size: 18),
+            SizedBox(width: 4),
             Text(
-              '+ Create',
+              'Create',
               style: TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 15,
                 letterSpacing: -0.2,
@@ -794,7 +795,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _openCreatePostScreen() async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CreatePostScreen(
@@ -803,14 +804,16 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
+    if (result == true) {
+      RewardsService.instance.fetchSummary(forceRefresh: true);
+    }
     widget.repository.refresh();
   }
 
-  // ── IMAGE 4: Report Content Sheet ("Report content") ──
   void _showReportContentSheet(String postId) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -823,24 +826,21 @@ class _FeedScreenState extends State<FeedScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Handle Grabber
                 Center(
                   child: Container(
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
+                      color: AppColors.divider,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Header
                 const Text(
                   'Report content',
                   style: TextStyle(
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 22,
                     letterSpacing: -0.4,
@@ -850,13 +850,11 @@ class _FeedScreenState extends State<FeedScreen> {
                 const Text(
                   'Help keep Nearhood safe.',
                   style: TextStyle(
-                    color: Color(0xFF64748B),
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // 1. Harassment / Impersonation
                 _buildReportCard(
                   ctx: ctx,
                   postId: postId,
@@ -867,8 +865,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   subtitle: 'Targeting or pretending to be someone else',
                 ),
                 const SizedBox(height: 12),
-
-                // 2. Personal information
                 _buildReportCard(
                   ctx: ctx,
                   postId: postId,
@@ -879,26 +875,22 @@ class _FeedScreenState extends State<FeedScreen> {
                   subtitle: 'Shares private details without consent',
                 ),
                 const SizedBox(height: 12),
-
-                // 3. Spam / Scams
                 _buildReportCard(
                   ctx: ctx,
                   postId: postId,
                   icon: Icons.block_rounded,
-                  iconBgColor: const Color(0xFFF1F5F9),
-                  iconColor: const Color(0xFF475569),
+                  iconBgColor: AppColors.chipBg,
+                  iconColor: AppColors.textMuted,
                   title: 'Spam / Scams',
                   subtitle: 'Misleading, repetitive, or fraudulent content',
                 ),
                 const SizedBox(height: 12),
-
-                // 4. Hate Speech / Civic Threat
                 _buildReportCard(
                   ctx: ctx,
                   postId: postId,
                   icon: Icons.chat_bubble_rounded,
-                  iconBgColor: const Color(0xFFFEF2F2),
-                  iconColor: const Color(0xFFEF4444),
+                  iconBgColor: AppColors.errorSoft,
+                  iconColor: AppColors.error,
                   title: 'Hate Speech / Civic Threat',
                   subtitle: 'Hateful, violent, or threatening content',
                 ),
@@ -921,21 +913,21 @@ class _FeedScreenState extends State<FeedScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             widget.repository.reportPost(postId, widget.currentUserHandle);
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: AppColors.primary,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -980,7 +972,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       Text(
                         title,
                         style: const TextStyle(
-                          color: Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -989,7 +981,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       Text(
                         subtitle,
                         style: const TextStyle(
-                          color: Color(0xFF64748B),
+                          color: AppColors.textMuted,
                           fontSize: 12.5,
                         ),
                       ),
@@ -998,7 +990,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
                 const Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF94A3B8),
+                  color: AppColors.textMuted,
                   size: 22,
                 ),
               ],
@@ -1013,27 +1005,27 @@ class _FeedScreenState extends State<FeedScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text(
           'Delete Post?',
           style: TextStyle(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: const Text(
           'Are you sure you want to permanently delete this post? This action cannot be undone.',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -1045,7 +1037,7 @@ class _FeedScreenState extends State<FeedScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    backgroundColor: const Color(0xFFEF4444),
+                    backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -1109,14 +1101,12 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final post = widget.post;
+    final post = widget.repository.getPostById(widget.post.id) ?? widget.post;
     final isEmergency = post.isEmergency;
     final isLongText = post.content.length > 220;
     final displayContent = (isLongText && !_isExpanded)
         ? '${post.content.substring(0, 220)}...'
         : post.content;
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final isEvent = post.category == PostCategory.events || post.eventTitle != null;
     final isAlert = isEmergency || post.category == PostCategory.safetyAlert;
@@ -1128,11 +1118,11 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     final dayStr = post.createdAt.day.toString().padLeft(2, '0');
     final monthStr = const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][post.createdAt.month - 1];
 
-    Color cardBg = const Color(0xFF072E33);
-    Color borderColor = const Color(0xFF0E525B);
+    Color cardBg = AppColors.surface;
+    Color borderColor = AppColors.divider;
     if (isUrgent) {
-      cardBg = const Color(0xFF1F0D11);
-      borderColor = const Color(0xFFEF4444);
+      cardBg = AppColors.errorSoft;
+      borderColor = AppColors.error;
     }
 
     return RepaintBoundary(
@@ -1140,22 +1130,22 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: borderColor,
             width: isUrgent ? 1.5 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: InkWell(
             onTap: () {
               Navigator.push(
@@ -1169,19 +1159,18 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                 ),
               );
             },
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Emergency / Safety Alert Banner if marked urgent
                   if (isUrgent) ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444),
+                        color: AppColors.error,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Row(
@@ -1204,19 +1193,17 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                     ),
                   ],
 
-                  // SPECIAL EVENT LAYOUT MATCHING SCREENSHOT
                   if (isEvent) ...[
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left Date Box
                         Container(
                           width: 54,
                           height: 58,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0E4B52),
+                            color: AppColors.primarySoft,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF0E525B)),
+                            border: Border.all(color: AppColors.primarySoft),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1224,7 +1211,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               Text(
                                 dayStr,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.primaryText,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
                                   height: 1.1,
@@ -1233,7 +1220,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               Text(
                                 monthStr,
                                 style: const TextStyle(
-                                  color: Color(0xFF90B4B6),
+                                  color: AppColors.primaryText,
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.5,
@@ -1243,7 +1230,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           ),
                         ),
                         const SizedBox(width: 14),
-                        // Event Details
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1251,7 +1237,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               Text(
                                 post.eventTitle ?? post.content,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textPrimary,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: -0.2,
@@ -1261,7 +1247,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               Text(
                                 '${post.eventLocationText ?? "Society garden, Gotri"} · ${post.eventDate ?? "8:00 AM"}',
                                 style: const TextStyle(
-                                  color: Color(0xFF90B4B6),
+                                  color: AppColors.textMuted,
                                   fontSize: 12.5,
                                 ),
                               ),
@@ -1269,13 +1255,13 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0E4B52),
+                                  color: AppColors.primarySoft,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   '${post.eventRsvpCount > 0 ? post.eventRsvpCount : 42} going',
                                   style: const TextStyle(
-                                    color: Color(0xFFFACC15),
+                                    color: AppColors.primaryText,
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -1287,7 +1273,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                       ],
                     ),
                   ] else ...[
-                    // STANDARD HEADER FOR QUESTIONS / ALERTS / GENERAL
                     Row(
                       children: [
                         UserAvatar(
@@ -1302,56 +1287,159 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              GestureDetector(
-                                onTap: widget.onProfileTap,
-                                child: Text(
-                                  post.authorHandle.displayHandle,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    fontSize: 14.5,
-                                  ),
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final authorName = getDisplayName(
+                                    post.authorHandle,
+                                    fallback: post.authorName,
+                                  );
+                                  final authorBadge = BadgeCacheService.instance.getUserBadge(
+                                    post.authorHandle,
+                                    fallback: post.authorBadge,
+                                  );
+                                  final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
+                                    post.authorHandle,
+                                    fallback: post.isVerified,
+                                  );
+
+                                  return GestureDetector(
+                                    onTap: widget.onProfileTap,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            authorName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
+                                              fontSize: 14.5,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
+                                          const SizedBox(width: 5),
+                                          VerifiedBadge(
+                                            isVerified: isAuthorVerified,
+                                            badgeText: authorBadge,
+                                            compact: true,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${post.areaName ?? "Vadodara"} • ${_formatTimeAgo(post.createdAt)}',
-                                style: const TextStyle(
-                                  color: Color(0xFF90B4B6),
-                                  fontSize: 12,
+                              InkWell(
+                                onTap: () async {
+                                  final lat = post.lat;
+                                  final lng = post.lng;
+                                  Uri uri;
+                                  if (lat != null && lng != null) {
+                                    uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                                  } else {
+                                    final query = Uri.encodeComponent('${post.areaName ?? "Vadodara"}, Gujarat, India');
+                                    uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+                                  }
+                                  try {
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    }
+                                  } catch (_) {}
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                child: Builder(
+                                  builder: (context) {
+                                    String cleanArea = post.areaName != null && post.areaName!.isNotEmpty ? post.areaName! : 'Vadodara';
+                                    if (cleanArea.contains('General / All')) {
+                                      cleanArea = cleanArea.replaceAll('General / All', 'General · All');
+                                    }
+
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.location_on_rounded,
+                                          size: 11.5,
+                                          color: AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Flexible(
+                                          child: Text(
+                                            cleanArea,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        const Text(
+                                          ' · ',
+                                          style: TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          _formatTimeAgo(post.createdAt),
+                                          style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                             ],
                           ),
                         ),
 
-                        // Category Badge
                         Builder(
                           builder: (_) {
-                            Color bg = const Color(0xFF0E4B52);
-                            Color text = Colors.white;
+                            Color bg = AppColors.chipBg;
+                            Color text = AppColors.textPrimary;
                             String label = 'General';
 
                             if (isUrgent) {
-                              bg = const Color(0xFF7F1D1D);
-                              text = const Color(0xFFFCA5A5);
+                              bg = AppColors.error;
+                              text = Colors.white;
                               label = 'Urgent';
-                            } else if (isLostPet) {
-                              bg = const Color(0xFF451A03);
-                              text = const Color(0xFFFBBF24);
-                              label = 'Lost pet';
-                            } else if (isAlert) {
-                              bg = const Color(0xFF451A03);
-                              text = const Color(0xFFFBBF24);
+                            } else if (isAlert || post.category == PostCategory.safetyAlert || post.category == PostCategory.safety) {
+                              bg = AppColors.errorSoft;
+                              text = AppColors.errorSoftText;
                               label = 'Safety';
-                            } else {
-                              bg = const Color(0xFF0E4B52);
-                              text = const Color(0xFF90B4B6);
+                            } else if (post.category == PostCategory.alerts) {
+                              bg = const Color(0xFFFEF3C7);
+                              text = const Color(0xFFB45309);
+                              label = 'Alerts';
+                            } else if (post.category == PostCategory.question) {
+                              bg = AppColors.primarySoft;
+                              text = AppColors.primaryText;
                               label = 'Question';
+                            } else if (post.category == PostCategory.events) {
+                              bg = const Color(0xFFEDE9FE);
+                              text = const Color(0xFF6D28D9);
+                              label = 'Events';
+                            } else if (isLostPet) {
+                              bg = const Color(0xFFFEF3C7);
+                              text = const Color(0xFFB45309);
+                              label = 'Lost pet';
+                            } else {
+                              bg = AppColors.chipBg;
+                              text = AppColors.textMuted;
+                              label = post.category.label;
                             }
 
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
                                 color: bg,
                                 borderRadius: BorderRadius.circular(12),
@@ -1359,7 +1447,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               child: Text(
                                 label,
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
                                   color: text,
                                 ),
@@ -1373,12 +1461,11 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
 
                   const SizedBox(height: 12),
 
-                  // Post Content Text
                   Text.rich(
                     TextSpan(
                       text: displayContent,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         height: 1.45,
                         fontWeight: FontWeight.w400,
@@ -1395,10 +1482,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                   _isExpanded = true;
                                 });
                               },
-                              child: Text(
+                              child: const Text(
                                 ' Read more',
                                 style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black,
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5,
                                 ),
@@ -1409,7 +1496,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                     ),
                   ),
 
-                  // Post Image if present
                   if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     PostImageView(
@@ -1463,7 +1549,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
 
                   const SizedBox(height: 14),
 
-                  // Card Footer Actions
                   Row(
                     children: [
                       LikeCapsule(
@@ -1491,16 +1576,16 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.chat_bubble_outline_rounded,
                                 size: 18,
-                                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
+                                color: AppColors.textMuted,
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 '${post.commentCount}',
-                                style: TextStyle(
-                                  color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1516,6 +1601,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
+                              backgroundColor: AppColors.primary,
                               content: Text('Post link copied to clipboard!'),
                               duration: Duration(seconds: 2),
                               behavior: SnackBarBehavior.floating,
@@ -1523,20 +1609,20 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           );
                         },
                         borderRadius: BorderRadius.circular(18),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.share_outlined,
                                 size: 18,
-                                color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
+                                color: AppColors.textMuted,
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Text(
                                 'Share',
                                 style: TextStyle(
-                                  color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6E6E6E),
+                                  color: AppColors.textMuted,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1550,10 +1636,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
 
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        icon: Icon(
+                        icon: const Icon(
                           Icons.more_horiz_rounded,
                           size: 20,
-                          color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF8E8E93),
+                          color: AppColors.textMuted,
                         ),
                         onPressed: () {
                           if (post.authorHandle == widget.currentUserHandle) {
@@ -1566,87 +1652,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                     ],
                   ),
 
-                  // Emergency Quick Action Buttons
-                  if (isEmergency || post.category == PostCategory.safetyAlert) ...[
-                    const SizedBox(height: 12),
-                    if (isLostPet) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF0E525B), width: 1.5),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            backgroundColor: const Color(0xFF072E33),
-                          ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                backgroundColor: Color(0xFF072E33),
-                                content: Text('👍 Notification sent to pet owner: "I have seen it"'),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'I have seen it',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-                              label: const Text('I\'m Safe', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    backgroundColor: Color(0xFF10B981),
-                                    content: Text('✅ Status updated: Marked as Safe'),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFDC2626),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              icon: const Icon(Icons.phone_in_talk_rounded, size: 16),
-                              label: const Text('Call 112', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    backgroundColor: Color(0xFFDC2626),
-                                    content: Text('📞 Dialing National Emergency Services 112...'),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
                 ],
               ),
             ),

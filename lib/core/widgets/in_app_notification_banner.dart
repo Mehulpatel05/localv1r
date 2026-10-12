@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme.dart';
 import '../widgets/user_avatar.dart';
+import '../../theme/app_colors.dart';
 
-/// Interactive top floating in-app notification banner overlay.
-/// Slides down smoothly when a notification arrives in foreground,
-/// supports tap to open, swipe up to dismiss, and auto-dismisses after 4s.
 class InAppNotificationBanner {
   static OverlayEntry? _currentEntry;
   static Timer? _dismissTimer;
@@ -17,6 +14,7 @@ class InAppNotificationBanner {
     required String body,
     String? handle,
     String? photoUrl,
+    bool isEmergency = false,
     required VoidCallback onTap,
   }) {
     dismiss();
@@ -24,14 +22,23 @@ class InAppNotificationBanner {
     final overlayState = Overlay.maybeOf(context);
     if (overlayState == null) return;
 
-    HapticFeedback.lightImpact();
+    if (isEmergency) {
+      HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.alert);
+    } else {
+      HapticFeedback.lightImpact();
+    }
+
+    final safeTitle = title.trim().isNotEmpty ? title.trim() : 'Nearhood';
+    final safeBody = body.trim().isNotEmpty ? body.trim() : 'You have a new notification';
 
     _currentEntry = OverlayEntry(
       builder: (ctx) => _BannerWidget(
-        title: title,
-        body: body,
+        title: safeTitle,
+        body: safeBody,
         handle: handle,
         photoUrl: photoUrl,
+        isEmergency: isEmergency,
         onTap: () {
           dismiss();
           onTap();
@@ -42,7 +49,7 @@ class InAppNotificationBanner {
 
     overlayState.insert(_currentEntry!);
 
-    _dismissTimer = Timer(const Duration(milliseconds: 4200), () {
+    _dismissTimer = Timer(Duration(milliseconds: isEmergency ? 8000 : 4200), () {
       dismiss();
     });
   }
@@ -61,6 +68,7 @@ class _BannerWidget extends StatefulWidget {
     required this.body,
     this.handle,
     this.photoUrl,
+    this.isEmergency = false,
     required this.onTap,
     required this.onDismiss,
   });
@@ -69,6 +77,7 @@ class _BannerWidget extends StatefulWidget {
   final String body;
   final String? handle;
   final String? photoUrl;
+  final bool isEmergency;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
 
@@ -120,7 +129,6 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final topPadding = MediaQuery.of(context).padding.top;
 
     return Positioned(
@@ -152,13 +160,18 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: c.bg,
+                  color: widget.isEmergency ? const Color(0xFF1E0707) : AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.line, width: 1.2),
+                  border: Border.all(
+                    color: widget.isEmergency ? AppColors.error : AppColors.divider,
+                    width: widget.isEmergency ? 1.8 : 1.2,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 18,
+                      color: widget.isEmergency
+                          ? AppColors.error.withValues(alpha: 0.35)
+                          : const Color(0xFF111827).withValues(alpha: 0.12),
+                      blurRadius: widget.isEmergency ? 24 : 18,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -166,8 +179,21 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Leading Avatar / Icon
-                    if (widget.handle != null && widget.handle!.isNotEmpty)
+                    if (widget.isEmergency)
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF451111),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 22,
+                          color: Color(0xFFFF5252),
+                        ),
+                      )
+                    else if (widget.handle != null && widget.handle!.isNotEmpty)
                       UserAvatar(
                         handle: widget.handle!,
                         photoUrl: widget.photoUrl,
@@ -178,18 +204,16 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: c.field,
+                          color: AppColors.chipBg,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.notifications_active_outlined,
                           size: 19,
-                          color: c.ink,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     const SizedBox(width: 12),
-
-                    // Title and text
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,7 +226,7 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
                             style: TextStyle(
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
-                              color: c.ink,
+                              color: widget.isEmergency ? const Color(0xFFFF5252) : AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -212,7 +236,7 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 13,
-                              color: c.muted,
+                              color: widget.isEmergency ? const Color(0xFFFFCDD2) : AppColors.textMuted,
                               height: 1.3,
                             ),
                           ),
@@ -220,20 +244,18 @@ class _BannerWidgetState extends State<_BannerWidget> with SingleTickerProviderS
                       ),
                     ),
                     const SizedBox(width: 8),
-
-                    // Dismiss button
                     GestureDetector(
                       onTap: _handleDismiss,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: c.field,
+                          color: AppColors.chipBg,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.close,
                           size: 14,
-                          color: c.muted,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ),

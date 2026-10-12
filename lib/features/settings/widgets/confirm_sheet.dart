@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme.dart';
+import '../../../theme/app_colors.dart';
 
-/// Grab handle shown at the top of every bottom sheet.
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     return Center(
       child: Container(
         width: 40,
         height: 4,
         margin: const EdgeInsets.only(bottom: 18),
         decoration: BoxDecoration(
-          color: c.line,
+          color: AppColors.divider,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -22,7 +20,6 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// A reusable bottom-sheet button.
 enum _ButtonVariant { primary, ghost, danger }
 
 class _SheetButton extends StatefulWidget {
@@ -49,7 +46,6 @@ class _SheetButtonState extends State<_SheetButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     Color bg;
@@ -58,16 +54,16 @@ class _SheetButtonState extends State<_SheetButton> {
 
     switch (widget.variant) {
       case _ButtonVariant.primary:
-        bg = c.btn;
-        fg = c.btnink;
+        bg = AppColors.primary;
+        fg = Colors.white;
         break;
       case _ButtonVariant.ghost:
         bg = Colors.transparent;
-        fg = c.ink;
-        border = Border.all(color: c.line, width: 1.5);
+        fg = AppColors.textPrimary;
+        border = Border.all(color: AppColors.divider, width: 1.5);
         break;
       case _ButtonVariant.danger:
-        bg = c.danger;
+        bg = AppColors.error;
         fg = Colors.white;
         break;
     }
@@ -133,15 +129,6 @@ class _SheetButtonState extends State<_SheetButton> {
   }
 }
 
-/// A reusable bottom-sheet for confirmation dialogs (log out, delete, etc.).
-///
-/// Spec layout:
-///   • Transparent background, barrierColor black 45 %, isScrollControlled.
-///   • Container: bg, top-corners radius 28, padding 10 top / 22 h / 22 b + safeArea.
-///   • Grab handle, title (20/w800/-0.02em), body (14.5/muted/h1.5),
-///     optional error text (14.5/danger), two buttons column (gap 10, top 20).
-///
-/// Pass [isDismissible] as false when a destructive action is in progress.
 class ConfirmSheet extends StatefulWidget {
   const ConfirmSheet({
     super.key,
@@ -157,13 +144,7 @@ class ConfirmSheet extends StatefulWidget {
   final String body;
   final String confirmLabel;
   final String cancelLabel;
-
-  /// Called when the user taps the confirm button. The sheet handles its own
-  /// loading state; [onConfirm] should be an async function. Throw to surface
-  /// an inline error instead of dismissing.
   final Future<void> Function() onConfirm;
-
-  /// When true the confirm button uses the danger color.
   final bool isDanger;
 
   @override
@@ -181,7 +162,6 @@ class _ConfirmSheetState extends State<ConfirmSheet> {
     });
     try {
       await widget.onConfirm();
-      // onConfirm is expected to close the sheet (Navigator.pop) or navigate away.
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -194,16 +174,14 @@ class _ConfirmSheetState extends State<ConfirmSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return PopScope(
-      // Block back-swipe while loading
       canPop: !_loading,
       child: Container(
-        decoration: BoxDecoration(
-          color: c.bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomPad),
         child: Column(
@@ -211,43 +189,35 @@ class _ConfirmSheetState extends State<ConfirmSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _SheetHandle(),
-
-            // Title
             Text(
               widget.title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.02 * 20,
-                color: c.ink,
+                color: AppColors.textPrimary,
               ),
             ),
-
-            // Body
             const SizedBox(height: 8),
             Text(
               widget.body,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14.5,
-                color: c.muted,
+                color: AppColors.textMuted,
                 height: 1.5,
               ),
             ),
-
-            // Inline error
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
                 _error!,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14.5,
-                  color: c.danger,
+                  color: AppColors.error,
                   height: 1.4,
                 ),
               ),
             ],
-
-            // Buttons
             const SizedBox(height: 20),
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -277,7 +247,6 @@ class _ConfirmSheetState extends State<ConfirmSheet> {
   }
 }
 
-/// Shows [ConfirmSheet] as a modal bottom sheet with the spec animation.
 Future<void> showConfirmSheet(
   BuildContext context, {
   required String title,

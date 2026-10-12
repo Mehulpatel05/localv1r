@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../core/motion.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../theme/app_colors.dart';
 import '../../core/utils/content_filter.dart';
 import '../../services/post_repository.dart';
 import '../../services/presence_service.dart';
@@ -12,12 +13,13 @@ import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../core/splash_controller.dart';
-import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
-import '../../core/theme.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/location/location_engine.dart';
+import '../../features/auth/widgets/logo_pin.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
-import 'phone_login_screen.dart';
+import '../../main.dart';
 
 enum UsernameState {
   empty,
@@ -34,6 +36,7 @@ class CreateHandleScreen extends StatefulWidget {
   final String userId;
   final String? phoneNumber;
   final dynamic user;
+  final bool isChangeArea;
 
   const CreateHandleScreen({
     super.key,
@@ -41,6 +44,7 @@ class CreateHandleScreen extends StatefulWidget {
     required this.userId,
     this.phoneNumber,
     this.user,
+    this.isChangeArea = false,
   });
 
   @override
@@ -48,170 +52,24 @@ class CreateHandleScreen extends StatefulWidget {
 }
 
 class _CreateHandleScreenState extends State<CreateHandleScreen> {
-  final TextEditingController _handleController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  static const Color _primaryGreen = Color(0xFF0E8A3E);
+  static const Color _darkGreen = Color(0xFF0B5D2A);
+  static const Color _lightGreenTint = Color(0xFFE3F4EA);
+  static const Color _screenBg = Color(0xFFF4F6F5);
+  static const Color _textPrimary = Color(0xFF111827);
+  static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _borderColor = Color(0xFFE5E7EB);
 
-  UsernameState _state = UsernameState.empty;
-  Timer? _debounceTimer;
-  bool _isSubmitting = false;
-  String? _customErrorMessage;
-  File? _pickedProfileImage;
+  static const List<String> _popularAreaNames = [
+    'Alkapuri',
+    'Gotri',
+    'Manjalpur',
+    'Akota',
+    'Fatehgunj',
+    'Karelibaug',
+    'Vasna',
+  ];
 
-  Future<void> _showPhotoPickerSheet() async {
-    final colors = context.nearhoodColors;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Material(
-        color: colors.field,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        clipBehavior: Clip.antiAlias,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: colors.line, width: 1.5),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: colors.line,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Text(
-                'Add Profile Picture',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: colors.ink,
-                ),
-              ),
-              const SizedBox(height: 14),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: colors.field2,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8), size: 22),
-                ),
-                title: const Text(
-                  'Take Photo',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Colors.white,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: colors.field2,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFFA78BFA), size: 22),
-                ),
-                title: const Text(
-                  'Choose from Gallery',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Colors.white,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              if (_pickedProfileImage != null)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
-                  ),
-                  title: const Text(
-                    'Remove Photo',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: Color(0xFFEF4444),
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    setState(() => _pickedProfileImage = null);
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        maxWidth: 1080,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
-      if (picked != null) {
-        final rawFile = File(picked.path);
-
-        if (!mounted) return;
-
-        // Open Instagram Move and Scale interactive cropper
-        final croppedFile = await InstagramAvatarCropper.cropImage(
-          context,
-          imageFile: rawFile,
-        );
-
-        if (croppedFile != null && mounted) {
-          setState(() => _pickedProfileImage = croppedFile);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error picking profile image: $e');
-    }
-  }
-
-  // Cache previously checked handles to prevent unnecessary Firestore query abuse
-  final Map<String, bool> _availabilityCache = {};
-
-  // Security: Reserved keywords to prevent staff/system impersonation & routing collisions
   static const Set<String> _reservedUsernames = {
     'admin',
     'administrator',
@@ -240,9 +98,89 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     'police',
   };
 
+  static const List<Map<String, Color>> _avatarPresets = [
+    {
+      'bg': Color(0xFFE3F4EA),
+      'accent': Color(0xFF0E8A3E),
+    },
+    {
+      'bg': Color(0xFFE0F2FE),
+      'accent': Color(0xFF0284C7),
+    },
+    {
+      'bg': Color(0xFFFEF3C7),
+      'accent': Color(0xFFD97706),
+    },
+    {
+      'bg': Color(0xFFF3E8FF),
+      'accent': Color(0xFF9333EA),
+    },
+    {
+      'bg': Color(0xFFFFE4E6),
+      'accent': Color(0xFFE11D48),
+    },
+  ];
+
+  int _selectedAvatarPresetIndex = 0;
+
+  Color get _currentAvatarBgColor =>
+      _avatarPresets[_selectedAvatarPresetIndex]['bg']!;
+
+  Color get _currentAvatarAccentColor =>
+      _avatarPresets[_selectedAvatarPresetIndex]['accent']!;
+
+  int _currentStep = 1;
+
+  final TextEditingController _nameController = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode();
+
+  final TextEditingController _handleController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  final TextEditingController _areaSearchController = TextEditingController();
+  final FocusNode _areaFocusNode = FocusNode();
+
+  final TextEditingController _addressNoteController = TextEditingController();
+  final FocusNode _addressNoteFocusNode = FocusNode();
+
+  UsernameState _state = UsernameState.empty;
+  Timer? _debounceTimer;
+  Timer? _areaDebounceTimer;
+  bool _isSubmitting = false;
+  bool _isLocating = false;
+  bool _isSearchingPlaces = false;
+  bool _isResolvingArea = false;
+  String? _customErrorMessage;
+  File? _pickedProfileImage;
+  final Map<String, bool> _availabilityCache = {};
+
+  GeoArea? _selectedArea;
+  String? _selectedCityName;
+  String? _selectedCityId;
+  List<Map<String, dynamic>> _livePredictions = [];
+  List<String> _dynamicPopularNames = [];
+  bool _isAreaSearching = false;
+  String _autocompleteSessionToken = '';
+
   @override
   void initState() {
     super.initState();
+
+    if (widget.isChangeArea) {
+      _currentStep = 2;
+    }
+
+    _nameFocusNode.addListener(() {
+      setState(() {});
+    });
+    _nameController.addListener(() {
+      setState(() {});
+    });
+
+    if (widget.user?.displayName != null &&
+        (widget.user!.displayName as String).trim().isNotEmpty) {
+      _nameController.text = (widget.user!.displayName as String).trim();
+    }
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
@@ -250,9 +188,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           setState(() => _state = UsernameState.empty);
         }
       }
+      setState(() {});
     });
 
-    // Default handle suggestion based on email prefix if available
+    _areaFocusNode.addListener(() {
+      setState(() {
+        _isAreaSearching = _areaFocusNode.hasFocus &&
+            _areaSearchController.text.trim().isNotEmpty;
+      });
+    });
+
+    _addressNoteFocusNode.addListener(() {
+      setState(() {});
+    });
+
     if (widget.user?.email != null) {
       final emailParts = widget.user!.email!.split('@');
       if (emailParts.isNotEmpty) {
@@ -265,13 +214,40 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       }
     }
+
+    _loadPopularAreas();
+  }
+
+  Future<void> _loadPopularAreas([String? cityId]) async {
+    try {
+      final targetCityId = cityId ?? _selectedCityId ?? 'GJ-VAD';
+      final areas = await AuthService.instance.fetchPopularAreas(cityId: targetCityId);
+      if (mounted && areas.isNotEmpty) {
+        final names = areas
+            .map((a) => (a['name'] as String?)?.trim() ?? '')
+            .where((n) => n.isNotEmpty)
+            .toList();
+        if (names.isNotEmpty) {
+          setState(() {
+            _dynamicPopularNames = names;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _areaDebounceTimer?.cancel();
+    _nameController.dispose();
+    _nameFocusNode.dispose();
     _handleController.dispose();
     _focusNode.dispose();
+    _areaSearchController.dispose();
+    _areaFocusNode.dispose();
+    _addressNoteController.dispose();
+    _addressNoteFocusNode.dispose();
     super.dispose();
   }
 
@@ -287,7 +263,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    // Security Check 1: Input Regex Sanitization (Only lowercase alphanumeric, 3-20 chars)
     final RegExp validRegex = RegExp(r'^[a-z0-9]{3,20}$');
     if (!validRegex.hasMatch(trimmed)) {
       setState(() {
@@ -298,7 +273,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    // Security Check 2: Reserved Usernames
     if (_reservedUsernames.contains(trimmed)) {
       setState(() {
         _state = UsernameState.reserved;
@@ -307,7 +281,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    // Security Check 3: Content Filtering (Prohibited / Harassment / Doxxing words)
     final filterViolation = ContentFilter.validateContent(trimmed);
     if (filterViolation != null) {
       setState(() {
@@ -317,7 +290,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    // Check memory cache first
     if (_availabilityCache.containsKey(trimmed)) {
       setState(() {
         _state = _availabilityCache[trimmed]!
@@ -328,13 +300,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    // Format is valid, start checking state & debouncing firestore call (450ms)
     setState(() {
       _state = UsernameState.checking;
       _customErrorMessage = null;
     });
 
-    _debounceTimer = Timer(const Duration(milliseconds: 450), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
       _checkAvailability(trimmed);
     });
   }
@@ -369,14 +340,13 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       _checkAvailability(trimmed);
     } else {
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 450), () {
+      _debounceTimer = Timer(const Duration(milliseconds: 400), () {
         _checkAvailability(trimmed);
       });
     }
   }
 
   Future<void> _checkAvailability(String handle) async {
-    // Check if session exists
     if (widget.userId.isEmpty) {
       final loggedIn = await AuthService.instance.isLoggedIn();
       if (!loggedIn) {
@@ -391,7 +361,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     try {
       final isAvailable = await AuthService.instance.checkHandleAvailable(handle);
 
-      // Guard if user has changed text while query was in-flight
       if (!mounted || _handleController.text.trim().toLowerCase() != handle) {
         return;
       }
@@ -415,20 +384,827 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     }
   }
 
+  void _onAreaSearchChanged(String query) {
+    _areaDebounceTimer?.cancel();
+    final trimmed = query.trim();
+
+    if (trimmed.isEmpty) {
+      setState(() {
+        _livePredictions.clear();
+        _isAreaSearching = false;
+        _isSearchingPlaces = false;
+        _autocompleteSessionToken = '';
+      });
+      return;
+    }
+
+    if (_autocompleteSessionToken.isEmpty) {
+      _autocompleteSessionToken =
+          DateTime.now().millisecondsSinceEpoch.toString();
+    }
+
+    setState(() {
+      _isAreaSearching = true;
+      _isSearchingPlaces = true;
+    });
+
+    _areaDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final predictions = await AuthService.instance.searchPlacesAutocomplete(
+          trimmed,
+          sessionToken: _autocompleteSessionToken,
+        );
+        if (!mounted || _areaSearchController.text.trim() != trimmed) return;
+        setState(() {
+          _livePredictions = predictions;
+          _isSearchingPlaces = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isSearchingPlaces = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _onSelectPrediction(Map<String, dynamic> prediction) async {
+    final placeId = prediction['place_id'] as String? ?? '';
+    final mainText = prediction['main_text'] as String? ??
+        prediction['description'] as String? ??
+        '';
+    if (placeId.isEmpty) return;
+
+    _areaFocusNode.unfocus();
+    setState(() {
+      _isResolvingArea = true;
+      _isAreaSearching = false;
+      _livePredictions.clear();
+      _areaSearchController.text = mainText;
+    });
+
+    try {
+      final res = await AuthService.instance.resolveArea(
+        placeId,
+        sessionToken: _autocompleteSessionToken,
+      );
+      _autocompleteSessionToken = '';
+
+      if (!mounted) return;
+
+      if (res != null && res['live'] == true && res['area'] != null) {
+        final areaData = res['area'] as Map<String, dynamic>;
+        final cityData = res['city'] as Map<String, dynamic>?;
+        final cityName = cityData?['name'] as String? ?? 'Vadodara';
+        final cityId =
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? 'GJ-VAD';
+
+        setState(() {
+          _selectedCityName = cityName;
+          _selectedCityId = cityId;
+          _selectedArea = GeoArea(
+            id: areaData['id'] as String,
+            cityId: cityId,
+            name: areaData['name'] as String? ?? mainText,
+            lat: areaData['lat'] != null
+                ? (areaData['lat'] as num).toDouble()
+                : null,
+            lng: areaData['lng'] != null
+                ? (areaData['lng'] as num).toDouble()
+                : null,
+          );
+          _areaSearchController.text = _selectedArea!.name;
+        });
+        _loadPopularAreas(cityId);
+      } else if (res != null && res['live'] == false) {
+        final detectedCity = res['detected_city'] as String? ?? mainText;
+        final lat = res['lat'] != null ? (res['lat'] as num).toDouble() : null;
+        final lng = res['lng'] != null ? (res['lng'] as num).toDouble() : null;
+        setState(() {
+          _selectedArea = null;
+        });
+        _showWaitlistSheet(detectedCity: detectedCity, lat: lat, lng: lng);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not verify area. Please select again.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error resolving area: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isResolvingArea = false);
+      }
+    }
+  }
+
+  Future<void> _selectPopularArea(String areaName) async {
+    _areaFocusNode.unfocus();
+    setState(() {
+      _isResolvingArea = true;
+      _isAreaSearching = false;
+      _livePredictions.clear();
+      _areaSearchController.text = areaName;
+    });
+
+    try {
+      final cityId = _selectedCityId ?? 'GJ-VAD';
+      final res = await AuthService.instance.resolveArea(
+        null,
+        name: areaName,
+        cityId: cityId,
+      );
+
+      if (!mounted) return;
+
+      if (res != null && res['live'] == true && res['area'] != null) {
+        final areaData = res['area'] as Map<String, dynamic>;
+        final cityData = res['city'] as Map<String, dynamic>?;
+        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
+        final resolvedCityId =
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? cityId;
+
+        setState(() {
+          _selectedCityName = cityName;
+          _selectedCityId = resolvedCityId;
+          _selectedArea = GeoArea(
+            id: areaData['id'] as String,
+            cityId: resolvedCityId,
+            name: areaData['name'] as String? ?? areaName,
+            lat: areaData['lat'] != null
+                ? (areaData['lat'] as num).toDouble()
+                : null,
+            lng: areaData['lng'] != null
+                ? (areaData['lng'] as num).toDouble()
+                : null,
+          );
+          _areaSearchController.text = _selectedArea!.name;
+        });
+        _loadPopularAreas(resolvedCityId);
+      } else if (res != null && res['live'] == false) {
+        final detectedCity = res['detected_city'] as String? ?? _selectedCityName ?? 'Your City';
+        final lat = res['lat'] != null ? (res['lat'] as num).toDouble() : null;
+        final lng = res['lng'] != null ? (res['lng'] as num).toDouble() : null;
+        setState(() {
+          _selectedArea = null;
+        });
+        _showWaitlistSheet(detectedCity: detectedCity, lat: lat, lng: lng);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not verify area. Please select again.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() => _isResolvingArea = false);
+      }
+    }
+  }
+
+  Future<void> _detectCurrentLocation() async {
+    setState(() => _isLocating = true);
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please turn on device location (GPS).'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        setState(() => _isLocating = false);
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission required to detect your area.'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        setState(() => _isLocating = false);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+
+      final res = await AuthService.instance.reverseGeocodeCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (!mounted) return;
+
+      if (res != null && res['live'] == true && res['area'] != null) {
+        final areaData = res['area'] as Map<String, dynamic>;
+        final cityData = res['city'] as Map<String, dynamic>?;
+        final cityName = cityData?['name'] as String? ?? 'Vadodara';
+        final cityId =
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? 'GJ-VAD';
+
+        setState(() {
+          _selectedCityName = cityName;
+          _selectedCityId = cityId;
+          _selectedArea = GeoArea(
+            id: areaData['id'] as String,
+            cityId: cityId,
+            name: areaData['name'] as String? ?? 'Detected Area',
+            lat: position.latitude,
+            lng: position.longitude,
+          );
+          _areaSearchController.text = _selectedArea!.name;
+          _isAreaSearching = false;
+          _livePredictions.clear();
+        });
+        _loadPopularAreas(cityId);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Detected: ${_selectedArea!.name}, $cityName'),
+            backgroundColor: _primaryGreen,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (res != null && res['live'] == false) {
+        final detectedCity = res['detected_city'] as String? ?? 'Aapka shehar';
+        setState(() {
+          _selectedArea = null;
+        });
+        _showWaitlistSheet(
+          detectedCity: detectedCity,
+          lat: position.latitude,
+          lng: position.longitude,
+        );
+      } else {
+        final match = LocationEngine.detectLocation(
+          position.latitude,
+          position.longitude,
+        );
+        if (match.area != null) {
+          setState(() {
+            _selectedCityName = 'Vadodara';
+            _selectedArea = match.area;
+            _areaSearchController.text = match.area!.name;
+            _isAreaSearching = false;
+            _livePredictions.clear();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Detected: ${match.area!.name}, Vadodara'),
+              backgroundColor: _primaryGreen,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not detect your area. Please search above.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location detection failed: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+      }
+    }
+  }
+
+  Future<void> _showWaitlistSheet({
+    required String detectedCity,
+    double? lat,
+    double? lng,
+  }) async {
+    bool isSubmittingWaitlist = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Material(
+              color: Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: _borderColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: const BoxDecoration(
+                          color: _lightGreenTint,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.location_city_rounded,
+                          color: _primaryGreen,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Nearhood abhi $detectedCity mein nahi hai',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: _textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Hum jald hi aapke shehar aa rahe hain! Waitlist join kijiye taaki launch hote hi aapko sabse pehle access mile.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _textSecondary.withValues(alpha: 0.9),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primaryGreen,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: isSubmittingWaitlist
+                              ? null
+                              : () async {
+                                  setSheetState(
+                                      () => isSubmittingWaitlist = true);
+                                  final uid = widget.userId.isNotEmpty
+                                      ? widget.userId
+                                      : (await AuthService.instance.getUserId() ??
+                                          '');
+                                  final phone = widget.phoneNumber ??
+                                      (await AuthService.instance
+                                              .getPhoneNumber() ??
+                                          '');
+                                  final contact = phone.isNotEmpty
+                                      ? phone
+                                      : (uid.isNotEmpty ? uid : 'app_user');
+
+                                  final success =
+                                      await AuthService.instance.joinWaitlist(
+                                    cityText: detectedCity,
+                                    lat: lat,
+                                    lng: lng,
+                                    contactOrDeviceId: contact,
+                                  );
+
+                                  if (sheetContext.mounted) {
+                                    Navigator.of(sheetContext).pop();
+                                  }
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          success
+                                              ? 'Aap waitlist mein add ho gaye hain! Shukriya.'
+                                              : 'Waitlist join karne mein samasya aayi. Dobara koshish karein.',
+                                        ),
+                                        backgroundColor: success
+                                            ? _primaryGreen
+                                            : AppColors.error,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                },
+                          child: isSubmittingWaitlist
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.2,
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.notifications_active_rounded,
+                                        size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Join waitlist',
+                                      style: TextStyle(
+                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                            _areaSearchController.clear();
+                            _areaFocusNode.requestFocus();
+                          },
+                          child: const Text(
+                            'Choose another area',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showPhotoPickerSheet() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Material(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: AppColors.divider, width: 1.5),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                'Add Profile Picture',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Choose Default Avatar',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _textSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(_avatarPresets.length, (idx) {
+                  final preset = _avatarPresets[idx];
+                  final isSelected = _pickedProfileImage == null &&
+                      _selectedAvatarPresetIndex == idx;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedAvatarPresetIndex = idx;
+                        _pickedProfileImage = null;
+                      });
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: preset['bg'],
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected
+                              ? _primaryGreen
+                              : Colors.transparent,
+                          width: isSelected ? 2.5 : 1.0,
+                        ),
+                      ),
+                      child: Center(
+                        child: CustomPaint(
+                          size: const Size(36, 36),
+                          painter: _DefaultAvatarPainter(
+                            color: preset['accent']!,
+                            strokeWidth: 2.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 14),
+              const Divider(color: _borderColor, height: 1),
+              const SizedBox(height: 6),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
+                ),
+                title: const Text(
+                  'Take Photo',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
+                ),
+                title: const Text(
+                  'Choose from Gallery',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              if (_pickedProfileImage != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.errorSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 22),
+                  ),
+                  title: const Text(
+                    'Remove Photo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _pickedProfileImage = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        final rawFile = File(picked.path);
+
+        if (!mounted) return;
+
+        final croppedFile = await InstagramAvatarCropper.cropImage(
+          context,
+          imageFile: rawFile,
+        );
+
+        if (croppedFile != null && mounted) {
+          setState(() => _pickedProfileImage = croppedFile);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking profile image: $e');
+    }
+  }
+
   Future<void> _createHandle() async {
+    if (widget.isChangeArea) {
+      if (_selectedArea == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select your area to finish.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _isSubmitting = true;
+        _customErrorMessage = null;
+      });
+
+      try {
+        final result = await AuthService.instance.confirmAreaDetails(
+          areaId: _selectedArea!.id,
+          addressNote: _addressNoteController.text.trim(),
+        );
+
+        if (!mounted) return;
+
+        if (result['success'] != true) {
+          final errorMsg = result['error'] as String? ?? 'Failed to update area. Please try again.';
+          setState(() {
+            _isSubmitting = false;
+            _customErrorMessage = errorMsg;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMsg),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
+        final selectedCityId =
+            _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
+        final city = LocationEngine.lookupCity(selectedCityId) ??
+            GeoCity(
+              id: selectedCityId,
+              stateId: 'GJ',
+              name: _selectedCityName ?? 'Vadodara',
+              enabled: true,
+              areas: [_selectedArea!],
+            );
+        await widget.repository.locationService.setCity(city);
+        await widget.repository.locationService.setArea(_selectedArea);
+
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+          _customErrorMessage = 'An error occurred. Please try again.';
+        });
+      }
+      return;
+    }
+
+    final name = _nameController.text.trim();
+    if (name.length < 2) {
+      setState(() {
+        _currentStep = 1;
+        _customErrorMessage = 'Please enter your full name (at least 2 letters).';
+      });
+      return;
+    }
+
     final handle = _handleController.text.trim().toLowerCase();
     final RegExp validRegex = RegExp(r'^[a-z0-9]{3,20}$');
 
-    // Security Gate 1: Strict Format Check
     if (!validRegex.hasMatch(handle) || _reservedUsernames.contains(handle)) {
       setState(() {
+        _currentStep = 1;
         _state = UsernameState.invalid;
         _customErrorMessage = 'Invalid or reserved username.';
       });
       return;
     }
 
-    // Security Gate 2: Auth Verification
+    if (_selectedArea == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your area to finish.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final effectiveUid = widget.userId.isNotEmpty
         ? widget.userId
         : (await AuthService.instance.getUserId() ?? '');
@@ -439,22 +1215,29 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     });
 
     try {
-      debugPrint('[CreateHandleScreen] Submitting handle "$handle" for uid: $effectiveUid');
+      final selectedCityId =
+          _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
       final result = await AuthService.instance.saveUserHandle(
         handle,
         userId: effectiveUid,
         phone: widget.phoneNumber,
+        name: name,
+        cityId: selectedCityId,
+        areaId: _selectedArea!.id,
+        areaName: _selectedArea!.name,
+        addressNote: _addressNoteController.text.trim(),
       );
 
       if (result['success'] != true) {
         final isTaken = result['isTaken'] == true;
         final errorMsg = result['error'] as String? ?? 'Failed to update username.';
-        
+
         if (isTaken) {
           _availabilityCache[handle] = false;
         }
 
         setState(() {
+          _currentStep = 1;
           _state = isTaken ? UsernameState.taken : UsernameState.available;
           _isSubmitting = false;
           _customErrorMessage = errorMsg;
@@ -462,7 +1245,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         return;
       }
 
-      // If user selected a profile image, upload and sync
+      NameCacheService.instance.setCachedName(handle, name);
+      await NameCacheService.instance.saveMyNameLocally(name);
+
       if (_pickedProfileImage != null) {
         try {
           final uploadedUrl = await R2StorageService.uploadImage(_pickedProfileImage!);
@@ -474,22 +1259,31 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       }
 
+      final city = LocationEngine.lookupCity(selectedCityId) ??
+          GeoCity(
+            id: selectedCityId,
+            stateId: 'GJ',
+            name: _selectedCityName ?? 'Vadodara',
+            enabled: true,
+            areas: [_selectedArea!],
+          );
+      await widget.repository.locationService.setCity(city);
+      await widget.repository.locationService.setArea(_selectedArea);
+
       widget.repository.currentUserHandle = handle;
       NotificationService().initialize();
       NotificationService().startListening(handle);
       PresenceService.instance.init(handle);
 
-      // ⚡ Instant Cache Preloading (Chats, Communities, Feeds, Preferences)
       SplashController.instance.warmFetchOnLogin(
         uid: effectiveUid,
         handle: handle,
-        cityId: 'surat_gujarat',
+        cityId: selectedCityId,
         postRepo: widget.repository,
       );
 
       if (!mounted) return;
 
-      // Onboarding transition
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => PermissionRequestScreen(
@@ -514,39 +1308,55 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (mounted) {
         setState(() {
           _customErrorMessage =
-              'Failed to create username: ${e.toString().replaceAll('Exception:', '').trim()}';
+              'Failed to complete setup: ${e.toString().replaceAll('Exception:', '').trim()}';
           _isSubmitting = false;
         });
       }
     }
   }
 
-  Future<void> _handleSignOut() async {
-    final colors = context.nearhoodColors;
+  Future<void> _handleTopLeftAction() async {
+    if (widget.isChangeArea) {
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(false);
+        return;
+      }
+    }
+
+    if (_currentStep == 2) {
+      setState(() => _currentStep = 1);
+      return;
+    }
+
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: colors.field,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: colors.line, width: 1.5),
+          side: const BorderSide(color: AppColors.divider, width: 1.5),
         ),
-        title: Text(
+        title: const Text(
           'Cancel Setup?',
-          style: TextStyle(color: colors.ink, fontWeight: FontWeight.w800),
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
         ),
-        content: Text(
+        content: const Text(
           'If you leave now, your account setup won\'t be completed and you will be signed out.',
-          style: TextStyle(color: colors.muted, height: 1.4),
+          style: TextStyle(color: AppColors.textMuted, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Stay', style: TextStyle(color: colors.muted, fontWeight: FontWeight.w600)),
+            child: const Text('Stay', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -563,7 +1373,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => PhoneLoginScreen(repository: widget.repository),
+          builder: (_) => const VadodaraLocalApp(),
         ),
         (route) => false,
       );
@@ -572,191 +1382,360 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.nearhoodColors;
-    final isButtonActive =
-        _state == UsernameState.available && !_isSubmitting;
+    final topPadding = MediaQuery.paddingOf(context).top;
+    final isNameValid = _nameController.text.trim().length >= 2;
+    final isStep1Valid =
+        isNameValid && _state == UsernameState.available && !_isSubmitting;
+    final isStep2Valid =
+        _selectedArea != null && !_isSubmitting && !_isResolvingArea;
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          _handleSignOut();
+          _handleTopLeftAction();
         }
       },
       child: Scaffold(
-        backgroundColor: colors.bg,
-        appBar: AppBar(
-          backgroundColor: colors.bg,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leading: IconButton(
-            icon: Icon(
-              Icons.close_rounded,
-              color: colors.muted,
-              size: 22,
-            ),
-            tooltip: 'Cancel & Sign Out',
-            onPressed: _handleSignOut,
-          ),
-        ),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 16),
-
-                        // App Logo / Profile Avatar
-                        _buildLogo(colors),
-
-                        const SizedBox(height: 32),
-
-                        // Title
-                        Text(
-                          'Choose your\nusername',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: colors.ink,
-                            letterSpacing: -0.5,
-                            height: 1.2,
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Subtitle
-                        Text(
-                          'Your username is how people will find\nand recognize you in the app.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.muted,
-                            height: 1.4,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-
-                        const SizedBox(height: 36),
-
-                        // Username Input Field Box
-                        _buildInputField(colors),
-
-                        const SizedBox(height: 10),
-
-                        // Status & Helper Message below input
-                        _buildStatusHelper(colors),
-
-                        const Spacer(),
-
-                        const SizedBox(height: 24),
-
-                        // Continue Button
-                        _buildContinueButton(colors, isButtonActive),
-
-                        const SizedBox(height: 16),
-
-                        // Footer note
-                        Text(
-                          'You can change your username later.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: colors.muted.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-                      ],
-                    ),
+        backgroundColor: _screenBg,
+        body: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Stack(
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 290 + topPadding,
+                child: _buildCurvedHeaderBackground(),
+              ),
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 12),
+                      _buildHeaderTopBar(),
+                      const SizedBox(height: 16),
+                      _buildHeaderLogoTile(),
+                      const SizedBox(height: 12),
+                      _buildHeaderTitles(),
+                      const SizedBox(height: 20),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: _currentStep == 1
+                            ? _buildStep1Card()
+                            : _buildStep2Card(),
+                      ),
+                      const SizedBox(height: 20),
+                      _currentStep == 1
+                          ? _buildStep1ContinueButton(isStep1Valid)
+                          : _buildStep2FinishButton(isStep2Valid),
+                      const SizedBox(height: 12),
+                      _buildFooterText(),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLogo(NearhoodColors colors) {
+  Widget _buildCurvedHeaderBackground() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: _darkGreen,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -40,
+            right: -30,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -20,
+            left: -20,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.04),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 70,
+            left: 50,
+            child: Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.03),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderTopBar() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Semantics(
+          label: _currentStep == 1 ? 'Close setup' : 'Back to previous step',
+          button: true,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleTopLeftAction,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _currentStep == 1
+                      ? Icons.close_rounded
+                      : Icons.arrow_back_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (widget.isChangeArea)
+          const Text(
+            'Change Area',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          )
+        else
+          Row(
+            children: [
+              Text(
+                'Step $_currentStep of 2',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 24,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: 24,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _currentStep == 2
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderLogoTile() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Image.asset(
+            'assets/images/app_icon.png',
+            width: 28,
+            height: 28,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => const LogoPin(width: 24, height: 30),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderTitles() {
+    final title = _currentStep == 1
+        ? 'Namaste! Aap kaun?'
+        : 'Aapka ghar kahan hai?';
+    final subtitle = _currentStep == 1
+        ? 'Apna naam aur username chuniye, taaki padosi aapko pehchaan sakein.'
+        : 'Apne area ke padosi, shops aur posts dekhne ke liye.';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.88),
+            fontSize: 13.5,
+            height: 1.35,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep1Card() {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.topCenter,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 42),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 52, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(
+                child: Text(
+                  'Photo add karna optional hai',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: _textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildFullNameField(),
+              const SizedBox(height: 16),
+              _buildUsernameField(),
+              const SizedBox(height: 8),
+              _buildUsernameStatusHelper(),
+            ],
+          ),
+        ),
+        Positioned(
+          top: 0,
+          child: _buildAvatar(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatar() {
     return GestureDetector(
       onTap: _showPhotoPickerSheet,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 104,
-            height: 104,
-            padding: EdgeInsets.all(_pickedProfileImage != null ? 3.0 : 0),
+            width: 84,
+            height: 84,
             decoration: BoxDecoration(
+              color: _currentAvatarBgColor,
               shape: BoxShape.circle,
-              gradient: _pickedProfileImage != null ? UserAvatar.instagramGradient : null,
-              color: _pickedProfileImage == null ? colors.field : null,
-              border: _pickedProfileImage == null
-                  ? Border.all(color: colors.line, width: 2)
-                  : null,
+              border: Border.all(color: Colors.white, width: 3.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Container(
-              padding: _pickedProfileImage != null ? const EdgeInsets.all(2.5) : const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colors.field,
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: _pickedProfileImage != null
-                    ? Image.file(
-                        _pickedProfileImage!,
-                        width: 90,
-                        height: 90,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                      )
-                    : Image.asset(
-                        'assets/images/nearhood_logo.png',
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.person_rounded,
-                            size: 44,
-                            color: colors.muted,
-                          );
-                        },
+            child: ClipOval(
+              child: _pickedProfileImage != null
+                  ? Image.file(
+                      _pickedProfileImage!,
+                      width: 84,
+                      height: 84,
+                      fit: BoxFit.cover,
+                    )
+                  : CustomPaint(
+                      size: const Size(84, 84),
+                      painter: _DefaultAvatarPainter(
+                        color: _currentAvatarAccentColor,
                       ),
-              ),
+                    ),
             ),
           ),
           Positioned(
-            bottom: 2,
-            right: 2,
+            bottom: 0,
+            right: 0,
             child: Container(
-              width: 34,
-              height: 34,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
-                color: colors.field2,
+                color: _primaryGreen,
                 shape: BoxShape.circle,
-                border: Border.all(color: colors.bg, width: 2.5),
+                border: Border.all(color: Colors.white, width: 2.2),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 6,
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -764,7 +1743,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 17,
+                size: 14,
               ),
             ),
           ),
@@ -773,307 +1752,726 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     );
   }
 
-  Widget _buildInputField(NearhoodColors colors) {
-    Color borderColor;
-    Color fillColor = colors.field;
-    List<BoxShadow> shadows = [];
+  Widget _buildFullNameField() {
+    final hasFocus = _nameFocusNode.hasFocus;
+    final isValid = _nameController.text.trim().length >= 2;
 
-    switch (_state) {
-      case UsernameState.empty:
-        borderColor = _focusNode.hasFocus
-            ? const Color(0xFF2DD4BF)
-            : colors.line;
-        if (_focusNode.hasFocus) {
-          shadows = [
-            BoxShadow(
-              color: const Color(0xFF2DD4BF).withValues(alpha: 0.15),
-              blurRadius: 10,
-              spreadRadius: 1,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Full Name',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: _textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: _screenBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasFocus ? _primaryGreen : _borderColor,
+              width: hasFocus ? 1.5 : 1.0,
             ),
-          ];
-        }
-        break;
-      case UsernameState.focused:
-        borderColor = const Color(0xFF2DD4BF);
-        shadows = [
-          BoxShadow(
-            color: const Color(0xFF2DD4BF).withValues(alpha: 0.15),
-            blurRadius: 10,
-            spreadRadius: 1,
           ),
-        ];
-        break;
-      case UsernameState.checking:
-        borderColor = colors.line;
-        break;
-      case UsernameState.available:
-        borderColor = const Color(0xFF4ADE80);
-        shadows = [
-          BoxShadow(
-            color: const Color(0xFF4ADE80).withValues(alpha: 0.2),
-            blurRadius: 10,
-            spreadRadius: 1,
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 14, right: 10),
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  color: hasFocus ? _primaryGreen : _textSecondary,
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _nameController,
+                  focusNode: _nameFocusNode,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600,
+                    color: _textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Aapka poora naam (e.g. Rahul Sharma)',
+                    hintStyle: TextStyle(
+                      fontSize: 14.5,
+                      color: _textSecondary.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+              if (isValid)
+                const Padding(
+                  padding: EdgeInsets.only(right: 14),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: _primaryGreen,
+                    size: 18,
+                  ),
+                ),
+            ],
           ),
-        ];
-        break;
-      case UsernameState.taken:
-      case UsernameState.invalid:
-      case UsernameState.reserved:
-        borderColor = const Color(0xFFEF4444);
-        fillColor = const Color(0xFFEF4444).withValues(alpha: 0.12);
-        break;
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUsernameField() {
+    final hasFocus = _focusNode.hasFocus;
+    final isTaken = _state == UsernameState.taken;
+    final isInvalid = _state == UsernameState.invalid || _state == UsernameState.reserved;
+    final isAvailable = _state == UsernameState.available;
+
+    Color currentBorderColor;
+    if (isTaken || isInvalid) {
+      currentBorderColor = AppColors.error;
+    } else if (hasFocus || isAvailable) {
+      currentBorderColor = _primaryGreen;
+    } else {
+      currentBorderColor = _borderColor;
     }
 
-    return AnimatedContainer(
-      duration: AppMotion.durationMicro,
-      curve: AppMotion.interactiveCurve,
-      height: 60,
-      decoration: BoxDecoration(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: borderColor,
-          width: (_state == UsernameState.available ||
-                  _state == UsernameState.focused ||
-                  (_state == UsernameState.empty && _focusNode.hasFocus))
-              ? 2.0
-              : 1.5,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Username',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: _textPrimary,
+          ),
         ),
-        boxShadow: shadows,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 18, right: 8),
-            child: Text(
-              '@',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: colors.ink,
-              ),
+        const SizedBox(height: 6),
+        Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: (isTaken || isInvalid) ? AppColors.errorSoft : _screenBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: currentBorderColor,
+              width: (hasFocus || isAvailable || isTaken || isInvalid) ? 1.5 : 1.0,
             ),
           ),
-          Expanded(
-            child: TextField(
-              controller: _handleController,
-              focusNode: _focusNode,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.text,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                TextInputFormatter.withFunction((oldVal, newVal) {
-                  return newVal.copyWith(
-                    text: newVal.text.toLowerCase(),
-                  );
-                }),
-              ],
-              onChanged: _onTextChanged,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colors.ink,
-                letterSpacing: 0.2,
-              ),
-              decoration: InputDecoration(
-                hintText: 'username',
-                hintStyle: TextStyle(
-                  color: colors.muted.withValues(alpha: 0.5),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
+          child: Row(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 14, right: 6),
+                child: Text(
+                  '@',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: _primaryGreen,
+                  ),
                 ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
-            ),
+              Expanded(
+                child: TextField(
+                  controller: _handleController,
+                  focusNode: _focusNode,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  keyboardType: TextInputType.text,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                    TextInputFormatter.withFunction((oldVal, newVal) {
+                      return newVal.copyWith(text: newVal.text.toLowerCase());
+                    }),
+                    LengthLimitingTextInputFormatter(20),
+                  ],
+                  onChanged: _onTextChanged,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600,
+                    color: _textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'username',
+                    hintStyle: TextStyle(
+                      fontSize: 14.5,
+                      color: _textSecondary.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+              if (_state == UsernameState.checking)
+                const Padding(
+                  padding: EdgeInsets.only(right: 14),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(_primaryGreen),
+                    ),
+                  ),
+                )
+              else if (isAvailable)
+                const Padding(
+                  padding: EdgeInsets.only(right: 14),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: _primaryGreen,
+                    size: 18,
+                  ),
+                )
+              else if (isTaken || isInvalid)
+                const Padding(
+                  padding: EdgeInsets.only(right: 14),
+                  child: Icon(
+                    Icons.cancel_rounded,
+                    color: AppColors.error,
+                    size: 18,
+                  ),
+                )
+              else
+                const SizedBox(width: 14),
+            ],
           ),
-          if (_state == UsernameState.checking)
-            const Padding(
-              padding: EdgeInsets.only(right: 18),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2DD4BF)),
-                ),
-              ),
-            )
-          else
-            const SizedBox(width: 18),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildStatusHelper(NearhoodColors colors) {
+  Widget _buildUsernameStatusHelper() {
+    final handleText = _handleController.text.trim();
+
     switch (_state) {
       case UsernameState.empty:
       case UsernameState.focused:
-        return SizedBox(
-          width: double.infinity,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 4, top: 4),
-            child: Text(
-              '3–20 characters • lowercase letters and numbers',
-              style: TextStyle(
-                color: colors.muted,
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
+        return const Text(
+          '3–20 characters · lowercase letters and numbers',
+          style: TextStyle(
+            color: _textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
           ),
         );
 
       case UsernameState.checking:
-        return SizedBox(
-          width: double.infinity,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 4, top: 4),
-            child: Text(
-              'Checking availability...',
-              style: TextStyle(
-                color: colors.muted,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+        return const Text(
+          'Checking availability...',
+          style: TextStyle(
+            color: _textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         );
 
       case UsernameState.available:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 2, top: 4),
-              child: Row(
-                children: const [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 18,
-                    color: Color(0xFF4ADE80),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Username available',
-                    style: TextStyle(
-                      color: Color(0xFF4ADE80),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 14,
+              color: _primaryGreen,
             ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                '3–20 characters • lowercase letters and numbers',
-                style: TextStyle(
-                  color: colors.muted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                ),
+            const SizedBox(width: 4),
+            Text(
+              '@$handleText available hai',
+              style: const TextStyle(
+                color: _primaryGreen,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         );
 
       case UsernameState.taken:
-        return Padding(
-          padding: const EdgeInsets.only(left: 2, top: 4),
-          child: Row(
-            children: const [
-              Icon(
-                Icons.cancel_rounded,
-                size: 18,
-                color: Color(0xFFEF4444),
+        return Row(
+          children: [
+            const Icon(
+              Icons.cancel_rounded,
+              size: 14,
+              color: AppColors.error,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '@$handleText already taken hai',
+              style: const TextStyle(
+                color: AppColors.error,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
               ),
-              SizedBox(width: 6),
-              Text(
-                'Username is already taken',
-                style: TextStyle(
-                  color: Color(0xFFEF4444),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
 
       case UsernameState.invalid:
       case UsernameState.reserved:
-        return Padding(
-          padding: const EdgeInsets.only(left: 2, top: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.cancel_rounded,
-                  size: 18,
-                  color: Color(0xFFEF4444),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  _customErrorMessage ??
-                      'Username must be 3–20 characters using lowercase letters and numbers.',
-                  style: const TextStyle(
-                    color: Color(0xFFEF4444),
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-            ],
+        return Text(
+          _customErrorMessage ?? 'Invalid username.',
+          style: const TextStyle(
+            color: AppColors.error,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         );
     }
   }
 
-  Widget _buildContinueButton(NearhoodColors colors, bool isButtonActive) {
-    return Container(
+  Widget _buildStep1ContinueButton(bool isStep1Valid) {
+    return SizedBox(
       width: double.infinity,
-      height: 54,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isButtonActive
-            ? [
-                BoxShadow(
-                  color: colors.field2.withValues(alpha: 0.5),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : null,
-      ),
+      height: 56,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: isButtonActive
-              ? colors.field2
-              : colors.field,
-          foregroundColor: isButtonActive
-              ? Colors.white
-              : colors.muted.withValues(alpha: 0.4),
+          backgroundColor: isStep1Valid
+              ? _primaryGreen
+              : _primaryGreen.withValues(alpha: 0.35),
+          foregroundColor: Colors.white,
           elevation: 0,
-          side: BorderSide(
-            color: isButtonActive ? const Color(0xFF2DD4BF) : colors.line,
-            width: 1.5,
-          ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
-        onPressed: isButtonActive ? _createHandle : null,
+        onPressed: isStep1Valid
+            ? () {
+                _focusNode.unfocus();
+                _nameFocusNode.unfocus();
+                setState(() => _currentStep = 2);
+              }
+            : null,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Continue',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                letterSpacing: 0.2,
+              ),
+            ),
+            SizedBox(width: 8),
+            Icon(Icons.arrow_forward_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep2Card() {
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildAreaSearchField(),
+          if (_isAreaSearching &&
+              (_livePredictions.isNotEmpty || _isSearchingPlaces))
+            _buildAreaSuggestionsList(),
+          const SizedBox(height: 14),
+          _buildCurrentLocationButton(),
+          const SizedBox(height: 18),
+          _buildPopularChips(),
+          const SizedBox(height: 18),
+          _buildAddressNoteField(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAreaSearchField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Your area',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: _textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: _screenBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _primaryGreen,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  color: _primaryGreen,
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _areaSearchController,
+                  focusNode: _areaFocusNode,
+                  onChanged: _onAreaSearchChanged,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600,
+                    color: _textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search or choose your area (e.g. Alkapuri)',
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: _textSecondary.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+              if (_isResolvingArea || _isSearchingPlaces)
+                const Padding(
+                  padding: EdgeInsets.only(right: 14),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(_primaryGreen),
+                    ),
+                  ),
+                )
+              else if (_areaSearchController.text.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 18, color: _textSecondary),
+                  onPressed: () {
+                    _areaSearchController.clear();
+                    _onAreaSearchChanged('');
+                    setState(() {
+                      _selectedArea = null;
+                    });
+                  },
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAreaSuggestionsList() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: _isSearchingPlaces
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(_primaryGreen),
+                  ),
+                ),
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemCount: _livePredictions.length,
+              separatorBuilder: (context, index) =>
+                  const Divider(height: 1, color: _borderColor),
+              itemBuilder: (ctx, index) {
+                final prediction = _livePredictions[index];
+                final mainText = prediction['main_text'] as String? ??
+                    prediction['description'] as String? ??
+                    '';
+                final secondaryText =
+                    prediction['secondary_text'] as String? ?? '';
+
+                return ListTile(
+                  dense: true,
+                  minVerticalPadding: 10,
+                  leading: const Icon(
+                    Icons.location_on_rounded,
+                    color: _primaryGreen,
+                    size: 18,
+                  ),
+                  title: Text(
+                    mainText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: _textPrimary,
+                    ),
+                  ),
+                  subtitle: secondaryText.isNotEmpty
+                      ? Text(
+                          secondaryText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: _textSecondary,
+                          ),
+                        )
+                      : null,
+                  onTap: () => _onSelectPrediction(prediction),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildCurrentLocationButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _isLocating ? null : _detectCurrentLocation,
+        borderRadius: BorderRadius.circular(14),
+        child: CustomPaint(
+          painter: const _DashedBorderPainter(
+            color: _primaryGreen,
+            radius: 14,
+            strokeWidth: 1.2,
+          ),
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: _lightGreenTint.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: _isLocating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(_primaryGreen),
+                      ),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.my_location_rounded,
+                          color: _primaryGreen,
+                          size: 18,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Use my current location',
+                          style: TextStyle(
+                            color: _primaryGreen,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPopularChips() {
+    final chipsList = _dynamicPopularNames.isNotEmpty
+        ? _dynamicPopularNames
+        : _popularAreaNames;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Popular in ${_selectedCityName ?? 'Vadodara'}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: _textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: chipsList.map((areaName) {
+            final isSelected =
+                _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _selectPopularArea(areaName),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? _primaryGreen : _screenBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isSelected ? null : Border.all(color: _borderColor),
+                  ),
+                  child: Text(
+                    areaName,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : _textPrimary,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddressNoteField() {
+    final hasFocus = _addressNoteFocusNode.hasFocus;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Society / flat / landmark (Optional)',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: _textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: _screenBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasFocus ? _primaryGreen : _borderColor,
+              width: hasFocus ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Icon(
+                  Icons.home_outlined,
+                  color: hasFocus ? _primaryGreen : _textSecondary,
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _addressNoteController,
+                  focusNode: _addressNoteFocusNode,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                    color: _textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Tower B, Shivalik Residency, Near Circle',
+                    hintStyle: TextStyle(
+                      fontSize: 13.5,
+                      color: _textSecondary.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Row(
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 13, color: _textSecondary),
+            SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                'Exact address kisi ko nahi dikhega, sirf aapka area.',
+                style: TextStyle(
+                  color: _textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep2FinishButton(bool isStep2Valid) {
+    final areaName = _selectedArea?.name ?? 'Area';
+
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isStep2Valid
+              ? _primaryGreen
+              : _primaryGreen.withValues(alpha: 0.35),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        onPressed: isStep2Valid ? _createHandle : null,
         child: _isSubmitting
             ? const SizedBox(
                 width: 22,
@@ -1083,15 +2481,144 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   strokeWidth: 2.2,
                 ),
               )
-            : const Text(
-                'Continue',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  letterSpacing: 0.2,
-                ),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    widget.isChangeArea
+                        ? 'Confirm & join $areaName'
+                        : 'Finish & join $areaName',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.check_circle_rounded, size: 18),
+                ],
               ),
       ),
     );
   }
+
+  Widget _buildFooterText() {
+    final footerMsg = _currentStep == 1
+        ? 'You can change your profile details later.'
+        : 'You can change your area later from Profile.';
+
+    return Center(
+      child: Text(
+        footerMsg,
+        style: TextStyle(
+          fontSize: 12.5,
+          color: _textSecondary.withValues(alpha: 0.8),
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  static const double dashWidth = 5.0;
+  static const double dashSpace = 3.0;
+
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+
+  const _DashedBorderPainter({
+    required this.color,
+    this.strokeWidth = 1.2,
+    this.radius = 14,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        strokeWidth / 2,
+        strokeWidth / 2,
+        size.width - strokeWidth,
+        size.height - strokeWidth,
+      ),
+      Radius.circular(radius),
+    );
+
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics();
+
+    for (final metric in metrics) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final length = (distance + dashWidth < metric.length)
+            ? dashWidth
+            : metric.length - distance;
+        final extract = metric.extractPath(distance, distance + length);
+        canvas.drawPath(extract, paint);
+        distance += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.strokeWidth != strokeWidth ||
+      oldDelegate.radius != radius;
+}
+
+class _DefaultAvatarPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+
+  const _DefaultAvatarPainter({
+    required this.color,
+    this.strokeWidth = 2.4,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    final headCenter = Offset(cx, cy - size.height * 0.11);
+    final headRadius = size.width * 0.16;
+    canvas.drawCircle(headCenter, headRadius, paint);
+
+    final shoulderPath = Path();
+    final leftX = cx - size.width * 0.28;
+    final rightX = cx + size.width * 0.28;
+    final topY = cy + size.height * 0.10;
+    final bottomY = cy + size.height * 0.26;
+
+    shoulderPath.moveTo(leftX, bottomY);
+    shoulderPath.cubicTo(
+      leftX,
+      topY,
+      rightX,
+      topY,
+      rightX,
+      bottomY,
+    );
+
+    canvas.drawPath(shoulderPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DefaultAvatarPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
 }

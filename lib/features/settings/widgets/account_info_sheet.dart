@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../screens/friends/friend_requests_screen.dart';
+import '../../../services/friend_repository.dart';
+import '../../../theme/app_colors.dart';
 
-/// Bottom sheet showing the current user's account information.
-///
-/// Spec: title "Account Info", bordered card (1px line, radius 18) with 3 rows
-/// separated by dividers: Handle | Email | Joined. Values from [UserProfile].
-/// Primary "Done" button.
 class AccountInfoSheet extends StatelessWidget {
   const AccountInfoSheet({super.key, required this.profile});
 
@@ -14,73 +11,117 @@ class AccountInfoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomPad),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Grab handle
           Center(
             child: Container(
               width: 40,
               height: 4,
               margin: const EdgeInsets.only(bottom: 18),
               decoration: BoxDecoration(
-                color: c.line,
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-
-          // Title
-          Text(
+          const Text(
             'Account Info',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.02 * 20,
-              color: c.ink,
+              color: AppColors.textPrimary,
             ),
           ),
-
-          // Info card
           const SizedBox(height: 14),
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: c.line, width: 1),
+              color: AppColors.surface,
+              border: Border.all(color: AppColors.divider, width: 1),
               borderRadius: BorderRadius.circular(18),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (profile.hasCustomName) ...[
+                  _InfoRow(
+                    label: 'Name',
+                    value: profile.displayName!,
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.divider),
+                ],
                 _InfoRow(
-                  label: 'Handle',
+                  label: 'Username',
                   value: profile.displayHandle,
                 ),
-                Divider(height: 1, thickness: 1, color: c.line),
+                const Divider(height: 1, thickness: 1, color: AppColors.divider),
                 _InfoRow(
                   label: 'Phone',
                   value: _formatPhone(profile.phone),
                 ),
-                Divider(height: 1, thickness: 1, color: c.line),
+                const Divider(height: 1, thickness: 1, color: AppColors.divider),
                 _InfoRow(
                   label: 'Joined',
                   value: profile.joinedFormatted,
                 ),
+                const Divider(height: 1, thickness: 1, color: AppColors.divider),
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final repo = FriendRepository()
+                      ..currentUserHandle = profile.handle;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => FriendRequestsScreen(
+                          repository: repo,
+                          currentUserHandle: profile.handle,
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Friend Requests',
+                          style: TextStyle(fontSize: 14.5, color: AppColors.textMuted),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'View requests',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.textMuted),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-
-          // Done button
           const SizedBox(height: 20),
           _DoneButton(onTap: () => Navigator.of(context).pop()),
         ],
@@ -100,7 +141,6 @@ class AccountInfoSheet extends StatelessWidget {
   }
 }
 
-/// A single row inside the account info card.
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.label, required this.value});
 
@@ -109,7 +149,6 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       child: Row(
@@ -117,17 +156,17 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 14.5, color: c.muted),
+            style: const TextStyle(fontSize: 14.5, color: AppColors.textMuted),
           ),
           const SizedBox(width: 16),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w700,
-                color: c.ink,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -150,7 +189,6 @@ class _DoneButtonState extends State<_DoneButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Semantics(
@@ -172,16 +210,16 @@ class _DoneButtonState extends State<_DoneButton> {
             height: 54,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: c.btn,
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(16),
             ),
             alignment: Alignment.center,
-            child: Text(
+            child: const Text(
               'Done',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: c.btnink,
+                color: Colors.white,
               ),
             ),
           ),
@@ -191,7 +229,6 @@ class _DoneButtonState extends State<_DoneButton> {
   }
 }
 
-/// Shows [AccountInfoSheet] with the spec animation style.
 void showAccountInfoSheet(BuildContext context, {required UserProfile profile}) {
   final disableAnimations = MediaQuery.of(context).disableAnimations;
   showModalBottomSheet<void>(

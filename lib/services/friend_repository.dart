@@ -7,7 +7,8 @@ import '../models/friendship_model.dart';
 import '../models/block_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
-import 'notification_service.dart';
+import '../core/utils/api_error.dart';
+import '../core/services/badge_cache_service.dart';
 
 enum RelationshipStatus {
   none,
@@ -120,6 +121,15 @@ class FriendRepository {
           if (other.isNotEmpty && !seenFriends.contains(other)) {
             seenFriends.add(other);
             friendsList.add(f);
+            final isVerified = map['isVerified'] == true || map['is_verified'] == 1;
+            final badge = (map['authorBadge'] ?? map['author_badge'] ?? map['badge']) as String?;
+            final founderSeq = map['founderSeq'] as int?;
+            BadgeCacheService.instance.setBadge(
+              other,
+              isVerified: isVerified,
+              badgeText: badge,
+              founderSeq: founderSeq,
+            );
           }
         }
         _cachedFriends = friendsList;
@@ -152,6 +162,15 @@ class FriendRepository {
           if (sender.isNotEmpty && !seenRecv.contains(sender)) {
             seenRecv.add(sender);
             recvList.add(req);
+            final isVerified = map['isVerified'] == true || map['is_verified'] == 1;
+            final badge = (map['authorBadge'] ?? map['author_badge'] ?? map['badge']) as String?;
+            final founderSeq = map['founderSeq'] as int?;
+            BadgeCacheService.instance.setBadge(
+              sender,
+              isVerified: isVerified,
+              badgeText: badge,
+              founderSeq: founderSeq,
+            );
           }
         }
         _cachedPendingRequests = recvList;
@@ -165,6 +184,15 @@ class FriendRepository {
           if (receiver.isNotEmpty && !seenSent.contains(receiver)) {
             seenSent.add(receiver);
             sentList.add(req);
+            final isVerified = map['isVerified'] == true || map['is_verified'] == 1;
+            final badge = (map['authorBadge'] ?? map['author_badge'] ?? map['badge']) as String?;
+            final founderSeq = map['founderSeq'] as int?;
+            BadgeCacheService.instance.setBadge(
+              receiver,
+              isVerified: isVerified,
+              badgeText: badge,
+              founderSeq: founderSeq,
+            );
           }
         }
         _cachedSentRequests = sentList;
@@ -302,20 +330,10 @@ class FriendRepository {
       );
       _sentRequestsController.add(List.unmodifiable(_cachedSentRequests));
 
-      NotificationService().sendNotification(
-        targetHandle: them,
-        title: 'New Friend Request',
-        body: '@$me sent you a friend request',
-        data: {
-          'type': 'friend_request',
-          'senderHandle': me,
-        },
-      ).catchError((_) {});
-
       return RelationshipStatus.requestSentByMe;
     } else {
       final data = jsonDecode(res.body);
-      final errorMsg = data['error']?['message'] ?? data['error'] ?? data['detail'] ?? 'Failed to send friend request';
+      final errorMsg = extractApiError(data, 'Failed to send friend request');
       throw Exception(errorMsg);
     }
   }
@@ -354,19 +372,9 @@ class FriendRepository {
       _cachedFriends.insert(0, newFriendship);
       _friendsController.add(List.unmodifiable(_cachedFriends));
 
-      NotificationService().sendNotification(
-        targetHandle: them,
-        title: 'Friend Request Accepted',
-        body: '@$me accepted your friend request! Tap to start chatting.',
-        data: {
-          'type': 'chat',
-          'partnerHandle': me,
-          'senderHandle': me,
-        },
-      ).catchError((_) {});
     } else {
       final data = jsonDecode(res.body);
-      final errorMsg = data['error']?['message'] ?? data['error'] ?? data['detail'] ?? 'Failed to accept friend request';
+      final errorMsg = extractApiError(data, 'Failed to accept friend request');
       throw Exception(errorMsg);
     }
   }
@@ -577,6 +585,16 @@ class FriendRepository {
           if (handle.isEmpty || handle == myHandle || seen.contains(handle)) continue;
           seen.add(handle);
           deduped.add(map);
+
+          final isVerified = map['isVerified'] == true || map['is_verified'] == 1;
+          final badge = (map['authorBadge'] ?? map['author_badge'] ?? map['badge']) as String?;
+          final founderSeq = map['founderSeq'] as int?;
+          BadgeCacheService.instance.setBadge(
+            handle,
+            isVerified: isVerified,
+            badgeText: badge,
+            founderSeq: founderSeq,
+          );
         }
         return deduped;
       }
@@ -604,7 +622,18 @@ class FriendRepository {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final prof = (data['profile'] ?? data['user']) as Map<String, dynamic>?;
-        if (prof != null) return prof;
+        if (prof != null) {
+          final isVerified = prof['isVerified'] == true || prof['is_verified'] == 1;
+          final badge = (prof['authorBadge'] ?? prof['author_badge'] ?? prof['badge']) as String?;
+          final founderSeq = prof['founderSeq'] as int?;
+          BadgeCacheService.instance.setBadge(
+            clean,
+            isVerified: isVerified,
+            badgeText: badge,
+            founderSeq: founderSeq,
+          );
+          return prof;
+        }
       }
     } catch (e) {
       debugPrint('[FriendRepository] getUserByHandle profile error: $e');

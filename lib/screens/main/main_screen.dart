@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../theme/app_colors.dart';
 import '../../services/post_repository.dart';
 import '../feed/feed_screen.dart';
 import '../bazar/bazar_screen.dart';
@@ -6,8 +8,13 @@ import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../services/notification_service.dart';
 import '../../services/direct_chat_service.dart';
+import '../../services/rewards_service.dart';
+import '../../services/auth_service.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../features/auth/widgets/confirm_area_sheet.dart';
+import '../../features/auth/widgets/city_paused_dialog.dart';
+import '../auth/create_handle_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final PostRepository repository;
@@ -34,6 +41,71 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     for (int i = 0; i < 4; i++) {
       _cachedTabs[i] = _createTab(i);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAreaAndCityStatus();
+    });
+  }
+
+  Future<void> _checkAreaAndCityStatus() async {
+    final me = await AuthService.instance.fetchMe();
+    if (!mounted || me == null) return;
+
+    final cityStatus = me['city_status'] as String? ?? me['user']?['cityStatus'] as String? ?? 'active';
+    final cityMessage = me['city_message'] as String? ?? me['user']?['cityMessage'] as String?;
+    final areaConfirmed = me['area_confirmed'] == 1 || me['user']?['areaConfirmed'] == true;
+    final areaName = me['user']?['areaName'] as String? ?? me['user']?['areaId'] as String? ?? 'Alkapuri';
+    final cityName = me['user']?['cityId'] as String? ?? 'Vadodara';
+
+    if (cityStatus == 'paused') {
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (_) => CityPausedDialog(
+          message: cityMessage,
+          cityName: cityName,
+        ),
+      );
+    } else if (!areaConfirmed) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => ConfirmAreaSheet(
+          currentAreaName: areaName,
+          currentCityName: cityName,
+          onAreaConfirmed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Area successfully confirmed!'),
+                backgroundColor: AppColors.primary,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+          onChangeArea: () async {
+            final result = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (_) => CreateHandleScreen(
+                  repository: widget.repository,
+                  userId: '',
+                  isChangeArea: true,
+                ),
+              ),
+            );
+            if (result == true && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Area successfully updated!'),
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              _checkAreaAndCityStatus();
+            }
+          },
+        ),
+      );
+    }
   }
 
   @override
@@ -45,6 +117,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   void _onTabTapped(int index) {
     if (_currentIndexNotifier.value == index) return;
     _currentIndexNotifier.value = index;
+    if (index == 0 || index == 3) {
+      RewardsService.instance.fetchSummary();
+    }
   }
 
   Widget _getOrCreateTab(int index) {
@@ -83,112 +158,123 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: ValueListenableBuilder<int>(
-        valueListenable: _currentIndexNotifier,
-        builder: (context, currentIndex, _) {
-          return IndexedStack(
-            index: currentIndex,
-            children: List.generate(4, (index) => _getOrCreateTab(index)),
-          );
-        },
-      ),
-      bottomNavigationBar: ValueListenableBuilder<int>(
-        valueListenable: _currentIndexNotifier,
-        builder: (context, currentIndex, _) {
-          const barBg = Colors.black;
-          const borderColor = Color(0xFF072E33);
-          const activePillColor = Color(0xFF072E33);
-
-          return Container(
-            decoration: const BoxDecoration(
-              color: barBg,
-              border: Border(
-                top: BorderSide(color: borderColor, width: 1.5),
-              ),
+    return ValueListenableBuilder<int>(
+      valueListenable: _currentIndexNotifier,
+      builder: (context, currentIndex, _) {
+        return PopScope(
+          canPop: currentIndex == 0,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (currentIndex != 0) {
+              _onTabTapped(0);
+            }
+          },
+          child: Scaffold(
+            backgroundColor: AppColors.background,
+            body: IndexedStack(
+              index: currentIndex,
+              children: List.generate(4, (index) => _getOrCreateTab(index)),
             ),
-            child: SafeArea(
-              child: SizedBox(
-                height: 56,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final itemWidth = constraints.maxWidth / 4;
-                      final pillColumn = currentIndex;
-                      return Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [
-                          // Active indicator pill with Deep Teal #072E33
-                          AnimatedPositioned(
-                            duration: AppMotion.durationMicro,
-                            curve: AppMotion.interactiveCurve,
-                            left: pillColumn * itemWidth + (itemWidth - 56) / 2,
-                            width: 56,
-                            top: 4,
-                            bottom: 4,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: activePillColor,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFF0E525B), width: 1.0),
-                              ),
-                            ),
-                          ),
-                          // Navigation items
-                          Row(
+            bottomNavigationBar: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: const SystemUiOverlayStyle(
+                systemNavigationBarColor: Colors.transparent,
+                systemNavigationBarDividerColor: Colors.transparent,
+                systemNavigationBarIconBrightness: Brightness.dark,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 16,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  left: false,
+                  right: false,
+                  child: SizedBox(
+                    height: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final itemWidth = constraints.maxWidth / 4;
+                          final pillColumn = currentIndex;
+                          return Stack(
+                            alignment: Alignment.centerLeft,
                             children: [
-                              _buildNavItem(
-                                index: 0,
-                                currentIndex: currentIndex,
-                                icon: Icons.home_outlined,
-                                selectedIcon: Icons.home_rounded,
-                                tooltip: 'Home',
+                              AnimatedPositioned(
+                                duration: AppMotion.durationMicro,
+                                curve: AppMotion.interactiveCurve,
+                                left: pillColumn * itemWidth + (itemWidth - 58) / 2,
+                                width: 58,
+                                top: 0,
+                                bottom: 0,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDBF1E3),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                ),
                               ),
-                              _buildNavItem(
-                                index: 1,
-                                currentIndex: currentIndex,
-                                icon: Icons.storefront_outlined,
-                                selectedIcon: Icons.storefront_rounded,
-                                tooltip: 'Bazar',
-                              ),
-                              ValueListenableBuilder<int>(
-                                valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                builder: (context, preloadedUnread, _) {
-                                  return StreamBuilder<int>(
-                                    initialData: preloadedUnread,
-                                    stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
-                                    builder: (context, snapshot) {
-                                      final unreadCount = snapshot.data ?? preloadedUnread;
-                                      return _buildNavItem(
-                                        index: 2,
-                                        currentIndex: currentIndex,
-                                        icon: Icons.chat_bubble_outline_rounded,
-                                        selectedIcon: Icons.chat_bubble_rounded,
-                                        tooltip: 'Chats',
-                                        badgeCount: unreadCount,
+                              Row(
+                                children: [
+                                  _buildNavItem(
+                                    index: 0,
+                                    currentIndex: currentIndex,
+                                    icon: Icons.home_outlined,
+                                    selectedIcon: Icons.home_rounded,
+                                    tooltip: 'Home',
+                                  ),
+                                  _buildNavItem(
+                                    index: 1,
+                                    currentIndex: currentIndex,
+                                    icon: Icons.storefront_outlined,
+                                    selectedIcon: Icons.storefront_rounded,
+                                    tooltip: 'Bazar',
+                                  ),
+                                  ValueListenableBuilder<int>(
+                                    valueListenable: DirectChatService.instance.unreadCountNotifier,
+                                    builder: (context, preloadedUnread, _) {
+                                      return StreamBuilder<int>(
+                                        initialData: preloadedUnread,
+                                        stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
+                                        builder: (context, snapshot) {
+                                          final unreadCount = snapshot.data ?? preloadedUnread;
+                                          return _buildNavItem(
+                                            index: 2,
+                                            currentIndex: currentIndex,
+                                            icon: Icons.chat_bubble_outline_rounded,
+                                            selectedIcon: Icons.chat_bubble_rounded,
+                                            tooltip: 'Chats',
+                                            badgeCount: unreadCount,
+                                          );
+                                        },
                                       );
                                     },
-                                  );
-                                },
-                              ),
-                              // Profile tab
-                              _buildProfileNavItem(
-                                currentIndex: currentIndex,
+                                  ),
+                                  _buildProfileNavItem(
+                                    currentIndex: currentIndex,
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ],
-                      );
-                    },
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -201,8 +287,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     int badgeCount = 0,
   }) {
     final isSelected = currentIndex == index;
-    const selectedColor = Colors.white;
-    const unselectedColor = Color(0xFF90B4B6);
 
     return Expanded(
       child: Material(
@@ -228,7 +312,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                       child: Icon(
                         isSelected ? selectedIcon : icon,
                         size: 25,
-                        color: isSelected ? selectedColor : unselectedColor,
+                        color: isSelected ? AppColors.primary : AppColors.textMuted,
                       ),
                     ),
                     if (badgeCount > 0)
@@ -239,10 +323,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444),
+                            color: AppColors.error,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: Colors.black,
+                              color: AppColors.surface,
                               width: 1.5,
                             ),
                           ),
@@ -308,7 +392,6 @@ class _ProfileNavAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const ringColor = Colors.white;
     final borderWidth = isSelected ? 2.0 : 0.0;
 
     return AnimatedScale(
@@ -321,7 +404,7 @@ class _ProfileNavAvatar extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? ringColor : Colors.transparent,
+            color: isSelected ? AppColors.primary : Colors.transparent,
             width: borderWidth,
           ),
         ),
@@ -336,4 +419,3 @@ class _ProfileNavAvatar extends StatelessWidget {
     );
   }
 }
-

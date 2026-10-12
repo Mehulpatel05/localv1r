@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'location_models.dart';
+import 'all_india_data.dart';
 export 'location_models.dart';
+export 'all_india_data.dart' show kAllIndiaStates;
 
 // ── 2. HIGH-SPEED CONSOLIDATED ENGINE WITH O(1) HASH INDEXES ────────────────
 class LocationEngine {
   static final Map<String, GeoCity> _cityIndex = {};
+  static final Map<String, GeoArea> _areaIndex = {};
   static final Map<String, GeoArea> _pincodeIndex = {};
   static bool _isIndexed = false;
 
@@ -17,6 +20,7 @@ class LocationEngine {
         _cityIndex[city.id] = city;
         if (city.pincode != null) _pincodeIndex[city.pincode!] = city.areas.firstOrNull ?? GeoArea(id: city.id, cityId: city.id, name: city.name);
         for (final area in city.areas) {
+          _areaIndex[area.id] = area;
           if (area.pincode != null) _pincodeIndex[area.pincode!] = area;
         }
       }
@@ -28,6 +32,12 @@ class LocationEngine {
   static GeoCity? lookupCity(String cityId) {
     _ensureIndexed();
     return _cityIndex[cityId];
+  }
+
+  /// O(1) Lookup by Area ID (e.g. 'GJ-VAD-ALKAPURI')
+  static GeoArea? lookupArea(String areaId) {
+    _ensureIndexed();
+    return _areaIndex[areaId];
   }
 
   /// O(1) Lookup by 6-Digit PIN Code
@@ -97,117 +107,6 @@ class LocationEngine {
 }
 
 // ── 3. PAN-INDIA MASTER DATASET ──────────────────────────────────────────────
-const kPanIndiaStates = [
-  GeoState(
-    id: 'GJ',
-    name: 'Gujarat',
-    cities: [
-      GeoCity(
-        id: 'GJ-VAD',
-        stateId: 'GJ',
-        name: 'Vadodara',
-        enabled: true,
-        lat: 22.3072,
-        lng: 73.1812,
-        pincode: '390001',
-        areas: [
-          GeoArea(id: 'GJ-VAD-GENERAL', cityId: 'GJ-VAD', name: 'General / All Vadodara', lat: 22.3072, lng: 73.1812),
-          GeoArea(id: 'GJ-VAD-ALKAPURI', cityId: 'GJ-VAD', name: 'Alkapuri', pincode: '390007', lat: 22.3120, lng: 73.1740),
-          GeoArea(id: 'GJ-VAD-SAYAJIGUNJ', cityId: 'GJ-VAD', name: 'Sayajigunj', pincode: '390005', lat: 22.3100, lng: 73.1880),
-          GeoArea(id: 'GJ-VAD-GOTRI', cityId: 'GJ-VAD', name: 'Gotri', pincode: '390021', lat: 22.3180, lng: 73.1430),
-          GeoArea(id: 'GJ-VAD-MANJALPUR', cityId: 'GJ-VAD', name: 'Manjalpur', pincode: '390011', lat: 22.2680, lng: 73.1960),
-          GeoArea(id: 'GJ-VAD-KARELIBAUG', cityId: 'GJ-VAD', name: 'Karelibaug', pincode: '390018', lat: 22.3270, lng: 73.1970),
-          GeoArea(id: 'GJ-VAD-FATEHGUNJ', cityId: 'GJ-VAD', name: 'Fatehgunj', pincode: '390002', lat: 22.3250, lng: 73.1860),
-          GeoArea(id: 'GJ-VAD-SUBHANPURA', cityId: 'GJ-VAD', name: 'Subhanpura', pincode: '390023', lat: 22.3210, lng: 73.1550),
-          GeoArea(id: 'GJ-VAD-AKOTA', cityId: 'GJ-VAD', name: 'Akota', pincode: '390020', lat: 22.2960, lng: 73.1700),
-          GeoArea(id: 'GJ-VAD-VASNA', cityId: 'GJ-VAD', name: 'Vasna', pincode: '390007', lat: 22.2880, lng: 73.1520),
-          GeoArea(id: 'GJ-VAD-BHAYLI', cityId: 'GJ-VAD', name: 'Bhayli', pincode: '391410', lat: 22.2790, lng: 73.1250),
-        ],
-      ),
-      GeoCity(
-        id: 'GJ-SRT',
-        stateId: 'GJ',
-        name: 'Surat',
-        enabled: true,
-        lat: 21.1702,
-        lng: 72.8311,
-        pincode: '395003',
-        areas: [
-          GeoArea(id: 'GJ-SRT-VESU', cityId: 'GJ-SRT', name: 'Vesu', pincode: '395007', lat: 21.1418, lng: 72.7709),
-          GeoArea(id: 'GJ-SRT-ADAJAN', cityId: 'GJ-SRT', name: 'Adajan', pincode: '395009', lat: 21.1959, lng: 72.7933),
-        ],
-      ),
-    ],
-  ),
-  GeoState(
-    id: 'MH',
-    name: 'Maharashtra',
-    cities: [
-      GeoCity(
-        id: 'MH-MUM',
-        stateId: 'MH',
-        name: 'Mumbai',
-        enabled: true,
-        lat: 19.0760,
-        lng: 72.8777,
-        pincode: '400001',
-        areas: [
-          GeoArea(id: 'MH-MUM-BANDRA', cityId: 'MH-MUM', name: 'Bandra West', pincode: '400050', lat: 19.0596, lng: 72.8295),
-          GeoArea(id: 'MH-MUM-ANDHERI', cityId: 'MH-MUM', name: 'Andheri West', pincode: '400058', lat: 19.1136, lng: 72.8397),
-          GeoArea(id: 'MH-MUM-POWAI', cityId: 'MH-MUM', name: 'Powai', pincode: '400076', lat: 19.1176, lng: 72.9060),
-        ],
-      ),
-      GeoCity(
-        id: 'MH-PUN',
-        stateId: 'MH',
-        name: 'Pune',
-        enabled: true,
-        lat: 18.5204,
-        lng: 73.8567,
-        pincode: '411001',
-        areas: [
-          GeoArea(id: 'MH-PUN-BANER', cityId: 'MH-PUN', name: 'Baner', pincode: '411045', lat: 18.5590, lng: 73.7868),
-          GeoArea(id: 'MH-PUN-HINJEWADI', cityId: 'MH-PUN', name: 'Hinjewadi', pincode: '411057', lat: 18.5912, lng: 73.7389),
-        ],
-      ),
-    ],
-  ),
-  GeoState(
-    id: 'DL',
-    name: 'Delhi NCR',
-    cities: [
-      GeoCity(
-        id: 'DL-DEL',
-        stateId: 'DL',
-        name: 'New Delhi',
-        enabled: true,
-        lat: 28.6139,
-        lng: 77.2090,
-        pincode: '110001',
-        areas: [
-          GeoArea(id: 'DL-DEL-CP', cityId: 'DL-DEL', name: 'Connaught Place', pincode: '110001', lat: 28.6315, lng: 77.2167),
-          GeoArea(id: 'DL-DEL-DWARKA', cityId: 'DL-DEL', name: 'Dwarka', pincode: '110075', lat: 28.5921, lng: 77.0460),
-        ],
-      ),
-    ],
-  ),
-  GeoState(
-    id: 'KA',
-    name: 'Karnataka',
-    cities: [
-      GeoCity(
-        id: 'KA-BLR',
-        stateId: 'KA',
-        name: 'Bengaluru (Bangalore)',
-        enabled: true,
-        lat: 12.9716,
-        lng: 77.5946,
-        pincode: '560001',
-        areas: [
-          GeoArea(id: 'KA-BLR-INDIRA', cityId: 'KA-BLR', name: 'Indiranagar', pincode: '560038', lat: 12.9784, lng: 77.6408),
-          GeoArea(id: 'KA-BLR-KORA', cityId: 'KA-BLR', name: 'Koramangala', pincode: '560034', lat: 12.9352, lng: 77.6245),
-        ],
-      ),
-    ],
-  ),
-];
+// Only Vadodara is enabled (true); all other cities across all states are "Coming soon" (enabled: false)
+const kPanIndiaStates = kAllIndiaStates;
+

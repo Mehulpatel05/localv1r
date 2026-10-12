@@ -52,30 +52,30 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyA5W6f7ImUCdtO84k8j8igQpQoddqDSSxY',
-    appId: '1:426704624424:android:ab4c743cca4df07a128e1d',
+    appId: '1:426704624424:android:2f864d1865b4ba9d128e1d',
     messagingSenderId: '426704624424',
     projectId: 'local1-e61cb',
     storageBucket: 'local1-e61cb.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCPp8tC3eMj6DCM7lxFlfUZMBO_WB68hzw',
-    appId: '1:426704624424:ios:b9b54dbc782ef1b5128e1d',
+    appId: '1:426704624424:ios:47a89ff540889d27128e1d',
     messagingSenderId: '426704624424',
     projectId: 'local1-e61cb',
     storageBucket: 'local1-e61cb.firebasestorage.app',
     androidClientId: '426704624424-3hgh2ba1d1r8o80mp8ounr86tog8c8gc.apps.googleusercontent.com',
-    iosClientId: '426704624424-0q5hla855122090d13bu49888i43vm9d.apps.googleusercontent.com',
-    iosBundleId: 'com.nearhood.app',
+    iosClientId: '426704624424-g1jqita6rn6r127hhvgh05379vh552g6.apps.googleusercontent.com',
+    iosBundleId: 'com.social.nearhood',
   );
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCPp8tC3eMj6DCM7lxFlfUZMBO_WB68hzw',
-    appId: '1:426704624424:ios:c21b5c40184939d9128e1d',
+    appId: '1:426704624424:ios:47a89ff540889d27128e1d',
     messagingSenderId: '426704624424',
     projectId: 'local1-e61cb',
     storageBucket: 'local1-e61cb.firebasestorage.app',
     androidClientId: '426704624424-3hgh2ba1d1r8o80mp8ounr86tog8c8gc.apps.googleusercontent.com',
-    iosClientId: '426704624424-h7otks6hhu62j90nc3m05p44f1fhlqra.apps.googleusercontent.com',
-    iosBundleId: 'com.example.localv1',
+    iosClientId: '426704624424-g1jqita6rn6r127hhvgh05379vh552g6.apps.googleusercontent.com',
+    iosBundleId: 'com.social.nearhood',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

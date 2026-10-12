@@ -1,12 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'create_bazar_listing_screen.dart';
 import 'shop_detail_screen.dart';
 import '../chat/personal_chat_screen.dart';
-import '../../core/models/user_profile.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/auth_service.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../services/rewards_service.dart';
+import '../rewards/boost_listing_screen.dart';
+import '../rewards/shop_perks_screen.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../core/widgets/user_avatar.dart';
+import '../../core/services/badge_cache_service.dart';
+import '../../theme/app_colors.dart';
 
 class BazarProduct {
   final String id;
@@ -16,11 +24,16 @@ class BazarProduct {
   final double distanceKm;
   final String imageUrl;
   final String sellerHandle;
+  final String? sellerName;
   final String location;
   final String description;
   final int viewsCount;
   final int chatsCount;
   bool isSold;
+  final bool isBoosted;
+  final int boostHoursLeft;
+  final bool isVerified;
+  final String? authorBadge;
   final DateTime createdAt;
 
   BazarProduct({
@@ -31,13 +44,22 @@ class BazarProduct {
     required this.distanceKm,
     required this.imageUrl,
     required this.sellerHandle,
+    this.sellerName,
     required this.location,
     required this.description,
     this.viewsCount = 0,
     this.chatsCount = 0,
     this.isSold = false,
+    this.isBoosted = false,
+    this.boostHoursLeft = 0,
+    this.isVerified = false,
+    this.authorBadge,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
+
+  String get displaySellerName {
+    return NameCacheService.instance.getDisplayName(sellerHandle, fallback: sellerName);
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -47,11 +69,16 @@ class BazarProduct {
         'distanceKm': distanceKm,
         'imageUrl': imageUrl,
         'sellerHandle': sellerHandle,
+        'sellerName': sellerName,
         'location': location,
         'description': description,
         'viewsCount': viewsCount,
         'chatsCount': chatsCount,
         'isSold': isSold,
+        'isBoosted': isBoosted,
+        'boostHoursLeft': boostHoursLeft,
+        'isVerified': isVerified,
+        'authorBadge': authorBadge,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -70,10 +97,30 @@ class BazarProduct {
     }
 
     final sHandle = (json['sellerHandle'] ?? json['seller_handle'] ?? '') as String;
+    final sName = (json['sellerDisplayName'] ?? json['sellerName'] ?? json['seller_display_name']) as String?;
+    final cleanSellerName = (sName != null && sName.trim().isNotEmpty) ? sName.trim() : null;
+    if (cleanSellerName != null && sHandle.isNotEmpty) {
+      NameCacheService.instance.setCachedName(sHandle.replaceAll('@', ''), cleanSellerName);
+    }
+
+    final isVerified = json['isVerified'] == true || json['is_verified'] == 1;
+    final authorBadge = (json['authorBadge'] ?? json['author_badge'] ?? json['badge']) as String?;
+    if (sHandle.isNotEmpty) {
+      BadgeCacheService.instance.setBadge(
+        sHandle.replaceAll('@', ''),
+        isVerified: isVerified,
+        badgeText: authorBadge,
+      );
+    }
+
     final views = json['viewsCount'] ?? json['views_count'] ?? 0;
     final chats = json['chatsCount'] ?? json['chats_count'] ?? 0;
     final isActive = json['is_active'];
     final isSold = json['isSold'] ?? (isActive != null ? isActive == 0 : false);
+    final isBoosted = json['is_boosted'] == true || json['isBoosted'] == true;
+    final boostHours = json['boost_hours_left'] is num
+        ? (json['boost_hours_left'] as num).toInt()
+        : (json['boostHoursLeft'] is num ? (json['boostHoursLeft'] as num).toInt() : 0);
 
     return BazarProduct(
       id: (json['id'] ?? '').toString(),
@@ -87,11 +134,16 @@ class BazarProduct {
           : (json['distance_km'] is num ? (json['distance_km'] as num).toDouble() : 0.8),
       imageUrl: img,
       sellerHandle: sHandle,
+      sellerName: cleanSellerName,
       location: (json['location'] ?? 'Vadodara').toString(),
       description: (json['description'] ?? '').toString(),
       viewsCount: views is num ? views.toInt() : 0,
       chatsCount: chats is num ? chats.toInt() : 0,
       isSold: isSold == true,
+      isBoosted: isBoosted,
+      boostHoursLeft: boostHours,
+      isVerified: isVerified,
+      authorBadge: authorBadge,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
@@ -110,9 +162,9 @@ class BazarProduct {
       return Container(
         width: width,
         height: height,
-        color: const Color(0xFF0E525B),
+        color: AppColors.chipBg,
         child: Center(
-          child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+          child: Icon(fallbackIcon, color: AppColors.textMuted, size: fallbackIconSize),
         ),
       );
     }
@@ -130,9 +182,9 @@ class BazarProduct {
             errorBuilder: (ctx, err, stack) => Container(
               width: width,
               height: height,
-              color: const Color(0xFF0E525B),
+              color: AppColors.chipBg,
               child: Center(
-                child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+                child: Icon(fallbackIcon, color: AppColors.textMuted, size: fallbackIconSize),
               ),
             ),
           );
@@ -148,9 +200,9 @@ class BazarProduct {
       errorBuilder: (ctx, err, stack) => Container(
         width: width,
         height: height,
-        color: const Color(0xFF0E525B),
+        color: AppColors.chipBg,
         child: Center(
-          child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+          child: Icon(fallbackIcon, color: AppColors.textMuted, size: fallbackIconSize),
         ),
       ),
       loadingBuilder: (ctx, child, progress) {
@@ -158,12 +210,12 @@ class BazarProduct {
         return Container(
           width: width,
           height: height,
-          color: const Color(0xFF0E525B),
-          child: const Center(
+          color: AppColors.chipBg,
+          child: Center(
             child: SizedBox(
               width: 22,
               height: 22,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
             ),
           ),
         );
@@ -189,7 +241,7 @@ class BazarScreen extends StatefulWidget {
 class _BazarScreenState extends State<BazarScreen> {
   late bool _showMyListings;
   String _selectedCategory = 'All';
-  String _myListingsTab = 'Active'; // 'Active' or 'Sold'
+  String _myListingsTab = 'Active';
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -214,16 +266,25 @@ class _BazarScreenState extends State<BazarScreen> {
 
     if (newProduct != null) {
       setState(() {
+        _allProducts.removeWhere((p) => p.id == newProduct.id);
+        _allProducts.insert(0, newProduct);
         _showMyListings = true;
         _myListingsTab = 'Active';
       });
 
+      RewardsService.instance.addPoints(10);
+      unawaited(BazarRepository.instance.fetchListings());
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF072E33),
-            content: Text('🎉 Listed "${newProduct.title}" on Bazaar!'),
+            backgroundColor: AppColors.textPrimary,
+            content: Text(
+              '🎉 Listed "${newProduct.title}" on Bazaar! (+10 pts)',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -276,7 +337,9 @@ class _BazarScreenState extends State<BazarScreen> {
         }
       }
       _allProducts = uniqueProducts;
-      _localShops = List.from(BazarRepository.instance.shops);
+      _localShops = BazarRepository.instance.shops
+          .where((s) => s.status == 'active')
+          .toList();
     });
   }
 
@@ -289,15 +352,12 @@ class _BazarScreenState extends State<BazarScreen> {
 
   List<BazarProduct> get _filteredProducts {
     return _allProducts.where((product) {
-      // Exclude items marked as sold from general browse
       if (product.isSold) return false;
 
-      // Category filter
       if (_selectedCategory != 'All' && product.category != _selectedCategory) {
         return false;
       }
 
-      // Search query filter
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         final matchTitle = product.title.toLowerCase().contains(q);
@@ -341,13 +401,58 @@ class _BazarScreenState extends State<BazarScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF072E33),
+        backgroundColor: AppColors.textPrimary,
         content: Text(
           statusMsg,
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _confirmDeleteProduct(BazarProduct product) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete Listing',
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${product.title}"? This item will be permanently removed.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await BazarRepository.instance.deleteProduct(product.id);
+              if (mounted) {
+                _onBazarRepoChanged();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Listing deleted successfully'),
+                    backgroundColor: AppColors.textPrimary,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -363,250 +468,284 @@ class _BazarScreenState extends State<BazarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isPushedFromProfile = widget.initialShowMyListings;
     final canPop = Navigator.canPop(context);
-    final showBackButton = canPop || _showMyListings;
+    final showBackButton = isPushedFromProfile || _showMyListings || _isSearching;
 
     return PopScope(
-      canPop: !_showMyListings && canPop,
+      canPop: isPushedFromProfile
+          ? !_isSearching && canPop
+          : !_isSearching && !_showMyListings,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (_showMyListings) {
+        if (_isSearching) {
+          setState(() {
+            _isSearching = false;
+            _searchQuery = '';
+            _searchController.clear();
+          });
+          return;
+        }
+        if (!isPushedFromProfile && _showMyListings) {
           setState(() {
             _showMyListings = false;
           });
+          return;
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: Colors.black,
+          backgroundColor: AppColors.surface,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: showBackButton
               ? IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
                   onPressed: () {
-                    if (_showMyListings) {
+                    if (_isSearching) {
+                      setState(() {
+                        _isSearching = false;
+                        _searchQuery = '';
+                        _searchController.clear();
+                      });
+                    } else if (isPushedFromProfile) {
+                      Navigator.pop(context);
+                    } else if (_showMyListings) {
                       setState(() {
                         _showMyListings = false;
                       });
-                    } else if (canPop) {
-                      Navigator.pop(context);
                     }
                   },
                 )
               : null,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                onChanged: (val) {
+          title: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search products in Bazaar...',
+                    hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+                    border: InputBorder.none,
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _showMyListings ? 'My Listings' : 'Bazaar',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Near Alkapuri, Vadodara',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+          actions: [
+            if (!_showMyListings)
+              IconButton(
+                icon: Icon(
+                  _isSearching ? Icons.close : Icons.search_rounded,
+                  color: AppColors.textPrimary,
+                ),
+                onPressed: () {
                   setState(() {
-                    _searchQuery = val;
+                    _isSearching = !_isSearching;
+                    if (!_isSearching) {
+                      _searchQuery = '';
+                      _searchController.clear();
+                    }
                   });
                 },
-                decoration: const InputDecoration(
-                  hintText: 'Search products in Bazaar...',
-                  hintStyle: TextStyle(color: Color(0xFF90B4B6), fontSize: 15),
-                  border: InputBorder.none,
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _showMyListings ? 'My Listings' : 'Bazaar',
+              ),
+            if (!isPushedFromProfile)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                  icon: Icon(
+                    _showMyListings ? Icons.storefront_rounded : Icons.shopping_bag_outlined,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _showMyListings ? 'Bazaar' : 'My Listings',
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Text(
-                    'Near Alkapuri, Vadodara',
-                    style: TextStyle(
-                      color: Color(0xFF90B4B6),
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
-                ],
-              ),
-        actions: [
-          if (!_showMyListings)
-            IconButton(
-              icon: Icon(
-                _isSearching ? Icons.close : Icons.search_rounded,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                setState(() {
-                  _isSearching = !_isSearching;
-                  if (!_isSearching) {
-                    _searchQuery = '';
-                    _searchController.clear();
-                  }
-                });
-              },
-            ),
-          // Toggle View Action Button (My Listings vs Browse)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: const Color(0xFF072E33),
-                side: const BorderSide(color: Color(0xFF0E525B)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              ),
-              icon: Icon(
-                _showMyListings ? Icons.storefront_rounded : Icons.shopping_bag_outlined,
-                size: 16,
-                color: Colors.white,
-              ),
-              label: Text(
-                _showMyListings ? 'Bazaar' : 'My Listings',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  onPressed: () {
+                    setState(() {
+                      _showMyListings = !_showMyListings;
+                      _isSearching = false;
+                      _searchQuery = '';
+                      _searchController.clear();
+                    });
+                  },
                 ),
               ),
-              onPressed: () {
-                setState(() {
-                  _showMyListings = !_showMyListings;
-                  _isSearching = false;
-                  _searchQuery = '';
-                  _searchController.clear();
-                });
-              },
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 4,
-        onPressed: _openPostScreen,
-        icon: const Icon(Icons.add_rounded, size: 22),
-        label: const Text(
-          'Post Item',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ],
         ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          onPressed: _openPostScreen,
+          icon: const Icon(Icons.add_rounded, size: 22),
+          label: const Text(
+            'Post Item',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+        ),
+        body: _showMyListings ? _buildMyListingsView() : _buildBrowseBazarView(),
       ),
-      body: _showMyListings ? _buildMyListingsView() : _buildBrowseBazarView(),
-    ),
-  );
-}
+    );
+  }
 
-  // --- BROWSE BAZAAR VIEW ---
   Widget _buildBrowseBazarView() {
     final products = _filteredProducts;
 
     return RefreshIndicator(
-      onRefresh: () => Future.wait([
-        BazarRepository.instance.fetchListings(),
-        BazarRepository.instance.fetchShops(),
-      ]),
-      color: Colors.white,
-      backgroundColor: const Color(0xFF072E33),
+      onRefresh: () async {
+        await Future.wait([
+          BazarRepository.instance.fetchListings(),
+          BazarRepository.instance.fetchShops(),
+        ]);
+        _onBazarRepoChanged();
+      },
+      color: AppColors.primary,
+      backgroundColor: AppColors.surface,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          // Horizontal Filter Chips
-          Container(
-            height: 48,
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                final cat = _categories[index];
-                final isSelected = _selectedCategory == cat;
+            Container(
+              height: 48,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final cat = _categories[index];
+                  final isSelected = _selectedCategory == cat;
 
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(
-                      cat,
-                      style: TextStyle(
-                        color: isSelected ? Colors.black : Colors.white,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                        fontSize: 13,
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        cat,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontSize: 13,
+                        ),
                       ),
+                      selected: isSelected,
+                      selectedColor: AppColors.primary,
+                      backgroundColor: AppColors.surface,
+                      side: BorderSide(
+                        color: isSelected ? AppColors.primary : AppColors.divider,
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      showCheckmark: false,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _selectedCategory = cat;
+                          });
+                        }
+                      },
                     ),
-                    selected: isSelected,
-                    selectedColor: Colors.white,
-                    backgroundColor: const Color(0xFF072E33),
-                    side: BorderSide(
-                      color: isSelected ? Colors.white : const Color(0xFF0E525B),
-                      width: 1,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    showCheckmark: false,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedCategory = cat;
-                        });
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Local shops near you Section (Matching Image 1: media_1790655154584.png)
-          _buildLocalShopsSection(),
-
-          // Section Header: Items for sale
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text(
-              'Items for sale',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                  );
+                },
               ),
             ),
-          ),
 
-          // 2-Column Product Grid
-          products.isEmpty
-              ? _buildEmptyState('No products found matching your search.')
-              : GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.75,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return _buildProductCard(product);
-                  },
+            _buildLocalShopsSection(),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Text(
+                'Items for sale',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-        ],
+              ),
+            ),
+
+            products.isEmpty
+                ? _buildEmptyState('No products found matching your search.')
+                : products.length == 1
+                    ? Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final cardWidth = (constraints.maxWidth - 14) / 2;
+                            return Align(
+                              alignment: Alignment.topLeft,
+                              child: SizedBox(
+                                width: cardWidth,
+                                child: AspectRatio(
+                                  aspectRatio: 0.75,
+                                  child: _buildProductCard(products.first),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                    : GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.75,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                        ),
+                        itemCount: products.length,
+                        itemBuilder: (context, index) {
+                          final product = products[index];
+                          return _buildProductCard(product);
+                        },
+                      ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildLocalShopsSection() {
     return Column(
@@ -617,10 +756,10 @@ class _BazarScreenState extends State<BazarScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Local shops near you',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -639,10 +778,10 @@ class _BazarScreenState extends State<BazarScreen> {
                       _showAllShopsSheet(context);
                     }
                   },
-                  child: const Text(
+                  child: Text(
                     'See all >',
                     style: TextStyle(
-                      color: Color(0xFF90B4B6),
+                      color: AppColors.primary,
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                     ),
@@ -658,18 +797,18 @@ class _BazarScreenState extends State<BazarScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF0E525B)),
+                    border: Border.all(color: AppColors.divider),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.storefront_rounded, color: Color(0xFF90B4B6), size: 28),
-                      SizedBox(width: 12),
+                      Icon(Icons.storefront_rounded, color: AppColors.textMuted, size: 28),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'No local shops registered near you yet.',
-                          style: TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                         ),
                       ),
                     ],
@@ -688,6 +827,76 @@ class _BazarScreenState extends State<BazarScreen> {
                   },
                 ),
               ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ShopPerksScreen(),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDE68A),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.local_offer_rounded,
+                      color: Color(0xFFD97706),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Shop Perks',
+                          style: TextStyle(
+                            color: Color(0xFFB45309),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Unlock discount coupons with points',
+                          style: TextStyle(
+                            color: Color(0xFF92400E),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFFD97706),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 8),
       ],
     );
@@ -696,7 +905,7 @@ class _BazarScreenState extends State<BazarScreen> {
   void _showAllShopsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF072E33),
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -712,16 +921,16 @@ class _BazarScreenState extends State<BazarScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0E525B),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'All Local Shops',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -731,7 +940,7 @@ class _BazarScreenState extends State<BazarScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: _localShops.length,
-                  separatorBuilder: (_, _) => const Divider(color: Color(0xFF0E525B), height: 1),
+                  separatorBuilder: (_, _) => Divider(color: AppColors.divider, height: 1),
                   itemBuilder: (context, index) {
                     final shop = _localShops[index];
                     return ListTile(
@@ -740,37 +949,37 @@ class _BazarScreenState extends State<BazarScreen> {
                         width: 46,
                         height: 46,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0E525B),
+                          color: AppColors.chipBg,
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF147A86), width: 1.5),
+                          border: Border.all(color: AppColors.divider, width: 1.5),
                         ),
                         alignment: Alignment.center,
                         child: Text(shop.categoryIcon, style: const TextStyle(fontSize: 22)),
                       ),
                       title: Text(
                         shop.name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
                       ),
                       subtitle: Text(
                         '${shop.category} • ${shop.location}',
-                        style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: shop.isOpen ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.redAccent.withValues(alpha: 0.15),
+                          color: shop.isOpen ? AppColors.primarySoft : AppColors.errorSoft,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           shop.isOpen ? 'OPEN' : 'CLOSED',
                           style: TextStyle(
-                            color: shop.isOpen ? const Color(0xFF10B981) : Colors.redAccent,
+                            color: shop.isOpen ? AppColors.primaryText : const Color(0xFFB3262A),
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
@@ -817,10 +1026,10 @@ class _BazarScreenState extends State<BazarScreen> {
                   width: 66,
                   height: 66,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.surface,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFF0E525B),
+                      color: AppColors.divider,
                       width: 1.5,
                     ),
                   ),
@@ -838,13 +1047,13 @@ class _BazarScreenState extends State<BazarScreen> {
                       width: 18,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF14B8A6),
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black, width: 1.5),
+                        border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       child: const Icon(
                         Icons.check,
-                        color: Colors.black,
+                        color: Colors.white,
                         size: 11,
                       ),
                     ),
@@ -857,8 +1066,8 @@ class _BazarScreenState extends State<BazarScreen> {
               maxLines: 2,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppColors.textPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 height: 1.1,
@@ -870,16 +1079,15 @@ class _BazarScreenState extends State<BazarScreen> {
     );
   }
 
-  // Product Card in Grid
   Widget _buildProductCard(BazarProduct product) {
     return GestureDetector(
       onTap: () => _openProductDetail(product),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF072E33),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF0E525B),
+            color: AppColors.divider,
             width: 1,
           ),
         ),
@@ -887,7 +1095,6 @@ class _BazarScreenState extends State<BazarScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Container with Network Image & fallback
             Expanded(
               child: Stack(
                 children: [
@@ -899,15 +1106,13 @@ class _BazarScreenState extends State<BazarScreen> {
                       fallbackIconSize: 40,
                     ),
                   ),
-
-                  // Distance Tag
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
+                        color: AppColors.textPrimary,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -920,11 +1125,46 @@ class _BazarScreenState extends State<BazarScreen> {
                       ),
                     ),
                   ),
+                  if (product.isBoosted)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFFF59E0B),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.bolt_rounded,
+                              size: 12,
+                              color: Color(0xFFD97706),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              product.boostHoursLeft > 0
+                                  ? 'Featured · ${product.boostHoursLeft}h'
+                                  : 'Featured',
+                              style: const TextStyle(
+                                color: Color(0xFFB45309),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-
-            // Card Body
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
@@ -935,7 +1175,7 @@ class _BazarScreenState extends State<BazarScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -947,23 +1187,23 @@ class _BazarScreenState extends State<BazarScreen> {
                       Text(
                         '₹${product.price}',
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0E525B),
+                          color: AppColors.primarySoft,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           product.category,
                           style: const TextStyle(
-                            color: Color(0xFF90B4B6),
+                            color: AppColors.primaryText,
                             fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -978,7 +1218,6 @@ class _BazarScreenState extends State<BazarScreen> {
     );
   }
 
-  // --- MY LISTINGS VIEW ---
   Widget _buildMyListingsView() {
     final listings = _userMyListings;
     final activeHandle = widget.currentUserHandle.replaceAll('@', '').trim().toLowerCase();
@@ -995,14 +1234,13 @@ class _BazarScreenState extends State<BazarScreen> {
 
     return Column(
       children: [
-        // Tabs: Active / Sold
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: const Color(0xFF072E33),
+            color: AppColors.chipBg,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF0E525B)),
+            border: Border.all(color: AppColors.divider),
           ),
           child: Row(
             children: [
@@ -1017,14 +1255,23 @@ class _BazarScreenState extends State<BazarScreen> {
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: _myListingsTab == 'Active' ? Colors.white : Colors.transparent,
+                      color: _myListingsTab == 'Active' ? AppColors.surface : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
+                      boxShadow: _myListingsTab == 'Active'
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : null,
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       'Active ($activeCount)',
                       style: TextStyle(
-                        color: _myListingsTab == 'Active' ? Colors.black : const Color(0xFF90B4B6),
+                        color: _myListingsTab == 'Active' ? AppColors.textPrimary : AppColors.textMuted,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -1043,14 +1290,23 @@ class _BazarScreenState extends State<BazarScreen> {
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: _myListingsTab == 'Sold' ? Colors.white : Colors.transparent,
+                      color: _myListingsTab == 'Sold' ? AppColors.surface : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
+                      boxShadow: _myListingsTab == 'Sold'
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : null,
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       'Sold ($soldCount)',
                       style: TextStyle(
-                        color: _myListingsTab == 'Sold' ? Colors.black : const Color(0xFF90B4B6),
+                        color: _myListingsTab == 'Sold' ? AppColors.textPrimary : AppColors.textMuted,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -1061,39 +1317,114 @@ class _BazarScreenState extends State<BazarScreen> {
             ],
           ),
         ),
-
-        // List of My Listings matching Screenshot 2 specs
-        Expanded(
-          child: listings.isEmpty
-              ? _buildEmptyState(_myListingsTab == 'Active'
-                  ? 'You have no active listings. Tap "+ Sell Item" to list a product!'
-                  : 'No sold items yet.')
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                  itemCount: listings.length,
-                  itemBuilder: (context, index) {
-                    final item = listings[index];
-                    return _buildMyListingCard(item);
-                  },
+        if (_myListingsTab == 'Sold')
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      '🏆 Top Seller Badge',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$soldCount/5 items',
+                      style: const TextStyle(
+                        color: Color(0xFFD97706),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: (soldCount / 5).clamp(0.0, 1.0),
+                    backgroundColor: AppColors.chipBg,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  soldCount >= 5
+                      ? '🎉 You unlocked the Top Seller badge!'
+                      : 'Sell ${5 - soldCount} more ${5 - soldCount == 1 ? "item" : "items"} to unlock Top Seller badge',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([
+                BazarRepository.instance.fetchListings(),
+                BazarRepository.instance.fetchShops(),
+              ]);
+              _onBazarRepoChanged();
+            },
+            color: AppColors.primary,
+            backgroundColor: AppColors.surface,
+            child: listings.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: 300,
+                        child: _buildEmptyState(_myListingsTab == 'Active'
+                            ? 'You have no active listings. Tap "+ Sell Item" to list a product!'
+                            : 'No sold items yet.'),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 88 + MediaQuery.paddingOf(context).bottom),
+                    itemCount: listings.length,
+                    itemBuilder: (context, index) {
+                      final item = listings[index];
+                      return _buildMyListingCard(item);
+                    },
+                  ),
+          ),
         ),
       ],
     );
   }
 
-  // Card for My Listing (With View / Chat Count and Mark as Sold button)
   Widget _buildMyListingCard(BazarProduct item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF072E33),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0E525B)),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Row(
         children: [
-          // Image Thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
@@ -1109,15 +1440,14 @@ class _BazarScreenState extends State<BazarScreen> {
           ),
           const SizedBox(width: 14),
 
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   item.title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1126,18 +1456,17 @@ class _BazarScreenState extends State<BazarScreen> {
                 Text(
                   '₹${item.price}',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 6),
 
-                // Stats: 38 views · 3 chats
                 Text(
                   '${item.viewsCount} views  •  ${item.chatsCount} chats',
-                  style: const TextStyle(
-                    color: Color(0xFF90B4B6),
+                  style: TextStyle(
+                    color: AppColors.textMuted,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1146,42 +1475,127 @@ class _BazarScreenState extends State<BazarScreen> {
             ),
           ),
 
-          // Mark as Sold / Relist Button
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              backgroundColor: item.isSold ? const Color(0xFF0E525B) : Colors.white,
-              foregroundColor: item.isSold ? Colors.white : Colors.black,
-              side: BorderSide(
-                color: item.isSold ? const Color(0xFF0E525B) : Colors.white,
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!item.isSold) ...[
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFEF3C7),
+                    foregroundColor: const Color(0xFFB45309),
+                    side: const BorderSide(color: Color(0xFFF59E0B)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFFD97706)),
+                  label: Text(
+                    item.isBoosted ? 'Boosted (${item.boostHoursLeft}h)' : 'Boost',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                  onPressed: item.isBoosted
+                      ? null
+                      : () async {
+                          final res = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BoostListingScreen(
+                                listingId: item.id,
+                                listingTitle: item.title,
+                                currentBalance: RewardsService.instance.summary?.balance ?? 0,
+                              ),
+                            ),
+                          );
+                          if (res == true && mounted) {
+                            _initBazarData();
+                          }
+                        },
+                ),
+                const SizedBox(height: 6),
+              ],
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: AppColors.chipBg,
+                  foregroundColor: AppColors.textPrimary,
+                  side: BorderSide(color: AppColors.divider),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 14),
+                label: const Text(
+                  'Edit',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () async {
+                  final res = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateBazarListingScreen(initialProduct: item),
+                    ),
+                  );
+                  if (res == true && mounted) {
+                    _initBazarData();
+                  }
+                },
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 6),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: item.isSold ? AppColors.chipBg : AppColors.primarySoft,
+                  foregroundColor: item.isSold ? AppColors.textPrimary : AppColors.primaryText,
+                  side: BorderSide(
+                    color: item.isSold ? AppColors.divider : AppColors.primarySoft,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () => _toggleMarkAsSold(item),
+                child: Text(
+                  item.isSold ? 'Relist' : 'Mark as Sold',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
-            onPressed: () => _toggleMarkAsSold(item),
-            child: Text(
-              item.isSold ? 'Relist' : 'Mark as Sold',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => _confirmDeleteProduct(item),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Delete',
+                        style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Product Detail Bottom Sheet
   Widget _buildProductDetailSheet(BazarProduct product) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF072E33),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(
-          top: BorderSide(color: Color(0xFF0E525B), width: 1.5),
-        ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -1193,14 +1607,13 @@ class _BazarScreenState extends State<BazarScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFF0E525B),
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Product Image Banner
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
@@ -1216,7 +1629,6 @@ class _BazarScreenState extends State<BazarScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Title & Price
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1224,8 +1636,8 @@ class _BazarScreenState extends State<BazarScreen> {
               Expanded(
                 child: Text(
                   product.title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1234,7 +1646,7 @@ class _BazarScreenState extends State<BazarScreen> {
               Text(
                 '₹${product.price}',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1243,24 +1655,80 @@ class _BazarScreenState extends State<BazarScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Location & Distance
           Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: Color(0xFF90B4B6), size: 16),
+              Icon(Icons.location_on_outlined, color: AppColors.textMuted, size: 16),
               const SizedBox(width: 4),
               Text(
                 '${product.location} (${product.distanceKm} km away)',
-                style: const TextStyle(color: Color(0xFF90B4B6), fontSize: 13),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.chipBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Row(
+              children: [
+                UserAvatar(
+                  handle: product.sellerHandle,
+                  size: 36,
+                  fontSize: 13.5,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              product.displaySellerName,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          VerifiedBadge(
+                            handle: product.sellerHandle,
+                            isVerified: product.isVerified,
+                            badgeText: product.authorBadge,
+                            size: 14,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      const Text(
+                        'Seller',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 14),
 
-          // Description
-          const Text(
+          Text(
             'Description',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -1268,29 +1736,28 @@ class _BazarScreenState extends State<BazarScreen> {
           const SizedBox(height: 4),
           Text(
             product.description,
-            style: const TextStyle(
-              color: Color(0xFF90B4B6),
+            style: TextStyle(
+              color: AppColors.textMuted,
               fontSize: 13.5,
               height: 1.4,
             ),
           ),
           const SizedBox(height: 20),
 
-          // Chat / Contact Seller Button
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
               label: Text(
-                'Chat with Seller (${product.sellerHandle.displayHandle})',
+                'Chat with Seller (${product.displaySellerName})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
               onPressed: () async {
@@ -1302,16 +1769,15 @@ class _BazarScreenState extends State<BazarScreen> {
                 if (cleanMy.isNotEmpty && cleanSeller.isNotEmpty && cleanMy == cleanSeller) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: Color(0xFF072E33),
-                      content: Text('ℹ️ This is your own product listing.'),
+                    SnackBar(
+                      backgroundColor: AppColors.textPrimary,
+                      content: const Text('ℹ️ This is your own product listing.'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
                   return;
                 }
 
-                // Record listing chat inquiry in background
                 BazarRepository.instance.recordListingChatInquiry(product.id);
 
                 if (!mounted) return;
@@ -1342,13 +1808,13 @@ class _BazarScreenState extends State<BazarScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Color(0xFF072E33),
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.storefront_rounded,
-                color: Color(0xFF90B4B6),
+                color: AppColors.textMuted,
                 size: 40,
               ),
             ),
@@ -1356,8 +1822,8 @@ class _BazarScreenState extends State<BazarScreen> {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF90B4B6),
+              style: TextStyle(
+                color: AppColors.textMuted,
                 fontSize: 14,
                 height: 1.4,
               ),

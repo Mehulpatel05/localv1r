@@ -5,6 +5,9 @@ import '../core/action_state/action_state_provider.dart';
 class Post {
   final String id;
   final String authorHandle;
+  final String? authorName;
+  final String? authorBadge;
+  final bool isVerified;
   final String content;
   final String? imageUrl;
   final PostCategory category;
@@ -76,6 +79,9 @@ class Post {
   Post({
     required this.id,
     required this.authorHandle,
+    this.authorName,
+    this.authorBadge,
+    this.isVerified = false,
     required this.content,
     this.imageUrl,
     required this.category,
@@ -147,10 +153,19 @@ class Post {
     }
   }
 
+  String get displayAuthorName {
+    final name = authorName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return authorHandle;
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'authorHandle': authorHandle,
+      'authorName': authorName,
+      'authorBadge': authorBadge,
+      'isVerified': isVerified,
       'content': content,
       'imageUrl': imageUrl,
       'category': category.name,
@@ -201,9 +216,14 @@ class Post {
   }
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    final rawName = (json['authorName'] ?? json['author_name'] ?? json['displayName'] ?? json['authorDisplayName']) as String?;
+
     return Post(
       id: json['id'] as String,
       authorHandle: json['authorHandle'] as String,
+      authorName: (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : null,
+      authorBadge: (json['authorBadge'] ?? json['author_badge'] ?? json['badge']) as String?,
+      isVerified: json['isVerified'] == true || json['is_verified'] == 1,
       content: json['content'] as String,
       imageUrl: json['imageUrl'] as String?,
       category: PostCategory.values.byName(json['category'] as String),
@@ -244,6 +264,12 @@ class Post {
       jobWorkMode: json['jobWorkMode'] as String?,
       eventRsvpCount: json['eventRsvpCount'] as int? ?? 0,
       isUserRsvped: json['isUserRsvped'] as bool? ?? false,
+      stateId: json['stateId'] as String?,
+      cityId: json['cityId'] as String?,
+      areaId: json['areaId'] as String?,
+      areaName: json['areaName'] as String?,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
     );
   }
 
@@ -269,16 +295,23 @@ class Post {
 
     PostCategory cat = PostCategory.general;
     if (json['category'] != null) {
-      try {
-        cat = PostCategory.values.byName(json['category'].toString().toLowerCase());
-      } catch (_) {
-        cat = PostCategory.general;
+      final rawCat = json['category'].toString().toLowerCase().trim();
+      if (rawCat == 'safety' || rawCat == 'safety_alert' || rawCat == 'safetyalert') {
+        cat = PostCategory.safety;
+      } else {
+        try {
+          cat = PostCategory.values.byName(rawCat);
+        } catch (_) {
+          cat = PostCategory.general;
+        }
       }
     }
 
     return Post(
       id: id,
       authorHandle: (json['authorHandle'] as String?) ?? 'Anon',
+      authorBadge: (json['authorBadge'] ?? json['author_badge'] ?? json['badge']) as String?,
+      isVerified: json['isVerified'] == true || json['is_verified'] == 1,
       content: (json['content'] as String?) ?? '',
       imageUrl: json['imageUrl'] as String?,
       category: cat,
@@ -331,6 +364,9 @@ class Post {
   Post copyWith({
     String? id,
     String? authorHandle,
+    String? authorName,
+    String? authorBadge,
+    bool? isVerified,
     String? content,
     String? imageUrl,
     PostCategory? category,
@@ -339,6 +375,8 @@ class Post {
     String? cityId,
     String? areaId,
     String? areaName,
+    double? lat,
+    double? lng,
     int? upvotes,
     int? downvotes,
     int? commentCount,
@@ -379,6 +417,9 @@ class Post {
     return Post(
       id: id ?? this.id,
       authorHandle: authorHandle ?? this.authorHandle,
+      authorName: authorName ?? this.authorName,
+      authorBadge: authorBadge ?? this.authorBadge,
+      isVerified: isVerified ?? this.isVerified,
       content: content ?? this.content,
       imageUrl: imageUrl ?? this.imageUrl,
       category: category ?? this.category,
@@ -387,6 +428,8 @@ class Post {
       cityId: cityId ?? this.cityId,
       areaId: areaId ?? this.areaId,
       areaName: areaName ?? this.areaName,
+      lat: lat ?? this.lat,
+      lng: lng ?? this.lng,
       upvotes: upvotes ?? this.upvotes,
       downvotes: downvotes ?? this.downvotes,
       commentCount: commentCount ?? this.commentCount,

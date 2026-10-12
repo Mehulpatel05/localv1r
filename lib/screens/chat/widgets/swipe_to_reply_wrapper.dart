@@ -2,15 +2,8 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../theme/app_colors.dart';
 
-/// Custom horizontal drag gesture recognizer that only accepts drags
-/// in the direction allowed for this message bubble:
-/// - If [isMe] is true: Only accepts drag to the left (dx < 0).
-/// - If [isMe] is false: Only accepts drag to the right (dx > 0).
-///
-/// Any gesture in the opposing direction returns false from
-/// [hasSufficientGlobalDistanceToAccept], cleanly yielding to vertical
-/// list scrolling or parent gesture recognizers.
 class DirectionalHorizontalDragGestureRecognizer
     extends HorizontalDragGestureRecognizer {
   bool isMe;
@@ -27,11 +20,9 @@ class DirectionalHorizontalDragGestureRecognizer
     PointerDeviceKind pointerDeviceKind,
     double? deviceTouchSlop,
   ) {
-    // If isMe is true (own message, right-aligned): ONLY allow drag to the left (globalDistanceMoved < 0)
     if (isMe && globalDistanceMoved >= 0) {
       return false;
     }
-    // If isMe is false (received message, left-aligned): ONLY allow drag to the right (globalDistanceMoved > 0)
     if (!isMe && globalDistanceMoved <= 0) {
       return false;
     }
@@ -42,17 +33,6 @@ class DirectionalHorizontalDragGestureRecognizer
   }
 }
 
-/// A WhatsApp / Instagram-grade swipe-to-reply gesture wrapper for chat message bubbles.
-///
-/// Features:
-/// - Direction locking based on sender ([isMe] == true -> right-to-left only; [isMe] == false -> left-to-right only).
-/// - 1:1 finger tracking up to 65px, with rubber-band resistance beyond that (capped at 85px).
-/// - Progressive reply icon reveal: 0-20px invisible, 20-45px fade & scale in.
-/// - 45px trigger threshold: tactile [HapticFeedback.lightImpact] + icon scale bounce (1.0 -> 1.16 -> 1.0).
-/// - Released >= 45px: triggers [onSwipeReply] and springs back using [Curves.easeOutBack] (~280ms).
-/// - Released < 45px: glides back using [Curves.easeOutCubic] (~180ms) without triggering reply.
-/// - Does not interfere with vertical list scrolling.
-/// - Multi-touch safe (only one bubble swiped at a time).
 class SwipeToReplyWrapper extends StatefulWidget {
   final String messageId;
   final bool isMe;
@@ -75,7 +55,6 @@ class SwipeToReplyWrapper extends StatefulWidget {
 
 class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
     with TickerProviderStateMixin {
-  /// Ensures only one bubble across the whole chat can be actively swiped at a time.
   static String? _activeSwipingMessageId;
 
   late AnimationController _returnController;
@@ -89,7 +68,6 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
   bool _thresholdReached = false;
   bool _isDragging = false;
 
-  // Gesture & threshold constants (Spec: 30px threshold, 60px damped max drag)
   static const double _kTriggerThreshold = 30.0;
   static const double _kHysteresisThreshold = 25.0;
   static const double _kMaxDragLimit = 60.0;
@@ -190,18 +168,14 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
     setState(() {
       _accumulatedDrag += delta;
 
-      // Lock direction:
       if (widget.isMe) {
-        // Only negative (drag left) allowed
         if (_accumulatedDrag > 0) _accumulatedDrag = 0;
       } else {
-        // Only positive (drag right) allowed
         if (_accumulatedDrag < 0) _accumulatedDrag = 0;
       }
 
       final rawMagnitude = _accumulatedDrag.abs();
 
-      // 1:1 finger tracking up to 65px, then rubber-band resistance
       if (rawMagnitude <= _kMaxDragLimit) {
         _currentDisplacement = rawMagnitude;
       } else {
@@ -210,14 +184,12 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
             (_kMaxDragLimit + (excess * 0.22)).clamp(0.0, _kMaxDisplacementCap);
       }
 
-      // 45px trigger threshold check
       if (_currentDisplacement >= _kTriggerThreshold && !_thresholdReached) {
         _thresholdReached = true;
         HapticFeedback.lightImpact();
         _bounceController.forward(from: 0.0);
       } else if (_currentDisplacement < _kHysteresisThreshold &&
           _thresholdReached) {
-        // Finger pulled back below threshold before release -> reset trigger
         _thresholdReached = false;
       }
     });
@@ -239,10 +211,8 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
     }
 
     if (triggered) {
-      // User passed threshold -> fire reply
       widget.onSwipeReply();
 
-      // Spring / overshoot return curve (250ms)
       _returnController.duration = const Duration(milliseconds: 250);
       _returnAnimation = Tween<double>(
         begin: startDisplacement,
@@ -252,7 +222,6 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
         curve: Curves.easeOutBack,
       ));
     } else {
-      // Released before 45px -> smooth ease-out return (~180ms)
       _returnController.duration = const Duration(milliseconds: 180);
       _returnAnimation = Tween<double>(
         begin: startDisplacement,
@@ -292,19 +261,14 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Displacement value clamped for visuals
     final double displayDistance =
         _currentDisplacement.clamp(0.0, _kMaxDisplacementCap);
 
-    // Opacity: 0 to 20px -> 0.0; 20 to 45px -> 0.0 to 1.0; >= 45px -> 1.0
     final double iconOpacity = displayDistance < 20.0
         ? 0.0
         : ((displayDistance - 20.0) / (_kTriggerThreshold - 20.0))
             .clamp(0.0, 1.0);
 
-    // Scale: 0 to 20px -> 0.6; 20 to 45px -> 0.6 to 1.0; plus bounce pop
     final double baseScale = displayDistance < 20.0
         ? 0.6
         : (0.6 +
@@ -316,9 +280,6 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
         _bounceController.isAnimating ? _bounceAnimation.value : 1.0;
     final double iconScale = baseScale * bounceMultiplier;
 
-    // Translation along X axis:
-    // If isMe: bubble translates to the left (-_currentDisplacement)
-    // If !isMe: bubble translates to the right (+_currentDisplacement)
     final double translationX =
         widget.isMe ? -_currentDisplacement : _currentDisplacement;
 
@@ -345,7 +306,6 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
         alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
         clipBehavior: Clip.none,
         children: [
-          // ── Reply Arrow Icon Behind Bubble ────────────────────────────────
           Positioned(
             left: widget.isMe ? null : 16.0,
             right: widget.isMe ? 16.0 : null,
@@ -361,19 +321,15 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
                     height: 34,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isDark
-                          ? const Color(0xFF2563EB).withValues(alpha: 0.22)
-                          : const Color(0xFF2563EB).withValues(alpha: 0.12),
+                      color: AppColors.primarySoft,
                     ),
                     child: Center(
                       child: Transform.flip(
-                        // If !isMe (received message): user swipes right -> flip arrow so it points right towards the bubble
-                        // If isMe (own message): user swipes left -> default Icons.reply_rounded points left towards the bubble
                         flipX: !widget.isMe,
-                        child: const Icon(
+                        child: Icon(
                           Icons.reply_rounded,
                           size: 19,
-                          color: Color(0xFF2563EB),
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
@@ -382,8 +338,6 @@ class _SwipeToReplyWrapperState extends State<SwipeToReplyWrapper>
               ),
             ),
           ),
-
-          // ── The Message Bubble (Translated by Finger) ─────────────────────
           Transform.translate(
             offset: Offset(translationX, 0.0),
             child: widget.child,

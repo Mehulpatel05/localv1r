@@ -6,6 +6,7 @@ import '../core/constants/api_constants.dart';
 import '../screens/bazar/bazar_screen.dart';
 import '../screens/bazar/shop_detail_screen.dart';
 import 'auth_service.dart';
+import 'rewards_service.dart';
 
 class BazarRepository extends ChangeNotifier {
   static final BazarRepository _instance = BazarRepository._internal();
@@ -64,7 +65,6 @@ class BazarRepository extends ChangeNotifier {
         }
       }
 
-      // Load real shops
       final shopsJsonStr = prefs.getString(_kShopsKey);
       if (shopsJsonStr != null && shopsJsonStr.isNotEmpty) {
         try {
@@ -72,6 +72,7 @@ class BazarRepository extends ChangeNotifier {
           _shops = list
               .whereType<Map<String, dynamic>>()
               .map((item) => LocalShop.fromJson(item))
+              .where((s) => s.status == 'active')
               .toList();
         } catch (e) {
           debugPrint('[BazarRepository] error decoding cached shops: $e');
@@ -133,14 +134,27 @@ class BazarRepository extends ChangeNotifier {
             }
           }
 
-          // Merge: keep locally created listings if not yet indexed by server
-          for (final local in _products) {
-            if (!seen.contains(local.id)) {
-              freshProducts.add(local);
+          if (queryParams.isEmpty) {
+            for (final local in _products) {
+              if (local.id.startsWith('m_') && !seen.contains(local.id)) {
+                freshProducts.add(local);
+              }
             }
+            _products = freshProducts;
+          } else {
+            final freshIds = freshProducts.map((p) => p.id).toSet();
+            final updated = <BazarProduct>[...freshProducts];
+            for (final local in _products) {
+              if (!freshIds.contains(local.id)) {
+                final matchesCategory = category != null && category != 'All' && local.category == category;
+                if (!matchesCategory) {
+                  updated.add(local);
+                }
+              }
+            }
+            _products = updated;
           }
 
-          _products = freshProducts;
           await _persistProducts();
           notifyListeners();
         }
@@ -180,16 +194,9 @@ class BazarRepository extends ChangeNotifier {
           for (final item in rawShops) {
             if (item is Map<String, dynamic>) {
               final shop = LocalShop.fromJson(item);
-              if (seen.add(shop.id)) {
+              if (shop.status == 'active' && seen.add(shop.id)) {
                 freshShops.add(shop);
               }
-            }
-          }
-
-          // Merge: keep locally created shops if not yet indexed by server
-          for (final local in _shops) {
-            if (!seen.contains(local.id)) {
-              freshShops.add(local);
             }
           }
 
@@ -262,10 +269,12 @@ class BazarRepository extends ChangeNotifier {
           }),
         ).timeout(const Duration(seconds: 15));
 
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 || response.statusCode == 201) {
           final body = jsonDecode(response.body);
           if (body['success'] == true) {
             final serverId = (body['listingId'] ?? body['listing']?['id'] ?? tempId).toString();
+            final pointsAwarded = (body['pointsAwarded'] as num?)?.toInt() ?? 10;
+            final newBalance = (body['newBalance'] as num?)?.toInt();
             final confirmedProduct = BazarProduct(
               id: serverId,
               title: title,
@@ -284,6 +293,7 @@ class BazarRepository extends ChangeNotifier {
             _products.insert(0, confirmedProduct);
             await _persistProducts();
             notifyListeners();
+            RewardsService.instance.addPoints(pointsAwarded, newBalance: newBalance);
             return confirmedProduct;
           }
         }
@@ -293,6 +303,78 @@ class BazarRepository extends ChangeNotifier {
     }
 
     return newProduct;
+  }
+
+  Future<bool> updateListing({
+    required String id,
+    required String title,
+    required int price,
+    required String description,
+    required String category,
+    required String condition,
+    required String location,
+    required String imageUrl,
+  }) async {
+    await init();
+    final idx = _products.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      final old = _products[idx];
+      _products[idx] = BazarProduct(
+        id: old.id,
+        title: title,
+        price: price,
+        category: category,
+        distanceKm: old.distanceKm,
+        imageUrl: imageUrl.isNotEmpty ? imageUrl : old.imageUrl,
+        sellerHandle: old.sellerHandle,
+        sellerName: old.sellerName,
+        location: location.isNotEmpty ? location : old.location,
+        description: description,
+        viewsCount: old.viewsCount,
+        chatsCount: old.chatsCount,
+        isSold: old.isSold,
+        isBoosted: old.isBoosted,
+        boostHoursLeft: old.boostHoursLeft,
+        isVerified: old.isVerified,
+        authorBadge: old.authorBadge,
+        createdAt: old.createdAt,
+      );
+      await _persistProducts();
+      notifyListeners();
+    }
+
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/listings/$id');
+        final response = await http.put(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'title': title,
+            'price': price,
+            'description': description,
+            'category': category,
+            'condition': condition,
+            'location': location.isNotEmpty ? location : 'Vadodara',
+            'imageUrl': imageUrl,
+            'imageUrls': imageUrl.isNotEmpty ? [imageUrl] : [],
+          }),
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final body = jsonDecode(response.body);
+          return body['success'] == true;
+        }
+      }
+    } catch (e) {
+      debugPrint('[BazarRepository] remote updateListing warning: $e');
+    }
+
+    return idx != -1;
   }
 
   Future<void> addProduct(BazarProduct product) async {
@@ -312,6 +394,17 @@ class BazarRepository extends ChangeNotifier {
       }
       return s == 'me';
     }).length;
+  }
+
+  List<BazarProduct> getUserListings(String userHandle) {
+    final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
+    return _products.where((p) {
+      final s = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
+      if (clean.isNotEmpty) {
+        return s == clean || s == 'me';
+      }
+      return s == 'me';
+    }).toList();
   }
 
   Future<void> markProductAsSold(String productId) async {
@@ -345,7 +438,39 @@ class BazarRepository extends ChangeNotifier {
   Future<void> deleteProduct(String productId) async {
     await init();
     _products.removeWhere((p) => p.id == productId);
+    _savedProductIds.remove(productId);
+    for (int i = 0; i < _shops.length; i++) {
+      final s = _shops[i];
+      if (s.products.any((p) => p.id == productId)) {
+        final updatedProducts = s.products.where((p) => p.id != productId).toList();
+        _shops[i] = LocalShop(
+          id: s.id,
+          ownerHandle: s.ownerHandle,
+          name: s.name,
+          category: s.category,
+          categoryIcon: s.categoryIcon,
+          location: s.location,
+          distanceKm: s.distanceKm,
+          isVerified: s.isVerified,
+          imageUrl: s.imageUrl,
+          bannerUrl: s.bannerUrl,
+          phone: s.phone,
+          deliveryInfo: s.deliveryInfo,
+          timings: s.timings,
+          aboutText: s.aboutText,
+          isOpen: s.isOpen,
+          sameWhatsapp: s.sameWhatsapp,
+          homeDelivery: s.homeDelivery,
+          viewsCount: s.viewsCount,
+          chatsCount: s.chatsCount,
+          ordersCount: s.ordersCount,
+          status: s.status,
+          products: updatedProducts,
+        );
+      }
+    }
     await _persistProducts();
+    await _persistShops();
     notifyListeners();
 
     try {
@@ -652,6 +777,14 @@ class BazarRepository extends ChangeNotifier {
             for (final item in list) {
               fresh.add(BazarProduct.fromJson(item));
             }
+            final freshIds = fresh.map((p) => p.id).toSet();
+            _products.removeWhere((p) {
+              final s = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
+              final isMine = s == activeHandle || s == 'me';
+              return isMine && !p.id.startsWith('m_') && !freshIds.contains(p.id);
+            });
+            await _persistProducts();
+            notifyListeners();
             return fresh;
           }
         }
@@ -660,7 +793,6 @@ class BazarRepository extends ChangeNotifier {
       debugPrint('[BazarRepository] error fetching my-shop products: $e');
     }
 
-    // Fallback to local products
     return _products.where((p) {
       final s = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
       return s == activeHandle || s == 'me';
@@ -867,5 +999,15 @@ class BazarRepository extends ChangeNotifier {
         ).timeout(const Duration(seconds: 5));
       }
     } catch (_) {}
+  }
+
+  void clearCache() {
+    _products = [];
+    _shops = [];
+    _savedProductIds = {};
+    _savedShopIds = {};
+    _isInitialized = false;
+    _isLoading = false;
+    notifyListeners();
   }
 }

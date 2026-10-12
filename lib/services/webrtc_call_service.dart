@@ -9,6 +9,7 @@ import '../models/call_model.dart';
 import '../screens/chat/incoming_call_screen.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
+import '../core/services/name_cache_service.dart';
 
 class WebRtcCallService {
   static final WebRtcCallService instance = WebRtcCallService._internal();
@@ -420,7 +421,7 @@ class WebRtcCallService {
     // Send push notification
     NotificationService().sendNotification(
       targetHandle: cleanReceiver,
-      title: '@$cleanCaller is calling...',
+      title: '${getDisplayName(cleanCaller)} is calling...',
       body: callType == CallType.video ? 'Incoming Video Call 📹' : 'Incoming Voice Call 📞',
       data: {
         'type': 'call',

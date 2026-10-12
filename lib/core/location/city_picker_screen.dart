@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../theme/app_colors.dart';
+import '../../services/founding_service.dart';
 import 'location_engine.dart';
 import 'location_service.dart';
 
@@ -18,6 +20,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
   @override
   void initState() {
     super.initState();
+    FoundingService.instance.fetchCounts();
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
     });
@@ -36,22 +39,21 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
     final currentAreaId = locService.areaId;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Select Location & Neighborhood'),
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
         titleTextStyle: const TextStyle(
-          color: Colors.white,
+          color: AppColors.textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       ),
       body: Column(
         children: [
-          // Auto-detect location button
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: InkWell(
@@ -60,8 +62,8 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                 if (success && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('🎯 Location auto-detected: ${locService.displayLabel}'),
-                      backgroundColor: const Color(0xFF072E33),
+                      content: Text('Location auto-detected: ${locService.displayLabel}'),
+                      backgroundColor: AppColors.primary,
                     ),
                   );
                   Navigator.pop(context);
@@ -101,16 +103,16 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF072E33),
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF0E4B52)),
+                  border: Border.all(color: AppColors.divider),
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
-                        color: Color(0xFF0E4B52),
+                        color: AppColors.primarySoft,
                         shape: BoxShape.circle,
                       ),
                       child: locService.isDetectingLocation
@@ -119,10 +121,10 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: AppColors.primary,
                               ),
                             )
-                          : const Icon(Icons.my_location_rounded, color: Colors.white, size: 16),
+                          : const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 16),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -136,7 +138,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           Text(
@@ -145,43 +147,42 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                                 : 'Pan-India Reverse Geocoding GPS Engine',
                             style: const TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF90B4B6),
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                    const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
                   ],
                 ),
               ),
             ),
           ),
 
-          // Search box for neighborhoods / pincodes
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Search city, area, pincode or address...',
-                hintStyle: const TextStyle(color: Color(0xFF90B4B6)),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF90B4B6)),
+                hintStyle: const TextStyle(color: AppColors.textMuted),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
                 filled: true,
-                fillColor: const Color(0xFF072E33),
+                fillColor: AppColors.surface,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFF0E4B52)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFF0E4B52)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Colors.white, width: 1.5),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                 ),
               ),
             ),
@@ -201,7 +202,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                         state.name.toUpperCase(),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF90B4B6),
+                          color: AppColors.textMuted,
                           fontSize: 12,
                           letterSpacing: 0.8,
                         ),
@@ -211,7 +212,6 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                       final isEnabled = city.enabled;
                       final isCitySelected = currentCityId == city.id;
 
-                      // Filter areas if searching
                       final areas = city.areas.where((a) {
                         if (_searchQuery.isEmpty) return true;
                         final nameMatches = a.name.toLowerCase().contains(_searchQuery);
@@ -224,101 +224,183 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                         if (_searchQuery.isNotEmpty && !city.name.toLowerCase().contains(_searchQuery)) {
                           return const SizedBox.shrink();
                         }
-                        return ListTile(
-                          title: Text(
-                            city.name,
-                            style: const TextStyle(color: Color(0xFF90B4B6)),
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          trailing: const Text('Coming soon', style: TextStyle(color: Color(0xFF90B4B6), fontSize: 12)),
-                          onTap: () => _joinWaitlist(context, city.id, city.name),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: AppColors.chipBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.location_city_rounded,
+                                color: AppColors.textMuted,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              city.name,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.chipBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Coming soon',
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            onTap: () => _joinWaitlist(context, city.id, city.name),
+                          ),
+                        );
+                      }
+
+                      final areaWidgets = <Widget>[];
+
+                      for (int i = 0; i < areas.length; i++) {
+                        final area = areas[i];
+                        final isAreaSelected = isCitySelected && currentAreaId == area.id;
+
+                        if (i > 0) {
+                          areaWidgets.add(const Divider(height: 1, color: AppColors.divider, indent: 16, endIndent: 16));
+                        }
+                        areaWidgets.add(
+                          InkWell(
+                            onTap: () {
+                              locService.setCity(city);
+                              locService.setArea(area);
+                              Navigator.pop(context);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 32),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                area.name,
+                                                style: TextStyle(
+                                                  fontSize: 15.5,
+                                                  fontWeight: isAreaSelected ? FontWeight.w700 : FontWeight.w600,
+                                                  color: isAreaSelected
+                                                      ? AppColors.primary
+                                                      : AppColors.textPrimary,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (area.pincode != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'PIN: ${area.pincode}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: AppColors.textMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (isAreaSelected) ...[
+                                    const SizedBox(width: 10),
+                                    const Icon(
+                                      Icons.check_circle_rounded,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
                         );
                       }
 
                       return Theme(
                         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                        child: ExpansionTile(
-                          initiallyExpanded: isCitySelected,
-                          leading: Icon(
-                            Icons.location_city_rounded,
-                            color: isCitySelected
-                                ? Colors.white
-                                : const Color(0xFF90B4B6),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          title: Text(
-                            city.name,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: isCitySelected ? FontWeight.bold : FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${city.areas.length} Neighborhoods',
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: Color(0xFF90B4B6),
-                            ),
-                          ),
-                          children: [
-                            // Option 1: Citywide
-                            ListTile(
-                              contentPadding: const EdgeInsets.only(left: 48, right: 16),
-                              title: Text(
-                                'All ${city.name} (Citywide)',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: (isCitySelected && currentAreaId == null)
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: (isCitySelected && currentAreaId == null)
-                                      ? Colors.white
-                                      : const Color(0xFF90B4B6),
-                                ),
+                          clipBehavior: Clip.antiAlias,
+                          child: ExpansionTile(
+                            initiallyExpanded: isCitySelected,
+                            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isCitySelected ? AppColors.primarySoft : AppColors.chipBg,
+                                shape: BoxShape.circle,
                               ),
-                              trailing: (isCitySelected && currentAreaId == null)
-                                  ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18)
-                                  : null,
-                              onTap: () {
-                                locService.setCity(city);
-                                locService.setArea(null);
-                                Navigator.pop(context);
+                              child: Icon(
+                                Icons.location_city_rounded,
+                                color: isCitySelected
+                                    ? AppColors.primary
+                                    : AppColors.textMuted,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              city.name,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: isCitySelected ? FontWeight.bold : FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                            subtitle: ListenableBuilder(
+                              listenable: FoundingService.instance,
+                              builder: (context, _) {
+                                final hasLoaded = FoundingService.instance.hasLoadedCounts;
+                                final citySpotsLeft = FoundingService.instance.getSpotsLeft(city.id);
+                                return Text(
+                                  hasLoaded && citySpotsLeft > 0
+                                      ? '${city.areas.length} Neighborhoods · $citySpotsLeft founding spots left'
+                                      : '${city.areas.length} Neighborhoods',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                );
                               },
                             ),
-                            // Neighborhood areas list
-                            ...areas.map((area) {
-                              final isAreaSelected = isCitySelected && currentAreaId == area.id;
-
-                              return ListTile(
-                                contentPadding: const EdgeInsets.only(left: 48, right: 16),
-                                title: Text(
-                                  area.name,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: isAreaSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isAreaSelected
-                                        ? Colors.white
-                                        : const Color(0xFF90B4B6),
-                                  ),
-                                ),
-                                subtitle: area.pincode != null
-                                    ? Text(
-                                        'PIN: ${area.pincode}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF90B4B6),
-                                        ),
-                                      )
-                                    : null,
-                                trailing: isAreaSelected
-                                    ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18)
-                                    : null,
-                                onTap: () {
-                                  locService.setCity(city);
-                                  locService.setArea(area);
-                                  Navigator.pop(context);
-                                },
-                              );
-                            }),
-                          ],
+                            children: [
+                              const Divider(height: 1, color: AppColors.divider),
+                              ...areaWidgets,
+                            ],
+                          ),
                         ),
                       );
                     }),

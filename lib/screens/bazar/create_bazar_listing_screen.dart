@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/r2_storage_service.dart';
+import '../../theme/app_colors.dart';
+import 'bazar_screen.dart';
 
 class CreateBazarListingScreen extends StatefulWidget {
-  const CreateBazarListingScreen({super.key});
+  final BazarProduct? initialProduct;
+
+  const CreateBazarListingScreen({super.key, this.initialProduct});
 
   @override
   State<CreateBazarListingScreen> createState() => _CreateBazarListingScreenState();
@@ -19,7 +23,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   bool _isPickingImage = false;
 
   String _selectedCategory = 'Electronics';
-  String _selectedCondition = 'Used'; // 'New' or 'Used'
+  String _selectedCondition = 'Used';
   String _selectedLocation = 'Visible within 2 km';
   bool _isPublishing = false;
 
@@ -39,6 +43,23 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     'All Vadodara',
   ];
 
+  String? _existingImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialProduct != null) {
+      final product = widget.initialProduct!;
+      _titleController.text = product.title;
+      _priceController.text = product.price.toString();
+      _selectedCategory = product.category;
+      if (!_categories.any((c) => c['name'] == _selectedCategory)) {
+        _selectedCategory = 'Electronics';
+      }
+      _existingImageUrl = product.imageUrl;
+    }
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -49,9 +70,9 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   Future<void> _pickImage() async {
     if (_pickedImagePaths.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maximum 5 photos/videos allowed.'),
-          backgroundColor: Color(0xFF072E33),
+        SnackBar(
+          content: const Text('Maximum 5 photos/videos allowed.'),
+          backgroundColor: AppColors.textPrimary,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -87,7 +108,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   void _showLocationPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF072E33),
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -97,10 +118,10 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Select Visibility Radius',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -112,11 +133,11 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                     opt == _selectedLocation
                         ? Icons.radio_button_checked
                         : Icons.radio_button_off,
-                    color: opt == _selectedLocation ? Colors.white : const Color(0xFF90B4B6),
+                    color: opt == _selectedLocation ? AppColors.primary : AppColors.textMuted,
                   ),
                   title: Text(
                     opt,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                   ),
                   onTap: () {
                     setState(() {
@@ -137,9 +158,9 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a title for your listing.'),
-          backgroundColor: Colors.redAccent,
+        SnackBar(
+          content: const Text('Please enter a title for your listing.'),
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -148,9 +169,9 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
     if (priceStr.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a price.'),
-          backgroundColor: Colors.redAccent,
+        SnackBar(
+          content: const Text('Please enter a price.'),
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -161,7 +182,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
     setState(() => _isPublishing = true);
 
-    String imageUrl = '';
+    String imageUrl = _existingImageUrl ?? '';
     if (_pickedImagePaths.isNotEmpty) {
       try {
         final file = File(_pickedImagePaths.first);
@@ -179,6 +200,43 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       }
     }
 
+    if (widget.initialProduct != null) {
+      final updated = await BazarRepository.instance.updateListing(
+        id: widget.initialProduct!.id,
+        title: title,
+        price: price,
+        description: 'Condition: $_selectedCondition. Visibility: $_selectedLocation.',
+        category: _selectedCategory,
+        condition: _selectedCondition,
+        location: _selectedLocation,
+        imageUrl: imageUrl,
+      );
+      if (mounted) {
+        setState(() => _isPublishing = false);
+        if (updated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Color(0xFFFEF3C7), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Listing updated successfully!',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        Navigator.pop(context, true);
+      }
+      return;
+    }
+
     final newProduct = await BazarRepository.instance.createListing(
       title: title,
       price: price,
@@ -190,25 +248,46 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     );
 
     if (mounted) {
+      if (newProduct != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                Icon(
+                  imageUrl.isNotEmpty ? Icons.star_rounded : Icons.check_circle_rounded,
+                  color: const Color(0xFFFEF3C7),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  imageUrl.isNotEmpty ? 'Listed · +10 pts' : 'Item listed successfully!',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       Navigator.pop(context, newProduct);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const cardBg = Color(0xFF072E33);
-    const borderColor = Color(0xFF0E525B);
-    const labelStyle = TextStyle(
-      color: Color(0xFF90B4B6),
+    final labelStyle = TextStyle(
+      color: AppColors.textMuted,
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 0.6,
     );
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -216,23 +295,23 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
           child: GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
           ),
         ),
         centerTitle: true,
-        title: const Text(
-          'Sell an item',
+        title: Text(
+          widget.initialProduct != null ? 'Edit listing' : 'Sell an item',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -243,15 +322,40 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. PHOTOS & VIDEO · UP TO 5
-            const Text('PHOTOS & VIDEO · UP TO 5', style: labelStyle),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('PHOTOS & VIDEO · UP TO 5', style: labelStyle),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.star_rounded, size: 13, color: Color(0xFFD97706)),
+                      SizedBox(width: 3),
+                      Text(
+                        '+10 pts (photo required)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFB45309),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             SizedBox(
               height: 76,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  // Add Button Box
                   GestureDetector(
                     onTap: _pickImage,
                     child: Container(
@@ -259,29 +363,29 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                       height: 76,
                       margin: const EdgeInsets.only(right: 10),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: borderColor, width: 1.5),
+                        border: Border.all(color: AppColors.divider, width: 1.5),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (_isPickingImage)
-                            const SizedBox(
+                            SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppColors.primary,
                                 strokeWidth: 2,
                               ),
                             )
                           else ...[
-                            const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                            Icon(Icons.add_rounded, color: AppColors.primary, size: 24),
                             const SizedBox(height: 2),
-                            const Text(
+                            Text(
                               'Add',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -292,7 +396,52 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                     ),
                   ),
 
-                  // Picked Images
+                  if (_existingImageUrl != null && _existingImageUrl!.isNotEmpty)
+                    Stack(
+                      children: [
+                        Container(
+                          width: 76,
+                          height: 76,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BazarProduct.buildProductImage(
+                              _existingImageUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 14,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _existingImageUrl = null;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
                   ..._pickedImagePaths.asMap().entries.map((entry) {
                     final index = entry.key;
                     final path = entry.value;
@@ -303,9 +452,9 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                           height: 76,
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
-                            color: cardBg,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderColor),
+                            border: Border.all(color: AppColors.divider),
                             image: DecorationImage(
                               image: FileImage(File(path)),
                               fit: BoxFit.cover,
@@ -320,7 +469,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.8),
+                                color: Colors.black.withValues(alpha: 0.7),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -340,26 +489,25 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 20),
 
-            // 2. TITLE
-            const Text('TITLE', style: labelStyle),
+            Text('TITLE', style: labelStyle),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: cardBg,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: AppColors.divider),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: TextField(
                 controller: _titleController,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Item title (e.g. Wooden Table)',
-                  hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                   border: InputBorder.none,
                 ),
               ),
@@ -367,22 +515,21 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 20),
 
-            // 3. PRICE
-            const Text('PRICE', style: labelStyle),
+            Text('PRICE', style: labelStyle),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: cardBg,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: AppColors.divider),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     '₹',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.primary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -392,14 +539,14 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                     child: TextField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: '7,500',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 16),
+                        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                         border: InputBorder.none,
                       ),
                     ),
@@ -410,8 +557,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 20),
 
-            // 4. CATEGORY
-            const Text('CATEGORY', style: labelStyle),
+            Text('CATEGORY', style: labelStyle),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -435,10 +581,10 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   },
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : cardBg,
+                      color: isSelected ? AppColors.primary : AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? Colors.white : borderColor,
+                        color: isSelected ? AppColors.primary : AppColors.divider,
                       ),
                     ),
                     alignment: Alignment.center,
@@ -456,7 +602,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: isSelected ? Colors.black : Colors.white,
+                              color: isSelected ? Colors.white : AppColors.textPrimary,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                               fontSize: 13,
                             ),
@@ -471,15 +617,14 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 20),
 
-            // 5. CONDITION
-            const Text('CONDITION', style: labelStyle),
+            Text('CONDITION', style: labelStyle),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: cardBg,
+                color: AppColors.chipBg,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: AppColors.divider),
               ),
               child: Row(
                 children: [
@@ -493,14 +638,23 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: _selectedCondition == 'New' ? Colors.white : Colors.transparent,
+                          color: _selectedCondition == 'New' ? AppColors.surface : Colors.transparent,
                           borderRadius: BorderRadius.circular(16),
+                          boxShadow: _selectedCondition == 'New'
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ]
+                              : null,
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           'New',
                           style: TextStyle(
-                            color: _selectedCondition == 'New' ? Colors.black : Colors.white,
+                            color: _selectedCondition == 'New' ? AppColors.textPrimary : AppColors.textMuted,
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                           ),
@@ -518,14 +672,23 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: _selectedCondition == 'Used' ? Colors.white : Colors.transparent,
+                          color: _selectedCondition == 'Used' ? AppColors.surface : Colors.transparent,
                           borderRadius: BorderRadius.circular(16),
+                          boxShadow: _selectedCondition == 'Used'
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ]
+                              : null,
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           'Used',
                           style: TextStyle(
-                            color: _selectedCondition == 'Used' ? Colors.black : Colors.white,
+                            color: _selectedCondition == 'Used' ? AppColors.textPrimary : AppColors.textMuted,
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                           ),
@@ -539,16 +702,15 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 20),
 
-            // 6. LOCATION
-            const Text('LOCATION', style: labelStyle),
+            Text('LOCATION', style: labelStyle),
             const SizedBox(height: 8),
             GestureDetector(
               onTap: _showLocationPicker,
               child: Container(
                 decoration: BoxDecoration(
-                  color: cardBg,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
+                  border: Border.all(color: AppColors.divider),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Row(
@@ -558,8 +720,8 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                     Expanded(
                       child: Text(
                         '$_selectedLocation  ▼',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
@@ -572,16 +734,15 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             const SizedBox(height: 24),
 
-            // 7. PREVIEW & PUBLISH LISTING BUTTON
-            const Text('PREVIEW', style: labelStyle),
+            Text('PREVIEW', style: labelStyle),
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(26),
@@ -593,13 +754,13 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
-                          color: Colors.black,
+                          color: Colors.white,
                           strokeWidth: 2.5,
                         ),
                       )
-                    : const Text(
-                        'Publish listing',
-                        style: TextStyle(
+                    : Text(
+                        widget.initialProduct != null ? 'Save changes' : 'Publish listing',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                         ),

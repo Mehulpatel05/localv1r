@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../theme/app_colors.dart';
 
 enum MediaPickerMode {
   all,
@@ -9,7 +10,6 @@ enum MediaPickerMode {
 }
 
 class MediaAttachmentPicker {
-  /// Shows a clean 2-option bottom sheet (Camera & Gallery) to pick photos and videos
   static Future<List<File>> showPickerSheet({
     required BuildContext context,
     MediaPickerMode mode = MediaPickerMode.all,
@@ -25,11 +25,10 @@ class MediaAttachmentPicker {
       return [];
     }
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sheetBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subtextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
-    final handleColor = isDark ? const Color(0xFF334155) : Colors.grey.shade300;
+    final sheetBg = AppColors.surface;
+    final textColor = AppColors.textPrimary;
+    final subtextColor = AppColors.textMuted;
+    final handleColor = AppColors.divider;
 
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -66,16 +65,15 @@ class MediaAttachmentPicker {
                   ),
                 ),
               ),
-              // Option 1: Camera
               ListTile(
                 leading: Container(
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB), size: 22),
+                  child: Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
                 ),
                 title: Text(
                   'Camera',
@@ -87,8 +85,6 @@ class MediaAttachmentPicker {
                 ),
                 onTap: () => Navigator.pop(ctx, 'camera'),
               ),
-
-              // Option 2: Gallery (Photos & Videos together)
               ListTile(
                 leading: Container(
                   width: 42,
@@ -133,7 +129,6 @@ class MediaAttachmentPicker {
         );
         if (picked != null) selectedFiles.add(File(picked.path));
       } else if (choice == 'gallery') {
-        // Native Visual Photo & Video Picker
         try {
           if (mode == MediaPickerMode.photoOnly) {
             final pickedList = await picker.pickMultiImage(
@@ -155,7 +150,6 @@ class MediaAttachmentPicker {
             );
             if (picked != null) selectedFiles.add(File(picked.path));
           } else {
-            // mode == MediaPickerMode.all: Pick photos and videos visually together
             final pickedList = await picker.pickMultipleMedia(
               imageQuality: 80,
               maxWidth: 1080,
@@ -171,7 +165,6 @@ class MediaAttachmentPicker {
           }
         } catch (e) {
           debugPrint('[MediaAttachmentPicker] pickMultipleMedia fallback: $e');
-          // Fallback to multi-image or single gallery pick
           try {
             final pickedList = await picker.pickMultiImage(
               imageQuality: 80,
@@ -200,7 +193,7 @@ class MediaAttachmentPicker {
       debugPrint('[MediaAttachmentPicker] Error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick media: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('Failed to pick media: $e'), backgroundColor: AppColors.error),
         );
       }
     }

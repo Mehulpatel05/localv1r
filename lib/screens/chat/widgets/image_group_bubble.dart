@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'multi_image_gallery_viewer.dart';
 import '../../../services/r2_storage_service.dart';
 import '../../../core/widgets/safe_image.dart';
+import '../../../theme/app_colors.dart';
 
 class ImageGroupBubble extends StatelessWidget {
   final List<String> mediaUrls;
@@ -85,7 +86,7 @@ class ImageGroupBubble extends StatelessWidget {
                       alignment: Alignment.center,
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black54,
                           shape: BoxShape.circle,
                         ),
@@ -123,7 +124,6 @@ class ImageGroupBubble extends StatelessWidget {
     final count = mediaUrls.length;
 
     if (count == 1) {
-      // 1 Image (Medium compact size)
       return GestureDetector(
         onTap: () => _openGallery(context, 0),
         child: ClipRRect(
@@ -170,7 +170,6 @@ class ImageGroupBubble extends StatelessWidget {
         ),
       );
     } else if (count == 2) {
-      // 2 Images: Side by Side (Medium compact size)
       return SizedBox(
         height: 130,
         child: Row(
@@ -182,7 +181,6 @@ class ImageGroupBubble extends StatelessWidget {
         ),
       );
     } else if (count == 3) {
-      // 3 Images: 1 Big Left + 2 Stacked Right (Medium compact size)
       return SizedBox(
         height: 160,
         child: Row(
@@ -223,7 +221,6 @@ class ImageGroupBubble extends StatelessWidget {
         ),
       );
     } else if (count == 4) {
-      // 4 Images: 2x2 Grid (Medium compact size)
       return Column(
         children: [
           SizedBox(
@@ -250,8 +247,7 @@ class ImageGroupBubble extends StatelessWidget {
         ],
       );
     } else {
-      // 5+ Images: 2x2 Grid with +N on 4th tile (Medium compact size)
-      final extraCount = count - 3; // Total remaining images
+      final extraCount = count - 3;
       return Column(
         children: [
           SizedBox(
@@ -289,10 +285,10 @@ class ImageGroupBubble extends StatelessWidget {
   Widget _buildStatusIcon({Color? readColor, Color? defaultColor}) {
     if (!isMe) return const SizedBox.shrink();
     if (status == 'failed') {
-      return const Icon(
+      return Icon(
         Icons.error_outline_rounded,
         size: 14,
-        color: Color(0xFFEF4444),
+        color: AppColors.error,
       );
     } else if (status == 'sending') {
       return Icon(
@@ -323,7 +319,6 @@ class ImageGroupBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasCaption = caption != null && caption!.trim().isNotEmpty;
 
     return Column(
@@ -386,7 +381,7 @@ class ImageGroupBubble extends StatelessWidget {
                   style: TextStyle(
                     color: isMe
                         ? Colors.white
-                        : (isDark ? Colors.white : const Color(0xFF0F172A)),
+                        : AppColors.textPrimary,
                     fontSize: 14.5,
                     height: 1.35,
                   ),
@@ -401,7 +396,7 @@ class ImageGroupBubble extends StatelessWidget {
                         style: TextStyle(
                           color: isMe
                               ? Colors.white.withValues(alpha: 0.75)
-                              : const Color(0xFF94A3B8),
+                              : AppColors.textMuted,
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
                         ),

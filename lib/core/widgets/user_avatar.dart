@@ -7,12 +7,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
 import '../../services/presence_service.dart';
+import '../../theme/app_colors.dart';
+import '../services/name_cache_service.dart';
 import 'safe_image.dart';
 
-/// Multi-tier high-performance Avatar Cache Service
-/// - In-memory synchronous 0ms lookups
-/// - Persistent disk caching via SharedPreferences
-/// - Seamless background cloud synchronization
 class AvatarCacheService extends ChangeNotifier {
   static final AvatarCacheService _instance = AvatarCacheService._internal();
   factory AvatarCacheService() => _instance;
@@ -66,19 +64,16 @@ class AvatarCacheService extends ChangeNotifier {
     });
   }
 
-  /// Ensure persistent cache is ready
   Future<void> ensureInitialized() async {
     await _initFromDisk();
   }
 
-  /// Retrieves cached avatar URL synchronously if present in memory, else null
   String? getCachedUrl(String handle) {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
     return _cache[clean];
   }
 
-  /// Returns all valid cached avatar URLs for background pre-warming
   List<String> getAllCachedUrls() {
     return _cache.values
         .where((u) => u != null && u.trim().isNotEmpty && u.startsWith('http'))
@@ -86,7 +81,6 @@ class AvatarCacheService extends ChangeNotifier {
         .toList();
   }
 
-  /// Sets or updates the cached avatar URL for a handle, persists to disk, and notifies listeners
   void setCachedUrl(String handle, String? photoUrl, {bool persist = true}) {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return;
@@ -99,7 +93,6 @@ class AvatarCacheService extends ChangeNotifier {
     }
   }
 
-  /// Bulk prime cache (e.g. from feed posts or friend lists)
   void primeCache(Map<String, String?> entries) {
     bool hasChanged = false;
     entries.forEach((handle, url) {
@@ -118,12 +111,41 @@ class AvatarCacheService extends ChangeNotifier {
     }
   }
 
-  /// Fetches avatar URL from Backend D1 `profiles/{handle}` if not already cached
+  final Map<String, int> _lastRevalidatedAt = {};
+
+  void _revalidateAvatarInBackground(String clean) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastTime = _lastRevalidatedAt[clean] ?? 0;
+    if (now - lastTime < 30000) return;
+    _lastRevalidatedAt[clean] = now;
+
+    Future.microtask(() async {
+      try {
+        final uri = Uri.parse('$baseUrl/auth/profile/${Uri.encodeComponent(clean)}');
+        final res = await http.get(uri).timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final user = data['user'] as Map<String, dynamic>?;
+          final photoUrl = (user?['avatarUrl'] as String?)?.trim();
+          final validUrl = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
+          if (_cache[clean] != validUrl) {
+            setCachedUrl(clean, validUrl);
+          }
+        } else if (res.statusCode == 404) {
+          if (_cache[clean] != null) {
+            setCachedUrl(clean, null);
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
   Future<String?> fetchAvatarUrl(String handle, {bool forceRefresh = false}) async {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
 
     if (!forceRefresh && _cache.containsKey(clean) && _cache[clean] != null) {
+      _revalidateAvatarInBackground(clean);
       return _cache[clean];
     }
 
@@ -143,11 +165,10 @@ class AvatarCacheService extends ChangeNotifier {
         final user = data['user'] as Map<String, dynamic>?;
         final photoUrl = (user?['avatarUrl'] as String?)?.trim();
         final validUrl = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
-        _cache[clean] = validUrl;
-        _scheduleSaveToDisk();
+        setCachedUrl(clean, validUrl);
         completer.complete(validUrl);
       } else if (res.statusCode == 404) {
-        _cache[clean] = null;
+        setCachedUrl(clean, null);
         completer.complete(null);
       } else {
         completer.complete(_cache[clean]);
@@ -159,13 +180,11 @@ class AvatarCacheService extends ChangeNotifier {
       }
     } finally {
       _inFlightCompleters.remove(clean);
-      notifyListeners();
     }
 
     return _cache[clean];
   }
 
-  /// In-memory & disk cache for current user's photoUrl
   Future<void> saveMyPhotoUrlLocally(String photoUrl) async {
     _myPhotoUrl = photoUrl;
     notifyListeners();
@@ -175,7 +194,6 @@ class AvatarCacheService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Loads current user's cached photoUrl (Memory -> Disk)
   Future<String?> getMyPhotoUrlLocally() async {
     if (_myPhotoUrl != null && _myPhotoUrl!.isNotEmpty) return _myPhotoUrl;
     try {
@@ -185,7 +203,6 @@ class AvatarCacheService extends ChangeNotifier {
     return _myPhotoUrl;
   }
 
-  /// Clears avatar caches on sign-out (Multi-Tenancy Isolation)
   Future<void> clearAll() async {
     _cache.clear();
     _inFlightCompleters.clear();
@@ -199,14 +216,6 @@ class AvatarCacheService extends ChangeNotifier {
   }
 }
 
-/// Universal Instagram-Grade User Avatar Widget
-/// - Perfect 1:1 circular fit with BoxFit.cover (never stretched or squashed)
-/// - Instagram Story / Profile ring support with customizable gradient and white spacer
-/// - Smooth loading placeholder with initials
-/// - Deterministic branded fallback initial avatars
-/// - Real-time reactive cache updates via AvatarCacheService
-/// - Online status badge support
-/// - Built-in full-screen HD photo popup dialog
 class UserAvatar extends StatefulWidget {
   final String handle;
   final String? photoUrl;
@@ -219,7 +228,6 @@ class UserAvatar extends StatefulWidget {
   final double? fontSize;
   final double? badgeSize;
 
-  // Instagram-style ring properties
   final bool showRing;
   final Gradient? ringGradient;
   final double ringWidth;
@@ -247,7 +255,6 @@ class UserAvatar extends StatefulWidget {
     this.enableFullViewOnTap = false,
   });
 
-  /// Instagram signature story gradient palette
   static const Gradient instagramGradient = LinearGradient(
     colors: [
       Color(0xFFFBAA47),
@@ -258,11 +265,10 @@ class UserAvatar extends StatefulWidget {
     end: Alignment.topRight,
   );
 
-  /// Nearhood brand gradient palette
   static const Gradient brandGradient = LinearGradient(
     colors: [
-      Color(0xFF3B82F6),
-      Color(0xFF8B5CF6),
+      Color(0xFF0B8A3E),
+      Color(0xFF07692D),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -271,7 +277,6 @@ class UserAvatar extends StatefulWidget {
   @override
   State<UserAvatar> createState() => _UserAvatarState();
 
-  /// Opens an Instagram-style full-screen HD avatar pop-up
   static void showFullAvatar(BuildContext context, {required String handle, required String? photoUrl}) {
     final clean = handle.replaceAll('@', '').trim();
     final url = (photoUrl != null && photoUrl.isNotEmpty)
@@ -323,7 +328,7 @@ class UserAvatar extends StatefulWidget {
                           return Container(
                             color: const Color(0xFF1E293B),
                             child: const Center(
-                              child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                              child: CircularProgressIndicator(color: AppColors.primary),
                             ),
                           );
                         },
@@ -334,7 +339,7 @@ class UserAvatar extends StatefulWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              '@$clean',
+              getDisplayName(clean),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -353,19 +358,15 @@ class UserAvatar extends StatefulWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
+        color: AppColors.avatarBg,
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: _UserAvatarState._getGradientForHandle(clean),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
       ),
       child: Center(
         child: Text(
-          _UserAvatarState._getInitials(clean),
+          _getInitials(clean),
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: fontSize,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
@@ -374,43 +375,16 @@ class UserAvatar extends StatefulWidget {
       ),
     );
   }
-}
-
-class _UserAvatarState extends State<UserAvatar> {
-  static const List<List<Color>> _avatarGradients = [
-    [Color(0xFF3B82F6), Color(0xFF1D4ED8)], // Blue
-    [Color(0xFF8B5CF6), Color(0xFF6D28D9)], // Purple
-    [Color(0xFFEC4899), Color(0xFFBE185D)], // Pink
-    [Color(0xFF10B981), Color(0xFF047857)], // Emerald
-    [Color(0xFFF59E0B), Color(0xFFB45309)], // Amber
-    [Color(0xFF06B6D4), Color(0xFF0E7490)], // Cyan
-    [Color(0xFF6366F1), Color(0xFF4338CA)], // Indigo
-    [Color(0xFF14B8A6), Color(0xFF0F766E)], // Teal
-    [Color(0xFFF97316), Color(0xFFC2410C)], // Orange
-  ];
-
-  static List<Color> _getGradientForHandle(String handle) {
-    if (handle.isEmpty) return _avatarGradients[0];
-    int hash = 0;
-    for (int i = 0; i < handle.length; i++) {
-      hash = (hash << 5) - hash + handle.codeUnitAt(i);
-      hash &= 0x7FFFFFFF;
-    }
-    return _avatarGradients[hash % _avatarGradients.length];
-  }
 
   static String _getInitials(String handle) {
     if (handle.isEmpty) return 'U';
-    final clean = handle.replaceAll('@', '').replaceAll('.', ' ').replaceAll('_', ' ').trim();
-    final parts = clean.split(RegExp(r'\s+'));
-    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    if (clean.length >= 2) {
-      return clean.substring(0, 2).toUpperCase();
-    }
-    return clean.isNotEmpty ? clean[0].toUpperCase() : 'U';
+    final clean = handle.replaceAll('@', '').trim();
+    if (clean.isEmpty) return 'U';
+    return clean[0].toUpperCase();
   }
+}
+
+class _UserAvatarState extends State<UserAvatar> {
 
   @override
   void initState() {
@@ -434,10 +408,7 @@ class _UserAvatarState extends State<UserAvatar> {
       if (widget.photoUrl != null && widget.photoUrl!.isNotEmpty) {
         AvatarCacheService.instance.setCachedUrl(clean, widget.photoUrl);
       } else {
-        final cached = AvatarCacheService.instance.getCachedUrl(clean);
-        if (cached == null) {
-          AvatarCacheService.instance.fetchAvatarUrl(clean);
-        }
+        AvatarCacheService.instance.fetchAvatarUrl(clean);
       }
     });
   }
@@ -463,7 +434,6 @@ class _UserAvatarState extends State<UserAvatar> {
     if (url != null && url.trim().isNotEmpty) {
       final trimmed = url.trim();
 
-      // 1. Base64 support
       if (trimmed.startsWith('data:image/')) {
         final bytes = _decodeBase64(trimmed);
         if (bytes != null && bytes.isNotEmpty) {
@@ -479,7 +449,6 @@ class _UserAvatarState extends State<UserAvatar> {
         }
       }
 
-      // 2. Local File path support (instant 0ms render before/during upload)
       if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
         try {
           final localFile = File(trimmed.replaceFirst('file://', ''));
@@ -497,7 +466,6 @@ class _UserAvatarState extends State<UserAvatar> {
         } catch (_) {}
       }
 
-      // 3. Network URL with disk caching & instant flash render
       return SafeImage(
         imageUrl: trimmed,
         width: imageSize,
@@ -505,6 +473,8 @@ class _UserAvatarState extends State<UserAvatar> {
         fit: BoxFit.cover,
         alignment: Alignment.center,
         backgroundColor: Colors.transparent,
+        placeholder: _buildInitialsPlaceholder(cleanHandle, imageSize, effectiveFontSize),
+        errorWidget: _buildInitialsPlaceholder(cleanHandle, imageSize, effectiveFontSize),
       );
     }
 
@@ -515,19 +485,15 @@ class _UserAvatarState extends State<UserAvatar> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
+        color: AppColors.avatarBg,
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: _getGradientForHandle(cleanHandle),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
       ),
       child: Center(
         child: Text(
-          _getInitials(cleanHandle),
+          UserAvatar._getInitials(cleanHandle),
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: fontSize,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
@@ -551,7 +517,6 @@ class _UserAvatarState extends State<UserAvatar> {
           resolvedUrl = AvatarCacheService.instance.getCachedUrl(cleanHandle);
         }
 
-        // Compute inner image size when ring is applied
         final double ringOffset = widget.showRing ? ((widget.ringWidth + widget.ringGap) * 2) : 0;
         final double innerSize = (widget.size - ringOffset).clamp(16.0, widget.size);
 
@@ -607,7 +572,6 @@ class _UserAvatarState extends State<UserAvatar> {
 
     Widget avatarCore;
 
-    // Online Status Badge
     if (widget.showOnlineBadge && cleanHandle.isNotEmpty) {
       if (widget.isOnline != null) {
         avatarCore = Stack(
@@ -669,7 +633,6 @@ class _UserAvatarState extends State<UserAvatar> {
       avatarCore = baseAvatar;
     }
 
-    // Edit Badge (e.g. Camera / Plus badge on profile screen)
     if (widget.editBadge != null) {
       avatarCore = Stack(
         clipBehavior: Clip.none,

@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/theme.dart';
 import '../../../services/auth_service.dart';
+import '../../../theme/app_colors.dart';
 
-/// Modal bottom sheet allowing users to configure who can call them (Voice & Video).
-/// Options: 'everyone' (default), 'friends', 'nobody'.
 class CallPrivacySettingsSheet extends StatefulWidget {
   const CallPrivacySettingsSheet({
     super.key,
@@ -87,62 +85,56 @@ class _CallPrivacySettingsSheetState extends State<CallPrivacySettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomPad),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Grab handle
           Center(
             child: Container(
               width: 40,
               height: 4,
               margin: const EdgeInsets.only(bottom: 18),
               decoration: BoxDecoration(
-                color: c.line,
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-
-          // Title & Subtitle
-          Text(
+          const Text(
             'Call Privacy',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.02 * 20,
-              color: c.ink,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'Choose who is allowed to start voice and video calls with you.',
-            style: TextStyle(fontSize: 13.5, color: c.muted),
+            style: TextStyle(fontSize: 13.5, color: AppColors.textMuted),
           ),
-
           const SizedBox(height: 18),
-
-          // Options Card
           if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 28),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
               child: Center(
-                child: CircularProgressIndicator(color: c.ink, strokeWidth: 2),
+                child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
               ),
             )
           else
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: c.line, width: 1),
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.divider, width: 1),
                 borderRadius: BorderRadius.circular(18),
               ),
               clipBehavior: Clip.antiAlias,
@@ -156,7 +148,7 @@ class _CallPrivacySettingsSheetState extends State<CallPrivacySettingsSheet> {
                     isSelected: _selectedOption == 'everyone',
                     onTap: () => _selectOption('everyone'),
                   ),
-                  Divider(height: 1, thickness: 1, color: c.line),
+                  const Divider(height: 1, thickness: 1, color: AppColors.divider),
                   _OptionRow(
                     icon: Icons.people_outline,
                     title: 'Friends Only',
@@ -164,7 +156,7 @@ class _CallPrivacySettingsSheetState extends State<CallPrivacySettingsSheet> {
                     isSelected: _selectedOption == 'friends',
                     onTap: () => _selectOption('friends'),
                   ),
-                  Divider(height: 1, thickness: 1, color: c.line),
+                  const Divider(height: 1, thickness: 1, color: AppColors.divider),
                   _OptionRow(
                     icon: Icons.block_outlined,
                     title: 'Nobody',
@@ -198,8 +190,6 @@ class _OptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
-
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -210,13 +200,13 @@ class _OptionRow extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: isSelected ? c.btn : c.field,
+                color: isSelected ? AppColors.primary : AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
                 size: 19,
-                color: isSelected ? c.btnink : c.ink,
+                color: isSelected ? Colors.white : AppColors.textPrimary,
               ),
             ),
             const SizedBox(width: 14),
@@ -226,18 +216,18 @@ class _OptionRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: c.ink,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12.5,
-                      color: c.muted,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -250,16 +240,16 @@ class _OptionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? c.ink : c.line,
+                  color: isSelected ? AppColors.primary : AppColors.divider,
                   width: 2,
                 ),
-                color: isSelected ? c.ink : Colors.transparent,
+                color: isSelected ? AppColors.primary : Colors.transparent,
               ),
               child: isSelected
-                  ? Icon(
+                  ? const Icon(
                       Icons.check,
                       size: 14,
-                      color: c.bg,
+                      color: Colors.white,
                     )
                   : null,
             ),
@@ -270,7 +260,6 @@ class _OptionRow extends StatelessWidget {
   }
 }
 
-/// Shows [CallPrivacySettingsSheet] with bottom sheet animation.
 void showCallPrivacySettingsSheet(BuildContext context, {required String userHandle}) {
   final disableAnimations = MediaQuery.of(context).disableAnimations;
   showModalBottomSheet<void>(

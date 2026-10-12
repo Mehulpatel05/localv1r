@@ -4,15 +4,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../services/app_image_cache_service.dart';
+import '../../theme/app_colors.dart';
 
-/// 🚀 High-Performance Resilient Image Widget
-///
-/// Features:
-/// 1. Instant 0ms RAM & Disk cache rendering (Zero network requests for already-seen images).
-/// 2. Crystal clear high visual quality (Gapless playback, no pixelation or blur degradation).
-/// 3. Resilient fallback & retry for flaky networks.
-/// 4. Blur backdrop letterboxing (Single-pass shared memory decode, 0 duplicate downloads).
-/// 5. Base64, Local File, and Network URL support.
 class SafeImage extends StatefulWidget {
   final String imageUrl;
   final double? height;
@@ -22,6 +15,8 @@ class SafeImage extends StatefulWidget {
   final bool enableBlurBackdrop;
   final Color? backgroundColor;
   final Alignment alignment;
+  final Widget? placeholder;
+  final Widget? errorWidget;
 
   const SafeImage({
     super.key,
@@ -33,6 +28,8 @@ class SafeImage extends StatefulWidget {
     this.enableBlurBackdrop = false,
     this.backgroundColor,
     this.alignment = Alignment.center,
+    this.placeholder,
+    this.errorWidget,
   });
 
   @override
@@ -89,7 +86,6 @@ class _SafeImageState extends State<SafeImage> {
     final trimmedUrl = widget.imageUrl.trim();
     if (trimmedUrl.isEmpty) return;
 
-    // 1. Base64
     if (_isBase64) {
       _memoryBytes = _decodeBase64(trimmedUrl);
       _diskFile = null;
@@ -98,7 +94,6 @@ class _SafeImageState extends State<SafeImage> {
       return;
     }
 
-    // 2. Local File
     if (_isLocalFile) {
       final filePath = trimmedUrl.replaceFirst('file://', '');
       final f = File(filePath);
@@ -114,7 +109,6 @@ class _SafeImageState extends State<SafeImage> {
       return;
     }
 
-    // 3. Check Synchronous RAM Cache (0ms)
     final inRam = AppImageCacheService.instance.getFromMemory(trimmedUrl);
     if (inRam != null) {
       _memoryBytes = inRam;
@@ -124,7 +118,6 @@ class _SafeImageState extends State<SafeImage> {
       return;
     }
 
-    // 4. Check Synchronous Disk Cache (1-2ms)
     final onDisk = AppImageCacheService.instance.getFromDiskSync(trimmedUrl);
     if (onDisk != null) {
       _diskFile = onDisk;
@@ -134,7 +127,6 @@ class _SafeImageState extends State<SafeImage> {
       return;
     }
 
-    // 5. Asynchronous Fetch & Store
     _isLoading = true;
     _hasError = false;
     AppImageCacheService.instance.getOrFetchImageFile(trimmedUrl).then((file) {
@@ -213,19 +205,18 @@ class _SafeImageState extends State<SafeImage> {
         alignment: widget.alignment,
         gaplessPlayback: true,
         filterQuality: filterQuality,
-        errorBuilder: (context, error, stackTrace) => _buildErrorFallback(),
+        errorBuilder: (context, error, stackTrace) => widget.errorWidget ?? _buildErrorFallback(),
       );
     }
 
     if (_isLoading) {
-      return _buildPlaceholderContainer();
+      return widget.placeholder ?? _buildPlaceholderContainer();
     }
 
     if (_hasError) {
-      return _buildErrorFallback();
+      return widget.errorWidget ?? _buildErrorFallback();
     }
 
-    // Direct network fallback if asynchronous disk read has not populated yet
     final trimmedUrl = widget.imageUrl.trim();
     return Image.network(
       trimmedUrl,
@@ -238,15 +229,14 @@ class _SafeImageState extends State<SafeImage> {
       filterQuality: filterQuality,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
-        return _buildPlaceholderContainer();
+        return widget.placeholder ?? _buildPlaceholderContainer();
       },
-      errorBuilder: (context, error, stackTrace) => _buildErrorFallback(),
+      errorBuilder: (context, error, stackTrace) => widget.errorWidget ?? _buildErrorFallback(),
     );
   }
 
   Widget _buildPlaceholderContainer() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = widget.backgroundColor ?? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9));
+    final baseColor = widget.backgroundColor ?? AppColors.chipBg;
     return Container(
       height: widget.height ?? 200,
       width: widget.width,
@@ -254,7 +244,7 @@ class _SafeImageState extends State<SafeImage> {
       child: Center(
         child: Icon(
           Icons.image_outlined,
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+          color: AppColors.textMuted.withValues(alpha: 0.5),
           size: 28,
         ),
       ),
@@ -262,8 +252,7 @@ class _SafeImageState extends State<SafeImage> {
   }
 
   Widget _buildErrorFallback() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = widget.backgroundColor ?? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9));
+    final baseColor = widget.backgroundColor ?? AppColors.chipBg;
 
     return Container(
       height: widget.height ?? 200,
@@ -281,14 +270,14 @@ class _SafeImageState extends State<SafeImage> {
                 Icon(
                   Icons.refresh_rounded,
                   size: 18,
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  color: AppColors.textMuted,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   'Tap to retry',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -318,7 +307,6 @@ class _SafeImageState extends State<SafeImage> {
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            // 1. Ambient blurred background matching the image colors
             ClipRect(
               child: ImageFiltered(
                 imageFilter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -333,11 +321,9 @@ class _SafeImageState extends State<SafeImage> {
                 ),
               ),
             ),
-            // 2. Subtle dark contrast overlay
             Container(
               color: Colors.black.withValues(alpha: 0.35),
             ),
-            // 3. Crisp, 100% complete uncropped foreground image
             _buildCoreImage(
               fit: widget.fit,
               filterQuality: FilterQuality.high,

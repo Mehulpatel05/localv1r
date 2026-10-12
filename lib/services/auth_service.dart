@@ -5,8 +5,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
+import '../core/utils/api_error.dart';
 import '../core/action_state/action_state_provider.dart';
 import '../core/widgets/user_avatar.dart';
+import '../core/services/name_cache_service.dart';
+import '../core/services/badge_cache_service.dart';
 import '../models/token_claims.dart';
 
 import 'direct_chat_service.dart';
@@ -16,6 +19,8 @@ import 'user_action_state_service.dart';
 import 'chat_preferences_service.dart';
 import 'friend_repository.dart';
 import 'presence_service.dart';
+import 'post_repository.dart';
+import 'rewards_service.dart';
 
 enum AuthEvent {
   signedIn,
@@ -33,6 +38,8 @@ class AuthService {
 
   TokenDecisionEngine _decisionEngine = TokenDecisionEngine.anonymous();
   TokenDecisionEngine get decisionEngine => _decisionEngine;
+
+  Completer<String?>? _refreshCompleter;
 
   AuthService._internal() {
     _initDecisionEngine();
@@ -77,7 +84,7 @@ class AuthService {
           'expiresIn': body['expires_in'] ?? 300,
         };
       } else {
-        final errorMsg = body['error']?['message'] ?? body['detail'] ?? 'Failed to send OTP.';
+        final errorMsg = extractApiError(body, 'Failed to send OTP.');
         return {
           'success': false,
           'error': errorMsg,
@@ -179,7 +186,7 @@ class AuthService {
           'isNewUser': isNewUser,
         };
       } else {
-        final errorMsg = body['error']?['message'] ?? body['detail'] ?? 'Verification failed.';
+        final errorMsg = extractApiError(body, 'Verification failed.');
         debugPrint('[AuthService] Verification failed: $errorMsg (status: ${response.statusCode})');
         return {
           'success': false,
@@ -202,37 +209,52 @@ class AuthService {
     }
   }
 
-  /// Refreshes JWT token with backend
   Future<String?> refreshToken() async {
-    final currentRefresh = await _secureStorage.read(key: _kRefreshTokenKey);
-    if (currentRefresh == null) return null;
+    if (_refreshCompleter != null) {
+      return await _refreshCompleter!.future;
+    }
 
-    final uri = Uri.parse('$baseUrl/auth/refresh');
+    final completer = Completer<String?>();
+    _refreshCompleter = completer;
+
     try {
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': currentRefresh}),
-      );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final newAccess = body['access_token'] as String;
-        final newRefresh = body['refresh_token'] as String;
-        await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
-        await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
-        updateDecisionEngineFromToken(newAccess);
-        return newAccess;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        // ⚡ Phase 1 & 4 Instant Revocation Force Logout
-        debugPrint('[AuthService] Refresh rejected (${response.statusCode}). Revoking session and purging caches.');
-        await forceSignOut(reason: 'Session revoked or expired');
+      final currentRefresh = await _secureStorage.read(key: _kRefreshTokenKey);
+      if (currentRefresh == null) {
+        completer.complete(null);
         return null;
       }
-    } catch (e) {
-      debugPrint('[AuthService] Token refresh error: $e');
+
+      final uri = Uri.parse('$baseUrl/auth/refresh');
+      try {
+        final response = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh_token': currentRefresh}),
+        );
+
+        if (response.statusCode == 200) {
+          final body = jsonDecode(response.body);
+          final newAccess = body['access_token'] as String;
+          final newRefresh = body['refresh_token'] as String;
+          await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
+          await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
+          updateDecisionEngineFromToken(newAccess);
+          completer.complete(newAccess);
+          return newAccess;
+        } else if (response.statusCode == 401 || response.statusCode == 403) {
+          debugPrint('[AuthService] Refresh rejected (${response.statusCode}). Revoking session and purging caches.');
+          await forceSignOut(reason: 'Session revoked or expired');
+          completer.complete(null);
+          return null;
+        }
+      } catch (e) {
+        debugPrint('[AuthService] Token refresh error: $e');
+      }
+      completer.complete(null);
+      return null;
+    } finally {
+      _refreshCompleter = null;
     }
-    return null;
   }
 
   Future<String?> getAccessToken() async {
@@ -248,7 +270,14 @@ class AuthService {
   }
 
   Future<String?> getUserHandle() async {
-    return await _secureStorage.read(key: _kHandleKey);
+    final handle = await _secureStorage.read(key: _kHandleKey);
+    if (handle != null && handle.isNotEmpty) return handle;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final prefHandle = prefs.getString('user_handle') ?? prefs.getString('current_user_handle');
+      if (prefHandle != null && prefHandle.isNotEmpty) return prefHandle;
+    } catch (_) {}
+    return null;
   }
 
   /// Checks if handle is available via backend D1
@@ -265,26 +294,48 @@ class AuthService {
     } catch (e) {
       debugPrint('[AuthService] checkHandleAvailable error: $e');
     }
-    return true;
+    return false;
   }
 
   /// Updates user handle in Cloudflare D1
-  Future<Map<String, dynamic>> saveUserHandle(String handle, {String? userId, String? phone}) async {
+  Future<Map<String, dynamic>> saveUserHandle(
+    String handle, {
+    String? userId,
+    String? phone,
+    String? name,
+    String? cityId,
+    String? areaId,
+    String? areaName,
+    String? addressNote,
+  }) async {
     final clean = handle.replaceAll('@', '').trim();
+    final cleanName = name?.trim();
 
     try {
       String? token = await getAccessToken();
       token ??= await refreshToken();
-      debugPrint('[AuthService] saveUserHandle: clean=$clean, tokenAvailable=${token != null && token.isNotEmpty}');
+      debugPrint('[AuthService] saveUserHandle: clean=$clean, name=$cleanName, tokenAvailable=${token != null && token.isNotEmpty}');
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('$baseUrl/auth/profile/handle');
+        final requestBody = <String, dynamic>{
+          'handle': clean,
+        };
+        if (cleanName != null && cleanName.isNotEmpty) {
+          requestBody['name'] = cleanName;
+          requestBody['displayName'] = cleanName;
+        }
+        if (cityId != null && cityId.isNotEmpty) requestBody['home_city_id'] = cityId;
+        if (areaId != null && areaId.isNotEmpty) requestBody['home_area_id'] = areaId;
+        if (areaName != null && areaName.isNotEmpty) requestBody['home_area_name'] = areaName;
+        if (addressNote != null && addressNote.isNotEmpty) requestBody['address_note'] = addressNote;
+
         final response = await http.post(
           uri,
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           },
-          body: jsonEncode({'handle': clean}),
+          body: jsonEncode(requestBody),
         ).timeout(const Duration(seconds: 15));
 
         debugPrint('[AuthService] saveUserHandle response ($uri): status=${response.statusCode}, body=${response.body}');
@@ -295,7 +346,21 @@ class AuthService {
           try {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_handle', clean);
+            if (cityId != null && cityId.isNotEmpty) await prefs.setString('selected_city_id', cityId);
+            if (areaId != null && areaId.isNotEmpty) await prefs.setString('selected_area_id', areaId);
+            if (areaName != null && areaName.isNotEmpty) await prefs.setString('home_area_name', areaName);
+            if (addressNote != null && addressNote.isNotEmpty) await prefs.setString('address_note', addressNote);
           } catch (_) {}
+
+          if (cleanName != null && cleanName.isNotEmpty) {
+            await _secureStorage.write(key: 'user_display_name', value: cleanName);
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('user_display_name', cleanName);
+            } catch (_) {}
+            NameCacheService.instance.setCachedName(clean, cleanName);
+            await NameCacheService.instance.saveMyNameLocally(cleanName);
+          }
 
           if (body['access_token'] != null) {
             final newTok = body['access_token'] as String;
@@ -307,7 +372,7 @@ class AuthService {
           }
           return {'success': true};
         } else {
-          final errorMsg = body['detail'] ?? body['error']?['message'] ?? 'Failed to update username.';
+          final errorMsg = extractApiError(body, 'Failed to update username.');
           return {
             'success': false,
             'statusCode': response.statusCode,
@@ -336,7 +401,29 @@ class AuthService {
     }
   }
 
-  /// Restores user profile, handle, and avatar from Cloudflare D1
+  Future<void> updateLocalUserCredentials({required String handle, String? displayName}) async {
+    final clean = handle.replaceAll('@', '').trim();
+    if (clean.isNotEmpty) {
+      await _secureStorage.write(key: _kHandleKey, value: clean);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_handle', clean);
+        await prefs.setString('current_user_handle', clean);
+        await prefs.setString('active_user_handle', clean);
+      } catch (_) {}
+    }
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      final cleanName = displayName.trim();
+      await _secureStorage.write(key: 'user_display_name', value: cleanName);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_display_name', cleanName);
+      } catch (_) {}
+      NameCacheService.instance.setCachedName(clean, cleanName);
+      await NameCacheService.instance.saveMyNameLocally(cleanName);
+    }
+  }
+
   Future<Map<String, dynamic>?> syncCloudProfile() async {
     try {
       String? token = await getAccessToken();
@@ -360,6 +447,8 @@ class AuthService {
           final photoUrl = user['avatarUrl'] as String?;
           final phone = user['phoneNumber'] as String?;
           final uid = user['userId'] as String?;
+          final rawName = (user['name'] ?? user['displayName'] ?? user['fullName']) as String?;
+          final displayName = (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : null;
 
           if (handle != null && handle.isNotEmpty) {
             await _secureStorage.write(key: _kHandleKey, value: handle);
@@ -375,15 +464,38 @@ class AuthService {
               AvatarCacheService.instance.setCachedUrl(handle, photoUrl);
             }
           }
+          if (displayName != null && displayName.isNotEmpty) {
+            await _secureStorage.write(key: 'user_display_name', value: displayName);
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('user_display_name', displayName);
+            } catch (_) {}
+            if (handle != null && handle.isNotEmpty) {
+              NameCacheService.instance.setCachedName(handle, displayName);
+            }
+            await NameCacheService.instance.saveMyNameLocally(displayName);
+          }
 
           return {
             'handle': handle,
+            'name': displayName,
+            'displayName': displayName,
             'photoUrl': photoUrl,
             'phoneNumber': phone,
             'userId': uid,
             'reputation': user['reputation'] ?? 0,
             'upvotes': user['upvotes'] ?? 0,
             'friendCount': user['friendCount'] ?? 0,
+            'isVerified': user['isVerified'] == true || user['is_verified'] == 1,
+            'bio': user['bio'] ?? '',
+            'nameUpdatedAt': user['nameUpdatedAt'] ?? user['name_updated_at'],
+            'handleUpdatedAt': user['handleUpdatedAt'] ?? user['handle_updated_at'],
+            'canChangeName': user['canChangeName'] ?? user['can_change_name'] ?? true,
+            'canChangeHandle': user['canChangeHandle'] ?? user['can_change_handle'] ?? true,
+            'nameDaysRemaining': user['nameDaysRemaining'] ?? user['name_days_remaining'] ?? 0,
+            'handleDaysRemaining': user['handleDaysRemaining'] ?? user['handle_days_remaining'] ?? 0,
+            'nextNameChangeAt': user['nextNameChangeAt'] ?? user['next_name_change_at'],
+            'nextHandleChangeAt': user['nextHandleChangeAt'] ?? user['next_handle_change_at'],
           };
         }
       }
@@ -398,12 +510,24 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Delete Account permanently via Backend D1
+  Future<String?> getDisplayName() async {
+    final cached = await NameCacheService.instance.getMyNameLocally();
+    if (cached != null && cached.trim().isNotEmpty) return cached.trim();
+    final stored = await _secureStorage.read(key: 'user_display_name');
+    if (stored != null && stored.trim().isNotEmpty) return stored.trim();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('user_display_name');
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> deleteAccount() async {
     String? token = await getAccessToken();
     token ??= await refreshToken();
 
-    final uri = Uri.parse('$baseUrl/auth/account');
+    final uri = Uri.parse('$baseUrl/account/purge');
     try {
       final headers = <String, String>{
         'Content-Type': 'application/json',
@@ -414,7 +538,6 @@ class AuthService {
 
       var response = await http.delete(uri, headers: headers);
 
-      // If 401, try refreshing token once
       if (response.statusCode == 401) {
         final newToken = await refreshToken();
         if (newToken != null) {
@@ -423,7 +546,11 @@ class AuthService {
         }
       }
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 404) {
+        response = await http.delete(Uri.parse('$baseUrl/account'), headers: headers);
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
         await signOut();
         return {'success': true};
       } else {
@@ -512,30 +639,33 @@ class AuthService {
   /// Thoroughly purges all user-specific in-memory singletons, disk docs, and secure tokens
   Future<void> _purgeUserSessionData() async {
     try {
-      // 1. Reset Decision Engine to Anonymous
       _decisionEngine = TokenDecisionEngine.anonymous();
+      TokenDecisionEngine.clear();
 
-      // 2. Clear Action State Singletons (Hot sets, O(1) button caches)
       ActionStateProvider.instance.clear();
       UserActionStateService.instance.clear();
 
-      // 3. Clear Avatar, Repo, Friend, Preferences & Presence Caches
       await AvatarCacheService.instance.clearAll();
       FriendRepository().clearCache();
       ChatPreferencesService.instance.clearCache();
       PresenceService.instance.clearCache();
+      PostRepository.instance.clearCache();
+      DirectChatService.instance.clearCache();
+      NameCacheService.instance.clearAll();
+      BadgeCacheService.instance.clear();
+      RewardsService.instance.clearCache();
 
-      // 4. Reset DirectChat & Notification Counters & Listeners
       DirectChatService.instance.unreadCountNotifier.value = 0;
       NotificationService.instance.stopListening();
       NotificationService.instance.unreadBadgeNotifier.value = 0;
 
-      // 5. Delete Secure Storage Tokens
       await _secureStorage.deleteAll();
 
-      // 6. Safety clear any legacy SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      await prefs.remove('user_handle');
+      await prefs.remove('user_id');
+      await prefs.remove('phone_number');
+      await prefs.remove('user_display_name');
       debugPrint('[AuthService] Multi-tenancy session purged successfully.');
     } catch (e) {
       debugPrint('[AuthService] Error during session purge: $e');
@@ -567,20 +697,58 @@ class AuthService {
   /// Updates in-memory Decision Engine synchronously from newly minted or refreshed JWT
   void updateDecisionEngineFromToken(String token) {
     final payload = parseJwtPayload(token);
+    final TokenClaims claims;
     if (payload != null) {
-      final claims = TokenClaims.fromJwtMap(payload);
-      _decisionEngine = TokenDecisionEngine.fromClaims(claims);
+      claims = TokenClaims.fromJwtMap(payload);
+    } else if (token.isNotEmpty) {
+      claims = TokenClaims(
+        uid: '',
+        role: 'user',
+        cityId: 'GJ-VAD',
+        verified: true,
+        handle: '',
+        planTier: 'free',
+        banned: false,
+        tokenVersion: 1,
+        exp: DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000,
+      );
+    } else {
+      claims = TokenClaims.anonymous();
     }
+    _decisionEngine = TokenDecisionEngine.fromClaims(claims);
+    TokenDecisionEngine.updateFromClaims(claims);
   }
 
   /// Extracts active token claims (uid, role, cityId, verified, planTier, banned, tokenVersion)
   Future<TokenClaims> getActiveClaims() async {
     final token = await getAccessToken();
-    if (token == null) return TokenClaims.anonymous();
+    if (token == null || token.isEmpty) {
+      final anon = TokenClaims.anonymous();
+      _decisionEngine = TokenDecisionEngine.fromClaims(anon);
+      TokenDecisionEngine.updateFromClaims(anon);
+      return anon;
+    }
     final payload = parseJwtPayload(token);
-    if (payload == null) return TokenClaims.anonymous();
-    final claims = TokenClaims.fromJwtMap(payload);
+    final TokenClaims claims;
+    if (payload != null) {
+      claims = TokenClaims.fromJwtMap(payload);
+    } else {
+      final handle = await getUserHandle() ?? '';
+      final uid = await getUserId() ?? '';
+      claims = TokenClaims(
+        uid: uid,
+        role: 'user',
+        cityId: 'GJ-VAD',
+        verified: true,
+        handle: handle,
+        planTier: 'free',
+        banned: false,
+        tokenVersion: 1,
+        exp: DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000,
+      );
+    }
     _decisionEngine = TokenDecisionEngine.fromClaims(claims);
+    TokenDecisionEngine.updateFromClaims(claims);
     return claims;
   }
 
@@ -596,10 +764,213 @@ class AuthService {
     return claims.cityId;
   }
 
-  /// Fast verification state getter
   Future<bool> isUserVerified() async {
     final claims = await getActiveClaims();
     return claims.verified;
+  }
+
+  Future<List<Map<String, dynamic>>> searchPlacesAutocomplete(
+    String query, {
+    String? sessionToken,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/places/autocomplete?q=${Uri.encodeComponent(query)}${sessionToken != null && sessionToken.isNotEmpty ? '&session=${Uri.encodeComponent(sessionToken)}' : ''}');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['predictions'] is List) {
+          return List<Map<String, dynamic>>.from(data['predictions']);
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> resolveArea(
+    String? placeId, {
+    String? name,
+    String? cityId,
+    String? sessionToken,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/areas/resolve');
+      final payload = <String, dynamic>{
+        if (placeId != null && placeId.isNotEmpty) 'place_id': placeId,
+        if (name != null && name.isNotEmpty) 'name': name,
+        if (cityId != null && cityId.isNotEmpty) 'city_id': cityId,
+        if (sessionToken != null && sessionToken.isNotEmpty) 'session': sessionToken,
+      };
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> reverseGeocodeCoordinates(
+    double lat,
+    double lng,
+  ) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/places/reverse-geocode?lat=$lat&lng=$lng');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> joinWaitlist({
+    required String cityText,
+    double? lat,
+    double? lng,
+    required String contactOrDeviceId,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/waitlist');
+      final payload = <String, dynamic>{
+        'city_text': cityText,
+        'contact_or_device_id': contactOrDeviceId,
+      };
+      if (lat != null) payload['lat'] = lat;
+      if (lng != null) payload['lng'] = lng;
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPopularAreas({
+    String cityId = 'GJ-VAD',
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/areas/popular?city_id=$cityId');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['areas'] is List) {
+          return List<Map<String, dynamic>>.from(data['areas']);
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>> confirmAreaDetails({
+    String? areaId,
+    String? addressNote,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/auth/confirm-area');
+      final payload = <String, dynamic>{
+        if (areaId != null && areaId.isNotEmpty) 'area_id': areaId,
+        if (addressNote != null && addressNote.isNotEmpty) 'address_note': addressNote,
+      };
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {'success': true, ...data};
+      } else {
+        final errorMsg = data['error'] as String? ?? 'Failed to update area.';
+        return {'success': false, 'error': errorMsg, ...data};
+      }
+    } catch (_) {
+      return {'success': false, 'error': 'Network error. Please try again.'};
+    }
+  }
+
+  Future<bool> confirmArea({
+    String? areaId,
+    String? addressNote,
+  }) async {
+    final res = await confirmAreaDetails(areaId: areaId, addressNote: addressNote);
+    return res['success'] == true;
+  }
+
+  Future<Map<String, dynamic>?> fetchMe() async {
+    try {
+      final token = await getAccessToken();
+      if (token == null || token.isEmpty) return null;
+      final url = Uri.parse('$baseUrl/auth/me');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 }
 

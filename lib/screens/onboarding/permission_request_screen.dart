@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../theme/app_colors.dart';
 import '../../core/motion.dart';
-import '../../core/theme.dart';
 import '../../services/app_permission_service.dart';
+import '../../core/constants/app_static_assets.dart';
+import '../../core/widgets/safe_image.dart';
 
-/// Full-page permission onboarding screen designed to fit entirely on screen
-/// without scrolling, featuring custom app branding and Nearhood theme styling.
 class PermissionRequestScreen extends StatefulWidget {
   final void Function(BuildContext context) onComplete;
 
@@ -74,10 +74,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.nearhoodColors;
-
     return Scaffold(
-      backgroundColor: colors.bg,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -85,7 +83,6 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
             children: [
               const Spacer(flex: 1),
 
-              // ── Header & App Logo ──────────────────────────────────
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -93,12 +90,12 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                     width: 64,
                     height: 64,
                     decoration: BoxDecoration(
-                      color: colors.field,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: colors.line, width: 1.5),
+                      border: Border.all(color: AppColors.divider, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -106,46 +103,31 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        'assets/images/nearhood_app_icon_1024.png',
+                      child: SafeImage(
+                        imageUrl: AppStaticAssets.appIcon1024,
                         width: 64,
                         height: 64,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Image.asset(
-                            'assets/images/nearhood_logo.png',
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.location_city_rounded,
-                                color: colors.ink,
-                                size: 30,
-                              );
-                            },
-                          );
-                        },
                       ),
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Text(
+                  const Text(
                     'Nearhood Needs Access',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: colors.ink,
+                      color: AppColors.textPrimary,
                       letterSpacing: -0.4,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Allow the following permissions so the app\nworks fully for you.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: colors.muted,
+                      color: AppColors.textMuted,
                       fontSize: 14,
                       height: 1.4,
                     ),
@@ -155,28 +137,26 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
               const Spacer(flex: 1),
 
-              // ── Permission Cards (Compact & Non-scrollable) ──────
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: _permissions
                     .map((item) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: _buildPermissionCard(item, colors),
+                          child: _buildPermissionCard(item),
                         ))
                     .toList(),
               ),
 
               const Spacer(flex: 1),
 
-              // ── Action Buttons ─────────────────────────────────────
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_hasRequested && _hasPermanentlyDenied) ...[
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.muted,
-                        side: BorderSide(color: colors.line),
+                        foregroundColor: AppColors.textMuted,
+                        side: const BorderSide(color: AppColors.divider),
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -197,12 +177,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                     height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: colors.field2,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        side: const BorderSide(
-                          color: Color(0xFF2DD4BF),
-                          width: 1.5,
-                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -241,10 +217,10 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Text(
+                      child: const Text(
                         'Skip for now',
                         style: TextStyle(
-                          color: colors.muted.withValues(alpha: 0.8),
+                          color: AppColors.textMuted,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -262,15 +238,13 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     );
   }
 
-  Widget _buildPermissionCard(_PermItem item, NearhoodColors colors) {
+  Widget _buildPermissionCard(_PermItem item) {
     final cardColor = item.granted
-        ? const Color(0xFF064E3B).withValues(alpha: 0.35)
-        : colors.field;
+        ? AppColors.primarySoft
+        : (item.denied ? AppColors.errorSoft : AppColors.surface);
     final borderColor = item.granted
-        ? const Color(0xFF4ADE80)
-        : item.denied
-            ? const Color(0xFFEF4444)
-            : colors.line;
+        ? AppColors.primary
+        : (item.denied ? AppColors.error : AppColors.divider);
 
     return AnimatedContainer(
       duration: AppMotion.durationStandard,
@@ -283,26 +257,19 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
           color: borderColor,
           width: 1.4,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Row(
         children: [
           Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(
-              color: colors.field2,
+            decoration: const BoxDecoration(
+              color: AppColors.chipBg,
               shape: BoxShape.circle,
             ),
             child: Icon(
               item.icon,
-              color: colors.ink,
+              color: AppColors.textPrimary,
               size: 22,
             ),
           ),
@@ -314,8 +281,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
               children: [
                 Text(
                   item.title,
-                  style: TextStyle(
-                    color: colors.ink,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -323,8 +290,8 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                 const SizedBox(height: 2),
                 Text(
                   item.reason,
-                  style: TextStyle(
-                    color: colors.muted,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
                     fontSize: 12,
                     height: 1.3,
                   ),
@@ -336,19 +303,19 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
           if (item.granted)
             const Icon(
               Icons.check_circle_rounded,
-              color: Color(0xFF4ADE80),
+              color: AppColors.primary,
               size: 24,
             )
           else if (item.denied)
             const Icon(
               Icons.cancel_rounded,
-              color: Color(0xFFEF4444),
+              color: AppColors.error,
               size: 24,
             )
           else
-            Icon(
+            const Icon(
               Icons.radio_button_unchecked,
-              color: colors.muted.withValues(alpha: 0.4),
+              color: AppColors.textMuted,
               size: 24,
             ),
         ],

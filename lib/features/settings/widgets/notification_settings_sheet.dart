@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/theme.dart';
+import '../../../theme/app_colors.dart';
 
-/// Modal bottom sheet allowing users to toggle specific notification categories.
-/// Strictly adheres to Nearhood B&W design system.
 class NotificationSettingsSheet extends StatefulWidget {
   const NotificationSettingsSheet({super.key});
 
@@ -40,62 +38,56 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomPad),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Grab handle
           Center(
             child: Container(
               width: 40,
               height: 4,
               margin: const EdgeInsets.only(bottom: 18),
               decoration: BoxDecoration(
-                color: c.line,
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-
-          // Title & Subtitle
-          Text(
+          const Text(
             'Notification Alerts',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.02 * 20,
-              color: c.ink,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'Manage what alerts you want to receive on this device.',
-            style: TextStyle(fontSize: 13.5, color: c.muted),
+            style: TextStyle(fontSize: 13.5, color: AppColors.textMuted),
           ),
-
           const SizedBox(height: 16),
-
-          // Toggles Card
           if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: CircularProgressIndicator(color: c.ink, strokeWidth: 2),
+                child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
               ),
             )
           else
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: c.line, width: 1),
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.divider, width: 1),
                 borderRadius: BorderRadius.circular(18),
               ),
               clipBehavior: Clip.antiAlias,
@@ -112,7 +104,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                       _updatePref('notif_chat_enabled', val);
                     },
                   ),
-                  Divider(height: 1, thickness: 1, color: c.line),
+                  const Divider(height: 1, thickness: 1, color: AppColors.divider),
                   _ToggleRow(
                     icon: Icons.people_outline,
                     title: 'Friend Requests',
@@ -123,8 +115,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                       _updatePref('notif_friends_enabled', val);
                     },
                   ),
-
-                  Divider(height: 1, thickness: 1, color: c.line),
+                  const Divider(height: 1, thickness: 1, color: AppColors.divider),
                   _ToggleRow(
                     icon: Icons.article_outlined,
                     title: 'Comments & Activity',
@@ -138,17 +129,14 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                 ],
               ),
             ),
-
           const SizedBox(height: 22),
-
-          // Done Button
           SizedBox(
             height: 54,
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: c.btn,
-                foregroundColor: c.btnink,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -184,8 +172,6 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.nearhoodColors;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
@@ -193,11 +179,11 @@ class _ToggleRow extends StatelessWidget {
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(
-              color: c.field,
+            decoration: const BoxDecoration(
+              color: AppColors.chipBg,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 18, color: c.ink),
+            child: Icon(icon, size: 18, color: AppColors.textPrimary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -206,18 +192,18 @@ class _ToggleRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
-                    color: c.ink,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12.5,
-                    color: c.muted,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ],
@@ -225,10 +211,10 @@ class _ToggleRow extends StatelessWidget {
           ),
           Switch.adaptive(
             value: value,
-            activeThumbColor: c.btn,
-            activeTrackColor: c.ink.withValues(alpha: 0.35),
-            inactiveThumbColor: c.muted,
-            inactiveTrackColor: c.field,
+            activeThumbColor: AppColors.primary,
+            activeTrackColor: AppColors.primarySoft,
+            inactiveThumbColor: AppColors.textMuted,
+            inactiveTrackColor: AppColors.chipBg,
             onChanged: onChanged,
           ),
         ],
@@ -237,7 +223,6 @@ class _ToggleRow extends StatelessWidget {
   }
 }
 
-/// Shows [NotificationSettingsSheet] with bottom sheet animation.
 void showNotificationSettingsSheet(BuildContext context) {
   final disableAnimations = MediaQuery.of(context).disableAnimations;
   showModalBottomSheet<void>(

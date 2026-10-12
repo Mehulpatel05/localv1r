@@ -2,17 +2,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:smart_auth/smart_auth.dart';
 import '../../../core/auth_repository.dart';
-import '../../../core/theme.dart';
+import '../../../theme/app_colors.dart';
 
-/// OTP step matching the exact HTML/CSS specification:
-/// - Back button: "← Change number" (14px, 700, var(--ink), margin-bottom 12)
-/// - Headline: "Enter the code" (28px, 800, -0.035em)
-/// - Subtitle: "Sent to +91 XXXXX XXXXX" (14.5px, muted)
-/// - 6 OTP boxes: height 58, radius 14, background var(--field), font 22px 700
-/// - Focus: border var(--ink), background var(--bg), 4px 9% glow
-/// - Primary button: height 54, radius 16, background var(--btn), disabled var(--field2)
-/// - Resend text: "Resend code in 0:30" / "Didn't get it? Resend OTP" (bold underline)
 class OtpStep extends StatefulWidget {
   final String phone;
   final AuthRepository authRepository;
@@ -71,7 +64,6 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
       duration: const Duration(milliseconds: 300),
     );
 
-    // Autofocus first box after ~50ms
     Future.delayed(const Duration(milliseconds: 50), () {
       if (mounted) {
         _focusNodes[0].requestFocus();
@@ -79,6 +71,28 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
     });
 
     _startResendTimer();
+    _listenForSmsOtp();
+  }
+
+  void _listenForSmsOtp() async {
+    try {
+      final res = await SmartAuth.instance.getSmsWithUserConsentApi(matcher: r'\d{6}');
+      final code = res.data?.code;
+      if (code != null && code.length == _otpLength && mounted) {
+        final digits = code.replaceAll(RegExp(r'\D'), '');
+        if (digits.length == _otpLength) {
+          for (int i = 0; i < _otpLength; i++) {
+            _controllers[i].text = digits[i];
+          }
+          setState(() {
+            _hasError = false;
+          });
+          _verifyOtp();
+        }
+      }
+    } catch (e) {
+      debugPrint('[OtpStep] SmartAuth listen error: $e');
+    }
   }
 
   void _startResendTimer() {
@@ -104,6 +118,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    SmartAuth.instance.removeUserConsentApiListener();
     _timer?.cancel();
     _shakeController.dispose();
     for (final node in _focusNodes) {
@@ -135,7 +150,6 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
       });
     }
 
-    // Handle 6-digit paste
     if (value.length > 1) {
       final digits = value.replaceAll(RegExp(r'\D'), '');
       for (int i = 0; i < _otpLength; i++) {
@@ -147,6 +161,9 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
           digits.length < _otpLength ? digits.length : _otpLength - 1;
       _focusNodes[focusTarget].requestFocus();
       setState(() {});
+      if (digits.length == _otpLength) {
+        _verifyOtp();
+      }
       return;
     }
 
@@ -156,6 +173,9 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
       }
     }
     setState(() {});
+    if (_isOtpComplete) {
+      _verifyOtp();
+    }
   }
 
   KeyEventResult _handleKeyEvent(int index, KeyEvent event) {
@@ -218,7 +238,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Verification error: $e'),
-            backgroundColor: context.nearhoodColors.danger,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -234,12 +254,12 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
     });
     _focusNodes[0].requestFocus();
     _startResendTimer();
+    _listenForSmsOtp();
     widget.authRepository.sendOtp(widget.phone);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.nearhoodColors;
     final disableAnimations =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final isButtonEnabled = _isOtpComplete && !_isLoading;
@@ -247,290 +267,297 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
-        0,
+        28,
         24,
         20 + MediaQuery.paddingOf(context).bottom,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Back button: "← Change number" (font-size 14px, weight 700, margin-bottom 12px)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Semantics(
-              button: true,
-              label: 'Change number',
-              child: GestureDetector(
-                onTap: () {
-                  _timer?.cancel();
-                  widget.onChangeNumber();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    '← Change number',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: colors.ink,
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Semantics(
+                button: true,
+                label: 'Change number',
+                child: GestureDetector(
+                  onTap: () {
+                    _timer?.cancel();
+                    widget.onChangeNumber();
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '← Change number',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0E8A3E),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-
-          // Headline: 28px, 800, -0.035em
-          Text(
-            'Enter the code',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.035 * 28,
-              color: colors.ink,
-              height: 1.1,
+            const Text(
+              'Enter the code',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.8,
+                color: Color(0xFF0F172A),
+                height: 1.15,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-
-          // Subtitle: "Sent to +91 XXXXX XXXXX" (14.5px, muted, 1.45)
-          Text(
-            'Sent to ${_formatPhoneNumber(widget.phone)}',
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w400,
-              color: colors.muted,
-              height: 1.45,
+            const SizedBox(height: 8),
+            Text(
+              'Sent to ${_formatPhoneNumber(widget.phone)}',
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF64748B),
+                height: 1.45,
+              ),
             ),
-          ),
-          const SizedBox(height: 22),
-
-          // 6 OTP boxes in a row (gap 9px, height 58, radius 14)
-          AnimatedBuilder(
-            animation: _shakeController,
-            builder: (context, child) {
-              double offset = 0.0;
-              if (_shakeController.isAnimating && !disableAnimations) {
-                offset = math.sin(_shakeController.value * math.pi * 6) * 8.0;
-              }
-              return Transform.translate(
-                offset: Offset(offset, 0),
-                child: child,
-              );
-            },
-            child: Row(
-              children: List.generate(_otpLength, (index) {
-                final isFocused = _focusedIndex == index;
-                final Color boxBorderColor;
-                if (_hasError) {
-                  boxBorderColor = colors.danger;
-                } else if (isFocused) {
-                  boxBorderColor = colors.ink;
-                } else {
-                  boxBorderColor = Colors.transparent;
+            const SizedBox(height: 24),
+            AnimatedBuilder(
+              animation: _shakeController,
+              builder: (context, child) {
+                double offset = 0.0;
+                if (_shakeController.isAnimating && !disableAnimations) {
+                  offset = math.sin(_shakeController.value * math.pi * 6) * 8.0;
                 }
-
-                final List<BoxShadow> shadows = [];
-                if (isFocused && !_hasError) {
-                  shadows.add(
-                    BoxShadow(
-                      color: colors.ink.withValues(alpha: 0.09),
-                      spreadRadius: 4,
-                      blurRadius: 0,
-                    ),
-                  );
-                } else if (_hasError) {
-                  shadows.add(
-                    BoxShadow(
-                      color: colors.danger.withValues(alpha: 0.12),
-                      spreadRadius: 4,
-                      blurRadius: 0,
-                    ),
-                  );
-                }
-
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      right: index < _otpLength - 1 ? 9.0 : 0.0,
-                    ),
-                    child: Semantics(
-                      label: 'Digit ${index + 1} of 6',
-                      child: Focus(
-                        onKeyEvent: (node, event) =>
-                            _handleKeyEvent(index, event),
-                        child: AnimatedContainer(
-                          duration: disableAnimations
-                              ? Duration.zero
-                              : const Duration(milliseconds: 150),
-                          curve: Curves.easeOut,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            color: isFocused ? colors.bg : colors.field,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: boxBorderColor,
-                              width: 1.5,
-                            ),
-                            boxShadow: shadows,
-                          ),
-                          alignment: Alignment.center,
-                          child: TextField(
-                            controller: _controllers[index],
-                            focusNode: _focusNodes[index],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            maxLength: 1,
-                            autofillHints: index == 0
-                                ? const [AutofillHints.oneTimeCode]
-                                : null,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            onChanged: (val) => _onDigitChanged(index, val),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: colors.ink,
-                            ),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              counterText: '',
-                              contentPadding: EdgeInsets.zero,
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                return Transform.translate(
+                  offset: Offset(offset, 0),
+                  child: child,
                 );
-              }),
-            ),
-          ),
+              },
+              child: Row(
+                children: List.generate(_otpLength, (index) {
+                  final isFocused = _focusedIndex == index;
+                  final Color boxBorderColor;
+                  if (_hasError) {
+                    boxBorderColor = AppColors.error;
+                  } else if (isFocused) {
+                    boxBorderColor = const Color(0xFF0E8A3E);
+                  } else {
+                    boxBorderColor = const Color(0xFFE2E8F0);
+                  }
 
-          // Hint / Error message area: min-height 20, margin 8px 0 12px
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 20),
-              child: _hasError
-                  ? Text(
-                      'Incorrect code. Try again.',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        color: colors.danger,
-                        height: 1.3,
+                  final List<BoxShadow> shadows = [];
+                  if (isFocused && !_hasError) {
+                    shadows.add(
+                      BoxShadow(
+                        color: const Color(0xFF0E8A3E).withValues(alpha: 0.12),
+                        spreadRadius: 4,
+                        blurRadius: 0,
                       ),
-                    )
-                  : const SizedBox(height: 20),
-            ),
-          ),
+                    );
+                  } else if (_hasError) {
+                    shadows.add(
+                      BoxShadow(
+                        color: AppColors.error.withValues(alpha: 0.12),
+                        spreadRadius: 4,
+                        blurRadius: 0,
+                      ),
+                    );
+                  }
 
-          // Primary button: height 54, radius 16, background var(--btn)
-          Semantics(
-            button: true,
-            enabled: isButtonEnabled,
-            label: 'Verify and continue',
-            child: GestureDetector(
-              onTapDown: isButtonEnabled
-                  ? (_) => setState(() => _isPressed = true)
-                  : null,
-              onTapUp: isButtonEnabled
-                  ? (_) => setState(() => _isPressed = false)
-                  : null,
-              onTapCancel: () => setState(() => _isPressed = false),
-              child: AnimatedScale(
-                scale: _isPressed && !disableAnimations ? 0.985 : 1.0,
-                duration: const Duration(milliseconds: 100),
-                child: SizedBox(
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: isButtonEnabled ? _verifyOtp : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colors.btn,
-                      disabledBackgroundColor: colors.field2,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        right: index < _otpLength - 1 ? 9.0 : 0.0,
                       ),
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: _isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                colors.btnink,
+                      child: Semantics(
+                        label: 'Digit ${index + 1} of 6',
+                        child: Focus(
+                          onKeyEvent: (node, event) =>
+                              _handleKeyEvent(index, event),
+                          child: AnimatedContainer(
+                            duration: disableAnimations
+                                ? Duration.zero
+                                : const Duration(milliseconds: 150),
+                            curve: Curves.easeOut,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: boxBorderColor,
+                                width: isFocused ? 1.8 : 1.2,
+                              ),
+                              boxShadow: shadows,
+                            ),
+                            alignment: Alignment.center,
+                            child: TextField(
+                              controller: _controllers[index],
+                              focusNode: _focusNodes[index],
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              maxLength: 1,
+                              autofillHints: const [AutofillHints.oneTimeCode],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              onChanged: (val) => _onDigitChanged(index, val),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                counterText: '',
+                                contentPadding: EdgeInsets.zero,
+                                isDense: true,
                               ),
                             ),
-                          )
-                        : Text(
-                            'Verify and continue',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: isButtonEnabled
-                                  ? colors.btnink
-                                  : colors.muted,
-                            ),
                           ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 20),
+                child: _hasError
+                    ? Text(
+                        'Incorrect code. Try again.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.error,
+                          height: 1.3,
+                        ),
+                      )
+                    : const SizedBox(height: 20),
+              ),
+            ),
+            Semantics(
+              button: true,
+              enabled: isButtonEnabled,
+              label: 'Verify and continue',
+              child: GestureDetector(
+                onTapDown: isButtonEnabled
+                    ? (_) => setState(() => _isPressed = true)
+                    : null,
+                onTapUp: isButtonEnabled
+                    ? (_) => setState(() => _isPressed = false)
+                    : null,
+                onTapCancel: () => setState(() => _isPressed = false),
+                child: AnimatedScale(
+                  scale: _isPressed && !disableAnimations ? 0.985 : 1.0,
+                  duration: const Duration(milliseconds: 100),
+                  child: SizedBox(
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: isButtonEnabled ? _verifyOtp : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0E8A3E),
+                        disabledBackgroundColor: const Color(0xFFE2E8F0),
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Verify and continue',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: isButtonEnabled
+                                    ? Colors.white
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-
-          // Resend countdown row: margin-top 14, 13.5px, var(--muted)
-          Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Center(
-              child: _secondsRemaining > 0
-                  ? Text(
-                      'Resend code in 0:${_secondsRemaining.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w400,
-                        color: colors.muted,
-                      ),
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Didn’t get it? ',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w400,
-                            color: colors.muted,
-                          ),
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Center(
+                child: _secondsRemaining > 0
+                    ? Text(
+                        'Resend code in 0:${_secondsRemaining.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF64748B),
                         ),
-                        Semantics(
-                          button: true,
-                          label: 'Resend OTP',
-                          child: GestureDetector(
-                            onTap: _onResendTapped,
-                            child: Text(
-                              'Resend OTP',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: colors.ink,
-                                decoration: TextDecoration.underline,
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Didn’t get it? ',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          Semantics(
+                            button: true,
+                            label: 'Resend OTP',
+                            child: GestureDetector(
+                              onTap: _onResendTapped,
+                              child: const Text(
+                                'Resend OTP',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0E8A3E),
+                                  decoration: TextDecoration.underline,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.verified_user_outlined,
+                  size: 16,
+                  color: Color(0xFF0E8A3E),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Verified neighbours only',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0E8A3E),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

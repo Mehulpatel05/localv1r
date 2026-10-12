@@ -4,6 +4,7 @@ import '../../bazar/shop_detail_screen.dart';
 import 'my_products_screen.dart';
 import 'edit_shop_details_screen.dart';
 import 'shop_insights_screen.dart';
+import '../../../theme/app_colors.dart';
 
 class MyShopDashboardScreen extends StatefulWidget {
   final LocalShop? initialShop;
@@ -91,7 +92,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                 ? '🟢 Shop is now OPEN. Customers see you in Bazaar!'
                 : '🔴 Shop is now CLOSED. Customers will see you as closed.',
           ),
-          backgroundColor: value ? const Color(0xFF0D5E56) : const Color(0xFF4A1515),
+          backgroundColor: value ? AppColors.textPrimary : AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 2),
@@ -104,33 +105,33 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF111A1B),
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1F383D)),
+          side: BorderSide(color: AppColors.divider),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.pause_circle_outline, color: Color(0xFFF87171), size: 26),
-            SizedBox(width: 10),
+            Icon(Icons.pause_circle_outline, color: AppColors.error, size: 26),
+            const SizedBox(width: 10),
             Text(
               'Deactivate Shop?',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
-        content: const Text(
+        content: Text(
           'Your shop will be hidden from the Bazaar feed temporarily. Your listed products and settings will remain safe.',
-          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, height: 1.4),
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -148,7 +149,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
   void _showBoostShopBottomSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0A1F22),
+      backgroundColor: AppColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -162,7 +163,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -170,14 +171,14 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF0E766E).withValues(alpha: 0.3),
+                color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF14B8A6)),
+                border: Border.all(color: AppColors.primary),
               ),
-              child: const Text(
+              child: Text(
                 '✨ COMING SOON',
                 style: TextStyle(
-                  color: Color(0xFF2DD4BF),
+                  color: AppColors.primaryText,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.8,
@@ -188,26 +189,26 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF14454C).withValues(alpha: 0.5),
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
               child: const Text('🚀', style: TextStyle(fontSize: 36)),
             ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'Boost My Shop',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Get 10x more reach and appear at the very top of Vadodara Bazaar for 7 days. Starting at just ₹49.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF94A3B8),
+                color: AppColors.textMuted,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -216,18 +217,17 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF072E33),
+                color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF0F5A63)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.auto_awesome, color: Color(0xFF2DD4BF), size: 20),
-                  SizedBox(width: 12),
+                  Icon(Icons.auto_awesome, color: AppColors.primaryText, size: 20),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Feature is under active development and launching in the next update!',
-                      style: TextStyle(color: Color(0xFF2DD4BF), fontWeight: FontWeight.w600, fontSize: 13),
+                      style: TextStyle(color: AppColors.primaryText, fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                   ),
                 ],
@@ -238,8 +238,8 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: const StadiumBorder(),
                 ),
@@ -255,13 +255,10 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg = Color(0xFF0A2E33);
-    const borderColor = Color(0xFF0F4E56);
-
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: Padding(
@@ -269,23 +266,23 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
           child: GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 size: 20,
               ),
             ),
           ),
         ),
         centerTitle: true,
-        title: const Text(
+        title: Text(
           'My shop',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w700,
           ),
@@ -296,12 +293,12 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
             child: Container(
               width: 38,
               height: 38,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E3A40),
+              decoration: BoxDecoration(
+                color: AppColors.chipBg,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.settings, color: Colors.white70, size: 20),
+                icon: Icon(Icons.settings, color: AppColors.textPrimary, size: 20),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -316,10 +313,10 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF14B8A6)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
-              color: const Color(0xFF14B8A6),
-              backgroundColor: const Color(0xFF0A2E33),
+              color: AppColors.primary,
+              backgroundColor: AppColors.surface,
               onRefresh: _loadShopData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -327,24 +324,22 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Header Shop Info Card
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: AppColors.divider),
                       ),
                       child: Row(
                         children: [
-                          // Shop Icon / Logo Box
                           Container(
                             width: 60,
                             height: 60,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF062327),
+                              color: AppColors.chipBg,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFF145E68)),
+                              border: Border.all(color: AppColors.divider),
                             ),
                             child: Center(
                               child: _shop.imageUrl.isNotEmpty
@@ -368,7 +363,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                             ),
                           ),
                           const SizedBox(width: 14),
-                          // Shop Name, Badge & Subtitle
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,8 +372,8 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                                     Flexible(
                                       child: Text(
                                         _shop.name,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: AppColors.textPrimary,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w800,
                                           letterSpacing: -0.3,
@@ -392,18 +386,18 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF0F4E56),
+                                        color: AppColors.primarySoft,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.check, size: 12, color: Color(0xFF2DD4BF)),
-                                          SizedBox(width: 3),
+                                          Icon(Icons.check, size: 12, color: AppColors.primaryText),
+                                          const SizedBox(width: 3),
                                           Text(
                                             'Verified',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: AppColors.primaryText,
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -416,8 +410,8 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   '${_shop.category} · ${_shop.location.split(',').first}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF94A3B8),
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -433,7 +427,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
 
                     const SizedBox(height: 22),
 
-                    // 2. Shop Open / Closed Toggle Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -441,10 +434,10 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Shop open',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textPrimary,
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -455,7 +448,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                                     ? 'Customers see you as open right now'
                                     : 'Shop is currently marked as closed',
                                 style: TextStyle(
-                                  color: _isOpen ? const Color(0xFF94A3B8) : const Color(0xFFF87171),
+                                  color: _isOpen ? AppColors.textMuted : AppColors.error,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -468,10 +461,10 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                           child: Switch(
                             value: _isOpen,
                             onChanged: _toggleShopOpen,
-                            activeTrackColor: const Color(0xFF14B8A6),
+                            activeTrackColor: AppColors.primary,
                             activeThumbColor: Colors.white,
-                            inactiveTrackColor: const Color(0xFF1E293B),
-                            inactiveThumbColor: Colors.grey,
+                            inactiveTrackColor: AppColors.chipBg,
+                            inactiveThumbColor: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -479,15 +472,12 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
 
                     const SizedBox(height: 22),
 
-                    // 3. 3 Metrics Grid Row (Views | Chats | Orders)
                     Row(
                       children: [
                         Expanded(
                           child: _buildMetricCard(
                             count: '$_viewsThisWeek',
                             label: 'Views this week',
-                            cardBg: cardBg,
-                            borderColor: borderColor,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -495,8 +485,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                           child: _buildMetricCard(
                             count: '$_chatsCount',
                             label: 'Chats',
-                            cardBg: cardBg,
-                            borderColor: borderColor,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -504,8 +492,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                           child: _buildMetricCard(
                             count: '$_ordersCount',
                             label: 'Orders',
-                            cardBg: cardBg,
-                            borderColor: borderColor,
                           ),
                         ),
                       ],
@@ -513,11 +499,10 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
 
                     const SizedBox(height: 28),
 
-                    // 4. Section Title: Manage
-                    const Text(
+                    Text(
                       'Manage',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
@@ -525,7 +510,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // 5. Manage List Items
                     _buildManageItem(
                       emoji: '📦',
                       title: 'Manage products',
@@ -585,7 +569,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                     _buildManageItem(
                       emoji: '⏸️',
                       title: 'Deactivate shop',
-                      titleColor: const Color(0xFFF87171),
+                      titleColor: AppColors.error,
                       subtitle: 'Hide your shop temporarily',
                       onTap: _showDeactivateDialog,
                     ),
@@ -601,22 +585,20 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
   Widget _buildMetricCard({
     required String count,
     required String label,
-    required Color cardBg,
-    required Color borderColor,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         children: [
           Text(
             count,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.textPrimary,
               fontSize: 22,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
@@ -626,8 +608,8 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF94A3B8),
+            style: TextStyle(
+              color: AppColors.textMuted,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -644,27 +626,30 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    Color titleColor = Colors.white,
+    Color? titleColor,
     String? badgeText,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          splashColor: const Color(0xFF0F4E56).withValues(alpha: 0.3),
-          highlightColor: const Color(0xFF0F4E56).withValues(alpha: 0.15),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             child: Row(
               children: [
                 Container(
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF072E33),
+                    color: AppColors.chipBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
@@ -681,7 +666,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                           Text(
                             title,
                             style: TextStyle(
-                              color: titleColor,
+                              color: titleColor ?? AppColors.textPrimary,
                               fontSize: 15.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -691,14 +676,14 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0E766E).withValues(alpha: 0.35),
+                                color: AppColors.primarySoft,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFF14B8A6), width: 0.8),
+                                border: Border.all(color: AppColors.primary, width: 0.8),
                               ),
                               child: Text(
                                 badgeText,
-                                style: const TextStyle(
-                                  color: Color(0xFF2DD4BF),
+                                style: TextStyle(
+                                  color: AppColors.primaryText,
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.5,
@@ -711,8 +696,8 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
+                        style: TextStyle(
+                          color: AppColors.textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
                         ),
@@ -720,9 +705,9 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF64748B),
+                  color: AppColors.textMuted,
                   size: 20,
                 ),
               ],

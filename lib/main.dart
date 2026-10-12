@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'services/post_repository.dart';
 import 'services/notification_service.dart';
@@ -22,36 +21,46 @@ import 'core/splash_controller.dart';
 import 'core/action_state/action_state_provider.dart';
 import 'services/user_action_state_service.dart';
 import 'screens/auth/create_handle_screen.dart';
+import 'core/location/location_gate_screen.dart';
+import 'core/location/city_not_serviceable_screen.dart';
+import 'core/location/city_picker_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // Fast parallel startup: orientation lock + Firebase core initialization
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   await Future.wait([
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]),
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
     Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ),
   ]);
   
-  // Optimize Flutter Image Cache for instant 0ms media renders
   PaintingBinding.instance.imageCache.maximumSize = 2500;
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024; // 120 MB
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024;
 
-  // Non-blocking asynchronous service setup (does not delay runApp)
   _initNonCriticalServices();
 
   runApp(const VadodaraLocalApp());
 }
 
 void _initNonCriticalServices() {
-  // Register background message handler for push notifications
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 }
 
@@ -71,6 +80,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   bool _isSplashFinished = false;
   bool _isLoggedIn = false;
   String _userHandle = 'Guest';
+  bool _previewMode = false;
 
   bool get _canShowMainFlow => _isReady && _isSplashFinished;
 
@@ -79,8 +89,14 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.initState();
     locationService = LocationService();
     postRepository = PostRepository(locationService);
+    locationService.addListener(_onLocationChanged);
     _authSub = AuthService.instance.authEvents.listen(_handleAuthEvent);
+    NotificationService().initialize();
     _bootstrapApp();
+  }
+
+  void _onLocationChanged() {
+    if (mounted) setState(() {});
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -111,12 +127,12 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   @override
   void dispose() {
     _authSub?.cancel();
+    locationService.removeListener(_onLocationChanged);
     locationService.dispose();
     postRepository.dispose();
     super.dispose();
   }
 
-  /// ⚡ Phase 2: Three-Stage Pre-Processing Pipeline Bootstrap
   Future<void> _bootstrapApp() async {
     try {
       final result = await SplashController.instance.runColdStartPipeline(
@@ -129,13 +145,8 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         _isLoggedIn = true;
         _userHandle = result.userHandle;
 
-        // Background non-critical service setup
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          NotificationService().initialize();
-          NotificationService().startListening(result.userHandle);
           PresenceService.instance.init(result.userHandle);
-          // Call system hidden for now
-          // CallListenerService.instance.startListening(result.userHandle);
         });
       }
 
@@ -149,6 +160,15 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       if (mounted && _isSplashFinished) {
         setState(() {});
       }
+    } finally {
+      // Must run even when the cold-start pipeline throws. initialize() is what
+      // reads getInitialMessage() and registers onMessageOpenedApp — if a
+      // network failure above skipped it, tapping a notification would do
+      // nothing at all. It is idempotent and binds whichever user is logged in,
+      // so it is safe on every path.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationService().initialize();
+      });
     }
   }
 
@@ -184,79 +204,115 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                   key: const ValueKey('splash_view'),
                   onAnimationComplete: () {
                     if (mounted) {
+                      SplashController.instance.isMainFlowVisible = true;
                       setState(() {
                         _isSplashFinished = true;
                       });
                     }
                   },
                 )
-              : _isLoggedIn
-                  ? MainScreen(
-                      key: const ValueKey('main_view'),
-                      repository: postRepository,
-                      currentUserHandle: _userHandle,
-                    )
-                  : LoginFlowPage(
-                      key: const ValueKey('login_flow_view'),
-                      authRepository: BackendAuthRepository(),
-                      postRepository: postRepository,
-                      onLoggedIn: () async {
-                        try {
-                          debugPrint('[MainFlow] onLoggedIn callback triggered.');
-                          final prefs = await SharedPreferences.getInstance();
-                          final handle = (await AuthService.instance.getUserHandle()) ?? prefs.getString('user_handle') ?? '';
-                          final userId = (await AuthService.instance.getUserId()) ?? prefs.getString('user_id') ?? '';
-                          final phone = (await AuthService.instance.getPhoneNumber()) ?? prefs.getString('phone_number') ?? '';
-
-                          final isNewUser = AuthService.isNewUserHandle(handle);
-                          debugPrint('[MainFlow] Auth evaluation: userId=$userId, phone=$phone, handle="$handle", isNewUser=$isNewUser');
-
-                          if (isNewUser) {
-                            debugPrint('[MainFlow] Navigating new user to CreateHandleScreen...');
-                            if (navigatorKey.currentState != null) {
-                              await navigatorKey.currentState!.push(
-                                MaterialPageRoute(
-                                  builder: (_) => CreateHandleScreen(
-                                    repository: postRepository,
-                                    userId: userId,
-                                    phoneNumber: phone,
-                                  ),
-                                ),
-                              );
-                            } else {
-                              debugPrint('[MainFlow] WARNING: navigatorKey.currentState was null during navigation.');
-                            }
-                          } else {
-                            debugPrint('[MainFlow] Existing user detected. Activating main session for $handle...');
-                            postRepository.currentUserHandle = handle;
-
-                            if (mounted) {
-                              setState(() {
-                                _isLoggedIn = true;
-                                _userHandle = handle;
-                              });
-                            }
-
-                            NotificationService().initialize();
-                            PresenceService.instance.init(handle);
-                            CallListenerService.instance.startListening(handle);
-
-                            // ⚡ Instant Background Cache Preloading (non-blocking)
-                            SplashController.instance.warmFetchOnLogin(
-                              uid: userId,
-                              handle: handle,
-                              cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'surat_gujarat',
-                              postRepo: postRepository,
-                            );
-                          }
-                        } catch (e, stack) {
-                          debugPrint('[MainFlow] ERROR in onLoggedIn: $e\n$stack');
-                        }
-                      },
-                    ),
+              : _buildFlowContent(locationService),
         ),
       ),
     );
   }
-}
 
+  void _openCityPicker() {
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      Navigator.push(
+        ctx,
+        MaterialPageRoute(builder: (_) => const CityPickerScreen()),
+      );
+    }
+  }
+
+  Widget _buildFlowContent(LocationService loc) {
+    if ((loc.isLocationBlocked || loc.isDetectingLocation) && !_previewMode) {
+      return LocationGateScreen(
+        key: const ValueKey('location_gate_view'),
+        locationService: loc,
+        onManualSelect: _openCityPicker,
+      );
+    }
+
+    if (!loc.isVadodara && !loc.isManualLocation && !_previewMode) {
+      return CityNotServiceableScreen(
+        key: const ValueKey('city_not_serviceable_view'),
+        locationService: loc,
+        onPreviewVadodara: () {
+          if (mounted) {
+            setState(() {
+              _previewMode = true;
+            });
+          }
+        },
+        onManualSelect: _openCityPicker,
+      );
+    }
+
+    return _isLoggedIn
+        ? MainScreen(
+            key: const ValueKey('main_view'),
+            repository: postRepository,
+            currentUserHandle: _userHandle,
+          )
+        : LoginFlowPage(
+            key: const ValueKey('login_flow_view'),
+            authRepository: BackendAuthRepository(),
+            postRepository: postRepository,
+            onLoggedIn: () async {
+              try {
+                debugPrint('[MainFlow] onLoggedIn callback triggered.');
+                final prefs = await SharedPreferences.getInstance();
+                final handle = (await AuthService.instance.getUserHandle()) ?? prefs.getString('user_handle') ?? '';
+                final userId = (await AuthService.instance.getUserId()) ?? prefs.getString('user_id') ?? '';
+                final phone = (await AuthService.instance.getPhoneNumber()) ?? prefs.getString('phone_number') ?? '';
+
+                final isNewUser = AuthService.isNewUserHandle(handle);
+                debugPrint('[MainFlow] Auth evaluation: userId=$userId, phone=$phone, handle="$handle", isNewUser=$isNewUser');
+
+                if (isNewUser) {
+                  debugPrint('[MainFlow] Navigating new user to CreateHandleScreen...');
+                  if (navigatorKey.currentState != null) {
+                    await navigatorKey.currentState!.push(
+                      MaterialPageRoute(
+                        builder: (_) => CreateHandleScreen(
+                          repository: postRepository,
+                          userId: userId,
+                          phoneNumber: phone,
+                        ),
+                      ),
+                    );
+                  } else {
+                    debugPrint('[MainFlow] WARNING: navigatorKey.currentState was null during navigation.');
+                  }
+                } else {
+                  debugPrint('[MainFlow] Existing user detected. Activating main session for $handle...');
+                  postRepository.currentUserHandle = handle;
+
+                  if (mounted) {
+                    setState(() {
+                      _isLoggedIn = true;
+                      _userHandle = handle;
+                    });
+                  }
+
+                  NotificationService().initialize();
+                  PresenceService.instance.init(handle);
+                  CallListenerService.instance.startListening(handle);
+
+                  SplashController.instance.warmFetchOnLogin(
+                    uid: userId,
+                    handle: handle,
+                    cityId: locationService.cityId.isNotEmpty ? locationService.cityId : 'GJ-VAD',
+                    postRepo: postRepository,
+                  );
+                }
+              } catch (e, stack) {
+                debugPrint('[MainFlow] ERROR in onLoggedIn: $e\n$stack');
+              }
+            },
+          );
+  }
+}

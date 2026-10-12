@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../theme/app_colors.dart';
 import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/widgets/post_image_view.dart';
@@ -8,9 +10,13 @@ import '../../models/post_model.dart';
 import '../../models/comment_model.dart';
 import '../../services/post_repository.dart';
 import '../../core/utils/content_filter.dart';
-import '../../core/models/user_profile.dart';
-import '../../services/notification_service.dart';
+import '../../services/rewards_service.dart';
+import '../../core/widgets/pressable_scale.dart';
+import '../../core/widgets/verified_badge.dart';
+import '../../core/services/name_cache_service.dart';
+import '../../core/services/badge_cache_service.dart';
 import '../profile/other_user_profile_sheet.dart';
+import '../main/main_screen.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -32,6 +38,120 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _commentError;
+  final Map<String, bool> _likeVotedOverrides = {};
+  final Map<String, int> _likeCountOverrides = {};
+  final Set<String> _inFlightCommentLikes = {};
+  final Map<String, DateTime> _likeOptimisticTimestamps = {};
+  final List<Comment> _optimisticComments = [];
+  late final bool _isOwnPost;
+
+  @override
+  void initState() {
+    super.initState();
+    _isOwnPost = widget.post.authorHandle.replaceAll('@', '').toLowerCase() ==
+        widget.currentUserHandle.replaceAll('@', '').toLowerCase();
+  }
+
+  bool _isCommentLiked(Comment comment) {
+    if (_likeVotedOverrides.containsKey(comment.id)) {
+      return _likeVotedOverrides[comment.id]!;
+    }
+    return comment.isLiked;
+  }
+
+  int _getCommentLikeCount(Comment comment) {
+    if (_likeCountOverrides.containsKey(comment.id)) {
+      return _likeCountOverrides[comment.id]!;
+    }
+    return comment.likeCount;
+  }
+
+  Future<void> _toggleCommentLike(Comment comment) async {
+    final isOwn = comment.authorHandle.replaceAll('@', '').toLowerCase() ==
+        widget.currentUserHandle.replaceAll('@', '').toLowerCase();
+    if (isOwn) return;
+
+    if (_inFlightCommentLikes.contains(comment.id)) return;
+
+    final isCurrentlyVoted = _isCommentLiked(comment);
+    final currentCount = _getCommentLikeCount(comment);
+    final nextVoted = !isCurrentlyVoted;
+    final nextCount = (isCurrentlyVoted ? currentCount - 1 : currentCount + 1).clamp(0, 99999);
+
+    setState(() {
+      _inFlightCommentLikes.add(comment.id);
+      _likeVotedOverrides[comment.id] = nextVoted;
+      _likeCountOverrides[comment.id] = nextCount;
+      _likeOptimisticTimestamps[comment.id] = DateTime.now();
+    });
+
+    try {
+      final res = await RewardsService.instance.toggleCommentLike(comment.id);
+      if (!mounted) return;
+
+      if (res['success'] == true) {
+        final serverLiked = res['isLiked'] as bool? ?? res['liked_by_me'] as bool? ?? nextVoted;
+        final serverCount = (res['likeCount'] as num?)?.toInt() ?? nextCount;
+        setState(() {
+          _likeVotedOverrides[comment.id] = serverLiked;
+          _likeCountOverrides[comment.id] = serverCount;
+        });
+      } else {
+        setState(() {
+          _likeVotedOverrides[comment.id] = isCurrentlyVoted;
+          _likeCountOverrides[comment.id] = currentCount;
+          _likeOptimisticTimestamps.remove(comment.id);
+        });
+        final rawMsg = res['message'] as String?;
+        final msg = (rawMsg != null && rawMsg.trim().isNotEmpty)
+            ? rawMsg.trim()
+            : 'Could not update like. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            content: Text(msg),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _likeVotedOverrides[comment.id] = isCurrentlyVoted;
+          _likeCountOverrides[comment.id] = currentCount;
+          _likeOptimisticTimestamps.remove(comment.id);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            content: Text('Network error. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _inFlightCommentLikes.remove(comment.id);
+        });
+      } else {
+        _inFlightCommentLikes.remove(comment.id);
+      }
+    }
+  }
+
+  void _reportContent(BuildContext context, String type, String id) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: AppColors.surface,
+        content: Text(
+          'Report submitted. Our moderation team will review this.',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -40,7 +160,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     super.dispose();
   }
 
-  void _submitComment() {
+  Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
@@ -52,35 +172,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    setState(() {
-      _commentError = null;
-    });
-
-    widget.repository.addComment(
-      widget.post.id,
-      widget.currentUserHandle,
-      text,
+    final localCommentId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticComment = Comment(
+      id: localCommentId,
+      postId: widget.post.id,
+      authorHandle: widget.currentUserHandle,
+      content: text,
+      createdAt: DateTime.now(),
     );
 
-    final author = widget.post.authorHandle.replaceAll('@', '').trim();
-    final me = widget.currentUserHandle.replaceAll('@', '').trim();
-    if (author.isNotEmpty && author != me) {
-      NotificationService().sendNotification(
-        targetHandle: author,
-        title: 'New Comment',
-        body: '${me.displayHandle} commented: "$text"',
-        data: {
-          'type': 'post_comment',
-          'postId': widget.post.id,
-          'senderHandle': me,
-        },
-      );
-    }
+    setState(() {
+      _commentError = null;
+      _optimisticComments.add(optimisticComment);
+    });
 
     _commentController.clear();
     FocusScope.of(context).unfocus();
 
-    // Scroll to the bottom to see new comment
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -90,95 +198,193 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       }
     });
+
+    try {
+      final res = await widget.repository.addComment(
+        widget.post.id,
+        widget.currentUserHandle,
+        text,
+      );
+
+      final pointsAwarded = (res['pointsAwarded'] as num?)?.toInt() ?? 0;
+      if (mounted && pointsAwarded > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: Row(
+              children: [
+                const Icon(Icons.star_rounded, color: Color(0xFFFEF3C7), size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Comment posted · +$pointsAwarded pts',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _optimisticComments.removeWhere((c) => c.id == localCommentId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text('Failed to post comment: $e'),
+          ),
+        );
+      }
+    }
   }
 
   void _confirmDeletePost(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Delete Post?', style: TextStyle(color: Colors.black87)),
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Post?', style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
           'Are you sure you want to permanently delete this anonymous post? This action cannot be undone.',
-          style: TextStyle(color: Colors.black54, fontSize: 14),
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.black54)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F1D1D)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
               Navigator.pop(ctx);
               await widget.repository.deletePostPermanently(widget.post.id);
               if (context.mounted) {
-                Navigator.pop(context); // Pop back to feed screen
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    backgroundColor: Color(0xFFEF4444),
+                    backgroundColor: AppColors.error,
                     content: Text('Post permanently deleted.'),
                   ),
                 );
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.black87)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
+  void _handleBackNavigation(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => MainScreen(
+            repository: widget.repository,
+            currentUserHandle: widget.currentUserHandle,
+          ),
+        ),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = widget.repository;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackNavigation(context);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: () => _handleBackNavigation(context),
+          ),
+          title: Text(
           (widget.post.category == PostCategory.general || (widget.post.areaName?.contains('General') ?? true))
               ? 'Discussion Thread — Vadodara'
               : 'Discussion Thread — ${widget.post.areaName}',
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
-          if (widget.post.authorHandle == widget.currentUserHandle)
+          if (_isOwnPost)
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
               tooltip: 'Delete Post',
               onPressed: () => _confirmDeletePost(context),
             ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textPrimary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (val) {
+              if (val == 'report') {
+                _reportContent(context, 'post', widget.post.id);
+              } else if (val == 'delete' && _isOwnPost) {
+                _confirmDeletePost(context);
+              }
+            },
+            itemBuilder: (ctx) => [
+              if (_isOwnPost)
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: AppColors.error, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, color: AppColors.textPrimary, size: 18),
+                    SizedBox(width: 8),
+                    Text('Report Post', style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
         children: [
-          // Comments list + Post Card
           Expanded(
             child: ListView(
               controller: _scrollController,
               padding: const EdgeInsets.all(14),
               children: [
-                // Highlighted original post card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: widget.post.isEmergency
-                        ? const Color(0xFF450A0A)
-                        : const Color(0xFF072E33),
+                        ? AppColors.errorSoft
+                        : AppColors.surface,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: widget.post.isEmergency
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                          : const Color(0xFF0E4B52),
+                          ? AppColors.error
+                          : AppColors.divider,
                     ),
                   ),
                   child: Column(
@@ -206,32 +412,101 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    if (widget.post.authorHandle != widget.currentUserHandle) {
-                                      showOtherUserProfileSheet(
-                                        context,
-                                        partnerHandle: widget.post.authorHandle,
-                                        currentUserHandle: widget.currentUserHandle,
-                                        repository: widget.repository,
-                                      );
-                                    }
+                                Builder(
+                                  builder: (context) {
+                                    final authorName = getDisplayName(
+                                      widget.post.authorHandle,
+                                      fallback: widget.post.authorName,
+                                    );
+                                    final isVerified = BadgeCacheService.instance.isUserVerified(
+                                      widget.post.authorHandle,
+                                      fallback: widget.post.isVerified,
+                                    );
+                                    final badgeText = BadgeCacheService.instance.getUserBadge(
+                                      widget.post.authorHandle,
+                                      fallback: widget.post.authorBadge,
+                                    );
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        if (widget.post.authorHandle != widget.currentUserHandle) {
+                                          showOtherUserProfileSheet(
+                                            context,
+                                            partnerHandle: widget.post.authorHandle,
+                                            currentUserHandle: widget.currentUserHandle,
+                                            repository: widget.repository,
+                                          );
+                                        }
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              authorName,
+                                              style: const TextStyle(
+                                                color: AppColors.textPrimary,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isVerified || (badgeText != null && badgeText.isNotEmpty)) ...[
+                                            const SizedBox(width: 5),
+                                            VerifiedBadge(
+                                              isVerified: isVerified,
+                                              badgeText: badgeText,
+                                              compact: true,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
                                   },
-                                  child: Text(
-                                    widget.post.authorHandle.displayHandle,
-                                    style: TextStyle(
-                                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                    ),
-                                  ),
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  '${widget.post.category.icon} ${widget.post.category.label} • ${_formatTime(widget.post.createdAt)}',
-                                  style: TextStyle(
-                                    color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
-                                    fontSize: 11.5,
+                                InkWell(
+                                  onTap: () async {
+                                    final lat = widget.post.lat;
+                                    final lng = widget.post.lng;
+                                    Uri uri;
+                                    if (lat != null && lng != null) {
+                                      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                                    } else {
+                                      final query = Uri.encodeComponent('${widget.post.areaName ?? "Vadodara"}, Gujarat, India');
+                                      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+                                    }
+                                    try {
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                      }
+                                    } catch (_) {}
+                                  },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.location_on_rounded, size: 12, color: AppColors.primary),
+                                      const SizedBox(width: 3),
+                                      Flexible(
+                                        child: Builder(
+                                          builder: (context) {
+                                            final locationAndTime = '${widget.post.areaName != null && widget.post.areaName!.isNotEmpty ? widget.post.areaName : "Vadodara"} • ${_formatTime(widget.post.createdAt)}';
+
+                                            return Text(
+                                              locationAndTime,
+                                              style: const TextStyle(
+                                                color: AppColors.textMuted,
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -242,8 +517,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       const SizedBox(height: 12),
                       Text(
                         widget.post.content,
-                        style: TextStyle(
-                          color: isDark ? Colors.white : Colors.black,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
                           fontSize: 16,
                           height: 1.45,
                         ),
@@ -255,8 +530,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ? widget.post.imageUrl!
                               : widget.post.mediaUrls.first,
                           allImages: widget.post.mediaUrls.isNotEmpty
-                              ? widget.post.mediaUrls
-                              : [widget.post.imageUrl!],
+                          ? widget.post.mediaUrls
+                          : [widget.post.imageUrl!],
                           height: 280,
                           borderRadius: BorderRadius.circular(14),
                           heroTagPrefix: 'detail_post_${widget.post.id}',
@@ -264,14 +539,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         ),
                       ],
                       const SizedBox(height: 12),
-                      Divider(color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9)),
+                      const Divider(color: AppColors.divider),
                       ListenableBuilder(
                         listenable: widget.repository,
                         builder: (context, _) {
-                          final currentPost = widget.repository.allPosts.firstWhere(
-                            (p) => p.id == widget.post.id,
-                            orElse: () => widget.post,
-                          );
+                          final currentPost = widget.repository.getPostById(widget.post.id) ?? widget.post;
                           return Row(
                             children: [
                               LikeCapsule(
@@ -281,16 +553,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(width: 16),
                               Row(
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.chat_bubble_outline_rounded,
                                     size: 16,
-                                    color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                                    color: AppColors.textMuted,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    '${currentPost.commentCount} comments',
-                                    style: TextStyle(
-                                      color: isDark ? const Color(0xFF9A9A9A) : const Color(0xFF64748B),
+                                    currentPost.commentCount == 1 ? '1 comment' : '${currentPost.commentCount} comments',
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -305,56 +577,66 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Section title
-                Text(
+                const Text(
                   'NEIGHBOR COMMENTS',
                   style: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38,
+                    color: AppColors.textMuted,
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                     letterSpacing: 1.0,
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Comments body
                 StreamBuilder<List<Comment>>(
-                  stream: repo.listenToComments(widget.post.id),
+                  stream: repo.listenToComments(widget.post.id, userHandle: widget.currentUserHandle),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: CircularProgressIndicator(
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ));
+                    final fetchedComments = snapshot.data ?? [];
+                    final comments = [...fetchedComments];
+                    for (final opt in _optimisticComments) {
+                      final alreadyIncluded = comments.any((c) =>
+                          c.id == opt.id ||
+                          (c.content == opt.content &&
+                              c.authorHandle.toLowerCase().replaceAll('@', '') ==
+                                  opt.authorHandle.toLowerCase().replaceAll('@', '')));
+                      if (!alreadyIncluded) {
+                        comments.add(opt);
+                      }
                     }
-                    final comments = snapshot.data ?? [];
+
+                    if (snapshot.connectionState == ConnectionState.waiting && comments.isEmpty) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      );
+                    }
                     if (comments.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40.0),
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40.0),
                         child: Center(
                           child: Column(
                             children: [
                               Icon(
                                 Icons.question_answer_outlined,
                                 size: 40,
-                                color: isDark ? Colors.white24 : Colors.black26,
+                                color: AppColors.textMuted,
                               ),
-                              const SizedBox(height: 8),
+                              SizedBox(height: 8),
                               Text(
                                 'No replies yet',
                                 style: TextStyle(
-                                  color: isDark ? Colors.white60 : Colors.black54,
+                                  color: AppColors.textMuted,
                                   fontSize: 13,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              SizedBox(height: 4),
                               Text(
-                                'Ask for details or reply as "${widget.currentUserHandle}"',
+                                'Ask for details or reply to join the conversation',
                                 style: TextStyle(
-                                  color: isDark ? Colors.white38 : Colors.black38,
+                                  color: AppColors.textMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -374,10 +656,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF072E33),
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: const Color(0xFF0E4B52),
+                              color: AppColors.divider,
                             ),
                           ),
                           child: Row(
@@ -405,45 +687,183 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   children: [
                                     Row(
                                       children: [
-                                        GestureDetector(
-                                          onTap: () {
-                                            if (comment.authorHandle != widget.currentUserHandle) {
-                                              showOtherUserProfileSheet(
-                                                context,
-                                                partnerHandle: comment.authorHandle,
-                                                currentUserHandle: widget.currentUserHandle,
-                                                repository: widget.repository,
-                                              );
-                                            }
+                                        Builder(
+                                          builder: (context) {
+                                            final cName = getDisplayName(
+                                              comment.authorHandle,
+                                              fallback: comment.authorName,
+                                            );
+                                            final isVerified = BadgeCacheService.instance.isUserVerified(
+                                              comment.authorHandle,
+                                              fallback: comment.isVerified,
+                                            );
+                                            final badgeText = BadgeCacheService.instance.getUserBadge(
+                                              comment.authorHandle,
+                                              fallback: comment.authorBadge,
+                                            );
+
+                                            return GestureDetector(
+                                              onTap: () {
+                                                if (comment.authorHandle != widget.currentUserHandle) {
+                                                  showOtherUserProfileSheet(
+                                                    context,
+                                                    partnerHandle: comment.authorHandle,
+                                                    currentUserHandle: widget.currentUserHandle,
+                                                    repository: widget.repository,
+                                                  );
+                                                }
+                                              },
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    cName,
+                                                    style: const TextStyle(
+                                                      color: AppColors.textPrimary,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                  if (isVerified || (badgeText != null && badgeText.isNotEmpty)) ...[
+                                                    const SizedBox(width: 4),
+                                                    VerifiedBadge(
+                                                      isVerified: isVerified,
+                                                      badgeText: badgeText,
+                                                      fontSize: 8.5,
+                                                      iconSize: 12,
+                                                      compact: true,
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            );
                                           },
-                                          child: Text(
-                                            comment.authorHandle.displayHandle,
-                                            style: TextStyle(
-                                              color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                            ),
-                                          ),
                                         ),
                                         const Spacer(),
                                         Text(
                                           _formatTime(comment.createdAt),
-                                          style: TextStyle(
-                                            color: isDark ? const Color(0xFF737373) : const Color(0xFF94A3B8),
+                                          style: const TextStyle(
+                                            color: AppColors.textMuted,
                                             fontSize: 11,
                                           ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        PopupMenuButton<String>(
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          icon: const Icon(Icons.more_vert_rounded, size: 16, color: AppColors.textMuted),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          onSelected: (val) {
+                                            if (val == 'report') {
+                                              _reportContent(context, 'comment', comment.id);
+                                            }
+                                          },
+                                          itemBuilder: (ctx) => [
+                                            const PopupMenuItem(
+                                              value: 'report',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.flag_outlined, color: AppColors.textPrimary, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text('Report Comment', style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       comment.content,
-                                      style: TextStyle(
-                                        color: isDark ? const Color(0xFFE5E5E5) : const Color(0xFF1E293B),
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
                                         fontSize: 13.5,
                                         height: 1.4,
                                       ),
                                     ),
+                                        Builder(
+                                          builder: (context) {
+                                            final isOwnComment = comment.authorHandle.replaceAll('@', '').toLowerCase() ==
+                                                widget.currentUserHandle.replaceAll('@', '').toLowerCase();
+                                            final isVoted = _isCommentLiked(comment);
+                                            final count = _getCommentLikeCount(comment);
+
+                                            if (!isOwnComment) {
+                                              final isInFlight = _inFlightCommentLikes.contains(comment.id);
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 6),
+                                                child: PressableScale(
+                                                  onTap: isInFlight ? null : () => _toggleCommentLike(comment),
+                                                  child: Opacity(
+                                                    opacity: isInFlight ? 0.7 : 1.0,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                      decoration: BoxDecoration(
+                                                        color: isVoted ? AppColors.primarySoft : AppColors.chipBg,
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        border: Border.all(
+                                                          color: isVoted ? AppColors.primary : Colors.transparent,
+                                                          width: 0.8,
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            isVoted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                                            size: 12,
+                                                            color: isVoted ? AppColors.primary : AppColors.textMuted,
+                                                          ),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            count > 0 ? 'Like ($count)' : 'Like',
+                                                            style: TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight: isVoted ? FontWeight.w700 : FontWeight.w500,
+                                                              color: isVoted ? AppColors.primary : AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            } else if (count > 0) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 6),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primarySoft,
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.favorite_rounded,
+                                                        size: 12,
+                                                        color: AppColors.primary,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        count == 1 ? '1 like' : '$count likes',
+                                                        style: const TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: AppColors.primary,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return const SizedBox.shrink();
+                                          },
+                                        ),
                                   ],
                                 ),
                               ),
@@ -457,33 +877,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ],
             ),
           ),
-
-          // Real-time error warning above the typing box
           if (_commentError != null)
             Container(
               width: double.infinity,
-              color: const Color(0xFF7F1D1D),
+              color: AppColors.errorSoft,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.white70, size: 16),
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _commentError!,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: AppColors.errorSoftText, fontSize: 12),
                     ),
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 14),
+                    icon: const Icon(Icons.close, color: AppColors.errorSoftText, size: 14),
                     onPressed: () => setState(() => _commentError = null),
                   ),
                 ],
               ),
             ),
-
-          // Interactive Reply Typing Bar
           Container(
             padding: EdgeInsets.only(
               left: 12,
@@ -491,11 +907,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               top: 10,
               bottom: MediaQuery.of(context).padding.bottom + 10,
             ),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black : Colors.white,
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
               border: Border(
                 top: BorderSide(
-                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                  color: AppColors.divider,
                   width: 1,
                 ),
               ),
@@ -511,22 +927,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4),
+                      color: AppColors.chipBg,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: isDark ? const Color(0xFF262626) : const Color(0xFFE6E6E6),
+                        color: AppColors.divider,
                       ),
                     ),
                     child: TextField(
                       controller: _commentController,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
+                      cursorColor: AppColors.primary,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
                         fontSize: 14,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Reply anonymously as ${widget.currentUserHandle}...',
-                        hintStyle: TextStyle(
-                          color: isDark ? Colors.white38 : Colors.black38,
+                        hintText: 'Reply as ${getDisplayName(widget.currentUserHandle)}...',
+                        hintStyle: const TextStyle(
+                          color: AppColors.textMuted,
                           fontSize: 13,
                         ),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -544,13 +961,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white : Colors.black,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.send_rounded,
-                      color: isDark ? Colors.black : Colors.white,
+                      color: Colors.white,
                       size: 18,
                     ),
                   ),
@@ -560,14 +977,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   String _formatTime(DateTime time) {
     final diff = DateTime.now().difference(time);
     if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    return '${diff.inDays}d';
   }
 }

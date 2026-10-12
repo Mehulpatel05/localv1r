@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_colors.dart';
 
-/// App-wide theme extension adhering to the user's custom color scheme:
-/// Background: Black (#000000)
-/// Containers / Other: Deep Teal (#072E33)
-/// Text: White (#FFFFFF)
 @immutable
 class NearhoodColors extends ThemeExtension<NearhoodColors> {
   final Color bg;
@@ -33,22 +30,22 @@ class NearhoodColors extends ThemeExtension<NearhoodColors> {
     required this.streets,
   });
 
-  static const NearhoodColors darkTealScheme = NearhoodColors(
-    bg: Color(0xFF000000), // Background Black
-    ink: Color(0xFFFFFFFF), // Text White
-    muted: Color(0xFF90B4B6), // Light Teal-Slate Muted Text
-    line: Color(0xFF0C4148), // Border / Divider Teal
-    field: Color(0xFF072E33), // Other / Container Deep Teal (#072E33)
-    field2: Color(0xFF0E4B52), // Secondary Surface Deep Teal
-    btn: Color(0xFF072E33), // Primary Button Deep Teal (#072E33)
-    btnink: Color(0xFFFFFFFF), // Button Text White
-    page: Color(0xFF000000), // Page Background Black
-    danger: Color(0xFFEF4444),
-    streets: Color(0x33072E33),
+  static const NearhoodColors lightWhiteScheme = NearhoodColors(
+    bg: AppColors.surface,
+    ink: AppColors.textPrimary,
+    muted: AppColors.textMuted,
+    line: AppColors.divider,
+    field: AppColors.surface,
+    field2: AppColors.chipBg,
+    btn: AppColors.primary,
+    btnink: Colors.white,
+    page: AppColors.background,
+    danger: AppColors.error,
+    streets: Color(0x1A0B8A3E),
   );
 
-  static const NearhoodColors light = darkTealScheme;
-  static const NearhoodColors dark = darkTealScheme;
+  static const NearhoodColors light = lightWhiteScheme;
+  static const NearhoodColors dark = lightWhiteScheme;
 
   @override
   NearhoodColors copyWith({
@@ -101,7 +98,7 @@ class NearhoodColors extends ThemeExtension<NearhoodColors> {
 extension NearhoodThemeContext on BuildContext {
   NearhoodColors get nearhoodColors {
     final colors = Theme.of(this).extension<NearhoodColors>();
-    return colors ?? NearhoodColors.darkTealScheme;
+    return colors ?? NearhoodColors.lightWhiteScheme;
   }
 }
 
@@ -110,32 +107,33 @@ class NearhoodTheme {
 
   static ThemeData get customTheme {
     final baseTextTheme =
-        GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
+        GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme);
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF000000), // Background Black
-      canvasColor: const Color(0xFF000000),
-      cardColor: const Color(0xFF072E33), // Other Deep Teal
-      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF072E33)),
-      colorScheme: const ColorScheme.dark(
-        primary: Color(0xFF072E33),
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: AppColors.background,
+      canvasColor: AppColors.background,
+      cardColor: AppColors.surface,
+      dividerColor: AppColors.divider,
+      dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.primary,
         onPrimary: Colors.white,
-        surface: Color(0xFF072E33),
-        onSurface: Colors.white,
-        error: Color(0xFFEF4444),
+        surface: AppColors.surface,
+        onSurface: AppColors.textPrimary,
+        error: AppColors.error,
       ),
       textTheme: baseTextTheme.apply(
-        bodyColor: Colors.white,
-        displayColor: Colors.white,
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF000000),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
         elevation: 0,
       ),
       extensions: const <ThemeExtension<dynamic>>[
-        NearhoodColors.darkTealScheme,
+        NearhoodColors.lightWhiteScheme,
       ],
     );
   }
