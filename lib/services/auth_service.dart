@@ -280,7 +280,6 @@ class AuthService {
     return null;
   }
 
-  /// Checks if handle is available via backend D1
   Future<bool> checkHandleAvailable(String handle) async {
     try {
       final clean = handle.replaceAll('@', '').trim();
@@ -289,12 +288,15 @@ class AuthService {
       debugPrint('[AuthService] checkHandleAvailable ($uri): status=${res.statusCode}, body=${res.body}');
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return data['available'] == true;
+        if (data is Map<String, dynamic> && data.containsKey('available')) {
+          return data['available'] == true;
+        }
       }
+      throw Exception('Server returned ${res.statusCode}');
     } catch (e) {
       debugPrint('[AuthService] checkHandleAvailable error: $e');
+      rethrow;
     }
-    return false;
   }
 
   /// Updates user handle in Cloudflare D1
