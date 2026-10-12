@@ -20,7 +20,6 @@ class _TopSectionState extends State<TopSection>
   late final AnimationController _chipController;
   late final Animation<double> _chip1Anim;
   late final Animation<double> _chip2Anim;
-  late final Animation<double> _chip3Anim;
 
   @override
   void initState() {
@@ -40,11 +39,6 @@ class _TopSectionState extends State<TopSection>
     _chip2Anim = CurvedAnimation(
       parent: _chipController,
       curve: const Interval(120 / 940, 820 / 940, curve: cubicCurve),
-    );
-
-    _chip3Anim = CurvedAnimation(
-      parent: _chipController,
-      curve: const Interval(240 / 940, 1.0, curve: cubicCurve),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,7 +63,7 @@ class _TopSectionState extends State<TopSection>
   @override
   Widget build(BuildContext context) {
     final statusBar = MediaQuery.paddingOf(context).top;
-    final double targetHeight = widget.isOtp ? 210.0 : 300.0;
+    final double targetHeight = widget.isOtp ? 85.0 : 135.0;
 
     return Container(
       height: targetHeight + statusBar,
@@ -89,7 +83,7 @@ class _TopSectionState extends State<TopSection>
             ),
           ),
           Positioned(
-            top: 46.0 + statusBar,
+            top: 22.0 + statusBar,
             left: 24.0,
             right: 24.0,
             child: const Row(
@@ -116,8 +110,8 @@ class _TopSectionState extends State<TopSection>
           ),
           if (!widget.isOtp) ...[
             Positioned(
-              top: 120.0 + statusBar,
-              left: 22.0,
+              top: 78.0 + statusBar,
+              left: 20.0,
               child: NearbyPinChip(
                 service: 'Plumber',
                 distance: '0.4 km',
@@ -126,23 +120,13 @@ class _TopSectionState extends State<TopSection>
               ),
             ),
             Positioned(
-              top: 164.0 + statusBar,
-              right: 22.0,
+              top: 78.0 + statusBar,
+              right: 20.0,
               child: NearbyPinChip(
                 service: 'Tiffin',
                 distance: '0.8 km',
                 dotColor: const Color(0xFFF59E0B),
                 animation: _chip2Anim,
-              ),
-            ),
-            Positioned(
-              top: 214.0 + statusBar,
-              left: 70.0,
-              child: NearbyPinChip(
-                service: 'Salon',
-                distance: '1.2 km',
-                dotColor: const Color(0xFFEC4899),
-                animation: _chip3Anim,
               ),
             ),
           ],

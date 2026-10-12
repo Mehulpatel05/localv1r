@@ -164,18 +164,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       setState(() {});
     });
     _nameController.addListener(() {
-      if (_handleController.text.trim().isEmpty) {
-        final sanitized = _nameController.text
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]'), '');
-        if (sanitized.length >= 3) {
-          final candidate =
-              sanitized.length > 20 ? sanitized.substring(0, 20) : sanitized;
-          _handleController.text = candidate;
-          _validateAndCheckAvailability(candidate, immediate: false);
-        }
-      }
       setState(() {});
     });
 
@@ -203,19 +191,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     _addressNoteFocusNode.addListener(() {
       setState(() {});
     });
-
-    if (widget.user?.email != null) {
-      final emailParts = widget.user!.email!.split('@');
-      if (emailParts.isNotEmpty) {
-        final sanitized = emailParts[0]
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]'), '');
-        if (sanitized.isNotEmpty) {
-          _handleController.text = sanitized;
-          _validateAndCheckAvailability(sanitized, immediate: true);
-        }
-      }
-    }
   }
 
   @override
@@ -292,41 +267,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     });
   }
 
-  void _validateAndCheckAvailability(String handle, {bool immediate = false}) {
-    final trimmed = handle.trim().toLowerCase();
-    if (trimmed.isEmpty) {
-      setState(() => _state = UsernameState.empty);
-      return;
-    }
-
-    final RegExp validRegex = RegExp(r'^[a-z0-9]{3,20}$');
-    if (!validRegex.hasMatch(trimmed)) {
-      setState(() {
-        _state = UsernameState.invalid;
-        _customErrorMessage =
-            'Username must be 3–20 characters using lowercase letters and numbers.';
-      });
-      return;
-    }
-
-    if (_reservedUsernames.contains(trimmed)) {
-      setState(() {
-        _state = UsernameState.reserved;
-        _customErrorMessage = 'This username is reserved and cannot be used.';
-      });
-      return;
-    }
-
-    setState(() => _state = UsernameState.checking);
-    if (immediate) {
-      _checkAvailability(trimmed);
-    } else {
-      _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 400), () {
-        _checkAvailability(trimmed);
-      });
-    }
-  }
 
   Future<void> _checkAvailability(String handle) async {
     if (widget.userId.isEmpty) {
@@ -1394,31 +1334,45 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               ),
           ],
         ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeaderTitles(),
-                const SizedBox(height: 18),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: _currentStep == 1
-                      ? _buildStep1Card()
-                      : _buildStep2Card(),
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: StreetPainter(
+                    strokeColor: const Color(0x180B8A3E),
+                    isOtp: true,
+                  ),
                 ),
-                const SizedBox(height: 18),
-                _currentStep == 1
-                    ? _buildStep1ContinueButton(isStep1Valid)
-                    : _buildStep2FinishButton(isStep2Valid),
-                const SizedBox(height: 12),
-                _buildFooterText(),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
-          ),
+            SafeArea(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeaderTitles(),
+                    const SizedBox(height: 18),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _currentStep == 1
+                          ? _buildStep1Card()
+                          : _buildStep2Card(),
+                    ),
+                    const SizedBox(height: 18),
+                    _currentStep == 1
+                        ? _buildStep1ContinueButton(isStep1Valid)
+                        : _buildStep2FinishButton(isStep2Valid),
+                    const SizedBox(height: 12),
+                    _buildFooterText(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1432,83 +1386,56 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         ? 'Apna naam aur username chuniye'
         : 'Apne area ke padosi aur posts dekhne ke liye';
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
         children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: StreetPainter(
-                strokeColor: const Color(0x180B8A3E),
-                isOtp: true,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: _textPrimary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: _textSecondary,
-                          fontSize: 13.5,
-                          height: 1.3,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                   ),
                 ),
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _lightGreenTint,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _primaryGreen.withValues(alpha: 0.25),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Icon(
-                    _currentStep == 1
-                        ? Icons.person_outline_rounded
-                        : Icons.location_on_outlined,
-                    color: _primaryGreen,
-                    size: 21,
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: _textSecondary,
+                    fontSize: 14,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
+          if (_currentStep == 2) ...[
+            const SizedBox(width: 12),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _lightGreenTint,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _primaryGreen.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.location_on_outlined,
+                color: _primaryGreen,
+                size: 22,
+              ),
+            ),
+          ],
         ],
       ),
     );

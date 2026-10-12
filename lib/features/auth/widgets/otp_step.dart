@@ -286,9 +286,9 @@ class _OtpStepState extends State<OtpStep>
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
-        28,
+        16,
         24,
-        20 + MediaQuery.paddingOf(context).bottom,
+        16 + MediaQuery.paddingOf(context).bottom,
       ),
       child: AutofillGroup(
         child: Column(
@@ -306,11 +306,11 @@ class _OtpStepState extends State<OtpStep>
                     widget.onChangeNumber();
                   },
                   child: const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(bottom: 10),
                     child: Text(
                       '← Change number',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF0E8A3E),
                       ),
@@ -322,24 +322,24 @@ class _OtpStepState extends State<OtpStep>
             const Text(
               'Enter the code',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
+                letterSpacing: -0.6,
                 color: Color(0xFF0F172A),
-                height: 1.15,
+                height: 1.2,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               'Sent to ${_formatPhoneNumber(widget.phone)}',
               style: const TextStyle(
-                fontSize: 14.5,
+                fontSize: 14,
                 fontWeight: FontWeight.w400,
                 color: Color(0xFF64748B),
-                height: 1.45,
+                height: 1.35,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             AnimatedBuilder(
               animation: _shakeController,
               builder: (context, child) {
@@ -398,7 +398,7 @@ class _OtpStepState extends State<OtpStep>
                                 ? Duration.zero
                                 : const Duration(milliseconds: 150),
                             curve: Curves.easeOut,
-                            height: 58,
+                            height: 52,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(14),
@@ -441,9 +441,9 @@ class _OtpStepState extends State<OtpStep>
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              padding: const EdgeInsets.only(top: 6, bottom: 10),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 20),
+                constraints: const BoxConstraints(minHeight: 18),
                 child: _hasError
                     ? Text(
                         'Incorrect code. Try again.',
@@ -454,7 +454,7 @@ class _OtpStepState extends State<OtpStep>
                           height: 1.3,
                         ),
                       )
-                    : const SizedBox(height: 20),
+                    : const SizedBox(height: 18),
               ),
             ),
             Semantics(
@@ -473,7 +473,7 @@ class _OtpStepState extends State<OtpStep>
                   scale: _isPressed && !disableAnimations ? 0.985 : 1.0,
                   duration: const Duration(milliseconds: 100),
                   child: SizedBox(
-                    height: 54,
+                    height: 50,
                     child: ElevatedButton(
                       onPressed: isButtonEnabled ? _verifyOtp : null,
                       style: ElevatedButton.styleFrom(
@@ -482,7 +482,7 @@ class _OtpStepState extends State<OtpStep>
                         elevation: 0,
                         shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         padding: EdgeInsets.zero,
                       ),

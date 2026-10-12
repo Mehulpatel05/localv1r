@@ -121,53 +121,53 @@ class _PhoneStepState extends State<PhoneStep> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
-        28,
+        16,
         24,
-        20 + MediaQuery.paddingOf(context).bottom,
+        16 + MediaQuery.paddingOf(context).bottom,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'Enter your\nphone number',
+            'Enter your phone number',
             style: TextStyle(
-              fontSize: 32,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
+              letterSpacing: -0.6,
               color: Color(0xFF0F172A),
-              height: 1.15,
+              height: 1.2,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           const Text(
             "We'll send a 6-digit code by SMS.",
             style: TextStyle(
-              fontSize: 14.5,
+              fontSize: 14,
               fontWeight: FontWeight.w400,
               color: Color(0xFF64748B),
-              height: 1.45,
+              height: 1.35,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           const Text(
             'Mobile number',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w700,
               color: Color(0xFF334155),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           AnimatedContainer(
             duration: disableAnimations
                 ? Duration.zero
                 : const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            height: 58,
+            height: 52,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: borderColor, width: _isFocused ? 1.8 : 1.2),
               boxShadow: boxShadows,
             ),
@@ -197,7 +197,7 @@ class _PhoneStepState extends State<PhoneStep> {
                 ),
                 Container(
                   width: 1.2,
-                  height: 28,
+                  height: 26,
                   color: const Color(0xFFE2E8F0),
                 ),
                 Expanded(
@@ -224,7 +224,7 @@ class _PhoneStepState extends State<PhoneStep> {
                         }
                       },
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 16.5,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.6,
                         color: Color(0xFF0F172A),
@@ -235,7 +235,7 @@ class _PhoneStepState extends State<PhoneStep> {
                         isDense: true,
                         hintText: '10-digit mobile number',
                         hintStyle: TextStyle(
-                          fontSize: 15.5,
+                          fontSize: 15,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF94A3B8),
                           letterSpacing: 0,
@@ -278,9 +278,9 @@ class _PhoneStepState extends State<PhoneStep> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 18),
+            padding: const EdgeInsets.only(top: 6, bottom: 14),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 20),
+              constraints: const BoxConstraints(minHeight: 18),
               child: Text(
                 _isInvalidTenDigits
                     ? 'Enter a valid Indian mobile number starting with 6–9.'
@@ -289,7 +289,7 @@ class _PhoneStepState extends State<PhoneStep> {
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: _isInvalidTenDigits ? AppColors.error : const Color(0xFF64748B),
-                  height: 1.25,
+                  height: 1.2,
                 ),
               ),
             ),
@@ -310,7 +310,7 @@ class _PhoneStepState extends State<PhoneStep> {
                 scale: _isPressed && !disableAnimations ? 0.985 : 1.0,
                 duration: const Duration(milliseconds: 100),
                 child: SizedBox(
-                  height: 54,
+                  height: 50,
                   child: ElevatedButton(
                     onPressed: isButtonEnabled ? _submitPhone : null,
                     style: ElevatedButton.styleFrom(
@@ -319,7 +319,7 @@ class _PhoneStepState extends State<PhoneStep> {
                       elevation: 0,
                       shadowColor: Colors.transparent,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       padding: EdgeInsets.zero,
                     ),
@@ -337,7 +337,7 @@ class _PhoneStepState extends State<PhoneStep> {
                         : Text(
                             'Send OTP',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15.5,
                               fontWeight: FontWeight.w700,
                               color: isButtonEnabled
                                   ? Colors.white
@@ -349,20 +349,20 @@ class _PhoneStepState extends State<PhoneStep> {
               ),
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 Icons.verified_user_outlined,
-                size: 16,
+                size: 15,
                 color: Color(0xFF0E8A3E),
               ),
               SizedBox(width: 6),
               Text(
                 'Verified neighbours only',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF0E8A3E),
                 ),
@@ -370,14 +370,14 @@ class _PhoneStepState extends State<PhoneStep> {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 20),
+            padding: const EdgeInsets.only(top: 14),
             child: Text.rich(
               TextSpan(
                 text: 'By continuing, you agree to Nearhood’s ',
                 style: const TextStyle(
                   fontSize: 12,
                   color: Color(0xFF64748B),
-                  height: 1.5,
+                  height: 1.45,
                 ),
                 children: [
                   TextSpan(
