@@ -59,7 +59,7 @@ class SplashController {
       // 1. Parallel execution of Stage A tasks
       final results = await Future.wait([
         _resolveAuthSession(),
-        locationService.ensureLocationPermissionAndAutoDetect(),
+        locationService.load(),
         AvatarCacheService.instance.ensureInitialized(),
         _pingServerHealth(),
         FoundingService.instance.fetchCounts(),

@@ -188,13 +188,10 @@ class LocationService extends ChangeNotifier {
           if (kDebugMode) {
             debugPrint('[LocationService] GPS toggle turned OFF by user');
           }
-          _state = LocationState.locationOff;
-          notifyListeners();
         } else if (status == ServiceStatus.enabled) {
           if (kDebugMode) {
             debugPrint('[LocationService] GPS toggle turned ON by user');
           }
-          checkLocationAndAutoDetect();
         }
       });
     } catch (e) {
@@ -237,14 +234,10 @@ class LocationService extends ChangeNotifier {
         ? DateTime.fromMillisecondsSinceEpoch(fetchedMs)
         : null;
 
-    if (_isManualLocation) {
-      _state           = LocationState.manualLocation;
-      _source          = LocationSource.manual;
-      _confidenceScore = 0.9;
-      notifyListeners();
-    } else {
-      await checkLocationAndAutoDetect();
-    }
+    _state = LocationState.manualLocation;
+    _source = _isManualLocation ? LocationSource.manual : LocationSource.defaultCity;
+    _confidenceScore = 0.9;
+    notifyListeners();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

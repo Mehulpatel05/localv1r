@@ -16,6 +16,7 @@ import '../../core/splash_controller.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/location/location_engine.dart';
+import '../../core/location/location_enabler.dart';
 import '../../features/auth/widgets/logo_pin.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
@@ -58,16 +59,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   static const Color _textPrimary = Color(0xFF0F172A);
   static const Color _textSecondary = Color(0xFF64748B);
   static const Color _borderColor = Color(0xFFE2E8F0);
-
-  static const List<String> _popularAreaNames = [
-    'Alkapuri',
-    'Gotri',
-    'Manjalpur',
-    'Akota',
-    'Fatehgunj',
-    'Karelibaug',
-    'Vasna',
-  ];
 
   static const Set<String> _reservedUsernames = {
     'admin',
@@ -157,7 +148,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   String? _selectedCityName;
   String? _selectedCityId;
   List<Map<String, dynamic>> _livePredictions = [];
-  List<String> _dynamicPopularNames = [];
   bool _isAreaSearching = false;
   String _autocompleteSessionToken = '';
 
@@ -173,6 +163,18 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       setState(() {});
     });
     _nameController.addListener(() {
+      if (_handleController.text.trim().isEmpty) {
+        final sanitized = _nameController.text
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (sanitized.length >= 3) {
+          final candidate =
+              sanitized.length > 20 ? sanitized.substring(0, 20) : sanitized;
+          _handleController.text = candidate;
+          _validateAndCheckAvailability(candidate, immediate: false);
+        }
+      }
       setState(() {});
     });
 
@@ -213,125 +215,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       }
     }
-
-    _loadPopularAreas();
-  }
-
-  Future<void> _loadPopularAreas([String? cityId]) async {
-    try {
-      final targetCityId = cityId ?? _selectedCityId ?? 'GJ-VAD';
-      final areas = await AuthService.instance.fetchPopularAreas(cityId: targetCityId);
-      if (mounted && areas.isNotEmpty) {
-        final names = areas
-            .map((a) => (a['name'] as String?)?.trim() ?? '')
-            .where((n) => n.isNotEmpty)
-            .toList();
-        if (names.isNotEmpty) {
-          setState(() {
-            _dynamicPopularNames = names;
-          });
-        }
-      }
-    } catch (_) {}
-  }
-
-  List<String> get _currentPopularChips {
-    if (_dynamicPopularNames.isNotEmpty) return _dynamicPopularNames;
-    final cityId = _selectedCityId ?? 'GJ-VAD';
-    final localCity = LocationEngine.lookupCity(cityId);
-    if (localCity != null && localCity.areas.isNotEmpty) {
-      final names = localCity.areas
-          .map((a) => a.name.trim())
-          .where((n) => n.isNotEmpty && n != 'Other / Not listed')
-          .take(12)
-          .toList();
-      if (names.isNotEmpty) return names;
-    }
-    return _popularAreaNames;
-  }
-
-  void _showCityPickerSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final cities = kPanIndiaStates.expand((s) => s.cities).toList();
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Select City',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: _textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.45,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: cities.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final c = cities[i];
-                    final isSelected = c.id == (_selectedCityId ?? 'GJ-VAD');
-                    return ListTile(
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      title: Text(
-                        c.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          color: isSelected ? _primaryGreen : _textPrimary,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 20)
-                          : null,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        setState(() {
-                          _selectedCityId = c.id;
-                          _selectedCityName = c.name;
-                          _selectedArea = null;
-                          _areaSearchController.clear();
-                          _dynamicPopularNames = [];
-                        });
-                        _loadPopularAreas(c.id);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -527,11 +410,21 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Future<void> _onSelectPrediction(Map<String, dynamic> prediction) async {
-    final placeId = prediction['place_id'] as String? ?? '';
-    final mainText = prediction['main_text'] as String? ??
-        prediction['description'] as String? ??
-        '';
-    if (placeId.isEmpty) return;
+    final placeId = (prediction['placeId'] ?? prediction['place_id'] ?? '').toString().trim();
+    final mainText = (prediction['mainText'] ??
+            prediction['main_text'] ??
+            prediction['description'] ??
+            prediction['name'] ??
+            '')
+        .toString()
+        .trim();
+
+    if (placeId.isEmpty && mainText.isEmpty) return;
+
+    final lat = (prediction['lat'] as num?)?.toDouble() ??
+        (prediction['latitude'] as num?)?.toDouble();
+    final lng = (prediction['lng'] as num?)?.toDouble() ??
+        (prediction['longitude'] as num?)?.toDouble();
 
     _areaFocusNode.unfocus();
     setState(() {
@@ -539,11 +432,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       _isAreaSearching = false;
       _livePredictions.clear();
       _areaSearchController.text = mainText;
+      _selectedArea = GeoArea(
+        id: placeId.isNotEmpty ? placeId : 'GJ-VAD-AREA',
+        cityId: _selectedCityId ?? 'GJ-VAD',
+        name: mainText,
+        lat: lat,
+        lng: lng,
+      );
     });
 
     try {
       final res = await AuthService.instance.resolveArea(
-        placeId,
+        placeId.isNotEmpty ? placeId : null,
+        name: mainText,
+        cityId: _selectedCityId,
         sessionToken: _autocompleteSessionToken,
       );
       _autocompleteSessionToken = '';
@@ -553,120 +455,34 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (res != null && res['live'] == true && res['area'] != null) {
         final areaData = res['area'] as Map<String, dynamic>;
         final cityData = res['city'] as Map<String, dynamic>?;
-        final cityName = cityData?['name'] as String? ?? 'Vadodara';
+        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
         final cityId =
-            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? 'GJ-VAD';
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? 'GJ-VAD';
 
         setState(() {
           _selectedCityName = cityName;
           _selectedCityId = cityId;
           _selectedArea = GeoArea(
-            id: areaData['id'] as String,
+            id: areaData['id'] as String? ?? (placeId.isNotEmpty ? placeId : 'GJ-VAD-AREA'),
             cityId: cityId,
             name: areaData['name'] as String? ?? mainText,
             lat: areaData['lat'] != null
                 ? (areaData['lat'] as num).toDouble()
-                : null,
+                : lat,
             lng: areaData['lng'] != null
                 ? (areaData['lng'] as num).toDouble()
-                : null,
+                : lng,
           );
           _areaSearchController.text = _selectedArea!.name;
         });
-        _loadPopularAreas(cityId);
       } else if (res != null && res['live'] == false) {
         final detectedCity = res['detected_city'] as String? ?? mainText;
-        final lat = res['lat'] != null ? (res['lat'] as num).toDouble() : null;
-        final lng = res['lng'] != null ? (res['lng'] as num).toDouble() : null;
+        final resLat = res['lat'] != null ? (res['lat'] as num).toDouble() : lat;
+        final resLng = res['lng'] != null ? (res['lng'] as num).toDouble() : lng;
         setState(() {
           _selectedArea = null;
         });
-        _showWaitlistSheet(detectedCity: detectedCity, lat: lat, lng: lng);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not verify area. Please select again.'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error resolving area: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isResolvingArea = false);
-      }
-    }
-  }
-
-  Future<void> _selectPopularArea(String areaName) async {
-    _areaFocusNode.unfocus();
-    setState(() {
-      _isResolvingArea = true;
-      _isAreaSearching = false;
-      _livePredictions.clear();
-      _areaSearchController.text = areaName;
-    });
-
-    try {
-      final cityId = _selectedCityId ?? 'GJ-VAD';
-      final res = await AuthService.instance.resolveArea(
-        null,
-        name: areaName,
-        cityId: cityId,
-      );
-
-      if (!mounted) return;
-
-      if (res != null && res['live'] == true && res['area'] != null) {
-        final areaData = res['area'] as Map<String, dynamic>;
-        final cityData = res['city'] as Map<String, dynamic>?;
-        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
-        final resolvedCityId =
-            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? cityId;
-
-        setState(() {
-          _selectedCityName = cityName;
-          _selectedCityId = resolvedCityId;
-          _selectedArea = GeoArea(
-            id: areaData['id'] as String,
-            cityId: resolvedCityId,
-            name: areaData['name'] as String? ?? areaName,
-            lat: areaData['lat'] != null
-                ? (areaData['lat'] as num).toDouble()
-                : null,
-            lng: areaData['lng'] != null
-                ? (areaData['lng'] as num).toDouble()
-                : null,
-          );
-          _areaSearchController.text = _selectedArea!.name;
-        });
-        _loadPopularAreas(resolvedCityId);
-      } else if (res != null && res['live'] == false) {
-        final detectedCity = res['detected_city'] as String? ?? _selectedCityName ?? 'Your City';
-        final lat = res['lat'] != null ? (res['lat'] as num).toDouble() : null;
-        final lng = res['lng'] != null ? (res['lng'] as num).toDouble() : null;
-        setState(() {
-          _selectedArea = null;
-        });
-        _showWaitlistSheet(detectedCity: detectedCity, lat: lat, lng: lng);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not verify area. Please select again.'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _showWaitlistSheet(detectedCity: detectedCity, lat: resLat, lng: resLng);
       }
     } catch (_) {
     } finally {
@@ -682,17 +498,20 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please turn on device location (GPS).'),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        final turnedOn = await LocationEnabler.requestEnableLocation();
+        if (!turnedOn) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please turn on device location (GPS).'),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          setState(() => _isLocating = false);
+          return;
         }
-        setState(() => _isLocating = false);
-        return;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -760,7 +579,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           _isAreaSearching = false;
           _livePredictions.clear();
         });
-        _loadPopularAreas(cityId);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -793,7 +611,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             _isAreaSearching = false;
             _livePredictions.clear();
           });
-          _loadPopularAreas(match.city.id);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Detected: ${match.area!.name}, ${match.city.name}'),
@@ -2113,8 +1930,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               ),
             ),
           const SizedBox(height: 18),
-          _buildPopularChips(),
-          const SizedBox(height: 18),
           _buildAddressNoteField(),
         ],
       ),
@@ -2245,11 +2060,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   const Divider(height: 1, color: _borderColor),
               itemBuilder: (ctx, index) {
                 final prediction = _livePredictions[index];
-                final mainText = prediction['main_text'] as String? ??
-                    prediction['description'] as String? ??
-                    '';
-                final secondaryText =
-                    prediction['secondary_text'] as String? ?? '';
+                final mainText = (prediction['mainText'] ??
+                        prediction['main_text'] ??
+                        prediction['description'] ??
+                        prediction['name'] ??
+                        '')
+                    .toString();
+                final secondaryText = (prediction['secondaryText'] ??
+                        prediction['secondary_text'] ??
+                        '')
+                    .toString();
 
                 return ListTile(
                   dense: true,
@@ -2336,88 +2156,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPopularChips() {
-    final chipsList = _currentPopularChips;
-    final cityName = _selectedCityName ?? 'Vadodara';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Popular in $cityName',
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: _textPrimary,
-              ),
-            ),
-            InkWell(
-              onTap: _showCityPickerSheet,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      cityName,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryGreen,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: _primaryGreen,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: chipsList.take(8).map((areaName) {
-            final isSelected =
-                _selectedArea?.name.toLowerCase() == areaName.toLowerCase();
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _selectPopularArea(areaName),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? _primaryGreen : _screenBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected ? null : Border.all(color: _borderColor),
-                  ),
-                  child: Text(
-                    areaName,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : _textPrimary,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
     );
   }
 

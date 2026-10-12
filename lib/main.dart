@@ -21,9 +21,6 @@ import 'core/splash_controller.dart';
 import 'core/action_state/action_state_provider.dart';
 import 'services/user_action_state_service.dart';
 import 'screens/auth/create_handle_screen.dart';
-import 'core/location/location_gate_screen.dart';
-import 'core/location/city_not_serviceable_screen.dart';
-import 'core/location/city_picker_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -80,7 +77,6 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   bool _isSplashFinished = false;
   bool _isLoggedIn = false;
   String _userHandle = 'Guest';
-  bool _previewMode = false;
 
   bool get _canShowMainFlow => _isReady && _isSplashFinished;
 
@@ -217,40 +213,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     );
   }
 
-  void _openCityPicker() {
-    final ctx = navigatorKey.currentContext;
-    if (ctx != null) {
-      Navigator.push(
-        ctx,
-        MaterialPageRoute(builder: (_) => const CityPickerScreen()),
-      );
-    }
-  }
-
   Widget _buildFlowContent(LocationService loc) {
-    if ((loc.isLocationBlocked || loc.isDetectingLocation) && !_previewMode) {
-      return LocationGateScreen(
-        key: const ValueKey('location_gate_view'),
-        locationService: loc,
-        onManualSelect: _openCityPicker,
-      );
-    }
-
-    if (!loc.isVadodara && !loc.isManualLocation && !_previewMode) {
-      return CityNotServiceableScreen(
-        key: const ValueKey('city_not_serviceable_view'),
-        locationService: loc,
-        onPreviewVadodara: () {
-          if (mounted) {
-            setState(() {
-              _previewMode = true;
-            });
-          }
-        },
-        onManualSelect: _openCityPicker,
-      );
-    }
-
     return _isLoggedIn
         ? MainScreen(
             key: const ValueKey('main_view'),
