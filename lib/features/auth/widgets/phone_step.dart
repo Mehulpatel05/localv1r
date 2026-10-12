@@ -411,8 +411,80 @@ class _PhoneStepState extends State<PhoneStep> {
               textAlign: TextAlign.center,
             ),
           ),
+          _buildCommunityTrustCard(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCommunityTrustCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.location_city_rounded,
+                size: 18,
+                color: Color(0xFF0E8A3E),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Vadodara\'s Neighborhood Network',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildTrustBullet(
+            Icons.lock_outline_rounded,
+            '100% Private: Your mobile number is never displayed to other users.',
+          ),
+          const SizedBox(height: 8),
+          _buildTrustBullet(
+            Icons.people_outline_rounded,
+            'Real Neighbors: Connect with verified residents in your own area.',
+          ),
+          const SizedBox(height: 8),
+          _buildTrustBullet(
+            Icons.campaign_outlined,
+            'Local Alerts: Instant neighborhood news, urgent updates & local recommendations.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrustBullet(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

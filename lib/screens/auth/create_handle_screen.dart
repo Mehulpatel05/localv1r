@@ -836,92 +836,96 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Material(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        clipBehavior: Clip.antiAlias,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: AppColors.divider, width: 1.5),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Material(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border(
+                top: BorderSide(color: AppColors.divider, width: 1.5),
+              ),
             ),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const Text(
-                'Add Profile Picture',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                const Text(
+                  'Add Profile Picture',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Choose Default Avatar',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _textSecondary,
+                const SizedBox(height: 14),
+                const Text(
+                  'Choose Default Avatar',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(_avatarPresets.length, (idx) {
-                  final preset = _avatarPresets[idx];
-                  final isSelected = _pickedProfileImage == null &&
-                      _selectedAvatarPresetIndex == idx;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedAvatarPresetIndex = idx;
-                        _pickedProfileImage = null;
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: preset['bg'],
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? _primaryGreen
-                              : Colors.transparent,
-                          width: isSelected ? 2.5 : 1.0,
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(_avatarPresets.length, (idx) {
+                    final preset = _avatarPresets[idx];
+                    final isSelected = _pickedProfileImage == null &&
+                        _selectedAvatarPresetIndex == idx;
+                    return GestureDetector(
+                      onTap: () {
+                        setModalState(() {
+                          _selectedAvatarPresetIndex = idx;
+                          _pickedProfileImage = null;
+                        });
+                        setState(() {
+                          _selectedAvatarPresetIndex = idx;
+                          _pickedProfileImage = null;
+                        });
+                      },
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: preset['bg'],
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? _primaryGreen
+                                : Colors.transparent,
+                            width: isSelected ? 2.5 : 1.0,
+                          ),
                         ),
-                      ),
-                      child: Center(
-                        child: CustomPaint(
-                          size: const Size(36, 36),
-                          painter: _DefaultAvatarPainter(
-                            color: preset['accent']!,
-                            strokeWidth: 2.0,
+                        child: Center(
+                          child: CustomPaint(
+                            size: const Size(36, 36),
+                            painter: _DefaultAvatarPainter(
+                              color: preset['accent']!,
+                              strokeWidth: 2.0,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }),
-              ),
+                    );
+                  }),
+                ),
               const SizedBox(height: 14),
               const Divider(color: _borderColor, height: 1),
               const SizedBox(height: 6),
@@ -1002,8 +1006,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -1409,7 +1414,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                     : _buildStep2FinishButton(isStep2Valid),
                 const SizedBox(height: 12),
                 _buildFooterText(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                _currentStep == 1
+                    ? _buildStep1CommunityInfoCard()
+                    : _buildStep2PrivacyInfoCard(),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -1471,18 +1480,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Center(child: _buildAvatar()),
-          const SizedBox(height: 8),
-          const Center(
-            child: Text(
-              'Photo optional hai',
-              style: TextStyle(
-                fontSize: 12,
-                color: _textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          _buildAvatarPresetsRow(),
+          const SizedBox(height: 18),
           _buildFullNameField(),
           const SizedBox(height: 16),
           _buildUsernameField(),
@@ -1490,6 +1490,223 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           _buildUsernameStatusHelper(),
         ],
       ),
+    );
+  }
+
+  Widget _buildAvatarPresetsRow() {
+    return Column(
+      children: [
+        const Text(
+          'Choose avatar or upload photo',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _textSecondary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ...List.generate(_avatarPresets.length, (idx) {
+              final preset = _avatarPresets[idx];
+              final isSelected = _pickedProfileImage == null &&
+                  _selectedAvatarPresetIndex == idx;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedAvatarPresetIndex = idx;
+                    _pickedProfileImage = null;
+                  });
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: preset['bg'],
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? _primaryGreen : Colors.transparent,
+                      width: isSelected ? 2.5 : 1.0,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: _primaryGreen.withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: CustomPaint(
+                      size: const Size(26, 26),
+                      painter: _DefaultAvatarPainter(
+                        color: preset['accent']!,
+                        strokeWidth: 2.0,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            GestureDetector(
+              onTap: _showPhotoPickerSheet,
+              child: Container(
+                width: 38,
+                height: 38,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: _pickedProfileImage != null
+                      ? _lightGreenTint
+                      : const Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _pickedProfileImage != null
+                        ? _primaryGreen
+                        : const Color(0xFFCBD5E1),
+                    width: _pickedProfileImage != null ? 2.0 : 1.0,
+                  ),
+                ),
+                child: Icon(
+                  Icons.camera_alt_rounded,
+                  size: 18,
+                  color: _pickedProfileImage != null
+                      ? _primaryGreen
+                      : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep1CommunityInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.shield_outlined, size: 18, color: _primaryGreen),
+              SizedBox(width: 8),
+              Text(
+                'Why your profile matters',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildInfoBullet(
+            Icons.alternate_email_rounded,
+            'Unique Handle: Your @handle is how neighbors recognize and mention you.',
+          ),
+          const SizedBox(height: 8),
+          _buildInfoBullet(
+            Icons.lock_outline_rounded,
+            'Privacy First: Mobile number is 100% private and never visible to others.',
+          ),
+          const SizedBox(height: 8),
+          _buildInfoBullet(
+            Icons.people_outline_rounded,
+            'Verified Identity: Real community members create safer neighborhoods.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep2PrivacyInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.location_on_outlined, size: 18, color: _primaryGreen),
+              SizedBox(width: 8),
+              Text(
+                'Neighborhood Privacy & Reach',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildInfoBullet(
+            Icons.home_outlined,
+            'Private Address: Flat / house details are strictly private and never published.',
+          ),
+          const SizedBox(height: 8),
+          _buildInfoBullet(
+            Icons.dynamic_feed_outlined,
+            'Hyperlocal Feed: You only see posts, news, and urgent alerts in your area.',
+          ),
+          const SizedBox(height: 8),
+          _buildInfoBullet(
+            Icons.storefront_outlined,
+            'Local Offers: Discover verified businesses, stores & services near your home.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBullet(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: _textSecondary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: _textSecondary,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
