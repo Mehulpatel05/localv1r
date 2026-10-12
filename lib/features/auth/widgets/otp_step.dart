@@ -24,7 +24,8 @@ class OtpStep extends StatefulWidget {
   State<OtpStep> createState() => _OtpStepState();
 }
 
-class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
+class _OtpStepState extends State<OtpStep>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const int _otpLength = 6;
   static const int _resendCountdownDuration = 30;
 
@@ -42,6 +43,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controllers = List.generate(_otpLength, (_) => TextEditingController());
     _focusNodes = List.generate(_otpLength, (index) {
       final node = FocusNode();
@@ -74,49 +76,40 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
     _listenForSmsOtp();
   }
 
-  void _listenForSmsOtp() {
-    try {
-      SmartAuth.instance.getSmsWithRetrieverApi(matcher: r'\d{6}').then((res) {
-        if (!mounted) return;
-        final raw = res.data?.code ??
-            (res.data?.sms != null
-                ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
-                : null);
-        if (raw != null && raw.isNotEmpty) {
-          _populateAndVerifyOtp(raw);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted && !_isOtpComplete) {
+      Future.delayed(const Duration(milliseconds: 120), () {
+        if (mounted && !_isOtpComplete) {
+          final targetIndex = _controllers.indexWhere((c) => c.text.isEmpty);
+          final idx = targetIndex == -1 ? _otpLength - 1 : targetIndex;
+          _focusNodes[idx].requestFocus();
         }
-      }).catchError((e) {
-        debugPrint('[OtpStep] Retriever API error: $e');
       });
-
-      SmartAuth.instance.getSmsWithUserConsentApi(matcher: r'\d{6}').then((res) {
-        if (!mounted) return;
-        final raw = res.data?.code ??
-            (res.data?.sms != null
-                ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
-                : null);
-        if (raw != null && raw.isNotEmpty) {
-          _populateAndVerifyOtp(raw);
-        }
-      }).catchError((e) {
-        debugPrint('[OtpStep] UserConsent API error: $e');
-      });
-    } catch (e) {
-      debugPrint('[OtpStep] SmartAuth listen error: $e');
     }
   }
 
-  void _populateAndVerifyOtp(String raw) {
-    if (!mounted || _isLoading) return;
-    final digits = raw.replaceAll(RegExp(r'\D'), '');
-    if (digits.length >= _otpLength) {
-      for (int i = 0; i < _otpLength; i++) {
-        _controllers[i].text = digits[i];
+  void _listenForSmsOtp() async {
+    try {
+      final res = await SmartAuth.instance.getSmsWithUserConsentApi(matcher: r'\d{6}');
+      final code = res.data?.code ??
+          (res.data?.sms != null
+              ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
+              : null);
+      if (code != null && mounted) {
+        final digits = code.replaceAll(RegExp(r'\D'), '');
+        if (digits.length >= _otpLength) {
+          for (int i = 0; i < _otpLength; i++) {
+            _controllers[i].text = digits[i];
+          }
+          setState(() {
+            _hasError = false;
+          });
+          _verifyOtp();
+        }
       }
-      setState(() {
-        _hasError = false;
-      });
-      _verifyOtp();
+    } catch (e) {
+      debugPrint('[OtpStep] SmartAuth listen error: $e');
     }
   }
 
@@ -143,6 +136,7 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     SmartAuth.instance.removeUserConsentApiListener();
     _timer?.cancel();
     _shakeController.dispose();
@@ -581,81 +575,9 @@ class _OtpStepState extends State<OtpStep> with SingleTickerProviderStateMixin {
                 ),
               ],
             ),
-            _buildOtpHelpCard(),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildOtpHelpCard() {
-    return Container(
-      margin: const EdgeInsets.only(top: 24),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.mark_email_read_outlined,
-                size: 18,
-                color: Color(0xFF0E8A3E),
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Auto-Detection Active',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildHelpBullet(
-            Icons.flash_on_rounded,
-            'SMS code will be detected and verified automatically upon arrival.',
-          ),
-          const SizedBox(height: 8),
-          _buildHelpBullet(
-            Icons.lock_outline_rounded,
-            '100% secure one-time password. Never share it with anyone.',
-          ),
-          const SizedBox(height: 8),
-          _buildHelpBullet(
-            Icons.phonelink_ring_rounded,
-            'Didn\'t receive code? You can resend or edit your mobile number.',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHelpBullet(IconData icon, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 14, color: const Color(0xFF64748B)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -50,49 +50,27 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
     _listenForSmsOtp();
   }
 
-  void _listenForSmsOtp() {
+  void _listenForSmsOtp() async {
     try {
-      SmartAuth.instance.getSmsWithRetrieverApi(matcher: r'\d{6}').then((res) {
-        if (!mounted) return;
-        final raw = res.data?.code ??
-            (res.data?.sms != null
-                ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
-                : null);
-        if (raw != null && raw.isNotEmpty) {
-          _populateAndVerifyOtp(raw);
+      final res = await SmartAuth.instance.getSmsWithUserConsentApi(matcher: r'\d{6}');
+      final code = res.data?.code ??
+          (res.data?.sms != null
+              ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
+              : null);
+      if (code != null && mounted) {
+        final digits = code.replaceAll(RegExp(r'\D'), '');
+        if (digits.length >= 6) {
+          for (int i = 0; i < 6; i++) {
+            _digitControllers[i].text = digits[i];
+          }
+          setState(() {
+            _errorMessage = null;
+          });
+          _handleVerify();
         }
-      }).catchError((e) {
-        debugPrint('[OtpVerifyScreen] Retriever API error: $e');
-      });
-
-      SmartAuth.instance.getSmsWithUserConsentApi(matcher: r'\d{6}').then((res) {
-        if (!mounted) return;
-        final raw = res.data?.code ??
-            (res.data?.sms != null
-                ? RegExp(r'\b\d{6}\b').firstMatch(res.data!.sms)?.group(0)
-                : null);
-        if (raw != null && raw.isNotEmpty) {
-          _populateAndVerifyOtp(raw);
-        }
-      }).catchError((e) {
-        debugPrint('[OtpVerifyScreen] UserConsent API error: $e');
-      });
+      }
     } catch (e) {
       debugPrint('[OtpVerifyScreen] SmartAuth listen error: $e');
-    }
-  }
-
-  void _populateAndVerifyOtp(String raw) {
-    if (!mounted || _isVerifying) return;
-    final digits = raw.replaceAll(RegExp(r'\D'), '');
-    if (digits.length >= 6) {
-      for (int i = 0; i < 6; i++) {
-        _digitControllers[i].text = digits[i];
-      }
-      setState(() {
-        _errorMessage = null;
-      });
-      _handleVerify();
     }
   }
 
