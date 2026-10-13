@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_service.dart';
-import '../../core/location/location_banner.dart';
-import '../../core/location/city_picker_screen.dart';
 import '../../core/widgets/post_image_view.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/like_capsule.dart';
@@ -177,125 +174,54 @@ class _FeedScreenState extends State<FeedScreen> {
               child: Builder(
                 builder: (context) {
                   final locService = context.watch<LocationService>();
-                  final areaName = (locService.area?.name != null && locService.area!.name != locService.city.name)
+                  final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
                       ? locService.area!.name
-                      : (locService.city.areas.firstOrNull?.name ?? 'Waghodia Road');
+                      : (locService.city.areas.firstOrNull?.name ?? locService.city.name);
                   final cityName = locService.city.name;
-                  final badgeText = locService.statusBadgeLabel;
-                  final hasWarning = locService.isLocationOff || locService.isPermissionDenied;
 
-                  return InkWell(
-                    onTap: () async {
-                      if (locService.isLocationOff) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.surface,
-                            title: const Text('Location ON Karein', style: TextStyle(color: AppColors.textPrimary)),
-                            content: const Text('Auto-detection ke liye device Location Services (GPS) ON karein.', style: TextStyle(color: AppColors.textMuted)),
-                            actions: [
-                              TextButton(
-                                child: const Text('Manual City Chunein', style: TextStyle(color: AppColors.primary)),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
-                                },
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                                child: const Text('OK'),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Geolocator.openLocationSettings();
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      } else if (locService.isPermissionDeniedForever) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.surface,
-                            title: const Text('Permission Needed', style: TextStyle(color: AppColors.textPrimary)),
-                            content: const Text('Please allow location permission in App Settings for auto-detection.', style: TextStyle(color: AppColors.textMuted)),
-                            actions: [
-                              TextButton(
-                                child: const Text('Manual City Chunein', style: TextStyle(color: AppColors.primary)),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CityPickerScreen()));
-                                },
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                                child: const Text('Settings Kholo'),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Geolocator.openAppSettings();
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CityPickerScreen()),
-                        );
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          areaName,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.4,
-                            height: 1.15,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        areaName,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.4,
+                          height: 1.15,
                         ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                hasWarning && badgeText.isNotEmpty
-                                    ? badgeText
-                                    : cityName,
-                                style: TextStyle(
-                                  color: hasWarning
-                                      ? Colors.amber.shade800
-                                      : AppColors.textMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.15,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.location_on_rounded,
+                            color: AppColors.primary,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              cityName,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                height: 1.15,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: hasWarning
-                                  ? Colors.amber.shade800
-                                  : AppColors.textMuted,
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   );
                 },
               ),
@@ -475,12 +401,6 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       body: Column(
         children: [
-          LocationBanner(
-            onChooseCity: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CityPickerScreen()),
-            ),
-          ),
           _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(

@@ -350,7 +350,10 @@ class AuthService {
             await prefs.setString('user_handle', clean);
             if (cityId != null && cityId.isNotEmpty) await prefs.setString('selected_city_id', cityId);
             if (areaId != null && areaId.isNotEmpty) await prefs.setString('selected_area_id', areaId);
-            if (areaName != null && areaName.isNotEmpty) await prefs.setString('home_area_name', areaName);
+            if (areaName != null && areaName.isNotEmpty) {
+              await prefs.setString('home_area_name', areaName);
+              await prefs.setString('selected_area_name', areaName);
+            }
             if (addressNote != null && addressNote.isNotEmpty) await prefs.setString('address_note', addressNote);
           } catch (_) {}
 
@@ -914,6 +917,8 @@ class AuthService {
 
   Future<Map<String, dynamic>> confirmAreaDetails({
     String? areaId,
+    String? areaName,
+    String? cityId,
     String? addressNote,
   }) async {
     try {
@@ -921,6 +926,8 @@ class AuthService {
       final url = Uri.parse('$baseUrl/auth/confirm-area');
       final payload = <String, dynamic>{
         if (areaId != null && areaId.isNotEmpty) 'area_id': areaId,
+        if (areaName != null && areaName.isNotEmpty) 'area_name': areaName,
+        if (cityId != null && cityId.isNotEmpty) 'city_id': cityId,
         if (addressNote != null && addressNote.isNotEmpty) 'address_note': addressNote,
       };
       final response = await http.post(
@@ -934,6 +941,16 @@ class AuthService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (cityId != null && cityId.isNotEmpty) await prefs.setString('selected_city_id', cityId);
+          if (areaId != null && areaId.isNotEmpty) await prefs.setString('selected_area_id', areaId);
+          if (areaName != null && areaName.isNotEmpty) {
+            await prefs.setString('home_area_name', areaName);
+            await prefs.setString('selected_area_name', areaName);
+          }
+          if (addressNote != null && addressNote.isNotEmpty) await prefs.setString('address_note', addressNote);
+        } catch (_) {}
         return {'success': true, ...data};
       } else {
         final errorMsg = data['error'] as String? ?? 'Failed to update area.';

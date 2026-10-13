@@ -651,87 +651,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  void _showAreaSelectorSheet() {
-    final areas = widget.repository.locationService.city.areas;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.location_on_rounded, color: AppColors.primary, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'Choose Neighborhood in Vadodara',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: AppColors.divider),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: areas.length,
-                  itemBuilder: (context, index) {
-                    final area = areas[index];
-                    final isSelected = _selectedArea?.id == area.id;
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                        color: isSelected ? AppColors.primary : AppColors.textMuted,
-                        size: 20,
-                      ),
-                      title: Text(
-                        area.name,
-                        style: TextStyle(
-                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      ),
-                      subtitle: area.pincode != null
-                          ? Text('PIN: ${area.pincode}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11))
-                          : null,
-                      onTap: () {
-                        setState(() => _selectedArea = area);
-                        Navigator.pop(ctx);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final locService = widget.repository.locationService;
+    final lockedAreaName = _selectedArea?.name ?? locService.area?.name ?? locService.city.name;
+    final lockedCityName = locService.city.name;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -816,9 +741,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                               fontSize: 13.5,
                             ),
                           ),
-                          const Text(
-                            'Visible to Vadodara community members',
-                            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                          Text(
+                            'Visible to $lockedAreaName, $lockedCityName community members',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
                           ),
                         ],
                       ),
@@ -858,7 +783,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                           ),
                           Text(
-                            _selectedArea?.name ?? 'All Vadodara',
+                            lockedAreaName == lockedCityName
+                                ? lockedCityName
+                                : '$lockedAreaName, $lockedCityName',
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 13.5,
@@ -866,25 +793,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                    InkWell(
-                      onTap: _showAreaSelectorSheet,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Change',
-                          style: TextStyle(
-                            color: AppColors.primaryText,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
                       ),
                     ),
                   ],

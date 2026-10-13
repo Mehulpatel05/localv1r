@@ -14,6 +14,7 @@ import '../../core/motion.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../features/auth/widgets/confirm_area_sheet.dart';
 import '../../features/auth/widgets/city_paused_dialog.dart';
+import '../../core/location/location_engine.dart';
 import '../auth/create_handle_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -50,11 +51,41 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     final me = await AuthService.instance.fetchMe();
     if (!mounted || me == null) return;
 
+    final userObj = me['user'] as Map<String, dynamic>?;
+    final serverAreaId = (userObj?['areaId'] ?? userObj?['homeAreaId'] ?? userObj?['home_area_id'] ?? me['area_id']) as String?;
+    final serverAreaName = (userObj?['areaName'] ?? userObj?['homeAreaName'] ?? userObj?['home_area_name'] ?? me['area_name']) as String?;
+    final serverCityId = (userObj?['cityId'] ?? userObj?['homeCityId'] ?? userObj?['home_city_id'] ?? me['city_id']) as String?;
+
+    final locService = widget.repository.locationService;
+    if (serverAreaName != null && serverAreaName.trim().isNotEmpty) {
+      final effectiveCityId = (serverCityId != null && serverCityId.isNotEmpty) ? serverCityId : locService.city.id;
+      final resolvedCity = LocationEngine.lookupCity(effectiveCityId) ?? locService.city;
+      if (locService.city.id != resolvedCity.id) {
+        await locService.setCity(resolvedCity);
+      }
+      final effectiveAreaId = (serverAreaId != null && serverAreaId.isNotEmpty) ? serverAreaId : effectiveCityId;
+      if (locService.area?.name != serverAreaName.trim() || locService.area?.id != effectiveAreaId) {
+        final matched = LocationEngine.lookupArea(effectiveAreaId);
+        await locService.setArea(
+          GeoArea(
+            id: effectiveAreaId,
+            cityId: resolvedCity.id,
+            name: serverAreaName.trim(),
+            lat: matched?.lat ?? locService.rawLat,
+            lng: matched?.lng ?? locService.rawLng,
+            pincode: matched?.pincode,
+          ),
+        );
+      }
+    }
+
+    if (!mounted) return;
+
     final cityStatus = me['city_status'] as String? ?? me['user']?['cityStatus'] as String? ?? 'active';
     final cityMessage = me['city_message'] as String? ?? me['user']?['cityMessage'] as String?;
     final areaConfirmed = me['area_confirmed'] == 1 || me['user']?['areaConfirmed'] == true;
-    final areaName = me['user']?['areaName'] as String? ?? me['user']?['areaId'] as String? ?? 'Alkapuri';
-    final cityName = me['user']?['cityId'] as String? ?? 'Vadodara';
+    final areaName = locService.area?.name ?? serverAreaName ?? serverAreaId ?? 'Alkapuri';
+    final cityName = locService.city.name;
 
     if (cityStatus == 'paused') {
       showDialog(

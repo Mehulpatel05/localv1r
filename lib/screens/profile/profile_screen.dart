@@ -21,7 +21,7 @@ import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
-import '../../core/location/city_picker_screen.dart';
+import '../auth/create_handle_screen.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
@@ -1451,7 +1451,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final handle = _userData?['handle'] ?? widget.currentUserHandle;
     final bio = _userData?['bio'] ?? '';
-    final areaLabel = widget.repository.locationService.displayLabel;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -1467,8 +1466,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onRefresh: _loadProfileData,
           color: const Color(0xFF0E8A3E),
           child: ListenableBuilder(
-            listenable: widget.repository,
-            builder: (context, _) => SingleChildScrollView(
+            listenable: Listenable.merge([widget.repository, widget.repository.locationService]),
+            builder: (context, _) {
+              final areaLabel = widget.repository.locationService.displayLabel;
+              return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
@@ -1544,49 +1545,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             ),
                                           ),
                                         ],
-                                        GestureDetector(
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => const CityPickerScreen(),
-                                              ),
-                                            );
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.16),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.22),
-                                                width: 0.8,
-                                              ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.22),
+                                              width: 0.8,
                                             ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(
-                                                  Icons.location_on_rounded,
-                                                  size: 15,
-                                                  color: Colors.white,
-                                                ),
-                                                const SizedBox(width: 5),
-                                                ConstrainedBox(
-                                                  constraints: const BoxConstraints(maxWidth: 160),
-                                                  child: Text(
-                                                    areaLabel,
-                                                    style: const TextStyle(
-                                                      fontSize: 12.5,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: Colors.white,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.location_on_rounded,
+                                                size: 15,
+                                                color: Colors.white,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              ConstrainedBox(
+                                                constraints: const BoxConstraints(maxWidth: 160),
+                                                child: Text(
+                                                  areaLabel,
+                                                  style: const TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.white,
                                                   ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
@@ -2116,13 +2107,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   iconColor: const Color(0xFFD97706),
                                   title: 'Change area',
                                   subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
-                                  onTap: () {
-                                    Navigator.push(
+                                  onTap: () async {
+                                    final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const CityPickerScreen(),
+                                        builder: (_) => CreateHandleScreen(
+                                          repository: widget.repository,
+                                          userId: '',
+                                          isChangeArea: true,
+                                        ),
                                       ),
                                     );
+                                    if (updated == true && mounted) {
+                                      setState(() {});
+                                      widget.repository.refresh();
+                                    }
                                   },
                                 ),
                               ),
@@ -2139,11 +2138,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildStatCard({

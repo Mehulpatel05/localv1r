@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import 'create_bazar_listing_screen.dart';
 import 'shop_detail_screen.dart';
 import '../chat/personal_chat_screen.dart';
@@ -546,13 +548,23 @@ class _BazarScreenState extends State<BazarScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(
-                      'Near Alkapuri, Vadodara',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final locService = context.watch<LocationService>();
+                        final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
+                            ? locService.area!.name
+                            : locService.city.name;
+                        final cityName = locService.city.name;
+                        final label = areaName == cityName ? cityName : '$areaName, $cityName';
+                        return Text(
+                          label,
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

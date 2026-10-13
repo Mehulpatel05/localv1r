@@ -998,8 +998,12 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       });
 
       try {
+        final selectedCityId =
+            _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
         final result = await AuthService.instance.confirmAreaDetails(
           areaId: _selectedArea!.id,
+          areaName: _selectedArea!.name,
+          cityId: selectedCityId,
           addressNote: _addressNoteController.text.trim(),
         );
 
@@ -1021,8 +1025,6 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           return;
         }
 
-        final selectedCityId =
-            _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
         final city = LocationEngine.lookupCity(selectedCityId) ??
             GeoCity(
               id: selectedCityId,

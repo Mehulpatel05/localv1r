@@ -34,7 +34,9 @@ enum LocationState {
 // SharedPreferences keys
 // ─────────────────────────────────────────────────────────────────────────────
 const _kCityKey         = 'selected_city_id';
+const _kCityNameKey     = 'selected_city_name';
 const _kAreaKey         = 'selected_area_id';
+const _kAreaNameKey     = 'selected_area_name';
 const _kIsManualKey     = 'is_manual_location';
 const _kLastLatKey      = 'last_known_lat';
 const _kLastLngKey      = 'last_known_lng';
@@ -215,18 +217,10 @@ class LocationService extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
 
-    // Restore last saved city/area
     final savedCityId   = prefs.getString(_kCityKey) ?? _kDefaultCityId;
+    final savedCityName = prefs.getString(_kCityNameKey);
     final savedCity     = LocationEngine.lookupCity(savedCityId);
-    _city = (savedCity != null && savedCity.enabled)
-        ? savedCity
-        : LocationEngine.lookupCity(_kDefaultCityId)!;
 
-    final savedAreaId = prefs.getString(_kAreaKey);
-    _area             = _city.areas.where((a) => a.id == savedAreaId).firstOrNull;
-    _isManualLocation = prefs.getBool(_kIsManualKey) ?? false;
-
-    // Restore last known raw coords
     _rawLat     = prefs.getDouble(_kLastLatKey);
     _rawLng     = prefs.getDouble(_kLastLngKey);
     final fetchedMs = prefs.getInt(_kLastFetchedKey);
@@ -234,6 +228,49 @@ class LocationService extends ChangeNotifier {
         ? DateTime.fromMillisecondsSinceEpoch(fetchedMs)
         : null;
 
+    if (savedCity != null && savedCity.enabled) {
+      _city = savedCity;
+    } else if (savedCityName != null && savedCityName.isNotEmpty) {
+      _city = GeoCity(
+        id: savedCityId,
+        stateId: 'GJ',
+        name: savedCityName,
+        enabled: true,
+        areas: const [],
+      );
+    } else {
+      _city = LocationEngine.lookupCity(_kDefaultCityId)!;
+    }
+
+    final savedAreaId   = prefs.getString(_kAreaKey);
+    final savedAreaName = prefs.getString(_kAreaNameKey) ?? prefs.getString('home_area_name');
+    final matchedArea   = _city.areas.where((a) => a.id == savedAreaId).firstOrNull ??
+        (savedAreaId != null ? LocationEngine.lookupArea(savedAreaId) : null);
+
+    if (matchedArea != null) {
+      _area = (savedAreaName != null && savedAreaName.isNotEmpty && matchedArea.name != savedAreaName)
+          ? GeoArea(
+              id: matchedArea.id,
+              cityId: _city.id,
+              name: savedAreaName,
+              lat: matchedArea.lat,
+              lng: matchedArea.lng,
+              pincode: matchedArea.pincode,
+            )
+          : matchedArea;
+    } else if (savedAreaName != null && savedAreaName.isNotEmpty) {
+      _area = GeoArea(
+        id: (savedAreaId != null && savedAreaId.isNotEmpty) ? savedAreaId : _city.id,
+        cityId: _city.id,
+        name: savedAreaName,
+        lat: _rawLat,
+        lng: _rawLng,
+      );
+    } else {
+      _area = _city.areas.firstOrNull;
+    }
+
+    _isManualLocation = prefs.getBool(_kIsManualKey) ?? true;
     _state = LocationState.manualLocation;
     _source = _isManualLocation ? LocationSource.manual : LocationSource.defaultCity;
     _confidenceScore = 0.9;
@@ -477,13 +514,14 @@ class LocationService extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kCityKey, c.id);
+    await prefs.setString(_kCityNameKey, c.name);
     await prefs.remove(_kAreaKey);
+    await prefs.remove(_kAreaNameKey);
     await prefs.setBool(_kIsManualKey, true);
     notifyListeners();
   }
 
   Future<void> setArea(GeoArea? a) async {
-    if (a != null && a.cityId != _city.id) return;
     _area            = a;
     _isManualLocation = true;
     _source          = LocationSource.manual;
@@ -494,8 +532,13 @@ class LocationService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     if (a == null) {
       await prefs.remove(_kAreaKey);
+      await prefs.remove(_kAreaNameKey);
     } else {
       await prefs.setString(_kAreaKey, a.id);
+      await prefs.setString(_kAreaNameKey, a.name);
+      await prefs.setString('home_area_name', a.name);
+      if (a.lat != null) await prefs.setDouble(_kLastLatKey, a.lat!);
+      if (a.lng != null) await prefs.setDouble(_kLastLngKey, a.lng!);
     }
     await prefs.setBool(_kIsManualKey, true);
     notifyListeners();

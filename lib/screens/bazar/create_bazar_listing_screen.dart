@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../../core/location/location_service.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -24,7 +26,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
   String _selectedCategory = 'Electronics';
   String _selectedCondition = 'Used';
-  String _selectedLocation = 'Visible within 2 km';
+  String _selectedLocation = 'Vadodara';
   bool _isPublishing = false;
 
   final List<Map<String, String>> _categories = [
@@ -34,13 +36,6 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     {'name': 'Home food', 'icon': '🍰'},
     {'name': 'Books', 'icon': '📚'},
     {'name': 'Other', 'icon': '💬'},
-  ];
-
-  final List<String> _locationOptions = [
-    'Visible within 2 km',
-    'Visible within 5 km',
-    'Visible within 10 km',
-    'All Vadodara',
   ];
 
   String? _existingImageUrl;
@@ -58,6 +53,17 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       }
       _existingImageUrl = product.imageUrl;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locService = context.read<LocationService>();
+    final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
+        ? locService.area!.name
+        : locService.city.name;
+    final cityName = locService.city.name;
+    _selectedLocation = areaName == cityName ? cityName : '$areaName, $cityName';
   }
 
   @override
@@ -103,53 +109,6 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     setState(() {
       _pickedImagePaths.removeAt(index);
     });
-  }
-
-  void _showLocationPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select Visibility Radius',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 14),
-            ..._locationOptions.map((opt) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    opt == _selectedLocation
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                    color: opt == _selectedLocation ? AppColors.primary : AppColors.textMuted,
-                  ),
-                  title: Text(
-                    opt,
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
-                  ),
-                  onTap: () {
-                    setState(() {
-                      _selectedLocation = opt;
-                    });
-                    Navigator.pop(ctx);
-                  },
-                )),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _publishListing() async {
@@ -704,31 +663,28 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
 
             Text('LOCATION', style: labelStyle),
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _showLocationPicker,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
-                  children: [
-                    const Text('📍', style: TextStyle(fontSize: 16)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '$_selectedLocation  ▼',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Row(
+                children: [
+                  const Text('📍', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _selectedLocation,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
