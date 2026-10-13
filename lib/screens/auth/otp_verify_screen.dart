@@ -142,6 +142,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
       } else {
         widget.repository.currentUserHandle = handle;
         NotificationService().initialize();
+        NotificationService.instance.startListening(handle);
         PresenceService.instance.init(handle);
 
         final prefs = await SharedPreferences.getInstance();

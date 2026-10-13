@@ -23,28 +23,47 @@ class DirectChatService {
 
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
 
-  /// ⚡ Phase 2: Stage B Pre-fetch Unread DM Counters (0ms UI Badge warmup)
   Future<int> prefetchUnreadSummary(String userHandle) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return 0;
 
     try {
       final token = await AuthService.instance.getAccessToken();
-      final uri = Uri.parse('${AuthService.baseUrl}/actions/counters');
+      final uri = Uri.parse('${AuthService.baseUrl}/actions/counters?handle=$clean');
       final res = await http.get(
         uri,
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         final counters = body['counters'] as Map<String, dynamic>? ?? {};
-        final unread = (counters['unreadMessages'] as int?) ?? 0;
+        final unread = (counters['unreadMessages'] as int?) ?? (counters['unreadChats'] as int?) ?? 0;
         unreadCountNotifier.value = unread;
         return unread;
+      }
+
+      final fallbackRes = await http.get(
+        Uri.parse('${AuthService.baseUrl}/chats?handle=$clean'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (fallbackRes.statusCode == 200) {
+        final body = jsonDecode(fallbackRes.body);
+        final chats = (body['chats'] as List<dynamic>?) ?? [];
+        int totalUnread = 0;
+        for (final c in chats) {
+          final unread = (c['unreadCount'] as num?)?.toInt() ?? 0;
+          totalUnread += unread;
+        }
+        unreadCountNotifier.value = totalUnread;
+        return totalUnread;
       }
     } catch (e) {
       debugPrint('[DirectChatService] prefetchUnreadSummary error: $e');

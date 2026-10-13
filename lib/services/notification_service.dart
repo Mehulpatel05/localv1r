@@ -27,6 +27,8 @@ import '../core/services/name_cache_service.dart';
 import '../screens/rewards/rewards_hub_screen.dart';
 import '../core/splash_controller.dart';
 import 'chat_preferences_service.dart';
+import 'direct_chat_service.dart';
+import '../models/chat_conversation_model.dart';
 
 /// Top-level background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -112,21 +114,20 @@ class NotificationService {
 
   final ValueNotifier<int> unreadBadgeNotifier = ValueNotifier<int>(0);
 
-  /// ⚡ Phase 2: Stage B Pre-fetch Notification Badge Counts
   Future<int> prefetchBadgeCounts(String userHandle) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return 0;
 
     try {
       final token = await AuthService.instance.getAccessToken();
-      final uri = Uri.parse('${AuthService.baseUrl}/actions/counters');
+      final uri = Uri.parse('${AuthService.baseUrl}/actions/counters?handle=$clean');
       final res = await http.get(
         uri,
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -134,6 +135,31 @@ class NotificationService {
         final unread = (counters['unreadNotifications'] as int?) ?? 0;
         unreadBadgeNotifier.value = unread;
         return unread;
+      }
+
+      final fallbackRes = await http.get(
+        Uri.parse('${AuthService.baseUrl}/notifications?handle=$clean'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (fallbackRes.statusCode == 200) {
+        final data = jsonDecode(fallbackRes.body);
+        final notifs = (data['notifications'] as List<dynamic>?) ?? [];
+        int count = 0;
+        for (final raw in notifs) {
+          final notif = raw as Map<String, dynamic>;
+          final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
+          final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
+          final type = payloadData['type'] as String? ?? notif['type'] as String?;
+          if (!isRead && type != 'chat' && type != 'message') {
+            count++;
+          }
+        }
+        unreadBadgeNotifier.value = count;
+        return count;
       }
     } catch (e) {
       debugPrint('[NotificationService] prefetchBadgeCounts error: $e');
@@ -372,17 +398,14 @@ class NotificationService {
     return '${title}_${body}_$time';
   }
 
-  /// Start realtime notification poller for a specific handle
   void startListening(String handle) {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty) return;
 
-    // Sync device FCM push token with D1 backend for background notifications
     syncFcmTokenForUser(cleanHandle);
 
     _pollingTimer?.cancel();
     bool isInitialTick = true;
-    final sessionThreshold = DateTime.now().subtract(const Duration(seconds: 30));
 
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       try {
@@ -394,53 +417,61 @@ class NotificationService {
             'Accept': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
           },
-
         ).timeout(const Duration(seconds: 4));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final notifs = (data['notifications'] as List<dynamic>?) ?? [];
 
+          int unreadCount = 0;
+          for (final raw in notifs) {
+            final notif = raw as Map<String, dynamic>;
+            final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
+            final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
+            final type = payloadData['type'] as String? ?? notif['type'] as String?;
+            if (!isRead && type != 'chat' && type != 'message') {
+              unreadCount++;
+            }
+          }
+          unreadBadgeNotifier.value = unreadCount;
+
           if (isInitialTick) {
-            // Seed the dedup set with all existing notifications on first load
-            // so we don't show old notifications as new on app start
             for (final raw in notifs) {
               final notif = raw as Map<String, dynamic>;
               final docId = _extractNotifId(notif);
-              if (docId.isNotEmpty) {
-                _addProcessed(docId);
+              final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
+              final rawCreated = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'];
+              DateTime? createdAt;
+              if (rawCreated is int) {
+                createdAt = rawCreated > 10000000000
+                    ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
+                    : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
+              } else if (rawCreated is String) {
+                String str = rawCreated.trim();
+                if (!str.endsWith('Z') && !str.contains('+')) {
+                  str = '${str.replaceAll(' ', 'T')}Z';
+                }
+                createdAt = DateTime.tryParse(str)?.toLocal() ?? DateTime.tryParse(rawCreated);
+              }
+
+              final isOlderThan5Min = createdAt != null && DateTime.now().difference(createdAt).inMinutes > 5;
+              if (isRead || isOlderThan5Min) {
+                if (docId.isNotEmpty) {
+                  _addProcessed(docId);
+                }
               }
             }
             isInitialTick = false;
-            return;
           }
 
           for (final raw in notifs) {
             final notif = raw as Map<String, dynamic>;
             final docId = _extractNotifId(notif);
-            if (_processedNotificationIds.contains(docId)) continue;
-            _addProcessed(docId); // ← use capped helper, not raw .add()
+            if (docId.isEmpty || _processedNotificationIds.contains(docId)) continue;
+            _addProcessed(docId);
 
             final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
             if (isRead) continue;
-
-            final rawCreated = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'];
-            DateTime? createdAt;
-            if (rawCreated is int) {
-              createdAt = rawCreated > 10000000000
-                  ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
-                  : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
-            } else if (rawCreated is String) {
-              String str = rawCreated.trim();
-              if (!str.endsWith('Z') && !str.contains('+')) {
-                str = '${str.replaceAll(' ', 'T')}Z';
-              }
-              createdAt = DateTime.tryParse(str)?.toLocal() ?? DateTime.tryParse(rawCreated);
-            }
-
-            if (createdAt != null && createdAt.isBefore(sessionThreshold)) {
-              continue;
-            }
 
             final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
             final type = payloadData['type'] as String? ?? notif['type'] as String?;
@@ -472,16 +503,15 @@ class NotificationService {
               continue;
             }
 
-            // Real-time synchronization for friends & chat modules
             if (type == 'friend_request' || type == 'friend_accept' || type == 'friend_rejected' || type == 'friend') {
               FriendRepository.instance.refreshAll().catchError((_) {});
+            } else if (type == 'chat' || type == 'message') {
+              DirectChatService.instance.getChats(cleanHandle).catchError((_) => <ChatConversation>[]);
             }
 
-            // Check user notification preferences
             final isAllowed = await _checkIfCategoryAllowed(type);
             if (!isAllowed) continue;
 
-            // Smart suppression: don't ring if user is actively on this chat screen
             if (type == 'chat' || type == 'message') {
               final sender = (payloadData['senderHandle'] ?? payloadData['partnerHandle'] as String?)?.replaceAll('@', '').trim();
               if (sender != null && sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
@@ -507,6 +537,32 @@ class NotificationService {
             if (isEmergency) {
               HapticFeedback.heavyImpact();
               SystemSound.play(SystemSoundType.alert);
+            } else {
+              HapticFeedback.lightImpact();
+            }
+
+            final notifPayload = payloadData.isNotEmpty ? payloadData : notif;
+            final notifIdInt = (docId.hashCode ^ DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF;
+
+            if (type != 'call') {
+              _localNotifications.show(
+                id: notifIdInt,
+                title: title,
+                body: body,
+                notificationDetails: NotificationDetails(
+                  android: AndroidNotificationDetails(
+                    channel.id,
+                    channel.name,
+                    channelDescription: channel.description,
+                    importance: Importance.max,
+                    priority: Priority.max,
+                    icon: '@drawable/ic_notification',
+                    playSound: true,
+                    enableVibration: true,
+                  ),
+                ),
+                payload: jsonEncode(notifPayload),
+              );
             }
 
             final currentContext = navigatorKey.currentContext;
@@ -518,13 +574,9 @@ class NotificationService {
                 body: body,
                 handle: sender,
                 isEmergency: isEmergency,
-                onTap: () => navigateToScreen(payloadData.isNotEmpty ? payloadData : notif),
+                onTap: () => navigateToScreen(notifPayload),
               );
             }
-
-            // NOTE: Polling loop NEVER shows system tray notification.
-            // FCM push already handles system tray for ALL types (chat, post_like, friend_request, etc.)
-            // when app is background/killed. Polling only shows in-app banner (above) when app is open.
           }
         }
       } catch (_) {}

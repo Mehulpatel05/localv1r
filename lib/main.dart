@@ -151,6 +151,8 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           PresenceService.instance.init(result.userHandle);
+          CallListenerService.instance.startListening(result.userHandle);
+          NotificationService.instance.startListening(result.userHandle);
         });
       }
 
