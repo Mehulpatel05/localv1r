@@ -24,15 +24,25 @@ class NameCacheService extends ChangeNotifier {
   String? _myName;
   Timer? _diskSaveDebounce;
 
+  static bool isPlaceholderName(String? value) {
+    if (value == null) return true;
+    final clean = value.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty || clean == 'guest' || clean == 'anon') return true;
+    if (clean.startsWith('user_') || clean.startsWith('anon#')) return true;
+    if (RegExp(r'^user\s*\d+').hasMatch(clean)) return true;
+    return false;
+  }
+
   Future<void> _initFromDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _myName = prefs.getString(_kMyNameKey);
+      final savedMyName = prefs.getString(_kMyNameKey);
+      _myName = isPlaceholderName(savedMyName) ? null : savedMyName?.trim();
       final jsonStr = prefs.getString(_kNameCacheKey);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final Map<String, dynamic> decoded = jsonDecode(jsonStr);
         decoded.forEach((key, val) {
-          if (val is String && val.trim().isNotEmpty) {
+          if (val is String && val.trim().isNotEmpty && !isPlaceholderName(val)) {
             _cache[key] = val.trim();
           }
         });
@@ -50,7 +60,9 @@ class NameCacheService extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         final mapToSave = <String, String>{};
         _cache.forEach((k, v) {
-          if (v != null && v.trim().isNotEmpty) mapToSave[k] = v.trim();
+          if (v != null && v.trim().isNotEmpty && !isPlaceholderName(v)) {
+            mapToSave[k] = v.trim();
+          }
         });
         await prefs.setString(_kNameCacheKey, jsonEncode(mapToSave));
       } catch (e) {
@@ -66,39 +78,51 @@ class NameCacheService extends ChangeNotifier {
   String? getCachedName(String handle) {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
-    return _cache[clean];
+    final val = _cache[clean];
+    if (isPlaceholderName(val)) return null;
+    return val;
   }
 
   String getDisplayName(String handle, {String? fallback}) {
     final clean = handle.replaceAll('@', '').trim();
     final lower = clean.toLowerCase();
     if (clean.isEmpty) {
-      if (fallback != null && fallback.trim().isNotEmpty) {
+      if (fallback != null && fallback.trim().isNotEmpty && !isPlaceholderName(fallback)) {
         final cleanFb = fallback.replaceAll('@', '').trim();
         return cleanFb.isNotEmpty ? cleanFb : '';
       }
       return '';
     }
     final cached = _cache[lower];
-    if (cached != null && cached.trim().isNotEmpty) {
+    if (cached != null && cached.trim().isNotEmpty && !isPlaceholderName(cached)) {
       return cached.trim();
     }
     if (fallback != null && fallback.trim().isNotEmpty) {
       final cleanFallback = fallback.replaceAll('@', '').trim();
-      if (cleanFallback.isNotEmpty && !cleanFallback.toLowerCase().startsWith('user ')) {
+      if (cleanFallback.isNotEmpty && !isPlaceholderName(cleanFallback)) {
         return cleanFallback;
       }
     }
-    if (clean.isNotEmpty) {
+    if (!isPlaceholderName(clean)) {
       return clean[0].toUpperCase() + clean.substring(1);
     }
-    return '';
+    if (_myName != null && _myName!.trim().isNotEmpty && !isPlaceholderName(_myName)) {
+      return _myName!.trim();
+    }
+    if (fallback != null && fallback.trim().isNotEmpty) {
+      final cleanFb = fallback.replaceAll('@', '').trim();
+      if (!isPlaceholderName(cleanFb)) return cleanFb;
+    }
+    return 'Neighbor';
   }
 
   void setCachedName(String handle, String? name, {bool persist = true}) {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return;
-    final val = (name != null && name.trim().isNotEmpty) ? name.trim() : null;
+    final val = (name != null && name.trim().isNotEmpty && !isPlaceholderName(name))
+        ? name.trim()
+        : null;
+    if (val == null) return;
 
     if (_cache[clean] != val) {
       _cache[clean] = val;
@@ -112,8 +136,10 @@ class NameCacheService extends ChangeNotifier {
     entries.forEach((handle, name) {
       final clean = handle.replaceAll('@', '').trim().toLowerCase();
       if (clean.isNotEmpty) {
-        final val = (name != null && name.trim().isNotEmpty) ? name.trim() : null;
-        if (_cache[clean] != val) {
+        final val = (name != null && name.trim().isNotEmpty && !isPlaceholderName(name))
+            ? name.trim()
+            : null;
+        if (val != null && _cache[clean] != val) {
           _cache[clean] = val;
           hasChanged = true;
         }
@@ -129,7 +155,7 @@ class NameCacheService extends ChangeNotifier {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
 
-    if (!forceRefresh && _cache.containsKey(clean) && _cache[clean] != null) {
+    if (!forceRefresh && _cache.containsKey(clean) && _cache[clean] != null && !isPlaceholderName(_cache[clean])) {
       return _cache[clean];
     }
 
@@ -154,9 +180,13 @@ class NameCacheService extends ChangeNotifier {
                 profile?['fullName'] ??
                 user?['name'] ??
                 user?['displayName']) as String?;
-        final validName = (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : null;
-        _cache[clean] = validName;
-        _scheduleSaveToDisk();
+        final validName = (rawName != null && rawName.trim().isNotEmpty && !isPlaceholderName(rawName))
+            ? rawName.trim()
+            : null;
+        if (validName != null) {
+          _cache[clean] = validName;
+          _scheduleSaveToDisk();
+        }
         completer.complete(validName);
       } else if (res.statusCode == 404) {
         _cache[clean] = null;
@@ -178,6 +208,7 @@ class NameCacheService extends ChangeNotifier {
   }
 
   Future<void> saveMyNameLocally(String name) async {
+    if (isPlaceholderName(name)) return;
     _myName = name.trim();
     notifyListeners();
     try {
@@ -187,10 +218,13 @@ class NameCacheService extends ChangeNotifier {
   }
 
   Future<String?> getMyNameLocally() async {
-    if (_myName != null && _myName!.trim().isNotEmpty) return _myName;
+    if (_myName != null && _myName!.trim().isNotEmpty && !isPlaceholderName(_myName)) {
+      return _myName;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      _myName = prefs.getString(_kMyNameKey);
+      final saved = prefs.getString(_kMyNameKey);
+      _myName = isPlaceholderName(saved) ? null : saved?.trim();
       return _myName;
     } catch (_) {
       return null;
@@ -202,13 +236,19 @@ class NameCacheService extends ChangeNotifier {
     _inFlightCompleters.clear();
     _myName = null;
     notifyListeners();
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove(_kNameCacheKey);
+      prefs.remove(_kMyNameKey);
+    }).catchError((_) {});
   }
 }
 
 String getDisplayName(dynamic userOrHandle, {String? fallback}) {
   if (userOrHandle == null) return fallback?.replaceAll('@', '').trim() ?? '';
   if (userOrHandle is UserProfile) {
-    if (userOrHandle.displayName != null && userOrHandle.displayName!.trim().isNotEmpty) {
+    if (userOrHandle.displayName != null &&
+        userOrHandle.displayName!.trim().isNotEmpty &&
+        !NameCacheService.isPlaceholderName(userOrHandle.displayName)) {
       return userOrHandle.displayName!.trim();
     }
     return NameCacheService.instance.getDisplayName(userOrHandle.handle, fallback: fallback);

@@ -528,36 +528,55 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
 
                 Builder(
                   builder: (context) {
+                    final cleanHandle = _targetHandle.replaceAll('@', '').trim();
                     final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
-                    final cachedName = NameCacheService.instance.getCachedName(_targetHandle);
-                    final effectiveName = (rawName != null && rawName.trim().isNotEmpty)
+                    final cachedName = NameCacheService.instance.getCachedName(cleanHandle);
+                    final effectiveName = (rawName != null && rawName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(rawName))
                         ? rawName.trim()
-                        : (cachedName != null && cachedName.trim().isNotEmpty ? cachedName.trim() : null);
+                        : ((cachedName != null && cachedName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(cachedName))
+                            ? cachedName.trim()
+                            : null);
 
-                    final displayName = getDisplayName(effectiveName ?? _targetHandle);
+                    final displayName = effectiveName ?? (cleanHandle.isNotEmpty ? cleanHandle : 'Neighbour');
 
-                    return Row(
+                    return Column(
                       mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                              letterSpacing: -0.4,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.4,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            VerifiedBadge(
+                              handle: _targetHandle,
+                              isVerified: isVerified,
+                              badgeText: authorBadge,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                        if (cleanHandle.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '@$cleanHandle',
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              color: AppColors.textMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        VerifiedBadge(
-                          handle: _targetHandle,
-                          isVerified: isVerified,
-                          badgeText: authorBadge,
-                          size: 18,
-                        ),
+                        ],
                       ],
                     );
                   },

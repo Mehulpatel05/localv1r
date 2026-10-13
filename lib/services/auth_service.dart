@@ -147,9 +147,10 @@ class AuthService {
         final userId = (user['userId'] as String?) ?? '';
         final phone = (user['phoneNumber'] as String?) ?? (phoneNumber ?? '');
         final handle = (user['handle'] as String?) ?? (body['handle'] as String?) ?? '';
+        final displayName = ((user['displayName'] ?? user['display_name'] ?? body['displayName']) as String?)?.trim() ?? '';
+        final avatarUrl = ((user['avatarUrl'] ?? user['avatar_url']) as String?)?.trim() ?? '';
         final isNewUser = body['isNewUser'] == true || user['isNewUser'] == true || isNewUserHandle(handle);
 
-        // 1. Secure storage write
         if (accessToken.isNotEmpty) {
           await _secureStorage.write(key: _kAccessTokenKey, value: accessToken);
           updateDecisionEngineFromToken(accessToken);
@@ -167,12 +168,23 @@ class AuthService {
           await _secureStorage.write(key: _kHandleKey, value: handle);
         }
 
-        // 2. Sync non-sensitive identifiers to SharedPreferences for instant 0ms UI access
+        if (isNewUser) {
+          await AvatarCacheService.instance.clearAll();
+          NameCacheService.instance.clearAll();
+        } else if (handle.isNotEmpty) {
+          if (displayName.isNotEmpty && !NameCacheService.isPlaceholderName(displayName)) {
+            NameCacheService.instance.setCachedName(handle, displayName);
+            await NameCacheService.instance.saveMyNameLocally(displayName);
+          }
+          AvatarCacheService.instance.setCachedUrl(handle, avatarUrl.isNotEmpty ? avatarUrl : null);
+          await AvatarCacheService.instance.saveMyPhotoUrlLocally(avatarUrl);
+        }
+
         try {
           final prefs = await SharedPreferences.getInstance();
           if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
           if (userId.isNotEmpty) await prefs.setString('user_id', userId);
-          await prefs.remove('phone_number'); // Remove any legacy plaintext phone PII
+          await prefs.remove('phone_number');
         } catch (_) {}
 
 
@@ -626,6 +638,7 @@ class AuthService {
       final clean = handle.replaceAll('@', '').trim().toLowerCase();
       AvatarCacheService.instance.setCachedUrl(clean, null);
     }
+    await AvatarCacheService.instance.saveMyPhotoUrlLocally('');
   }
 
   /// ⚡ Phase 4: Complete Sign Out with Multi-Tenancy Data Purge

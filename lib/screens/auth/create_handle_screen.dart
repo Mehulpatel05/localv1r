@@ -169,7 +169,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     });
 
     if (widget.user?.displayName != null &&
-        (widget.user!.displayName as String).trim().isNotEmpty) {
+        (widget.user!.displayName as String).trim().isNotEmpty &&
+        !NameCacheService.isPlaceholderName((widget.user!.displayName as String).trim())) {
       _nameController.text = (widget.user!.displayName as String).trim();
     }
 
@@ -1133,6 +1134,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         } catch (e) {
           debugPrint('Profile photo upload warning during onboarding: $e');
         }
+      } else {
+        await AuthService.instance.removeUserProfileImage();
       }
 
       final city = LocationEngine.lookupCity(selectedCityId) ??
@@ -1276,6 +1279,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.white,
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
@@ -1354,26 +1358,26 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             ),
             SafeArea(
               child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildHeaderTitles(),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       child: _currentStep == 1
                           ? _buildStep1Card()
                           : _buildStep2Card(),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     _currentStep == 1
                         ? _buildStep1ContinueButton(isStep1Valid)
                         : _buildStep2FinishButton(isStep2Valid),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildFooterText(),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),

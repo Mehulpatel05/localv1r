@@ -301,39 +301,13 @@ class PostRepository extends ChangeNotifier {
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
-      list.sort((a, b) {
-        final postLatA = a.lat ??
-            (a.areaId != null ? LocationEngine.lookupArea(a.areaId!)?.lat : null) ??
-            LocationEngine.lookupCity(a.cityId ?? '')?.lat ??
-            originLat;
-        final postLngA = a.lng ??
-            (a.areaId != null ? LocationEngine.lookupArea(a.areaId!)?.lng : null) ??
-            LocationEngine.lookupCity(a.cityId ?? '')?.lng ??
-            originLng;
-        final distA = LocationService.calculateDistanceKm(originLat, originLng, postLatA, postLngA);
-
-        final postLatB = b.lat ??
-            (b.areaId != null ? LocationEngine.lookupArea(b.areaId!)?.lat : null) ??
-            LocationEngine.lookupCity(b.cityId ?? '')?.lat ??
-            originLat;
-        final postLngB = b.lng ??
-            (b.areaId != null ? LocationEngine.lookupArea(b.areaId!)?.lng : null) ??
-            LocationEngine.lookupCity(b.cityId ?? '')?.lng ??
-            originLng;
-        final distB = LocationService.calculateDistanceKm(originLat, originLng, postLatB, postLngB);
-
-        if ((distA - distB).abs() > 0.5) {
-          return distA.compareTo(distB);
-        }
-        return b.createdAt.compareTo(a.createdAt);
-      });
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
 
     return list;
   }
 
   List<Post> get posts {
-    // 🛡️ Filter flagged posts inline using server-derived fields directly
     var list = allPosts;
 
     if (_selectedCategory != null) {
@@ -421,7 +395,6 @@ class PostRepository extends ChangeNotifier {
     );
   }
 
-  /// 🚀 Real-time Fetcher from Cloudflare D1 Backend
   Future<void> _fetchPosts({bool refresh = false}) async {
     if (refresh) {
       _nextCursor = null;
@@ -436,14 +409,12 @@ class PostRepository extends ChangeNotifier {
     
     try {
       final cityId = locationService.cityId;
-      final areaId = locationService.areaId;
       final categoryStr = _selectedCategory?.name;
       
       var uri = Uri.parse('$backendBaseUrl/posts');
       final queryParams = <String, String>{
         'limit': '50',
         'cityId': cityId,
-        if (areaId != null && areaId.isNotEmpty) 'areaId': areaId,
         'cursor': ?_nextCursor,
         'category': ?categoryStr,
       };

@@ -46,13 +46,13 @@ class _FeedScreenState extends State<FeedScreen> {
   late final Stream<int> _pendingRequestsStream;
   String _selectedFilterChip = 'All';
 
-  static const List<Map<String, String>> _feedCategoryFilters = [
-    {'label': 'All', 'icon': '✨'},
-    {'label': 'General', 'icon': '💬'},
-    {'label': 'Question', 'icon': '❓'},
-    {'label': 'Events', 'icon': '🎉'},
-    {'label': 'Alerts', 'icon': '⚠️'},
-    {'label': 'Safety', 'icon': '🛡️'},
+  static const List<String> _feedCategoryFilters = [
+    'All',
+    'General',
+    'Question',
+    'Events',
+    'Alerts',
+    'Safety',
   ];
 
   List<Post> _getFilteredPosts(List<Post> posts) {
@@ -92,7 +92,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildFilterChipsRow() {
     return Container(
-      height: 46,
+      height: 42,
       margin: const EdgeInsets.only(top: 6, bottom: 6),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -100,9 +100,7 @@ class _FeedScreenState extends State<FeedScreen> {
         itemCount: _feedCategoryFilters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final item = _feedCategoryFilters[index];
-          final chip = item['label']!;
-          final icon = item['icon']!;
+          final chip = _feedCategoryFilters[index];
           final isSelected = chip == _selectedFilterChip;
 
           final bg = isSelected ? AppColors.primary : AppColors.surface;
@@ -118,7 +116,7 @@ class _FeedScreenState extends State<FeedScreen> {
               });
             },
             child: Container(
-              padding: const EdgeInsets.fromLTRB(6, 5, 14, 5),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
               decoration: BoxDecoration(
                 color: bg,
                 borderRadius: BorderRadius.circular(999),
@@ -134,35 +132,14 @@ class _FeedScreenState extends State<FeedScreen> {
                     : null,
               ),
               alignment: Alignment.center,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.white.withValues(alpha: 0.22)
-                          : AppColors.chipBg,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      icon,
-                      style: const TextStyle(fontSize: 13.5),
-                    ),
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    chip,
-                    style: TextStyle(
-                      color: fg,
-                      fontSize: 13.5,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ],
+              child: Text(
+                chip,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 13.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
           );
@@ -1266,10 +1243,14 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             children: [
                               Builder(
                                 builder: (context) {
+                                  final cleanHandle = post.authorHandle.replaceAll('@', '').trim();
                                   final authorName = getDisplayName(
                                     post.authorHandle,
                                     fallback: post.authorName,
                                   );
+                                  final showHandle = cleanHandle.isNotEmpty &&
+                                      !cleanHandle.toLowerCase().startsWith('user_') &&
+                                      !cleanHandle.toLowerCase().startsWith('anon');
                                   final authorBadge = BadgeCacheService.instance.getUserBadge(
                                     post.authorHandle,
                                     fallback: post.authorBadge,
@@ -1295,6 +1276,20 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        if (showHandle) ...[
+                                          const SizedBox(width: 5),
+                                          Flexible(
+                                            child: Text(
+                                              '@$cleanHandle',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textMuted,
+                                                fontSize: 12.5,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
                                         if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
                                           const SizedBox(width: 5),
                                           VerifiedBadge(
@@ -1384,79 +1379,50 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             Color bg = AppColors.chipBg;
                             Color text = AppColors.textPrimary;
                             String label = 'General';
-                            String emoji = '💬';
 
                             if (isUrgent) {
                               bg = AppColors.error;
                               text = Colors.white;
                               label = 'Urgent';
-                              emoji = '🚨';
                             } else if (isAlert || post.category == PostCategory.safetyAlert || post.category == PostCategory.safety) {
                               bg = AppColors.errorSoft;
                               text = AppColors.errorSoftText;
                               label = 'Safety';
-                              emoji = '🛡️';
                             } else if (post.category == PostCategory.alerts) {
                               bg = const Color(0xFFFEF3C7);
                               text = const Color(0xFFB45309);
                               label = 'Alerts';
-                              emoji = '⚠️';
                             } else if (post.category == PostCategory.question) {
                               bg = AppColors.primarySoft;
                               text = AppColors.primaryText;
                               label = 'Question';
-                              emoji = '❓';
                             } else if (post.category == PostCategory.events) {
                               bg = const Color(0xFFEDE9FE);
                               text = const Color(0xFF6D28D9);
                               label = 'Events';
-                              emoji = '🎉';
                             } else if (isLostPet) {
                               bg = const Color(0xFFFEF3C7);
                               text = const Color(0xFFB45309);
                               label = 'Lost pet';
-                              emoji = '🐾';
                             } else {
                               bg = AppColors.chipBg;
                               text = AppColors.textPrimary;
                               label = post.category.label;
-                              emoji = post.category.icon;
                             }
 
                             return Container(
-                              padding: const EdgeInsets.fromLTRB(5, 4, 10, 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                               decoration: BoxDecoration(
                                 color: bg,
                                 borderRadius: BorderRadius.circular(999),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: isUrgent
-                                          ? Colors.white.withValues(alpha: 0.22)
-                                          : Colors.white.withValues(alpha: 0.75),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      emoji,
-                                      style: const TextStyle(fontSize: 10.5, height: 1),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    label,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: text,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: text,
+                                ),
                               ),
                             );
                           },

@@ -414,10 +414,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               children: [
                                 Builder(
                                   builder: (context) {
+                                    final cleanHandle = widget.post.authorHandle.replaceAll('@', '').trim();
                                     final authorName = getDisplayName(
                                       widget.post.authorHandle,
                                       fallback: widget.post.authorName,
                                     );
+                                    final showHandleText = cleanHandle.isNotEmpty &&
+                                        cleanHandle.toLowerCase() != 'anon' &&
+                                        !cleanHandle.toLowerCase().startsWith('user_') &&
+                                        authorName.toLowerCase() != cleanHandle.toLowerCase();
                                     final isVerified = BadgeCacheService.instance.isUserVerified(
                                       widget.post.authorHandle,
                                       fallback: widget.post.isVerified,
@@ -452,6 +457,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
+                                          if (showHandleText) ...[
+                                            const SizedBox(width: 5),
+                                            Flexible(
+                                              child: Text(
+                                                '@$cleanHandle',
+                                                style: const TextStyle(
+                                                  color: AppColors.textMuted,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                           if (isVerified || (badgeText != null && badgeText.isNotEmpty)) ...[
                                             const SizedBox(width: 5),
                                             VerifiedBadge(
