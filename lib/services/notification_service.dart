@@ -658,35 +658,35 @@ class NotificationService {
       SystemSound.play(SystemSoundType.alert);
     }
 
+    final sender = (message.data['senderHandle'] ?? message.data['partnerHandle'] as String?)
+        ?.replaceAll('@', '')
+        .trim();
+
+    if ((type == 'chat' || type == 'message') &&
+        sender != null &&
+        sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
+      return;
+    }
+
+    _localNotifications.show(
+      id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          channel.id,
+          channel.name,
+          channelDescription: channel.description,
+          importance: Importance.max,
+          priority: Priority.max,
+          icon: '@drawable/ic_notification',
+        ),
+      ),
+      payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
+    );
+
     final currentContext = navigatorKey.currentContext;
     if (currentContext != null && currentContext.mounted) {
-      final sender = (message.data['senderHandle'] ?? message.data['partnerHandle'] as String?)
-          ?.replaceAll('@', '')
-          .trim();
-
-      if ((type == 'chat' || type == 'message') &&
-          sender != null &&
-          sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
-        return;
-      }
-
-      _localNotifications.show(
-        id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
-        title: title,
-        body: body,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            channel.id,
-            channel.name,
-            channelDescription: channel.description,
-            importance: Importance.max,
-            priority: Priority.max,
-            icon: '@drawable/ic_notification',
-          ),
-        ),
-        payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
-      );
-
       InAppNotificationBanner.show(
         currentContext,
         title: title,

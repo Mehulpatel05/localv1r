@@ -44,6 +44,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAreaAndCityStatus();
+      NotificationService.instance.initialize();
+      NotificationService.instance.startListening(widget.currentUserHandle);
+      NotificationService.instance.syncFcmTokenForUser(widget.currentUserHandle);
     });
   }
 

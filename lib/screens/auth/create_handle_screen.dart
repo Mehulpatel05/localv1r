@@ -1169,6 +1169,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             onComplete: (permContext) async {
               final p = await SharedPreferences.getInstance();
               await p.setString('perms_done', 'true');
+              NotificationService.instance.initialize();
+              NotificationService.instance.startListening(handle);
+              NotificationService.instance.syncFcmTokenForUser(handle);
               if (permContext.mounted) {
                 Navigator.of(permContext).pushReplacement(
                   MaterialPageRoute(
