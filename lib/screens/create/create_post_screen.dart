@@ -873,12 +873,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         onTap: _isEmergency
                             ? null
                             : () => setState(() => _selectedCategory = cat),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(999),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                          padding: const EdgeInsets.fromLTRB(6, 5, 13, 5),
                           decoration: BoxDecoration(
                             color: isSelected ? AppColors.primary : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(999),
                             border: Border.all(
                               color: isSelected ? AppColors.primary : AppColors.divider,
                             ),
@@ -886,14 +886,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(cat.icon, style: const TextStyle(fontSize: 13)),
-                              const SizedBox(width: 5),
+                              Container(
+                                width: 26,
+                                height: 26,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.white.withValues(alpha: 0.22)
+                                      : AppColors.chipBg,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  cat.icon,
+                                  style: const TextStyle(fontSize: 13, height: 1),
+                                ),
+                              ),
+                              const SizedBox(width: 7),
                               Text(
                                 cat.label,
                                 style: TextStyle(
                                   color: isSelected ? Colors.white : AppColors.textPrimary,
                                   fontSize: 12.5,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                                 ),
                               ),
                             ],

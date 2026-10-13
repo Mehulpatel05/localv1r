@@ -34,7 +34,6 @@ import '../../services/rewards_service.dart';
 import '../../models/founding_model.dart';
 import '../../services/founding_service.dart';
 import '../rewards/rewards_hub_screen.dart';
-import 'widgets/profile_hero_painter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -1482,33 +1481,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     width: double.infinity,
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF085A2B),
-                          Color(0xFF0C6E35),
-                          Color(0xFF0A632F),
-                        ],
-                      ),
+                      color: Color(0xFF0E8A3E),
                       borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(32),
-                        bottomRight: Radius.circular(32),
+                        bottomLeft: Radius.circular(28),
+                        bottomRight: Radius.circular(28),
                       ),
                     ),
                     child: Stack(
                       children: [
-                        Positioned.fill(
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(32),
-                              bottomRight: Radius.circular(32),
-                            ),
-                            child: const CustomPaint(
-                              painter: ProfileHeaderBackgroundPainter(),
-                            ),
-                          ),
-                        ),
                         SafeArea(
                           bottom: false,
                           child: Padding(

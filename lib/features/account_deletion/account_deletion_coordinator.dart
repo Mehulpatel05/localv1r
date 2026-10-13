@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/auth_repository.dart';
 import '../../features/auth/login_flow_page.dart';
+import '../../services/post_repository.dart';
 import '../../theme/app_colors.dart';
 import 'account_deletion_dialog.dart';
 import 'account_deletion_client.dart';
@@ -68,6 +69,7 @@ class AccountDeletionCoordinator {
           MaterialPageRoute<void>(
             builder: (_) => LoginFlowPage(
               authRepository: authRepository ?? BackendAuthRepository(),
+              postRepository: PostRepository.instance,
             ),
           ),
           (route) => false,

@@ -15,7 +15,6 @@ import 'widgets/settings_tile.dart';
 import 'widgets/shorebird_update_tile.dart';
 import '../../screens/safety/legal_and_rules_screen.dart';
 import '../../screens/admin/founding_admin_screen.dart';
-import '../../screens/auth/create_handle_screen.dart';
 import '../../services/post_repository.dart';
 import '../../services/token_decision_engine.dart';
 import '../../theme/app_colors.dart';
@@ -52,6 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
       MaterialPageRoute<void>(
         builder: (_) => LoginFlowPage(
           authRepository: widget.authRepository,
+          postRepository: PostRepository.instance,
         ),
       ),
       (route) => false,
@@ -162,23 +162,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 _FriendsTile(friendRepository: _friendRepository, profile: widget.profile),
-                SettingsTile(
-                  icon: Icons.badge_outlined,
-                  title: 'Profile Setup Screen (Preview)',
-                  description: 'Preview username & name creation screen',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => CreateHandleScreen(
-                          repository: PostRepository.instance,
-                          userId: widget.profile.handle,
-                          phoneNumber: widget.profile.phone,
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
 

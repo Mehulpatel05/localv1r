@@ -19,9 +19,10 @@ import '../../core/location/location_engine.dart';
 import '../../core/location/location_enabler.dart';
 import '../../features/auth/widgets/logo_pin.dart';
 import '../../features/auth/widgets/street_painter.dart';
+import '../../core/auth_repository.dart';
+import '../../features/auth/login_flow_page.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
-import '../../main.dart';
 
 enum UsernameState {
   empty,
@@ -1248,7 +1249,10 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => const VadodaraLocalApp(),
+          builder: (_) => LoginFlowPage(
+            authRepository: BackendAuthRepository(),
+            postRepository: widget.repository,
+          ),
         ),
         (route) => false,
       );

@@ -104,8 +104,16 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
           _userHandle = 'Guest';
         });
       }
-      navigatorKey.currentState?.popUntil((route) => route.isFirst);
       if (event == AuthEvent.forceSignedOut) {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute<void>(
+            builder: (_) => LoginFlowPage(
+              authRepository: BackendAuthRepository(),
+              postRepository: postRepository,
+            ),
+          ),
+          (route) => false,
+        );
         final ctx = navigatorKey.currentContext;
         if (ctx != null) {
           ScaffoldMessenger.of(ctx).showSnackBar(

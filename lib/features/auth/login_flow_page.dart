@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/auth_repository.dart';
 import '../../core/splash_controller.dart';
-import '../../core/location/location_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/call_listener_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/post_repository.dart';
+import '../../services/presence_service.dart';
 import '../../screens/auth/create_handle_screen.dart';
+import '../../screens/main/main_screen.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/otp_step.dart';
 import 'widgets/phone_step.dart';
@@ -47,6 +50,8 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
   }
 
   Future<void> _onOtpVerified() async {
+    final repo = widget.postRepository ?? PostRepository.instance;
+    final loc = repo.locationService;
     try {
       final prefs = await SharedPreferences.getInstance();
       final handle = (await AuthService.instance.getUserHandle()) ?? prefs.getString('user_handle') ?? '';
@@ -58,7 +63,6 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
 
       if (isNewUser) {
         if (mounted) {
-          final repo = widget.postRepository ?? PostRepository(LocationService());
           debugPrint('[LoginFlowPage] Pushing CreateHandleScreen with Navigator.of(context)...');
           await Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
@@ -72,23 +76,51 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
           );
         }
       } else {
-        final loc = LocationService();
-        final repo = widget.postRepository ?? PostRepository(loc);
+        repo.currentUserHandle = handle;
+        NotificationService().initialize();
+        NotificationService().startListening(handle);
+        PresenceService.instance.init(handle);
+        CallListenerService.instance.startListening(handle);
+
         SplashController.instance.warmFetchOnLogin(
           uid: userId,
           handle: handle,
-          cityId: loc.cityId,
+          cityId: loc.cityId.isNotEmpty ? loc.cityId : 'GJ-VAD',
           postRepo: repo,
         );
 
         if (widget.onLoggedIn != null) {
           await widget.onLoggedIn!();
+        } else if (mounted) {
+          await Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => MainScreen(
+                repository: repo,
+                currentUserHandle: handle,
+              ),
+            ),
+            (route) => false,
+          );
         }
       }
     } catch (e, stack) {
       debugPrint('[LoginFlowPage] Error in _onOtpVerified: $e\n$stack');
       if (widget.onLoggedIn != null) {
         await widget.onLoggedIn!();
+      } else if (mounted) {
+        final handle = (await AuthService.instance.getUserHandle()) ?? '';
+        if (handle.isNotEmpty && mounted) {
+          repo.currentUserHandle = handle;
+          await Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => MainScreen(
+                repository: repo,
+                currentUserHandle: handle,
+              ),
+            ),
+            (route) => false,
+          );
+        }
       }
     }
   }
