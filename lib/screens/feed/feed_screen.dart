@@ -1035,33 +1035,37 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     final monthStr = const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][post.createdAt.month - 1];
 
     Color cardBg = AppColors.surface;
-    Color borderColor = AppColors.divider;
     if (isUrgent) {
       cardBg = AppColors.errorSoft;
-      borderColor = AppColors.error;
     }
 
     return RepaintBoundary(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: borderColor,
-            width: isUrgent ? 1.5 : 1,
-          ),
+          borderRadius: BorderRadius.circular(20),
+          border: isUrgent
+              ? Border.all(color: AppColors.error, width: 1.5)
+              : Border.all(color: AppColors.divider.withValues(alpha: 0.35), width: 0.8),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
+              color: const Color(0xFF94A3B8).withValues(alpha: 0.12),
+              blurRadius: 12,
+              spreadRadius: 0,
+              offset: const Offset(0, 3),
+            ),
+            BoxShadow(
+              color: AppColors.divider.withValues(alpha: 0.8),
+              blurRadius: 6,
+              spreadRadius: 0,
               offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: InkWell(
             onTap: () {
               Navigator.push(
@@ -1075,7 +1079,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                 ),
               );
             },
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(

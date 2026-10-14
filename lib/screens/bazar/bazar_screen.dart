@@ -750,13 +750,13 @@ class _BazarScreenState extends State<BazarScreen> {
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final cardWidth = (constraints.maxWidth - 14) / 2;
+                            final cardWidth = (constraints.maxWidth - 20) / 3;
                             return Align(
                               alignment: Alignment.topLeft,
                               child: SizedBox(
                                 width: cardWidth,
                                 child: AspectRatio(
-                                  aspectRatio: 0.75,
+                                  aspectRatio: 0.72,
                                   child: _buildProductCard(products.first),
                                 ),
                               ),
@@ -769,10 +769,10 @@ class _BazarScreenState extends State<BazarScreen> {
                         physics: const NeverScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.75,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
+                          crossAxisCount: 3,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
                         ),
                         itemCount: products.length,
                         itemBuilder: (context, index) {
@@ -1054,11 +1054,18 @@ class _BazarScreenState extends State<BazarScreen> {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: AppColors.divider,
             width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -1072,23 +1079,23 @@ class _BazarScreenState extends State<BazarScreen> {
                       product.imageUrl,
                       fit: BoxFit.cover,
                       fallbackIcon: Icons.storefront_rounded,
-                      fallbackIconSize: 40,
+                      fallbackIconSize: 28,
                     ),
                   ),
                   Positioned(
-                    top: 8,
-                    left: 8,
+                    top: 6,
+                    left: 6,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.textPrimary,
-                        borderRadius: BorderRadius.circular(12),
+                        color: AppColors.textPrimary.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${product.distanceKm} km',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 11,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1096,34 +1103,32 @@ class _BazarScreenState extends State<BazarScreen> {
                   ),
                   if (product.isBoosted)
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 6,
+                      right: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: const Color(0xFFF59E0B),
                             width: 0.8,
                           ),
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.bolt_rounded,
-                              size: 12,
+                              size: 10,
                               color: Color(0xFFD97706),
                             ),
-                            const SizedBox(width: 2),
+                            SizedBox(width: 1),
                             Text(
-                              product.boostHoursLeft > 0
-                                  ? 'Featured · ${product.boostHoursLeft}h'
-                                  : 'Featured',
-                              style: const TextStyle(
+                              'Boost',
+                              style: TextStyle(
                                 color: Color(0xFFB45309),
-                                fontSize: 9.5,
+                                fontSize: 8.5,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -1135,7 +1140,7 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(7, 6, 7, 7),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1145,33 +1150,41 @@ class _BazarScreenState extends State<BazarScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '₹${product.price}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          '₹${product.price}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           product.category,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.primaryText,
-                            fontSize: 10,
+                            fontSize: 8.5,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
