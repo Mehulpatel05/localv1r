@@ -16,6 +16,7 @@ import '../rewards/shop_perks_screen.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/pressable_scale.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -609,7 +610,7 @@ class _BazarScreenState extends State<BazarScreen> {
                     ),
                   ),
                   child: const Icon(
-                    Icons.local_offer_rounded,
+                    Icons.card_giftcard_rounded,
                     color: Color(0xFFD97706),
                     size: 18,
                   ),
@@ -684,47 +685,17 @@ class _BazarScreenState extends State<BazarScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              height: 48,
+              height: 42,
               margin: const EdgeInsets.symmetric(vertical: 8),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _categories.length,
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  final isSelected = _selectedCategory == cat;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(
-                        cat,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.surface,
-                      side: BorderSide(
-                        color: isSelected ? AppColors.primary : AppColors.divider,
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      showCheckmark: false,
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() {
-                            _selectedCategory = cat;
-                          });
-                        }
-                      },
-                    ),
-                  );
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SlidingCategoryTabBar(
+                categories: _categories,
+                selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                isScrollable: true,
+                onSelected: (index) {
+                  setState(() {
+                    _selectedCategory = _categories[index];
+                  });
                 },
               ),
             ),
@@ -1216,87 +1187,19 @@ class _BazarScreenState extends State<BazarScreen> {
 
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: AppColors.chipBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _myListingsTab = 'Active';
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _myListingsTab == 'Active' ? AppColors.surface : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: _myListingsTab == 'Active'
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              )
-                            ]
-                          : null,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Active ($activeCount)',
-                      style: TextStyle(
-                        color: _myListingsTab == 'Active' ? AppColors.textPrimary : AppColors.textMuted,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _myListingsTab = 'Sold';
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _myListingsTab == 'Sold' ? AppColors.surface : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: _myListingsTab == 'Sold'
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              )
-                            ]
-                          : null,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Sold ($soldCount)',
-                      style: TextStyle(
-                        color: _myListingsTab == 'Sold' ? AppColors.textPrimary : AppColors.textMuted,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: SlidingCategoryTabBar(
+            categories: [
+              'Active ($activeCount)',
+              'Sold ($soldCount)',
             ],
+            selectedIndex: _myListingsTab == 'Active' ? 0 : 1,
+            onSelected: (index) {
+              setState(() {
+                _myListingsTab = index == 0 ? 'Active' : 'Sold';
+              });
+            },
           ),
         ),
         if (_myListingsTab == 'Sold')

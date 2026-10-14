@@ -1461,7 +1461,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   }
 
                   return AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
+                    duration: const Duration(milliseconds: 140),
                     switchInCurve: Curves.easeOut,
                     switchOutCurve: Curves.easeIn,
                     transitionBuilder: (child, animation) {
