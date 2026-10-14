@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../services/r2_storage_service.dart';
 import '../../theme/app_colors.dart';
+import 'safe_image.dart';
 
 class UniversalMediaView extends StatefulWidget {
   final String? url;
@@ -186,23 +187,16 @@ class _UniversalMediaViewState extends State<UniversalMediaView> {
       );
     }
 
-    return Image.network(
-      widget.url!,
+    if (widget.url == null || widget.url!.trim().isEmpty) {
+      return _buildErrorPlaceholder();
+    }
+
+    return SafeImage(
+      imageUrl: widget.url!,
       fit: widget.fit,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: Colors.black12,
-          child: const Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
+      width: widget.width ?? double.infinity,
+      height: widget.height,
+      errorWidget: _buildErrorPlaceholder(),
     );
   }
 

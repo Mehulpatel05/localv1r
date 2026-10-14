@@ -47,6 +47,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       NotificationService.instance.initialize();
       NotificationService.instance.startListening(widget.currentUserHandle);
       NotificationService.instance.syncFcmTokenForUser(widget.currentUserHandle);
+      NotificationService.instance.prefetchBadgeCounts(widget.currentUserHandle);
+      DirectChatService.instance.prefetchUnreadSummary(widget.currentUserHandle);
     });
   }
 
@@ -204,7 +206,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             }
           },
           child: Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: Colors.white,
             body: IndexedStack(
               index: currentIndex,
               children: List.generate(4, (index) => _getOrCreateTab(index)),
@@ -274,21 +276,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                   ),
                                   ValueListenableBuilder<int>(
                                     valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                    builder: (context, preloadedUnread, _) {
-                                      return StreamBuilder<int>(
-                                        initialData: preloadedUnread,
-                                        stream: NotificationService().getUnreadChatCount(widget.currentUserHandle),
-                                        builder: (context, snapshot) {
-                                          final unreadCount = snapshot.data ?? preloadedUnread;
-                                          return _buildNavItem(
-                                            index: 2,
-                                            currentIndex: currentIndex,
-                                            icon: Icons.chat_bubble_outline_rounded,
-                                            selectedIcon: Icons.chat_bubble_rounded,
-                                            tooltip: 'Chats',
-                                            badgeCount: unreadCount,
-                                          );
-                                        },
+                                    builder: (context, unreadCount, _) {
+                                      return _buildNavItem(
+                                        index: 2,
+                                        currentIndex: currentIndex,
+                                        icon: Icons.chat_bubble_outline_rounded,
+                                        selectedIcon: Icons.chat_bubble_rounded,
+                                        tooltip: 'Chats',
+                                        badgeCount: unreadCount,
                                       );
                                     },
                                   ),

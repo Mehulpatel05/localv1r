@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../bazar/bazar_screen.dart';
@@ -6,6 +5,7 @@ import '../bazar/shop_detail_screen.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/post_repository.dart';
 import '../../core/services/name_cache_service.dart';
+import '../../core/widgets/safe_image.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -321,9 +321,15 @@ class _SavedScreenState extends State<SavedScreen> {
               children: [
                 Positioned.fill(
                   child: product.imageUrl.isNotEmpty
-                      ? (product.imageUrl.startsWith('http')
-                          ? Image.network(product.imageUrl, fit: BoxFit.cover)
-                          : Image.file(File(product.imageUrl), fit: BoxFit.cover))
+                      ? SafeImage(
+                          imageUrl: product.imageUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: Container(
+                            color: AppColors.chipBg,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.shopping_bag_outlined, color: AppColors.textMuted, size: 40),
+                          ),
+                        )
                       : Container(
                           color: AppColors.chipBg,
                           alignment: Alignment.center,

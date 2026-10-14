@@ -1537,16 +1537,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             onPressed: _showHelpDialog,
           ),
-          IconButton(
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            tooltip: 'New Message',
-            icon: const Icon(
-              Icons.edit_note_rounded,
-              color: AppColors.textPrimary,
-              size: 26,
-            ),
-            onPressed: _showNewChatPicker,
-          ),
           const SizedBox(width: 8),
         ],
       ],
@@ -1820,6 +1810,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       if (_isSelectionMode) {
                         _toggleSelection(conv);
                       } else {
+                        setState(() {
+                          _locallyReadChatIds.add(conv.id);
+                          _locallyUnreadChatIds.remove(conv.id);
+                        });
+                        DirectChatService.instance.markChatRead(conv.id, widget.currentUserHandle);
                         Navigator.push(
                           context,
                           PageRouteBuilder(
@@ -1833,7 +1828,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               child: child,
                             ),
                           ),
-                        );
+                        ).then((_) {
+                          if (mounted) {
+                            setState(() {
+                              _locallyReadChatIds.add(conv.id);
+                              _locallyUnreadChatIds.remove(conv.id);
+                            });
+                            DirectChatService.instance.getChats(widget.currentUserHandle);
+                          }
+                        });
                       }
                     },
                     child: Padding(

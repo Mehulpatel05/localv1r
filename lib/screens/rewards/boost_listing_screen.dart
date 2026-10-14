@@ -3,6 +3,7 @@ import '../../services/rewards_service.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/auth_service.dart';
 import '../bazar/bazar_screen.dart';
+import '../../core/widgets/safe_image.dart';
 
 class BoostListingScreen extends StatefulWidget {
   final String currentUserHandle;
@@ -331,7 +332,11 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                                     height: 54,
                                     color: const Color(0xFFE9ECEF),
                                     child: product.imageUrl.isNotEmpty
-                                        ? Image.network(product.imageUrl, fit: BoxFit.cover)
+                                        ? SafeImage(
+                                            imageUrl: product.imageUrl,
+                                            fit: BoxFit.cover,
+                                            errorWidget: const Icon(Icons.image_outlined, color: Color(0xFF5C6B7D)),
+                                          )
                                         : const Icon(Icons.image_outlined, color: Color(0xFF5C6B7D)),
                                   ),
                                 ),

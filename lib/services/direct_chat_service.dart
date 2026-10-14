@@ -198,6 +198,11 @@ class DirectChatService {
           }
         }
         _lastKnownChats = deduped;
+        int totalUnread = 0;
+        for (final chat in deduped) {
+          totalUnread += chat.unreadCount;
+        }
+        unreadCountNotifier.value = totalUnread;
         await _saveChatsToPrefs(clean, deduped);
         return deduped;
       }
@@ -362,10 +367,32 @@ class DirectChatService {
   /// Mark chat as read for this user in D1
   Future<bool> markChatRead(String chatId, String userHandle) async {
     final cleanUser = userHandle.replaceAll('@', '').trim();
+    final cleanId = chatId.replaceAll('@', '').trim().toLowerCase();
+
+    if (_lastKnownChats != null) {
+      final updatedList = <ChatConversation>[];
+      for (final chat in _lastKnownChats!) {
+        final matches = chat.id.toLowerCase() == cleanId ||
+            chat.getPartnerHandle(cleanUser).replaceAll('@', '').trim().toLowerCase() == cleanId;
+        if (matches) {
+          updatedList.add(chat.copyWith(unreadCount: 0));
+        } else {
+          updatedList.add(chat);
+        }
+      }
+      _lastKnownChats = updatedList;
+      int totalUnread = 0;
+      for (final c in updatedList) {
+        totalUnread += c.unreadCount;
+      }
+      unreadCountNotifier.value = totalUnread;
+      _saveChatsToPrefs(cleanUser, updatedList);
+    }
+
     try {
       final token = await AuthService.instance.getAccessToken();
       final res = await http.post(
-        Uri.parse('${AuthService.baseUrl}/chats/$chatId/read'),
+        Uri.parse('${AuthService.baseUrl}/chats/$cleanId/read?handle=$cleanUser'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -373,7 +400,6 @@ class DirectChatService {
         },
         body: jsonEncode({'user_handle': cleanUser}),
       ).timeout(const Duration(seconds: 6));
-
 
       return res.statusCode == 200;
     } catch (e) {

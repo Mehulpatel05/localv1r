@@ -5,6 +5,7 @@ import '../../../services/bazar_repository.dart';
 import '../../../services/r2_storage_service.dart';
 import '../../bazar/bazar_screen.dart';
 import '../../../theme/app_colors.dart';
+import '../../../core/widgets/safe_image.dart';
 
 class MyProductsScreen extends StatefulWidget {
   final String currentUserHandle;
@@ -170,8 +171,8 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                           : (currentImageUrl != null && currentImageUrl.isNotEmpty)
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
-                                  child: Image.network(
-                                    currentImageUrl,
+                                  child: SafeImage(
+                                    imageUrl: currentImageUrl,
                                     fit: BoxFit.cover,
                                   ),
                                 )
@@ -447,12 +448,12 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                       child: product.imageUrl.isNotEmpty
                                           ? ClipRRect(
                                               borderRadius: BorderRadius.circular(14),
-                                              child: Image.network(
-                                                product.imageUrl,
+                                              child: SafeImage(
+                                                imageUrl: product.imageUrl,
                                                 width: 52,
                                                 height: 52,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) => Text(
+                                                errorWidget: Text(
                                                   emoji,
                                                   style: const TextStyle(fontSize: 24),
                                                 ),

@@ -8,6 +8,7 @@ import '../../core/constants/areas_and_categories.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/utils/content_filter.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/token_decision_engine.dart';
@@ -27,6 +28,14 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
+  static const List<PostCategory> _categories = [
+    PostCategory.general,
+    PostCategory.question,
+    PostCategory.events,
+    PostCategory.alerts,
+    PostCategory.safety,
+  ];
+
   GeoCity? _selectedGeoCity;
   GeoArea? _selectedArea;
   bool _isEmergency = false;
@@ -68,17 +77,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (mounted) setState(() => _errorMessage = validationError);
   }
 
-  Future<void> _pickImagesFromGallery() async {
+  Future<void> _pickMediaFromGallery() async {
     try {
       final picker = ImagePicker();
-      final pickedImages = await picker.pickMultiImage(
+      final pickedMedia = await picker.pickMultipleMedia(
         imageQuality: 88,
         maxWidth: 1440,
         maxHeight: 1440,
       );
-      if (pickedImages.isNotEmpty) {
+      if (pickedMedia.isNotEmpty) {
         setState(() {
-          for (final x in pickedImages) {
+          for (final x in pickedMedia) {
             if (_mediaFiles.length < 10) {
               _mediaFiles.add(File(x.path));
             }
@@ -86,26 +95,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting images: $e');
-    }
-  }
-
-  Future<void> _pickVideoFromGallery() async {
-    try {
-      final picker = ImagePicker();
-      final pickedVideo = await picker.pickVideo(
-        source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 3),
-      );
-      if (pickedVideo != null) {
-        setState(() {
-          if (_mediaFiles.length < 10) {
-            _mediaFiles.add(File(pickedVideo.path));
-          }
-        });
-      }
-    } catch (e) {
-      setState(() => _errorMessage = 'Error selecting video: $e');
+      setState(() => _errorMessage = 'Error selecting media: $e');
     }
   }
 
@@ -149,10 +139,80 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  void _showCameraOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
+                  ),
+                  title: const Text(
+                    'Take Photo',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _capturePhotoFromCamera();
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.videocam_rounded, color: AppColors.primary, size: 22),
+                  ),
+                  title: const Text(
+                    'Record Video',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _captureVideoFromCamera();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showMediaPickerOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -194,51 +254,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
-                  ),
-                  title: const Text(
-                    'Choose Photos from Gallery',
-                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickImagesFromGallery();
-                  },
-                ),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.video_library_rounded, color: AppColors.primary, size: 22),
-                  ),
-                  title: const Text(
-                    'Choose Video from Gallery',
-                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickVideoFromGallery();
-                  },
-                ),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
                     child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
                   ),
                   title: const Text(
-                    'Take Photo with Camera',
+                    'Camera',
                     style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Take photo or record video',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _capturePhotoFromCamera();
+                    _showCameraOptions();
                   },
                 ),
                 ListTile(
@@ -248,15 +276,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.videocam_rounded, color: AppColors.primary, size: 22),
+                    child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
                   ),
                   title: const Text(
-                    'Record Video with Camera',
+                    'Choose Photo from Gallery',
                     style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Select photos or videos',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _captureVideoFromCamera();
+                    _pickMediaFromGallery();
                   },
                 ),
               ],
@@ -558,7 +590,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     width: 110,
                     height: 120,
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: AppColors.divider,
@@ -658,9 +690,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final lockedCityName = locService.city.name;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -717,7 +749,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.divider),
                 ),
@@ -755,7 +787,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.divider),
                 ),
@@ -801,7 +833,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _isEmergency ? AppColors.errorSoft : AppColors.surface,
+                  color: _isEmergency ? AppColors.errorSoft : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _isEmergency ? AppColors.error : AppColors.divider,
@@ -856,48 +888,25 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    PostCategory.general,
-                    PostCategory.question,
-                    PostCategory.events,
-                    PostCategory.alerts,
-                    PostCategory.safety,
-                  ].map((cat) {
-                    final isSelected = !_isEmergency && _selectedCategory == cat;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: InkWell(
-                        onTap: _isEmergency
-                            ? null
-                            : () => setState(() => _selectedCategory = cat),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
-                            ),
-                          ),
-                          child: Text(
-                            cat.label,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              fontSize: 12.5,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+              IgnorePointer(
+                ignoring: _isEmergency,
+                child: Opacity(
+                  opacity: _isEmergency ? 0.45 : 1.0,
+                  child: Container(
+                    height: 42,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    child: SlidingCategoryTabBar(
+                      categories: _categories.map((c) => c.label).toList(),
+                      selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                      onSelected: (index) {
+                        if (!_isEmergency && index >= 0 && index < _categories.length) {
+                          setState(() => _selectedCategory = _categories[index]);
+                        }
+                      },
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
               TextField(
                 controller: _contentController,
                 maxLines: 8,
@@ -915,7 +924,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   hintText: 'Ask a question, share traffic status, warn about police checkers, or vent about civic issues...',
                   hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14.5),
                   filled: true,
-                  fillColor: AppColors.surface,
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: AppColors.divider),
@@ -958,7 +967,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textPrimary,
-                      backgroundColor: AppColors.surface,
+                      backgroundColor: Colors.white,
                       side: const BorderSide(color: AppColors.divider),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -974,7 +983,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _attachedLat != null ? AppColors.primaryText : AppColors.textPrimary,
-                      backgroundColor: _attachedLat != null ? AppColors.primarySoft : AppColors.surface,
+                      backgroundColor: _attachedLat != null ? AppColors.primarySoft : Colors.white,
                       side: BorderSide(
                         color: _attachedLat != null ? AppColors.primary : AppColors.divider,
                       ),
@@ -1045,7 +1054,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.divider),
                   ),

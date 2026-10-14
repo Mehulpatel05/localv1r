@@ -18,6 +18,7 @@ import '../core/action_state/action_state_provider.dart';
 import '../core/widgets/user_avatar.dart';
 import '../core/services/name_cache_service.dart';
 import '../core/services/badge_cache_service.dart';
+import '../core/services/app_image_cache_service.dart';
 import 'founding_service.dart';
 
 enum FeedTab { latest, trending }
@@ -240,6 +241,7 @@ class PostRepository extends ChangeNotifier {
               .toList();
           if (mediaUrls.isNotEmpty) {
             unawaited(R2StorageService.prewarmCdn(mediaUrls));
+            unawaited(AppImageCacheService.instance.prefetchImages(mediaUrls));
           }
         }
       }
@@ -444,6 +446,15 @@ class PostRepository extends ChangeNotifier {
           _posts.addAll(newPosts);
         }
         registerPosts(newPosts);
+
+        final mediaUrls = newPosts
+            .expand((p) => [if (p.imageUrl != null) p.imageUrl!, ...p.mediaUrls])
+            .where((u) => u.trim().isNotEmpty && (u.startsWith('http://') || u.startsWith('https://')))
+            .take(15)
+            .toList();
+        if (mediaUrls.isNotEmpty) {
+          unawaited(AppImageCacheService.instance.prefetchImages(mediaUrls));
+        }
 
         _hasMore = postsData.isNotEmpty;
 
@@ -1079,6 +1090,14 @@ class PostRepository extends ChangeNotifier {
       }
     }
     registerPosts(results);
+    final mediaUrls = results
+        .expand((p) => [if (p.imageUrl != null) p.imageUrl!, ...p.mediaUrls])
+        .where((u) => u.trim().isNotEmpty && (u.startsWith('http://') || u.startsWith('https://')))
+        .take(15)
+        .toList();
+    if (mediaUrls.isNotEmpty) {
+      unawaited(AppImageCacheService.instance.prefetchImages(mediaUrls));
+    }
     return results;
   }
 

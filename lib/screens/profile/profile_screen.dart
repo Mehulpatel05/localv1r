@@ -1454,7 +1454,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFEEF8F1),
+        backgroundColor: Colors.white,
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF0E8A3E)),
         ),
@@ -1473,7 +1473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Colors.white,
         body: RefreshIndicator(
           onRefresh: _loadProfileData,
           color: const Color(0xFF0E8A3E),

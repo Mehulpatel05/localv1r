@@ -32,6 +32,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   StreamSubscription<List<Friendship>>? _friendsSub;
   final Set<String> _friendHandles = {};
 
+  final Set<String> _readNotifIds = {};
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
   Timer? _refreshTimer;
@@ -54,12 +55,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _friendHandles.addAll(set);
         });
       });
+      _markAllAsReadQuietly(cleanHandle);
     }
 
     _loadNotifications();
     _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       _loadNotifications(silent: true);
     });
+  }
+
+  Future<void> _markAllAsReadQuietly(String cleanHandle) async {
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/notifications/read-all?handle=$cleanHandle'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 4));
+      NotificationService.instance.unreadBadgeNotifier.value = 0;
+    } catch (_) {}
   }
 
   @override
@@ -93,6 +110,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final list = (data['notifications'] as List<dynamic>?) ?? [];
         if (mounted) {
           final incoming = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          for (final n in incoming) {
+            final idStr = (n['id'] ?? '').toString();
+            if (_readNotifIds.contains(idStr)) {
+              n['isRead'] = true;
+            }
+          }
           final bool hasChanged = _notifications.length != incoming.length ||
               !_areNotificationsEqual(_notifications, incoming);
           if (hasChanged) {
@@ -296,21 +319,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       if (notif['isRead'] == false) {
-        final token = await AuthService.instance.getAccessToken();
-        final headers = <String, String>{'Content-Type': 'application/json'};
-        if (token != null && token.isNotEmpty) {
-          headers['Authorization'] = 'Bearer $token';
-        }
-        http.post(
-          Uri.parse('${AuthService.baseUrl}/notifications/$notifId/read?handle=$cleanHandle'),
-          headers: headers,
-        ).catchError((_) => http.Response('', 500));
+        _readNotifIds.add(notifId);
         setState(() {
           notif['isRead'] = true;
         });
         if (NotificationService.instance.unreadBadgeNotifier.value > 0) {
           NotificationService.instance.unreadBadgeNotifier.value--;
         }
+        final token = await AuthService.instance.getAccessToken();
+        final headers = <String, String>{'Content-Type': 'application/json'};
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+        await http.post(
+          Uri.parse('${AuthService.baseUrl}/notifications/$notifId/read?handle=$cleanHandle'),
+          headers: headers,
+        ).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500));
       }
     } catch (_) {}
 

@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
+import '../core/services/app_image_cache_service.dart';
 import '../screens/bazar/bazar_screen.dart';
 import '../screens/bazar/shop_detail_screen.dart';
 import 'auth_service.dart';
@@ -157,6 +159,14 @@ class BazarRepository extends ChangeNotifier {
 
           await _persistProducts();
           notifyListeners();
+          final imageUrls = _products
+              .map((p) => p.imageUrl)
+              .where((u) => u.trim().isNotEmpty && (u.startsWith('http://') || u.startsWith('https://')))
+              .take(15)
+              .toList();
+          if (imageUrls.isNotEmpty) {
+            unawaited(AppImageCacheService.instance.prefetchImages(imageUrls));
+          }
         }
       }
     } catch (e) {

@@ -5,6 +5,7 @@ import 'my_products_screen.dart';
 import 'edit_shop_details_screen.dart';
 import 'shop_insights_screen.dart';
 import '../../../theme/app_colors.dart';
+import '../../../core/widgets/safe_image.dart';
 
 class MyShopDashboardScreen extends StatefulWidget {
   final LocalShop? initialShop;
@@ -345,12 +346,12 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                               child: _shop.imageUrl.isNotEmpty
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(
-                                        _shop.imageUrl,
+                                      child: SafeImage(
+                                        imageUrl: _shop.imageUrl,
                                         width: 60,
                                         height: 60,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => Text(
+                                        errorWidget: Text(
                                           _shop.categoryIcon,
                                           style: const TextStyle(fontSize: 28),
                                         ),

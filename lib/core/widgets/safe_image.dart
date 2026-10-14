@@ -39,7 +39,6 @@ class SafeImage extends StatefulWidget {
 class _SafeImageState extends State<SafeImage> {
   File? _diskFile;
   Uint8List? _memoryBytes;
-  bool _isLoading = false;
   bool _hasError = false;
   int _retryCounter = 0;
 
@@ -89,7 +88,6 @@ class _SafeImageState extends State<SafeImage> {
     if (_isBase64) {
       _memoryBytes = _decodeBase64(trimmedUrl);
       _diskFile = null;
-      _isLoading = false;
       _hasError = _memoryBytes == null;
       return;
     }
@@ -100,7 +98,6 @@ class _SafeImageState extends State<SafeImage> {
       if (f.existsSync()) {
         _diskFile = f;
         _memoryBytes = null;
-        _isLoading = false;
         _hasError = false;
       } else {
         _diskFile = null;
@@ -113,7 +110,6 @@ class _SafeImageState extends State<SafeImage> {
     if (inRam != null) {
       _memoryBytes = inRam;
       _diskFile = null;
-      _isLoading = false;
       _hasError = false;
       return;
     }
@@ -122,55 +118,36 @@ class _SafeImageState extends State<SafeImage> {
     if (onDisk != null) {
       _diskFile = onDisk;
       _memoryBytes = null;
-      _isLoading = false;
       _hasError = false;
       return;
     }
 
-    _isLoading = true;
     _hasError = false;
     AppImageCacheService.instance.getOrFetchImageFile(trimmedUrl).then((file) {
-      if (mounted) {
+      if (mounted && file != null && file.existsSync()) {
         setState(() {
-          _isLoading = false;
-          if (file != null && file.existsSync()) {
-            _diskFile = file;
-            _hasError = false;
-          } else {
-            _hasError = true;
-          }
+          _diskFile = file;
+          _hasError = false;
         });
       }
-    }).catchError((_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
-      }
-    });
+    }).catchError((_) {});
   }
 
   void _retryLoading() {
+    final trimmedUrl = widget.imageUrl.trim();
+    AppImageCacheService.instance.evict(trimmedUrl);
     setState(() {
       _retryCounter++;
-      _isLoading = true;
       _hasError = false;
     });
-    final trimmedUrl = widget.imageUrl.trim();
     AppImageCacheService.instance.getOrFetchImageFile(trimmedUrl).then((file) {
-      if (mounted) {
+      if (mounted && file != null && file.existsSync()) {
         setState(() {
-          _isLoading = false;
-          if (file != null && file.existsSync()) {
-            _diskFile = file;
-            _hasError = false;
-          } else {
-            _hasError = true;
-          }
+          _diskFile = file;
+          _hasError = false;
         });
       }
-    });
+    }).catchError((_) {});
   }
 
   Widget _buildCoreImage({
@@ -191,7 +168,7 @@ class _SafeImageState extends State<SafeImage> {
         alignment: widget.alignment,
         gaplessPlayback: true,
         filterQuality: filterQuality,
-        errorBuilder: (context, error, stackTrace) => _buildErrorFallback(),
+        errorBuilder: (context, error, stackTrace) => widget.errorWidget ?? _buildErrorFallback(),
       );
     }
 
@@ -209,18 +186,14 @@ class _SafeImageState extends State<SafeImage> {
       );
     }
 
-    if (_isLoading) {
-      return widget.placeholder ?? _buildPlaceholderContainer();
-    }
-
     if (_hasError) {
       return widget.errorWidget ?? _buildErrorFallback();
     }
 
-    final trimmedUrl = widget.imageUrl.trim();
+    final normalized = AppImageCacheService.normalizeImageUrl(widget.imageUrl);
     return Image.network(
-      trimmedUrl,
-      key: ValueKey('$trimmedUrl-$_retryCounter'),
+      normalized,
+      key: ValueKey('$normalized-$_retryCounter'),
       height: targetHeight,
       width: targetWidth,
       fit: fit,

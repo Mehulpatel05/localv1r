@@ -275,8 +275,9 @@ class _FeedScreenState extends State<FeedScreen> {
               valueListenable: NotificationService.instance.unreadBadgeNotifier,
               builder: (context, count, _) {
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    NotificationService.instance.unreadBadgeNotifier.value = 0;
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => NotificationsScreen(
@@ -284,6 +285,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                       ),
                     );
+                    if (context.mounted) {
+                      NotificationService.instance.prefetchBadgeCounts(widget.currentUserHandle);
+                    }
                   },
                   child: Container(
                     width: 40,

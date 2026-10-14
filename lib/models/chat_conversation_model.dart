@@ -154,12 +154,55 @@ class ChatConversation {
     return getPartnerHandle(currentUserHandle);
   }
 
+  int get unreadCount {
+    if (unreadCounts.containsKey('unread')) {
+      return unreadCounts['unread'] ?? 0;
+    }
+    int total = 0;
+    for (final v in unreadCounts.values) {
+      total += v;
+    }
+    return total;
+  }
+
   int getUnreadCount(String currentUserHandle) {
     final cleanCurrent = currentUserHandle.replaceAll('@', '').trim();
     return unreadCounts[currentUserHandle] ??
         unreadCounts[cleanCurrent] ??
         unreadCounts['@$cleanCurrent'] ??
         unreadCounts['unread'] ??
-        0;
+        unreadCount;
+  }
+
+  ChatConversation copyWith({
+    String? id,
+    List<String>? participants,
+    List<String>? participantsUids,
+    String? lastMessage,
+    String? lastSenderHandle,
+    DateTime? updatedAt,
+    Map<String, int>? unreadCounts,
+    Map<String, bool>? typing,
+    Map<String, int>? typingTimestamps,
+    String? partnerAvatarUrl,
+    String? partnerDisplayName,
+    int? unreadCount,
+  }) {
+    final effectiveUnread = unreadCount != null
+        ? (unreadCount > 0 ? {'unread': unreadCount} : <String, int>{})
+        : (unreadCounts ?? this.unreadCounts);
+    return ChatConversation(
+      id: id ?? this.id,
+      participants: participants ?? this.participants,
+      participantsUids: participantsUids ?? this.participantsUids,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastSenderHandle: lastSenderHandle ?? this.lastSenderHandle,
+      updatedAt: updatedAt ?? this.updatedAt,
+      unreadCounts: effectiveUnread,
+      typing: typing ?? this.typing,
+      typingTimestamps: typingTimestamps ?? this.typingTimestamps,
+      partnerAvatarUrl: partnerAvatarUrl ?? this.partnerAvatarUrl,
+      partnerDisplayName: partnerDisplayName ?? this.partnerDisplayName,
+    );
   }
 }

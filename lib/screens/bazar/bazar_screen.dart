@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/location/location_service.dart';
@@ -17,6 +16,7 @@ import '../../core/widgets/verified_badge.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/sliding_category_tab_bar.dart';
+import '../../core/widgets/safe_image.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -173,35 +173,20 @@ class BazarProduct {
       );
     }
 
-    final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-    if (!isNetwork) {
-      try {
-        final file = File(imageUrl);
-        if (file.existsSync()) {
-          return Image.file(
-            file,
-            fit: fit,
-            width: width,
-            height: height,
-            errorBuilder: (ctx, err, stack) => Container(
-              width: width,
-              height: height,
-              color: AppColors.chipBg,
-              child: Center(
-                child: Icon(fallbackIcon, color: AppColors.textMuted, size: fallbackIconSize),
-              ),
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-
-    return Image.network(
-      imageUrl,
+    return SafeImage(
+      imageUrl: imageUrl,
       fit: fit,
-      width: width,
+      width: width ?? double.infinity,
       height: height,
-      errorBuilder: (ctx, err, stack) => Container(
+      placeholder: Container(
+        width: width,
+        height: height,
+        color: AppColors.chipBg,
+        child: Center(
+          child: Icon(fallbackIcon, color: AppColors.textMuted.withValues(alpha: 0.5), size: fallbackIconSize),
+        ),
+      ),
+      errorWidget: Container(
         width: width,
         height: height,
         color: AppColors.chipBg,
@@ -209,21 +194,6 @@ class BazarProduct {
           child: Icon(fallbackIcon, color: AppColors.textMuted, size: fallbackIconSize),
         ),
       ),
-      loadingBuilder: (ctx, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          width: width,
-          height: height,
-          color: AppColors.chipBg,
-          child: Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -498,9 +468,9 @@ class _BazarScreenState extends State<BazarScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
+          backgroundColor: Colors.white,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: showBackButton
@@ -609,10 +579,8 @@ class _BazarScreenState extends State<BazarScreen> {
                       width: 1,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.local_offer_rounded,
-                    color: Color(0xFFD97706),
-                    size: 19,
+                  child: const Center(
+                    child: ShopPerksLogo(size: 24),
                   ),
                 ),
               ),
@@ -678,7 +646,7 @@ class _BazarScreenState extends State<BazarScreen> {
         _onBazarRepoChanged();
       },
       color: AppColors.primary,
-      backgroundColor: AppColors.surface,
+      backgroundColor: Colors.white,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -700,6 +668,7 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
             ),
 
+            _buildShopPerksBanner(),
             _buildLocalShopsSection(),
 
             Padding(
@@ -1715,6 +1684,179 @@ class _BazarScreenState extends State<BazarScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildShopPerksBanner() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: PressableScale(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ShopPerksScreen(),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const ShopPerksLogo(size: 38),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Shop Perks',
+                          style: TextStyle(
+                            color: Color(0xFF78350F),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'REWARDS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Redeem points for exclusive local discounts & coupons',
+                      style: TextStyle(
+                        color: Color(0xFF92400E),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Color(0xFFD97706),
+                  size: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ShopPerksLogo extends StatelessWidget {
+  final double size;
+
+  const ShopPerksLogo({super.key, this.size = 36});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(size * 0.28),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.35),
+                  blurRadius: size * 0.2,
+                  offset: Offset(0, size * 0.08),
+                ),
+              ],
+            ),
+          ),
+          Transform.rotate(
+            angle: -0.1,
+            child: Container(
+              width: size * 0.65,
+              height: size * 0.5,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(size * 0.1),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.percent_rounded,
+                  size: size * 0.34,
+                  color: const Color(0xFFD97706),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: size * 0.06,
+            right: size * 0.06,
+            child: Icon(
+              Icons.auto_awesome,
+              size: size * 0.32,
+              color: const Color(0xFFFEF3C7),
+            ),
+          ),
+        ],
       ),
     );
   }

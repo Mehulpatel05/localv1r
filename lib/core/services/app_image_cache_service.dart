@@ -25,36 +25,51 @@ class AppImageCacheService {
 
   Directory? _cacheDir;
   bool _isInitialized = false;
+  Future<void>? _initFuture;
+  final http.Client _httpClient = http.Client();
 
-  // In-memory RAM cache for ultra-fast 0ms access (Max 150 high-priority images)
   final Map<String, Uint8List> _memoryCache = {};
   final List<String> _memoryLruOrder = [];
-  static const int _maxMemoryCacheSize = 150;
+  static const int _maxMemoryCacheSize = 250;
 
-  // Track in-flight network downloads to avoid duplicate concurrent fetches for the same URL
   final Map<String, Completer<File?>> _inFlightDownloads = {};
-
-  // Background prefetch queue
   final Set<String> _prefetchedUrls = {};
 
   Future<void> _initDiskCache() async {
-    try {
-      final docDir = await getApplicationDocumentsDirectory();
-      _cacheDir = Directory('${docDir.path}/app_image_cache');
-      if (!await _cacheDir!.exists()) {
-        await _cacheDir!.create(recursive: true);
+    if (_isInitialized && _cacheDir != null) return;
+    _initFuture ??= () async {
+      try {
+        final docDir = await getApplicationDocumentsDirectory();
+        final dir = Directory('${docDir.path}/app_image_cache');
+        if (!await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+        _cacheDir = dir;
+        _isInitialized = true;
+      } catch (e) {
+        debugPrint('[AppImageCacheService] Init error: $e');
       }
-      _isInitialized = true;
-    } catch (e) {
-      debugPrint('[AppImageCacheService] Init error: $e');
-    }
+    }();
+    await _initFuture;
   }
 
-  /// Normalizes any .r2.dev URLs to use the active backend streaming endpoint
+  Future<void> ensureInitialized() async {
+    await _initDiskCache();
+  }
+
   static String normalizeImageUrl(String url) {
     var clean = url.trim();
+    if (clean.isEmpty) return clean;
     if (clean.contains('.r2.dev/')) {
       final path = clean.split('.r2.dev/').last;
+      return '${ApiConstants.baseUrl}/media/file/$path';
+    }
+    if (clean.contains('/api/v2/media/file/')) {
+      final path = clean.split('/api/v2/media/file/').last;
+      return '${ApiConstants.baseUrl}/media/file/$path';
+    }
+    if (clean.contains('/media/file/')) {
+      final path = clean.split('/media/file/').last;
       return '${ApiConstants.baseUrl}/media/file/$path';
     }
     return clean;
@@ -141,27 +156,36 @@ class AppImageCacheService {
 
     try {
       final reqHeaders = <String, String>{
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+        'User-Agent': 'NearhoodApp/1.0',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         ...?headers,
       };
 
-      final response = await http.get(Uri.parse(cleanUrl), headers: reqHeaders).timeout(const Duration(seconds: 15));
+      final uri = Uri.parse(cleanUrl.replaceAll(' ', '%20'));
+      File? result;
 
-      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-        final bytes = response.bodyBytes;
-        if (cacheFile != null) {
-          await cacheFile.writeAsBytes(bytes, flush: true);
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          final response = await _httpClient.get(uri, headers: reqHeaders).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            final bytes = response.bodyBytes;
+            if (cacheFile != null) {
+              await cacheFile.writeAsBytes(bytes, flush: true);
+            }
+            _putInMemory(cleanUrl, bytes);
+            result = cacheFile;
+            break;
+          }
+        } catch (_) {
+          if (attempt == 0) {
+            await Future.delayed(const Duration(milliseconds: 250));
+          }
         }
-        _putInMemory(cleanUrl, bytes);
-        completer.complete(cacheFile);
-        return cacheFile;
-      } else {
-        completer.complete(null);
-        return null;
       }
+
+      completer.complete(result);
+      return result;
     } catch (e) {
-      debugPrint('[AppImageCacheService] Download error for $cleanUrl: $e');
       completer.complete(null);
       return null;
     } finally {
@@ -179,26 +203,36 @@ class AppImageCacheService {
     _memoryLruOrder.add(url);
   }
 
-  /// ⚡ Background Pre-fetcher: Downloads upcoming images ahead of time silently
   Future<void> prefetchImages(List<String> urls) async {
+    final toFetch = <String>[];
     for (final rawUrl in urls) {
       final url = rawUrl.trim();
       if (url.isEmpty || _prefetchedUrls.contains(url)) continue;
       if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
-
       _prefetchedUrls.add(url);
-
-      // Check if already on disk
-      final file = getFromDiskSync(url);
-      if (file != null) continue;
-
-      // Silent background download (Low priority)
-      Future.microtask(() async {
-        try {
-          await getOrFetchImageFile(url);
-        } catch (_) {}
-      });
+      if (getFromDiskSync(url) != null || getFromMemory(url) != null) continue;
+      toFetch.add(url);
     }
+
+    if (toFetch.isEmpty) return;
+
+    for (int i = 0; i < toFetch.length; i += 3) {
+      final batch = toFetch.sublist(i, (i + 3).clamp(0, toFetch.length));
+      await Future.wait(batch.map((u) => getOrFetchImageFile(u).catchError((_) => null)));
+    }
+  }
+
+  Future<void> evict(String url) async {
+    final cleanUrl = normalizeImageUrl(url);
+    _memoryCache.remove(cleanUrl);
+    _memoryLruOrder.remove(cleanUrl);
+    _prefetchedUrls.remove(cleanUrl);
+    try {
+      final cacheFile = await _getCacheFile(cleanUrl);
+      if (cacheFile != null && await cacheFile.exists()) {
+        await cacheFile.delete();
+      }
+    } catch (_) {}
   }
 
   /// Clears cache when user explicitly requests

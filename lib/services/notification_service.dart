@@ -879,6 +879,23 @@ class NotificationService {
       return;
     }
 
+    final notifId = (data['notification_id'] ?? data['notifId'] ?? data['doc_id'])?.toString().trim();
+    if (notifId != null && notifId.isNotEmpty && cleanCurrentHandle.isNotEmpty) {
+      AuthService.instance.getAccessToken().then((token) {
+        final headers = <String, String>{'Content-Type': 'application/json'};
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+        http.post(
+          Uri.parse('${AuthService.baseUrl}/notifications/$notifId/read?handle=$cleanCurrentHandle'),
+          headers: headers,
+        ).catchError((_) => http.Response('', 500));
+      });
+      if (unreadBadgeNotifier.value > 0) {
+        unreadBadgeNotifier.value--;
+      }
+    }
+
     final partnerHandle = (data['senderHandle'] ??
             data['sender_handle'] ??
             data['partnerHandle'] ??
