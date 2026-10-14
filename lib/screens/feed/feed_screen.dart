@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
-import '../../core/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../core/location/location_service.dart';
@@ -24,6 +23,7 @@ import '../../core/services/badge_cache_service.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../services/rewards_service.dart';
 import '../rewards/rewards_hub_screen.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository repository;
@@ -91,58 +91,20 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildFilterChipsRow() {
+    final selectedIndex = _feedCategoryFilters.indexOf(_selectedFilterChip);
     return Container(
       height: 42,
       margin: const EdgeInsets.only(top: 6, bottom: 6),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _feedCategoryFilters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
+      child: SlidingCategoryTabBar(
+        categories: _feedCategoryFilters,
+        selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
+        onSelected: (index) {
           final chip = _feedCategoryFilters[index];
-          final isSelected = chip == _selectedFilterChip;
-
-          final bg = isSelected ? AppColors.primary : AppColors.surface;
-          final fg = isSelected ? Colors.white : AppColors.textPrimary;
-          final border = isSelected
-              ? Border.all(color: AppColors.primary, width: 1.2)
-              : Border.all(color: AppColors.divider, width: 1.0);
-
-          return PressableScale(
-            onTap: () {
-              setState(() {
-                _selectedFilterChip = chip;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(999),
-                border: border,
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.22),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                chip,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 13.5,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-          );
+          if (_selectedFilterChip != chip) {
+            setState(() {
+              _selectedFilterChip = chip;
+            });
+          }
         },
       ),
     );
@@ -222,9 +184,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         areaName,
                         style: const TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.4,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
                           height: 1.15,
                         ),
                         maxLines: 1,
@@ -438,9 +400,9 @@ class _FeedScreenState extends State<FeedScreen> {
           _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
-              duration: AppMotion.durationStandard,
-              switchInCurve: AppMotion.enterCurve,
-              switchOutCurve: AppMotion.exitCurve,
+              duration: const Duration(milliseconds: 150),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
               transitionBuilder: (child, animation) {
                 return FadeTransition(
                   opacity: animation,
