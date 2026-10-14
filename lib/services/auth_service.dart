@@ -846,6 +846,28 @@ class AuthService {
     return null;
   }
 
+  Future<List<Map<String, dynamic>>> getEnabledCities() async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/places/cities');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['cities'] is List) {
+          return List<Map<String, dynamic>>.from(data['cities']);
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
   Future<Map<String, dynamic>?> reverseGeocodeCoordinates(
     double lat,
     double lng,

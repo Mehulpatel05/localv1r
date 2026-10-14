@@ -376,8 +376,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       _livePredictions.clear();
       _areaSearchController.text = mainText;
       _selectedArea = GeoArea(
-        id: placeId.isNotEmpty ? placeId : 'GJ-VAD-AREA',
-        cityId: _selectedCityId ?? 'GJ-VAD',
+        id: placeId.isNotEmpty ? placeId : 'AREA-${DateTime.now().millisecondsSinceEpoch}',
+        cityId: _selectedCityId ?? '',
         name: mainText,
         lat: lat,
         lng: lng,
@@ -398,15 +398,15 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (res != null && res['live'] == true && res['area'] != null) {
         final areaData = res['area'] as Map<String, dynamic>;
         final cityData = res['city'] as Map<String, dynamic>?;
-        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
+        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? '';
         final cityId =
-            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? 'GJ-VAD';
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? cityName;
 
         setState(() {
           _selectedCityName = cityName;
           _selectedCityId = cityId;
           _selectedArea = GeoArea(
-            id: areaData['id'] as String? ?? (placeId.isNotEmpty ? placeId : 'GJ-VAD-AREA'),
+            id: areaData['id'] as String? ?? (placeId.isNotEmpty ? placeId : 'AREA-${DateTime.now().millisecondsSinceEpoch}'),
             cityId: cityId,
             name: areaData['name'] as String? ?? mainText,
             lat: areaData['lat'] != null
@@ -418,14 +418,22 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           );
           _areaSearchController.text = _selectedArea!.name;
         });
-      } else if (res != null && res['live'] == false) {
-        final detectedCity = res['detected_city'] as String? ?? mainText;
-        final resLat = res['lat'] != null ? (res['lat'] as num).toDouble() : lat;
-        final resLng = res['lng'] != null ? (res['lng'] as num).toDouble() : lng;
+      } else {
+        final detectedCity = (res != null ? res['detected_city'] as String? : null) ?? _selectedCityName ?? 'India';
+        final resLat = res != null && res['lat'] != null ? (res['lat'] as num).toDouble() : lat;
+        final resLng = res != null && res['lng'] != null ? (res['lng'] as num).toDouble() : lng;
         setState(() {
-          _selectedArea = null;
+          _selectedCityName = detectedCity;
+          _selectedCityId = detectedCity;
+          _selectedArea = GeoArea(
+            id: placeId.isNotEmpty ? placeId : 'AREA-${DateTime.now().millisecondsSinceEpoch}',
+            cityId: detectedCity,
+            name: mainText,
+            lat: resLat,
+            lng: resLng,
+          );
+          _areaSearchController.text = mainText;
         });
-        _showWaitlistSheet(detectedCity: detectedCity, lat: resLat, lng: resLng);
       }
     } catch (_) {
     } finally {
@@ -504,9 +512,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       if (res != null && res['live'] == true && res['area'] != null) {
         final areaData = res['area'] as Map<String, dynamic>;
         final cityData = res['city'] as Map<String, dynamic>?;
-        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? 'Vadodara';
+        final cityName = cityData?['name'] as String? ?? _selectedCityName ?? '';
         final cityId =
-            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? 'GJ-VAD';
+            areaData['city_id'] as String? ?? cityData?['id'] as String? ?? _selectedCityId ?? cityName;
 
         setState(() {
           _selectedCityName = cityName;
@@ -530,15 +538,30 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-      } else if (res != null && res['live'] == false) {
-        final detectedCity = res['detected_city'] as String? ?? _selectedCityName ?? 'Aapka shehar';
+      } else if (res != null) {
+        final detectedCity = res['detected_city'] as String? ?? _selectedCityName ?? 'India';
+        final detectedArea = (res['area'] is Map ? res['area']['name'] as String? : null) ?? 'Detected Area';
         setState(() {
-          _selectedArea = null;
+          _selectedCityName = detectedCity;
+          _selectedCityId = detectedCity;
+          _selectedArea = GeoArea(
+            id: 'GPS-${DateTime.now().millisecondsSinceEpoch}',
+            cityId: detectedCity,
+            name: detectedArea,
+            lat: position.latitude,
+            lng: position.longitude,
+          );
+          _areaSearchController.text = _selectedArea!.name;
+          _isAreaSearching = false;
+          _livePredictions.clear();
         });
-        _showWaitlistSheet(
-          detectedCity: detectedCity,
-          lat: position.latitude,
-          lng: position.longitude,
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Detected: ${_selectedArea!.name}, $detectedCity'),
+            backgroundColor: _primaryGreen,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       } else {
         final match = LocationEngine.detectLocation(
@@ -588,192 +611,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     }
   }
 
-  Future<void> _showWaitlistSheet({
-    required String detectedCity,
-    double? lat,
-    double? lng,
-  }) async {
-    bool isSubmittingWaitlist = false;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Material(
-              color: Colors.white,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
-              clipBehavior: Clip.antiAlias,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: _borderColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: const BoxDecoration(
-                          color: _lightGreenTint,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.location_city_rounded,
-                          color: _primaryGreen,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Nearhood abhi $detectedCity mein nahi hai',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Hum jald hi aapke shehar aa rahe hain! Waitlist join kijiye taaki launch hote hi aapko sabse pehle access mile.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: _textSecondary.withValues(alpha: 0.9),
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryGreen,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          onPressed: isSubmittingWaitlist
-                              ? null
-                              : () async {
-                                  setSheetState(
-                                      () => isSubmittingWaitlist = true);
-                                  final uid = widget.userId.isNotEmpty
-                                      ? widget.userId
-                                      : (await AuthService.instance.getUserId() ??
-                                          '');
-                                  final phone = widget.phoneNumber ??
-                                      (await AuthService.instance
-                                              .getPhoneNumber() ??
-                                          '');
-                                  final contact = phone.isNotEmpty
-                                      ? phone
-                                      : (uid.isNotEmpty ? uid : 'app_user');
-
-                                  final success =
-                                      await AuthService.instance.joinWaitlist(
-                                    cityText: detectedCity,
-                                    lat: lat,
-                                    lng: lng,
-                                    contactOrDeviceId: contact,
-                                  );
-
-                                  if (sheetContext.mounted) {
-                                    Navigator.of(sheetContext).pop();
-                                  }
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          success
-                                              ? 'Aap waitlist mein add ho gaye hain! Shukriya.'
-                                              : 'Waitlist join karne mein samasya aayi. Dobara koshish karein.',
-                                        ),
-                                        backgroundColor: success
-                                            ? _primaryGreen
-                                            : AppColors.error,
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  }
-                                },
-                          child: isSubmittingWaitlist
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.2,
-                                  ),
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.notifications_active_rounded,
-                                        size: 20),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Join waitlist',
-                                      style: TextStyle(
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: _textSecondary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.of(sheetContext).pop();
-                            _areaSearchController.clear();
-                            _areaFocusNode.requestFocus();
-                          },
-                          child: const Text(
-                            'Choose another area',
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   Future<void> _showPhotoPickerSheet() async {
     showModalBottomSheet(
@@ -1000,8 +838,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       });
 
       try {
-        final selectedCityId =
-            _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
+        final selectedCityId = _selectedArea!.cityId.isNotEmpty
+            ? _selectedArea!.cityId
+            : (_selectedCityId ?? _selectedCityName ?? 'IN');
         final result = await AuthService.instance.confirmAreaDetails(
           areaId: _selectedArea!.id,
           areaName: _selectedArea!.name,
@@ -1030,8 +869,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         final city = LocationEngine.lookupCity(selectedCityId) ??
             GeoCity(
               id: selectedCityId,
-              stateId: 'GJ',
-              name: _selectedCityName ?? 'Vadodara',
+              stateId: 'IN',
+              name: _selectedCityName ?? _selectedArea!.cityId,
               enabled: true,
               areas: [_selectedArea!],
             );
@@ -1092,8 +931,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     });
 
     try {
-      final selectedCityId =
-          _selectedArea!.cityId.isNotEmpty ? _selectedArea!.cityId : 'GJ-VAD';
+      final selectedCityId = _selectedArea!.cityId.isNotEmpty
+          ? _selectedArea!.cityId
+          : (_selectedCityId ?? _selectedCityName ?? 'IN');
       final result = await AuthService.instance.saveUserHandle(
         handle,
         userId: effectiveUid,
@@ -1141,8 +981,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       final city = LocationEngine.lookupCity(selectedCityId) ??
           GeoCity(
             id: selectedCityId,
-            stateId: 'GJ',
-            name: _selectedCityName ?? 'Vadodara',
+            stateId: 'IN',
+            name: _selectedCityName ?? _selectedArea!.cityId,
             enabled: true,
             areas: [_selectedArea!],
           );
@@ -1918,7 +1758,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${_selectedArea!.name}, ${_selectedCityName ?? "Vadodara"}',
+                      '${_selectedArea!.name}${_selectedCityName != null && _selectedCityName!.isNotEmpty ? ", $_selectedCityName" : ""}',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

@@ -9,12 +9,14 @@ class ParsedAreaResult {
   final String subtitle;
   final String city;
   final String? placeId;
+  final bool isCity;
 
   const ParsedAreaResult({
     required this.area,
     required this.subtitle,
     required this.city,
     this.placeId,
+    this.isCity = false,
   });
 
   static ParsedAreaResult parse(Map<String, dynamic> item) {
@@ -24,13 +26,15 @@ class ParsedAreaResult {
     final rawDesc = (item['description'] ?? '').toString().trim();
 
     final cleanSubtitle = _cleanAddressString(rawSec.isNotEmpty ? rawSec : rawDesc);
-    final detectedCity = _extractCity(rawSec.isNotEmpty ? rawSec : rawDesc, fallback: rawMain);
+    final (detectedCity, isCity) = _extractCityAndType(rawSec.isNotEmpty ? rawSec : rawDesc, fallback: rawMain);
+    final finalArea = isCity ? 'Main City' : rawMain;
 
     return ParsedAreaResult(
-      area: rawMain,
+      area: finalArea,
       subtitle: cleanSubtitle.isNotEmpty ? cleanSubtitle : rawSec,
       city: detectedCity,
       placeId: id,
+      isCity: isCity,
     );
   }
 
@@ -47,8 +51,10 @@ class ParsedAreaResult {
     return cleaned.join(', ');
   }
 
-  static String _extractCity(String rawSecondary, {required String fallback}) {
-    if (rawSecondary.isEmpty) return fallback;
+  static (String, bool) _extractCityAndType(String rawSecondary, {required String fallback}) {
+    if (rawSecondary.isEmpty) {
+      return (fallback, true);
+    }
 
     const ignoredTokens = {
       'india',
@@ -75,6 +81,19 @@ class ParsedAreaResult {
       'uttarakhand',
       'himachal pradesh',
       'goa',
+      'jammu and kashmir',
+      'ladakh',
+      'tripura',
+      'meghalaya',
+      'manipur',
+      'nagaland',
+      'mizoram',
+      'sikkim',
+      'arunachal pradesh',
+      'chandigarh',
+      'puducherry',
+      'dadra and nagar haveli',
+      'daman and diu',
     };
 
     final parts = rawSecondary.split(',');
@@ -89,11 +108,11 @@ class ParsedAreaResult {
       candidateCities.add(clean);
     }
 
-    if (candidateCities.isNotEmpty) {
-      return candidateCities.last;
+    if (candidateCities.isEmpty) {
+      return (fallback, true);
     }
 
-    return fallback;
+    return (candidateCities.last, false);
   }
 }
 
@@ -121,7 +140,24 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
   String _currentAreaName = '';
   String _currentCityName = '';
   String _currentAreaId = '';
-  String _currentCityId = 'GJ-VAD';
+  String _currentCityId = '';
+
+  List<Map<String, dynamic>> _enabledCities = [];
+
+  static const List<Map<String, String>> _defaultPopularCities = [
+    {'id': 'GJ-VAD', 'name': 'Vadodara'},
+    {'id': 'GJ-AMD', 'name': 'Ahmedabad'},
+    {'id': 'GJ-SRT', 'name': 'Surat'},
+    {'id': 'GJ-GAN', 'name': 'Gandhinagar'},
+    {'id': 'MH-MUM', 'name': 'Mumbai'},
+    {'id': 'MH-PUN', 'name': 'Pune'},
+    {'id': 'DL-DEL', 'name': 'Delhi NCR'},
+    {'id': 'KA-BLR', 'name': 'Bengaluru'},
+    {'id': 'RJ-JAI', 'name': 'Jaipur'},
+    {'id': 'MP-IND', 'name': 'Indore'},
+    {'id': 'UP-LKO', 'name': 'Lucknow'},
+    {'id': 'TS-HYD', 'name': 'Hyderabad'},
+  ];
 
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _areaNameController = TextEditingController();
@@ -135,21 +171,6 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
 
   Map<String, dynamic>? _selectedArea;
 
-  static const List<Map<String, String>> _popularVadodaraAreas = [
-    {'id': 'GJ-VAD-ALKAPURI', 'name': 'Alkapuri', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-SAYAJIGUNJ', 'name': 'Sayajigunj', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-GOTRI', 'name': 'Gotri', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-MANJALPUR', 'name': 'Manjalpur', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-KARELIBAUG', 'name': 'Karelibaug', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-FATEHGUNJ', 'name': 'Fatehgunj', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-AKOTA', 'name': 'Akota', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-VASNA', 'name': 'Vasna Road', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-MAKARPURA', 'name': 'Makarpura', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-SUBHANPURA', 'name': 'Subhanpura', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-WAGHODIA', 'name': 'Waghodia Road', 'city_id': 'Vadodara'},
-    {'id': 'GJ-VAD-NIZAMPURA', 'name': 'Nizampura', 'city_id': 'Vadodara'},
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -159,6 +180,18 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
     _currentCityId = widget.repository.locationService.city.id;
 
     _fetchStatus();
+    _fetchEnabledCities();
+  }
+
+  Future<void> _fetchEnabledCities() async {
+    try {
+      final cities = await AuthService.instance.getEnabledCities();
+      if (mounted && cities.isNotEmpty) {
+        setState(() {
+          _enabledCities = cities;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -240,28 +273,28 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
         'name': parsed.area,
         'description': parsed.subtitle.isNotEmpty ? '${parsed.area}, ${parsed.subtitle}' : parsed.area,
       };
-      _areaNameController.text = parsed.area;
+      _areaNameController.text = parsed.isCity ? '' : parsed.area;
       _cityNameController.text = parsed.city;
-      _searchController.text = parsed.subtitle.isNotEmpty ? '${parsed.area}, ${parsed.subtitle}' : parsed.area;
+      _searchController.text = parsed.isCity ? parsed.city : (parsed.subtitle.isNotEmpty ? '${parsed.area}, ${parsed.subtitle}' : parsed.area);
       _predictions.clear();
       _searchFocusNode.unfocus();
     });
   }
 
-  void _selectPopularArea(Map<String, String> area) {
-    final areaName = area['name'] ?? '';
-    final cityName = area['city_id'] == 'GJ-VAD' ? 'Vadodara' : (area['city_id'] ?? 'Vadodara');
+  void _selectPopularCity(Map<String, dynamic> city) {
+    final cityName = (city['name'] ?? '').toString();
+    final cityId = (city['id'] ?? cityName).toString();
     setState(() {
       _selectedArea = {
-        'id': area['id'] ?? areaName,
-        'area': areaName,
+        'id': cityId,
+        'area': '',
         'city': cityName,
-        'name': areaName,
-        'description': '$areaName, $cityName',
+        'name': '',
+        'description': cityName,
       };
-      _areaNameController.text = areaName;
+      _areaNameController.clear();
       _cityNameController.text = cityName;
-      _searchController.text = '$areaName, $cityName';
+      _searchController.text = cityName;
       _predictions.clear();
       _searchFocusNode.unfocus();
     });
@@ -279,6 +312,16 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select or enter an area name.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (cityName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select or enter a city name.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -469,8 +512,8 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
   }
 
   Widget _buildCurrentAreaCard() {
-    final areaDisplay = _currentAreaName.isNotEmpty ? _currentAreaName : 'Vadodara';
-    final cityDisplay = _currentCityName.isNotEmpty ? _currentCityName : 'Vadodara';
+    final areaDisplay = _currentAreaName.isNotEmpty ? _currentAreaName : 'Current Area';
+    final cityDisplay = _currentCityName.isNotEmpty ? _currentCityName : '';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -856,7 +899,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                parsed.area,
+                                parsed.isCity ? parsed.city : parsed.area,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
@@ -866,7 +909,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                               if (parsed.subtitle.isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 Text(
-                                  parsed.subtitle,
+                                  parsed.isCity ? '${parsed.subtitle} • City' : parsed.subtitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -993,7 +1036,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
         ] else ...[
           const SizedBox(height: 16),
           const Text(
-            'Popular Areas in Vadodara',
+            'Popular Cities',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -1005,12 +1048,12 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _popularVadodaraAreas.map((area) {
-              final isCurrent = (_currentAreaId.isNotEmpty && area['id'] == _currentAreaId) ||
-                  area['name']!.toLowerCase() == _currentAreaName.toLowerCase();
-              final isSelected = _areaNameController.text.trim().toLowerCase() == area['name']!.toLowerCase();
+            children: (_enabledCities.isNotEmpty ? _enabledCities : _defaultPopularCities).map((city) {
+              final cityName = (city['name'] ?? '').toString();
+              final isCurrent = cityName.toLowerCase() == _currentCityName.toLowerCase();
+              final isSelected = _cityNameController.text.trim().toLowerCase() == cityName.toLowerCase();
               return InkWell(
-                onTap: isCurrent ? null : () => _selectPopularArea(area),
+                onTap: isCurrent ? null : () => _selectPopularCity(city),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1026,7 +1069,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                     ),
                   ),
                   child: Text(
-                    area['name']! + (isCurrent ? ' (Current)' : ''),
+                    cityName + (isCurrent ? ' (Current)' : ''),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
@@ -1046,10 +1089,10 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                 setState(() {
                   _selectedArea = {
                     'area': '',
-                    'city': _currentCityName.isNotEmpty ? _currentCityName : 'Vadodara',
+                    'city': _currentCityName,
                   };
                   _areaNameController.clear();
-                  _cityNameController.text = _currentCityName.isNotEmpty ? _currentCityName : 'Vadodara';
+                  _cityNameController.text = _currentCityName;
                 });
               },
               icon: const Icon(Icons.edit_note_rounded, size: 18, color: _primaryGreen),
