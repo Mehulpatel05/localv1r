@@ -21,7 +21,7 @@ import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
-import '../auth/create_handle_screen.dart';
+import 'area_change_request_screen.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
@@ -2119,10 +2119,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => CreateHandleScreen(
+                                        builder: (_) => AreaChangeRequestScreen(
                                           repository: widget.repository,
-                                          userId: '',
-                                          isChangeArea: true,
                                         ),
                                       ),
                                     );

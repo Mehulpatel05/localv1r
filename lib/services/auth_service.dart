@@ -1004,6 +1004,92 @@ class AuthService {
     } catch (_) {}
     return null;
   }
+
+  Future<Map<String, dynamic>> getAreaChangeRequestStatus() async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/profile/area-change-request/status');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+    } catch (_) {}
+    return {'success': false, 'hasPending': false};
+  }
+
+  Future<Map<String, dynamic>> submitAreaChangeRequest({
+    required String requestedAreaId,
+    required String requestedAreaName,
+    String? requestedCityId,
+    String? reason,
+  }) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/profile/area-change-request');
+      final payload = <String, dynamic>{
+        'requested_area_id': requestedAreaId,
+        'requested_area_name': requestedAreaName,
+        if (requestedCityId != null && requestedCityId.isNotEmpty) 'requested_city_id': requestedCityId,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      };
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {'success': true, ...data};
+      } else {
+        final errorMsg = data['error'] as String? ?? 'Failed to submit area change request.';
+        return {'success': false, 'error': errorMsg, ...data};
+      }
+    } catch (_) {
+      return {'success': false, 'error': 'Network error. Please try again.'};
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelAreaChangeRequest({String? requestId}) async {
+    try {
+      final token = await getAccessToken();
+      final url = Uri.parse('$baseUrl/profile/area-change-request/cancel');
+      final payload = <String, dynamic>{
+        if (requestId != null && requestId.isNotEmpty) 'request_id': requestId,
+      };
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {'success': true, ...data};
+      } else {
+        final errorMsg = data['error'] as String? ?? 'Failed to cancel request.';
+        return {'success': false, 'error': errorMsg, ...data};
+      }
+    } catch (_) {
+      return {'success': false, 'error': 'Network error. Please try again.'};
+    }
+  }
 }
 
 
