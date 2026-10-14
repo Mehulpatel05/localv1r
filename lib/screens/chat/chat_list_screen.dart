@@ -71,7 +71,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    _chatsStream = DirectChatService.instance.pollChatsStream(widget.currentUserHandle);
+    _chatsStream = DirectChatService.instance.pollChatsStream(widget.currentUserHandle).asBroadcastStream();
     _friendRepo = FriendRepository()..currentUserHandle = widget.currentUserHandle;
     _searchController.addListener(_onSearchChanged);
     _loadPreferences();
@@ -1350,122 +1350,94 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
             ],
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, animation) {
-                  final isArchivedNav = _lastTransitionWasArchived;
-                  final slideOffset = isArchivedNav
-                      ? Offset(_archivedTransitionDirection * 0.3, 0.0)
-                      : const Offset(0.0, 0.03);
+              child: StreamBuilder<List<ChatConversation>>(
+                stream: _getChatsStream(),
+                initialData: DirectChatService.instance.lastKnownChats,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                    return _buildSkeletonLoading();
+                  }
 
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: slideOffset,
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-                    child: FadeTransition(
-                      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                      child: child,
-                    ),
-                  );
-                },
-                child: KeyedSubtree(
-                  key: ValueKey('list_filter_${_selectedFilter}_archived_$_showArchivedView'),
-                  child: StreamBuilder<List<ChatConversation>>(
-                    stream: _getChatsStream(),
-                    initialData: DirectChatService.instance.lastKnownChats,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                        return _buildSkeletonLoading();
+                  if (snapshot.hasError) {
+                    debugPrint('Chat stream error: ${snapshot.error}');
+                    return _buildErrorState(snapshot.error.toString());
+                  }
+
+                  final rawDocs = snapshot.data ?? [];
+                  final conversations = <ChatConversation>[];
+                  for (final conv in rawDocs) {
+                    if (!_locallyDeletedChatIds.contains(conv.id)) {
+                      conversations.add(conv);
+                    }
+                  }
+
+                  conversations.sort((a, b) {
+                    final aPinned = _pinnedChatIds.contains(a.id);
+                    final bPinned = _pinnedChatIds.contains(b.id);
+                    if (aPinned && !bPinned) return -1;
+                    if (!aPinned && bPinned) return 1;
+                    if (aPinned && bPinned) {
+                      final aPinTime = _pinnedTimestamps[a.id] ?? 0;
+                      final bPinTime = _pinnedTimestamps[b.id] ?? 0;
+                      if (aPinTime != bPinTime) return bPinTime.compareTo(aPinTime);
+                    }
+
+                    final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                    final bTime = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                    return bTime.compareTo(aTime);
+                  });
+
+                  var displayList = conversations.where((conv) {
+                    final isArchived = _archivedChatIds.contains(conv.id);
+                    return _showArchivedView ? isArchived : !isArchived;
+                  }).toList();
+
+                  if (!_showArchivedView && _selectedFilter != ChatFilter.all) {
+                    displayList = displayList.where((conv) {
+                      if (_selectedFilter == ChatFilter.unread) {
+                        if (_locallyUnreadChatIds.contains(conv.id)) return true;
+                        if (_locallyReadChatIds.contains(conv.id)) return false;
+                        return conv.getUnreadCount(widget.currentUserHandle) > 0;
+                      } else if (_selectedFilter == ChatFilter.favourites) {
+                        return _favouriteChatIds.contains(conv.id);
                       }
+                      return true;
+                    }).toList();
+                  }
 
-                      if (snapshot.hasError) {
-                        debugPrint('Chat stream error: ${snapshot.error}');
-                        return _buildErrorState(snapshot.error.toString());
-                      }
+                  if (_searchQuery.isNotEmpty) {
+                    displayList = displayList.where((conv) {
+                      final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
+                      final partnerName = NameCacheService.instance.getDisplayName(partner, fallback: conv.partnerDisplayName).toLowerCase();
+                      final snippet = conv.lastMessage.toLowerCase();
+                      return partner.contains(_searchQuery) ||
+                          partnerName.contains(_searchQuery) ||
+                          snippet.contains(_searchQuery);
+                    }).toList();
+                  }
 
-                      final rawDocs = snapshot.data ?? [];
-                      final conversations = <ChatConversation>[];
-                      for (final conv in rawDocs) {
-                        if (!_locallyDeletedChatIds.contains(conv.id)) {
-                          conversations.add(conv);
-                        }
-                      }
+                  _latestVisibleConversations = displayList;
 
-                      conversations.sort((a, b) {
-                        final aPinned = _pinnedChatIds.contains(a.id);
-                        final bPinned = _pinnedChatIds.contains(b.id);
-                        if (aPinned && !bPinned) return -1;
-                        if (!aPinned && bPinned) return 1;
-                        if (aPinned && bPinned) {
-                          final aPinTime = _pinnedTimestamps[a.id] ?? 0;
-                          final bPinTime = _pinnedTimestamps[b.id] ?? 0;
-                          if (aPinTime != bPinTime) return bPinTime.compareTo(aPinTime);
-                        }
+                  _checkAutoUnarchive(conversations);
 
-                        final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-                        final bTime = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-                        return bTime.compareTo(aTime);
-                      });
+                  Widget listBody;
+                  if (conversations.isEmpty) {
+                    listBody = _buildEmptyState();
+                  } else if (displayList.isEmpty && _searchQuery.isNotEmpty) {
+                    listBody = _buildSearchEmptyState();
+                  } else if (displayList.isEmpty && _showArchivedView) {
+                    listBody = _buildArchivedEmptyState();
+                  } else {
+                    final showArchivedRow = !_showArchivedView && _archivedChatIds.isNotEmpty && _searchQuery.isEmpty;
 
-                      var displayList = conversations.where((conv) {
-                        final isArchived = _archivedChatIds.contains(conv.id);
-                        return _showArchivedView ? isArchived : !isArchived;
-                      }).toList();
-
-                      if (!_showArchivedView && _selectedFilter != ChatFilter.all) {
-                        displayList = displayList.where((conv) {
-                          if (_selectedFilter == ChatFilter.unread) {
-                            if (_locallyUnreadChatIds.contains(conv.id)) return true;
-                            if (_locallyReadChatIds.contains(conv.id)) return false;
-                            return conv.getUnreadCount(widget.currentUserHandle) > 0;
-                          } else if (_selectedFilter == ChatFilter.favourites) {
-                            return _favouriteChatIds.contains(conv.id);
-                          }
-                          return true;
-                        }).toList();
-                      }
-
-                      if (_searchQuery.isNotEmpty) {
-                        displayList = displayList.where((conv) {
-                          final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
-                          final partnerName = NameCacheService.instance.getDisplayName(partner, fallback: conv.partnerDisplayName).toLowerCase();
-                          final snippet = conv.lastMessage.toLowerCase();
-                          return partner.contains(_searchQuery) ||
-                              partnerName.contains(_searchQuery) ||
-                              snippet.contains(_searchQuery);
-                        }).toList();
-                      }
-
-                      _latestVisibleConversations = displayList;
-
-                      _checkAutoUnarchive(conversations);
-
-                      if (conversations.isEmpty) {
-                        return _buildEmptyState();
-                      }
-
-                      if (displayList.isEmpty && _searchQuery.isNotEmpty) {
-                        return _buildSearchEmptyState();
-                      }
-
-                      if (displayList.isEmpty && _showArchivedView) {
-                        return _buildArchivedEmptyState();
-                      }
-
-                      final showArchivedRow = !_showArchivedView && _archivedChatIds.isNotEmpty && _searchQuery.isEmpty;
-
-                      if (displayList.isEmpty && !showArchivedRow) {
-                        return _buildEmptyFilterState();
-                      }
-
+                    if (displayList.isEmpty && !showArchivedRow) {
+                      listBody = _buildEmptyFilterState();
+                    } else {
                       final pinnedCount = displayList.where((c) => _pinnedChatIds.contains(c.id)).length;
                       final archivedRowIndex = pinnedCount;
                       final totalItemCount = displayList.length + (showArchivedRow ? 1 : 0);
 
-                      return ListView.separated(
+                      listBody = ListView.separated(
                         physics: const BouncingScrollPhysics(),
                         padding: EdgeInsets.only(bottom: 88 + MediaQuery.paddingOf(context).bottom),
                         itemCount: totalItemCount,
@@ -1485,9 +1457,36 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           return _buildConversationTile(conv);
                         },
                       );
+                    }
+                  }
+
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) {
+                      final isArchivedNav = _lastTransitionWasArchived;
+                      final slideOffset = isArchivedNav
+                          ? Offset(_archivedTransitionDirection * 0.3, 0.0)
+                          : const Offset(0.0, 0.03);
+
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: slideOffset,
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                        child: FadeTransition(
+                          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                          child: child,
+                        ),
+                      );
                     },
-                  ),
-                ),
+                    child: KeyedSubtree(
+                      key: ValueKey('list_filter_${_selectedFilter}_archived_${_showArchivedView}_empty_${displayList.isEmpty}'),
+                      child: listBody,
+                    ),
+                  );
+                },
               ),
             ),
           ],
