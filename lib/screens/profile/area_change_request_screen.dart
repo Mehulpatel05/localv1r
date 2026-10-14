@@ -6,35 +6,56 @@ import '../../services/auth_service.dart';
 
 class ParsedAreaResult {
   final String area;
+  final String subtitle;
   final String city;
   final String? placeId;
 
   const ParsedAreaResult({
     required this.area,
+    required this.subtitle,
     required this.city,
     this.placeId,
   });
 
-  static ParsedAreaResult parse(Map<String, dynamic> item, {String defaultCity = 'Vadodara'}) {
+  static ParsedAreaResult parse(Map<String, dynamic> item) {
     final id = item['id']?.toString() ?? item['placeId']?.toString() ?? item['place_id']?.toString();
-    final rawMain = (item['mainText'] ?? item['main_text'] ?? item['name'] ?? '').toString().trim();
+    final rawMain = (item['mainText'] ?? item['main_text'] ?? item['name'] ?? item['description'] ?? '').toString().trim();
     final rawSec = (item['secondaryText'] ?? item['secondary_text'] ?? '').toString().trim();
     final rawDesc = (item['description'] ?? '').toString().trim();
 
-    if (rawMain.isNotEmpty && rawSec.isEmpty && rawDesc.isEmpty) {
-      return ParsedAreaResult(
-        area: rawMain,
-        city: (item['city_id'] ?? item['city'] ?? defaultCity).toString(),
-        placeId: id,
-      );
-    }
+    final cleanSubtitle = _cleanAddressString(rawSec.isNotEmpty ? rawSec : rawDesc);
+    final detectedCity = _extractCity(rawSec.isNotEmpty ? rawSec : rawDesc, fallback: rawMain);
 
-    const ignoreWords = {
+    return ParsedAreaResult(
+      area: rawMain,
+      subtitle: cleanSubtitle.isNotEmpty ? cleanSubtitle : rawSec,
+      city: detectedCity,
+      placeId: id,
+    );
+  }
+
+  static String _cleanAddressString(String raw) {
+    if (raw.isEmpty) return '';
+    final parts = raw.split(',');
+    final cleaned = <String>[];
+    for (final part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      if (RegExp(r'^\d{4,8}$').hasMatch(trimmed)) continue;
+      cleaned.add(trimmed);
+    }
+    return cleaned.join(', ');
+  }
+
+  static String _extractCity(String rawSecondary, {required String fallback}) {
+    if (rawSecondary.isEmpty) return fallback;
+
+    const ignoredTokens = {
       'india',
       'bharat',
       'gujarat',
-      'maharashtra',
       'rajasthan',
+      'maharashtra',
       'madhya pradesh',
       'delhi',
       'karnataka',
@@ -56,45 +77,23 @@ class ParsedAreaResult {
       'goa',
     };
 
-    final sourceText = rawSec.isNotEmpty ? rawSec : rawDesc;
-    final rawParts = sourceText.split(',');
-    final tokens = <String>[];
+    final parts = rawSecondary.split(',');
+    final candidateCities = <String>[];
 
-    for (final part in rawParts) {
-      final clean = part.trim();
+    for (final p in parts) {
+      final clean = p.trim();
       if (clean.isEmpty) continue;
       final lower = clean.toLowerCase();
-      if (ignoreWords.contains(lower)) continue;
       if (RegExp(r'^\d{4,8}$').hasMatch(lower)) continue;
-      tokens.add(clean);
+      if (ignoredTokens.contains(lower)) continue;
+      candidateCities.add(clean);
     }
 
-    String resolvedCity = defaultCity;
-    String resolvedArea = rawMain;
-
-    if (tokens.isNotEmpty) {
-      resolvedCity = tokens.last;
+    if (candidateCities.isNotEmpty) {
+      return candidateCities.last;
     }
 
-    if (tokens.length >= 2) {
-      resolvedArea = tokens[tokens.length - 2];
-      if (tokens.length >= 3 && tokens[tokens.length - 3].toLowerCase() == 'new') {
-        resolvedArea = 'New $resolvedArea';
-      }
-    } else if (rawMain.isNotEmpty) {
-      final mainParts = rawMain.split(',');
-      resolvedArea = mainParts.last.trim();
-    }
-
-    if (resolvedArea.isEmpty && rawMain.isNotEmpty) {
-      resolvedArea = rawMain;
-    }
-
-    return ParsedAreaResult(
-      area: resolvedArea,
-      city: resolvedCity,
-      placeId: id,
-    );
+    return fallback;
   }
 }
 
@@ -239,11 +238,11 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
         'area': parsed.area,
         'city': parsed.city,
         'name': parsed.area,
-        'description': '${parsed.area}, ${parsed.city}',
+        'description': parsed.subtitle.isNotEmpty ? '${parsed.area}, ${parsed.subtitle}' : parsed.area,
       };
       _areaNameController.text = parsed.area;
       _cityNameController.text = parsed.city;
-      _searchController.text = '${parsed.area}, ${parsed.city}';
+      _searchController.text = parsed.subtitle.isNotEmpty ? '${parsed.area}, ${parsed.subtitle}' : parsed.area;
       _predictions.clear();
       _searchFocusNode.unfocus();
     });
@@ -491,7 +490,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
-              Icons.home_work_rounded,
+              Icons.location_on_rounded,
               color: _primaryGreen,
               size: 26,
             ),
@@ -830,10 +829,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
               separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
               itemBuilder: (context, index) {
                 final item = _predictions[index];
-                final parsed = ParsedAreaResult.parse(
-                  item,
-                  defaultCity: _currentCityName.isNotEmpty ? _currentCityName : 'Vadodara',
-                );
+                final parsed = ParsedAreaResult.parse(item);
                 return InkWell(
                   onTap: () => _selectParsedArea(parsed),
                   borderRadius: BorderRadius.circular(14),
@@ -867,21 +863,19 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  const Icon(Icons.location_city_rounded, size: 13, color: AppColors.textMuted),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    parsed.city,
-                                    style: const TextStyle(
-                                      fontSize: 12.5,
-                                      color: AppColors.textMuted,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                              if (parsed.subtitle.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  parsed.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppColors.textMuted,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
