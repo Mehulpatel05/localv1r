@@ -10,6 +10,7 @@ import '../../core/models/user_profile.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../../core/widgets/verified_badge.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../services/chat_preferences_service.dart';
 import '../../services/direct_chat_service.dart';
 import '../../services/friend_repository.dart';
@@ -1226,7 +1227,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surface,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: AnimatedSwitcher(
@@ -1330,19 +1331,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
               ),
               if (!_showArchivedView)
-                SizedBox(
-                  height: 36,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    children: [
-                      _buildFilterChip('All', ChatFilter.all),
-                      _buildFilterChip('Unread', ChatFilter.unread),
-                      _buildFilterChip('Favourites', ChatFilter.favourites),
-                    ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: SizedBox(
+                    height: 42,
+                    child: SlidingCategoryTabBar(
+                      categories: const ['All', 'Unread', 'Favourites'],
+                      selectedIndex: _selectedFilter.index,
+                      onSelected: (index) {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _lastTransitionWasArchived = false;
+                          _selectedFilter = ChatFilter.values[index];
+                        });
+                      },
+                    ),
                   ),
                 ),
-              const SizedBox(height: 6),
             ],
             Expanded(
               child: AnimatedSwitcher(
@@ -1494,7 +1499,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   AppBar _buildNormalAppBar() {
     return AppBar(
       key: const ValueKey('normal_app_bar'),
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: _showArchivedView ? 0 : 20,
@@ -2170,46 +2175,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textMuted),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, ChatFilter filter) {
-    final isSelected = _selectedFilter == filter;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() {
-            _lastTransitionWasArchived = false;
-            _selectedFilter = filter;
-          });
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : AppColors.chipBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.divider,
-              width: 1,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              color: isSelected ? Colors.white : AppColors.textPrimary,
-            ),
-            child: Text(label),
           ),
         ),
       ),
