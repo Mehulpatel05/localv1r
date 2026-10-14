@@ -15,6 +15,7 @@ import '../rewards/boost_listing_screen.dart';
 import '../rewards/shop_perks_screen.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/widgets/pressable_scale.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -585,32 +586,41 @@ class _BazarScreenState extends State<BazarScreen> {
                   });
                 },
               ),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: PressableScale(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ShopPerksScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.local_offer_rounded,
+                    color: Color(0xFFD97706),
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
             if (!isPushedFromProfile)
               Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  ),
-                  icon: Icon(
-                    _showMyListings ? Icons.storefront_rounded : Icons.shopping_bag_outlined,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    _showMyListings ? 'Bazaar' : 'My Listings',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  onPressed: () {
+                padding: const EdgeInsets.only(right: 12),
+                child: PressableScale(
+                  onTap: () {
                     setState(() {
                       _showMyListings = !_showMyListings;
                       _isSearching = false;
@@ -618,6 +628,23 @@ class _BazarScreenState extends State<BazarScreen> {
                       _searchController.clear();
                     });
                   },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _showMyListings ? AppColors.primary : AppColors.chipBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _showMyListings ? AppColors.primary : AppColors.divider,
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      _showMyListings ? Icons.storefront_rounded : Icons.shopping_bag_outlined,
+                      size: 18,
+                      color: _showMyListings ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -839,76 +866,6 @@ class _BazarScreenState extends State<BazarScreen> {
                   },
                 ),
               ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ShopPerksScreen(),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDE68A),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.local_offer_rounded,
-                      color: Color(0xFFD97706),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Shop Perks',
-                          style: TextStyle(
-                            color: Color(0xFFB45309),
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Unlock discount coupons with points',
-                          style: TextStyle(
-                            color: Color(0xFF92400E),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Color(0xFFD97706),
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
         const SizedBox(height: 8),
       ],
     );

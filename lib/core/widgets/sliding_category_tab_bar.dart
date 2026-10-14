@@ -22,15 +22,13 @@ class SlidingCategoryTabBar extends StatefulWidget {
 class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final ScrollController _scrollController;
-  late List<double> _tabWidths;
-  late List<double> _tabLefts;
 
   int? _pressedIndex;
   double _startLeft = 0.0;
   double _startRight = 0.0;
   double _targetLeft = 0.0;
   double _targetRight = 0.0;
+  double _lastTabWidth = 0.0;
   int _prevIndex = 0;
 
   static const Curve _springCurve = Cubic(0.34, 1.56, 0.64, 1.0);
@@ -38,86 +36,43 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
   @override
   void initState() {
     super.initState();
-    _calculateTabPositions();
-    _scrollController = ScrollController();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 320),
     );
 
     final maxIndex = widget.categories.isEmpty ? 0 : widget.categories.length - 1;
     final int initialIndex = widget.selectedIndex.clamp(0, maxIndex);
     _prevIndex = initialIndex;
-    if (_tabLefts.isNotEmpty) {
-      _startLeft = _tabLefts[initialIndex];
-      _startRight = _tabLefts[initialIndex] + _tabWidths[initialIndex];
-      _targetLeft = _startLeft;
-      _targetRight = _startRight;
-    }
     _controller.value = 1.0;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _scrollToSelectedTab(initialIndex, animate: false);
-      }
-    });
   }
 
   @override
   void didUpdateWidget(covariant SlidingCategoryTabBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.categories != oldWidget.categories) {
-      _calculateTabPositions();
-    }
     if (widget.selectedIndex != oldWidget.selectedIndex &&
         widget.selectedIndex != _prevIndex) {
-      _animateToTab(widget.selectedIndex);
+      _animateToTab(widget.selectedIndex, _lastTabWidth);
     }
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _calculateTabPositions() {
-    const textStyle = TextStyle(
-      fontSize: 13.5,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.2,
-    );
-    _tabWidths = [];
-    _tabLefts = [];
-    double currentX = 0.0;
-
-    for (final category in widget.categories) {
-      final painter = TextPainter(
-        text: TextSpan(text: category, style: textStyle),
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-      )..layout();
-      final width = (painter.width + 32.0).ceilToDouble();
-      _tabWidths.add(width);
-      _tabLefts.add(currentX);
-      currentX += width;
-    }
-  }
-
-  void _animateToTab(int newIndex) {
+  void _animateToTab(int newIndex, double tabWidth) {
     if (newIndex < 0 || newIndex >= widget.categories.length) return;
 
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
-    _startLeft = _getCurrentLeft();
-    _startRight = _getCurrentRight();
+    _startLeft = _getCurrentLeft(tabWidth);
+    _startRight = _getCurrentRight(tabWidth);
 
-    _targetLeft = _tabLefts[newIndex];
-    _targetRight = _tabLefts[newIndex] + _tabWidths[newIndex];
+    _targetLeft = newIndex * tabWidth;
+    _targetRight = (newIndex + 1) * tabWidth;
     _prevIndex = newIndex;
-
-    _scrollToSelectedTab(newIndex, animate: !reduceMotion);
 
     if (reduceMotion) {
       _startLeft = _targetLeft;
@@ -130,7 +85,7 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     _controller.forward(from: 0.0);
   }
 
-  double _getCurrentLeft() {
+  double _getCurrentLeft(double tabWidth) {
     final t = _controller.value;
     if (t >= 1.0) return _targetLeft;
     if (t <= 0.0) return _startLeft;
@@ -138,7 +93,7 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     final u = _springCurve.transform(t);
     final dist = _targetLeft - _startLeft;
     final dir = dist > 0 ? 1.0 : (dist < 0 ? -1.0 : 0.0);
-    final stretchAmount = (dist.abs() * 0.20).clamp(6.0, 22.0);
+    final stretchAmount = (dist.abs() * 0.28).clamp(8.0, 28.0);
     final stretch = math.sin(t * math.pi) * stretchAmount;
 
     if (dir < 0) {
@@ -147,7 +102,7 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     return ui.lerpDouble(_startLeft, _targetLeft, u) ?? _targetLeft;
   }
 
-  double _getCurrentRight() {
+  double _getCurrentRight(double tabWidth) {
     final t = _controller.value;
     if (t >= 1.0) return _targetRight;
     if (t <= 0.0) return _startRight;
@@ -155,7 +110,7 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     final u = _springCurve.transform(t);
     final dist = _targetLeft - _startLeft;
     final dir = dist > 0 ? 1.0 : (dist < 0 ? -1.0 : 0.0);
-    final stretchAmount = (dist.abs() * 0.20).clamp(6.0, 22.0);
+    final stretchAmount = (dist.abs() * 0.28).clamp(8.0, 28.0);
     final stretch = math.sin(t * math.pi) * stretchAmount;
 
     if (dir > 0) {
@@ -164,139 +119,137 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     return ui.lerpDouble(_startRight, _targetRight, u) ?? _targetRight;
   }
 
-  void _scrollToSelectedTab(int index, {required bool animate}) {
-    if (!_scrollController.hasClients || index < 0 || index >= _tabLefts.length) return;
-
-    final tabLeft = _tabLefts[index];
-    final tabWidth = _tabWidths[index];
-    final viewportWidth = _scrollController.position.viewportDimension;
-    final totalWidth = _tabLefts.last + _tabWidths.last + 6.0;
-
-    if (totalWidth <= viewportWidth) return;
-
-    final targetOffset = (16.0 + 3.0 + tabLeft + (tabWidth / 2.0)) - (viewportWidth / 2.0);
-    final clampedOffset = targetOffset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-
-    if (!animate) {
-      _scrollController.jumpTo(clampedOffset);
-    } else {
-      _scrollController.animateTo(
-        clampedOffset,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.categories.isEmpty) return const SizedBox.shrink();
 
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final maxBoundsRight = _tabLefts.last + _tabWidths.last;
 
-    final tabRow = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(widget.categories.length, (index) {
-        final isSelected = index == widget.selectedIndex;
-        final category = widget.categories[index];
-        final width = _tabWidths[index];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final innerWidth = math.max(0.0, totalWidth - 6.0);
+        final tabCount = widget.categories.length;
+        final tabWidth = tabCount > 0 ? innerWidth / tabCount : 0.0;
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => setState(() => _pressedIndex = index),
-          onTapUp: (_) => setState(() => _pressedIndex = null),
-          onTapCancel: () => setState(() => _pressedIndex = null),
-          onTap: () {
-            if (widget.selectedIndex != index) {
-              _animateToTab(index);
-              widget.onSelected(index);
-            }
-          },
-          child: AnimatedScale(
-            scale: _pressedIndex == index ? 0.96 : 1.0,
-            duration: const Duration(milliseconds: 100),
-            curve: Curves.easeOutCubic,
-            child: SizedBox(
-              width: width,
-              height: 36,
-              child: Center(
-                child: AnimatedDefaultTextStyle(
-                  duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    letterSpacing: -0.2,
-                  ),
-                  child: Text(
-                    category,
-                    maxLines: 1,
-                    overflow: TextOverflow.visible,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
+        if (_targetRight == 0.0 && tabWidth > 0.0) {
+          _startLeft = widget.selectedIndex * tabWidth;
+          _startRight = (widget.selectedIndex + 1) * tabWidth;
+          _targetLeft = _startLeft;
+          _targetRight = _startRight;
+        } else if (_lastTabWidth > 0.0 && _lastTabWidth != tabWidth) {
+          final scaleRatio = tabWidth / _lastTabWidth;
+          _startLeft *= scaleRatio;
+          _startRight *= scaleRatio;
+          _targetLeft = widget.selectedIndex * tabWidth;
+          _targetRight = (widget.selectedIndex + 1) * tabWidth;
+        }
+        _lastTabWidth = tabWidth;
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        height: 42,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.divider, width: 1.0),
-        ),
-        padding: const EdgeInsets.all(3),
-        child: AnimatedBuilder(
-          animation: _controller,
-          child: tabRow,
-          builder: (context, child) {
-            final rawLeft = _getCurrentLeft();
-            final rawRight = _getCurrentRight();
-            final left = rawLeft.clamp(0.0, maxBoundsRight);
-            final right = rawRight.clamp(0.0, maxBoundsRight);
-            final width = math.max(1.0, right - left);
+        final tabRow = Row(
+          children: List.generate(widget.categories.length, (index) {
+            final isSelected = index == widget.selectedIndex;
+            final category = widget.categories[index];
 
-            return Stack(
-              children: [
-                Positioned(
-                  left: left,
-                  top: 0,
-                  bottom: 0,
-                  width: width,
+            return Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => setState(() => _pressedIndex = index),
+                onTapUp: (_) => setState(() => _pressedIndex = null),
+                onTapCancel: () => setState(() => _pressedIndex = null),
+                onTap: () {
+                  if (widget.selectedIndex != index) {
+                    _animateToTab(index, tabWidth);
+                    widget.onSelected(index);
+                  }
+                },
+                child: AnimatedScale(
+                  scale: _pressedIndex == index ? 0.95 : 1.0,
+                  duration: const Duration(milliseconds: 100),
+                  curve: Curves.easeOutCubic,
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.28),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                    height: 36,
+                    alignment: Alignment.center,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: AnimatedDefaultTextStyle(
+                        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontSize: 12.5,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          letterSpacing: -0.2,
                         ),
-                      ],
+                        child: Text(
+                          category,
+                          maxLines: 1,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                ?child,
-              ],
+              ),
             );
-          },
-        ),
-      ),
+          }),
+        );
+
+        return Container(
+          height: 42,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppColors.divider, width: 1.0),
+          ),
+          padding: const EdgeInsets.all(3),
+          child: AnimatedBuilder(
+            animation: _controller,
+            child: tabRow,
+            builder: (context, child) {
+              final rawLeft = _getCurrentLeft(tabWidth);
+              final rawRight = _getCurrentRight(tabWidth);
+              final left = rawLeft.clamp(0.0, innerWidth);
+              final right = rawRight.clamp(0.0, innerWidth);
+              final width = math.max(1.0, right - left);
+
+              final t = _controller.value;
+              final isAnimating = _controller.isAnimating && t > 0.0 && t < 1.0;
+              final squish = isAnimating ? math.sin(t * math.pi) * 0.12 : 0.0;
+              final scaleY = (1.0 - squish).clamp(0.85, 1.0);
+
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Positioned(
+                    left: left,
+                    top: 0,
+                    bottom: 0,
+                    width: width,
+                    child: Transform.scale(
+                      scaleY: scaleY,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.32),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  ?child,
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

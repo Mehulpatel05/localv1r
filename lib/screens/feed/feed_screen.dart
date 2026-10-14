@@ -94,7 +94,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final selectedIndex = _feedCategoryFilters.indexOf(_selectedFilterChip);
     return Container(
       height: 42,
-      margin: const EdgeInsets.only(top: 6, bottom: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: SlidingCategoryTabBar(
         categories: _feedCategoryFilters,
         selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
