@@ -155,7 +155,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final repo = widget.repository;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
