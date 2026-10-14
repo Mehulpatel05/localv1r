@@ -610,9 +610,9 @@ class _BazarScreenState extends State<BazarScreen> {
                     ),
                   ),
                   child: const Icon(
-                    Icons.card_giftcard_rounded,
+                    Icons.local_offer_rounded,
                     color: Color(0xFFD97706),
-                    size: 18,
+                    size: 19,
                   ),
                 ),
               ),
