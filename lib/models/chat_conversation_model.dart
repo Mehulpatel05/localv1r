@@ -90,11 +90,23 @@ class ChatConversation {
 
     final partnerDisplayName = (json['partnerDisplayName'] ?? json['partnerName'] ?? json['otherUserName'] ?? json['name'] ?? json['displayName']) as String?;
 
+    final rawLastMessageType = (json['lastMessageType'] ?? json['last_message_type'] ?? '').toString().toLowerCase();
+    String lastMessageStr = (json['lastMessage'] ?? json['last_message'] ?? '').toString();
+    final isVoice = rawLastMessageType == 'voice_note' ||
+        rawLastMessageType == 'audio' ||
+        lastMessageStr.contains('voice_') ||
+        lastMessageStr.endsWith('.m4a') ||
+        lastMessageStr.endsWith('.aac') ||
+        lastMessageStr.endsWith('.mp3');
+    if (isVoice) {
+      lastMessageStr = '🎤 Voice note';
+    }
+
     return ChatConversation(
       id: chatId,
       participants: participants,
       participantsUids: participantsUids,
-      lastMessage: (json['lastMessage'] ?? json['last_message'] ?? '').toString(),
+      lastMessage: lastMessageStr,
       lastSenderHandle: (json['lastSenderHandle'] ?? '').toString(),
       updatedAt: updated,
       unreadCounts: effectiveUnread,

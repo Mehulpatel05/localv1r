@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -30,9 +31,10 @@ class VoiceNoteBubble extends StatefulWidget {
   State<VoiceNoteBubble> createState() => _VoiceNoteBubbleState();
 }
 
-class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProviderStateMixin {
+class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with TickerProviderStateMixin {
   late final AudioPlayer _player;
   late final AnimationController _playPauseController;
+  late final AnimationController _waveAnimController;
   bool _isPlaying = false;
   double _progress = 0.0;
   int _remainingSeconds = 0;
@@ -48,6 +50,10 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
+    _waveAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
 
     VoiceNoteBubble.activeAudioUrlNotifier.addListener(_onActiveAudioChanged);
 
@@ -56,8 +62,11 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
       final playing = state.playing && state.processingState != ProcessingState.completed;
       if (playing) {
         _playPauseController.forward();
+        _waveAnimController.repeat(reverse: true);
       } else {
         _playPauseController.reverse();
+        _waveAnimController.stop();
+        _waveAnimController.reset();
       }
       setState(() {
         _isPlaying = playing;
@@ -94,6 +103,7 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
     VoiceNoteBubble.activeAudioUrlNotifier.removeListener(_onActiveAudioChanged);
     _player.dispose();
     _playPauseController.dispose();
+    _waveAnimController.dispose();
     super.dispose();
   }
 
@@ -268,24 +278,33 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
                   behavior: HitTestBehavior.opaque,
                   child: SizedBox(
                     height: 30,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: List.generate(wave.length, (i) {
-                        final barProgress = i / wave.length;
-                        final isPlayed = barProgress <= _progress;
-                        final height = (wave[i] * 22).clamp(4.0, 26.0);
+                    child: AnimatedBuilder(
+                      animation: _waveAnimController,
+                      builder: (context, _) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: List.generate(wave.length, (i) {
+                            final barProgress = i / wave.length;
+                            final isPlayed = barProgress <= _progress;
+                            final baseHeight = (wave[i] * 22).clamp(4.0, 26.0);
+                            final animatedOffset = _isPlaying
+                                ? math.sin((_waveAnimController.value * 2 * math.pi) + (i * 0.45)) * 4.0
+                                : 0.0;
+                            final height = (baseHeight + animatedOffset).clamp(4.0, 28.0);
 
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 100),
-                          width: 2.2,
-                          height: height,
-                          decoration: BoxDecoration(
-                            color: isPlayed ? activeBarColor : inactiveBarColor,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 80),
+                              width: 2.2,
+                              height: height,
+                              decoration: BoxDecoration(
+                                color: isPlayed ? activeBarColor : inactiveBarColor,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            );
+                          }),
                         );
-                      }),
+                      },
                     ),
                   ),
                 ),

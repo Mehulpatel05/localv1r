@@ -439,40 +439,27 @@ class NotificationService {
             for (final raw in notifs) {
               final notif = raw as Map<String, dynamic>;
               final docId = _extractNotifId(notif);
-              final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
-              final rawCreated = notif['timestamp'] ?? notif['createdAt'] ?? notif['created_at'];
-              DateTime? createdAt;
-              if (rawCreated is int) {
-                createdAt = rawCreated > 10000000000
-                    ? DateTime.fromMillisecondsSinceEpoch(rawCreated)
-                    : DateTime.fromMillisecondsSinceEpoch(rawCreated * 1000);
-              } else if (rawCreated is String) {
-                String str = rawCreated.trim();
-                if (!str.endsWith('Z') && !str.contains('+')) {
-                  str = '${str.replaceAll(' ', 'T')}Z';
-                }
-                createdAt = DateTime.tryParse(str)?.toLocal() ?? DateTime.tryParse(rawCreated);
+              if (docId.isNotEmpty) {
+                _addProcessed(docId);
               }
-
-              final isOlderThan5Min = createdAt != null && DateTime.now().difference(createdAt).inMinutes > 5;
-              if (isRead || isOlderThan5Min) {
-                if (docId.isNotEmpty) {
-                  _addProcessed(docId);
-                }
+              final rawT = (notif['title'] as String?)?.trim() ?? '';
+              final rawB = (notif['body'] as String?)?.trim() ?? '';
+              if (rawT.isNotEmpty || rawB.isNotEmpty) {
+                _addProcessed('${rawT}_$rawB');
+              }
+              final pData = (notif['data'] as Map<String, dynamic>?) ?? {};
+              final mId = (pData['messageId'] ?? pData['id'] ?? pData['notifId'])?.toString();
+              if (mId != null && mId.isNotEmpty) {
+                _addProcessed(mId);
               }
             }
             isInitialTick = false;
+            return;
           }
 
           for (final raw in notifs) {
             final notif = raw as Map<String, dynamic>;
             final docId = _extractNotifId(notif);
-            if (docId.isEmpty || _processedNotificationIds.contains(docId)) continue;
-            _addProcessed(docId);
-
-            final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
-            if (isRead) continue;
-
             final payloadData = (notif['data'] as Map<String, dynamic>?) ?? {};
             final type = payloadData['type'] as String? ?? notif['type'] as String?;
             final rawTitle = (notif['title'] as String?)?.trim() ?? '';
@@ -493,6 +480,20 @@ class NotificationService {
                                     : (type == 'post_upload'
                                         ? 'Your post is now live in Nearhood!'
                                         : 'You have a new notification'))))));
+
+            final titleBodyKey = '${title}_$body';
+            final mId = (payloadData['messageId'] ?? payloadData['id'] ?? payloadData['notifId'])?.toString();
+
+            if (docId.isNotEmpty && _processedNotificationIds.contains(docId)) continue;
+            if (_processedNotificationIds.contains(titleBodyKey)) continue;
+            if (mId != null && mId.isNotEmpty && _processedNotificationIds.contains(mId)) continue;
+
+            if (docId.isNotEmpty) _addProcessed(docId);
+            _addProcessed(titleBodyKey);
+            if (mId != null && mId.isNotEmpty) _addProcessed(mId);
+
+            final isRead = notif['isRead'] == true || notif['is_read'] == 1 || notif['is_read'] == true;
+            if (isRead) continue;
 
             if (type == 'call_cancelled' || type == 'call_ended') {
               final callId = (payloadData['callId'] ?? notif['callId'])?.toString();
@@ -544,6 +545,17 @@ class NotificationService {
             final notifPayload = payloadData.isNotEmpty ? payloadData : notif;
             final notifIdInt = (docId.hashCode ^ DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF;
 
+            ByteArrayAndroidBitmap? largeIconBitmap;
+            final avatarUrl = (payloadData['senderAvatarUrl'] ?? payloadData['avatarUrl'] ?? payloadData['imageUrl'] ?? notif['avatarUrl'])?.toString().trim();
+            if (avatarUrl != null && avatarUrl.isNotEmpty && (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))) {
+              try {
+                final imgRes = await http.get(Uri.parse(avatarUrl)).timeout(const Duration(seconds: 2));
+                if (imgRes.statusCode == 200 && imgRes.bodyBytes.isNotEmpty) {
+                  largeIconBitmap = ByteArrayAndroidBitmap(imgRes.bodyBytes);
+                }
+              } catch (_) {}
+            }
+
             if (type != 'call') {
               _localNotifications.show(
                 id: notifIdInt,
@@ -557,6 +569,7 @@ class NotificationService {
                     importance: Importance.max,
                     priority: Priority.max,
                     icon: '@drawable/ic_notification',
+                    largeIcon: largeIconBitmap,
                     playSound: true,
                     enableVibration: true,
                   ),
@@ -590,7 +603,7 @@ class NotificationService {
     unreadBadgeNotifier.value = 0;
   }
 
-  void _showForegroundNotification(RemoteMessage message) {
+  Future<void> _showForegroundNotification(RemoteMessage message) async {
     final type = message.data['type']?.toString();
 
     if (type == 'call_cancelled' || type == 'call_ended') {
@@ -605,6 +618,14 @@ class NotificationService {
     final fcmMsgId = message.messageId ?? '';
     if (fcmMsgId.isNotEmpty) {
       _addProcessed(fcmMsgId);
+    }
+    final rawId = (message.data['id'] ?? message.data['notifId'] ?? message.data['notification_id'])?.toString();
+    if (rawId != null && rawId.isNotEmpty) {
+      _addProcessed(rawId);
+    }
+    final mId = message.data['messageId']?.toString();
+    if (mId != null && mId.isNotEmpty) {
+      _addProcessed(mId);
     }
 
     final notification = message.notification;
@@ -626,6 +647,8 @@ class NotificationService {
                             : (type == 'post_upload'
                                 ? 'Your post is now live in Nearhood!'
                                 : 'You have a new notification'))))));
+
+    _addProcessed('${title}_$body');
 
     if (type == 'call') {
       _localNotifications.show(
@@ -668,6 +691,17 @@ class NotificationService {
       return;
     }
 
+    ByteArrayAndroidBitmap? largeIconBitmap;
+    final avatarUrl = (message.data['senderAvatarUrl'] ?? message.data['avatarUrl'] ?? message.data['imageUrl'] ?? notification?.android?.imageUrl)?.toString().trim();
+    if (avatarUrl != null && avatarUrl.isNotEmpty && (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))) {
+      try {
+        final imgRes = await http.get(Uri.parse(avatarUrl)).timeout(const Duration(seconds: 2));
+        if (imgRes.statusCode == 200 && imgRes.bodyBytes.isNotEmpty) {
+          largeIconBitmap = ByteArrayAndroidBitmap(imgRes.bodyBytes);
+        }
+      } catch (_) {}
+    }
+
     _localNotifications.show(
       id: (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7FFFFFFF,
       title: title,
@@ -680,6 +714,7 @@ class NotificationService {
           importance: Importance.max,
           priority: Priority.max,
           icon: '@drawable/ic_notification',
+          largeIcon: largeIconBitmap,
         ),
       ),
       payload: message.data.isNotEmpty ? jsonEncode(message.data) : null,
