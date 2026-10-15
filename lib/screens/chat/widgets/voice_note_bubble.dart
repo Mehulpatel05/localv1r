@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../theme/app_colors.dart';
 
 class VoiceNoteBubble extends StatefulWidget {
@@ -148,13 +149,21 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with TickerProviderSt
   Future<void> _setupAudioSource(String url) async {
     final clean = url.trim();
     if (clean.isEmpty) return;
-    if (clean.startsWith('http://') || clean.startsWith('https://')) {
-      await _player.setUrl(clean);
-    } else if (File(clean).existsSync()) {
+    if (File(clean).existsSync()) {
       await _player.setFilePath(clean);
-    } else {
-      await _player.setUrl(clean);
+      return;
     }
+    String finalUrl = clean;
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      if (clean.startsWith('/')) {
+        finalUrl = '${ApiConstants.rootUrl}$clean';
+      } else if (clean.startsWith('api/')) {
+        finalUrl = '${ApiConstants.rootUrl}/$clean';
+      } else {
+        finalUrl = '${ApiConstants.baseUrl}/media/file/$clean';
+      }
+    }
+    await _player.setUrl(finalUrl);
   }
 
   Future<void> _togglePlay() async {

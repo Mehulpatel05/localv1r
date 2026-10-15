@@ -3,6 +3,7 @@ class ChatConversation {
   final List<String> participants;
   final List<String> participantsUids;
   final String lastMessage;
+  final String lastMessageType;
   final String lastSenderHandle;
   final DateTime? updatedAt;
   final Map<String, int> unreadCounts;
@@ -16,6 +17,7 @@ class ChatConversation {
     required this.participants,
     this.participantsUids = const [],
     this.lastMessage = '',
+    this.lastMessageType = 'text',
     this.lastSenderHandle = '',
     this.updatedAt,
     this.unreadCounts = const {},
@@ -107,6 +109,7 @@ class ChatConversation {
       participants: participants,
       participantsUids: participantsUids,
       lastMessage: lastMessageStr,
+      lastMessageType: isVoice ? 'voice_note' : (rawLastMessageType.isNotEmpty ? rawLastMessageType : 'text'),
       lastSenderHandle: (json['lastSenderHandle'] ?? '').toString(),
       updatedAt: updated,
       unreadCounts: effectiveUnread,
@@ -124,6 +127,7 @@ class ChatConversation {
       'participants': participants,
       'participantsUids': participantsUids,
       'lastMessage': lastMessage,
+      'lastMessageType': lastMessageType,
       'lastSenderHandle': lastSenderHandle,
       'updatedAt': updatedAt?.toIso8601String(),
       'unreadCounts': unreadCounts,
@@ -191,6 +195,7 @@ class ChatConversation {
     List<String>? participants,
     List<String>? participantsUids,
     String? lastMessage,
+    String? lastMessageType,
     String? lastSenderHandle,
     DateTime? updatedAt,
     Map<String, int>? unreadCounts,
@@ -208,6 +213,7 @@ class ChatConversation {
       participants: participants ?? this.participants,
       participantsUids: participantsUids ?? this.participantsUids,
       lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageType: lastMessageType ?? this.lastMessageType,
       lastSenderHandle: lastSenderHandle ?? this.lastSenderHandle,
       updatedAt: updatedAt ?? this.updatedAt,
       unreadCounts: effectiveUnread,

@@ -1013,7 +1013,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         sender: cleanMe,
         receiver: cleanPartner,
         content: '',
-        imageUrl: audioUrl,
+        audioUrl: audioUrl,
+        imageUrl: null,
         mediaUrls: [audioUrl],
         messageType: 'voice_note',
       );
@@ -1969,10 +1970,13 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
                       ),
                     ] else if (status == 'sending') ...[
                       const SizedBox(width: 4),
-                      const Icon(
-                        Icons.access_time_rounded,
-                        size: 12,
-                        color: Colors.white70,
+                      const SizedBox(
+                        width: 11,
+                        height: 11,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.4,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                        ),
                       ),
                     ] else ...[
                       const SizedBox(width: 4),
@@ -2166,9 +2170,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _optimisticMessages.removeWhere((opt) => messages.any((doc) {
       final docId = (doc['id'] ?? doc['messageId'] ?? '').toString();
       if (docId.isNotEmpty && docId == opt.id) return true;
-      if (opt.id.startsWith('temp_') && doc['content'] == opt.content && doc['senderHandle'] == opt.senderHandle) {
+      if (opt.status != 'sending' && opt.id.startsWith('temp_') && doc['content'] == opt.content && doc['senderHandle'] == opt.senderHandle) {
         final docTime = _parseTimestamp(doc['timestamp'] ?? doc['createdAt']);
-        if (docTime.isAfter(opt.timestamp.subtract(const Duration(seconds: 15)))) {
+        if (docTime.isAfter(opt.timestamp.subtract(const Duration(seconds: 5)))) {
           return true;
         }
       }
@@ -3041,10 +3045,12 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
           final rawMediaUrls = msg['mediaUrls'];
           final List<String>? mediaUrls = rawMediaUrls is List ? rawMediaUrls.map((e) => e.toString()).toList() : null;
 
+          final isVoice = forwardType == 'voice_note' || forwardType == 'audio';
+          final forwardAudioUrl = isVoice ? ((msg['audioUrl'] ?? msg['mediaR2Path'] ?? imageUrl) as String?) : null;
           String summary = content;
           if (summary.isEmpty) {
-            if (forwardType == 'voice_note') {
-              summary = '🎙️ Voice note';
+            if (isVoice) {
+              summary = '🎤 Voice note';
             } else if (forwardType == 'image' || forwardType == 'image_group') {
               summary = '📷 Photo';
             } else {
@@ -3056,7 +3062,8 @@ class _ForwardMessageSheetState extends State<_ForwardMessageSheet> {
             sender: cleanMe,
             receiver: cleanTarget,
             content: content,
-            imageUrl: imageUrl,
+            audioUrl: forwardAudioUrl,
+            imageUrl: isVoice ? null : imageUrl,
             mediaUrls: mediaUrls,
             messageType: forwardType,
           );

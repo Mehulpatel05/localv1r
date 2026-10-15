@@ -209,6 +209,44 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return true;
   }
 
+  String _formatLastMessageSnippet(ChatConversation conv) {
+    final type = conv.lastMessageType.toLowerCase();
+    if (type == 'voice_note' || type == 'audio') {
+      return '🎤 Voice note';
+    }
+    final partner = conv.getPartnerHandle(_cleanMe).replaceAll('@', '').trim();
+    final canonicalId = DirectChatService.getChatId(_cleanMe, partner);
+    final msgs = DirectChatService.instance.getLastKnownMessages(conv.id).isNotEmpty
+        ? DirectChatService.instance.getLastKnownMessages(conv.id)
+        : DirectChatService.instance.getLastKnownMessages(canonicalId);
+    if (msgs.isNotEmpty) {
+      final lastM = msgs.last;
+      final mType = (lastM['type'] ?? lastM['messageType'] ?? '').toString().toLowerCase();
+      final rawAudio = (lastM['audioUrl'] ?? lastM['mediaR2Path'] ?? lastM['imageUrl'] ?? '').toString();
+      final isAudio = mType == 'voice_note' ||
+          mType == 'audio' ||
+          rawAudio.contains('voice_') ||
+          rawAudio.endsWith('.m4a') ||
+          rawAudio.endsWith('.aac') ||
+          rawAudio.endsWith('.mp3');
+      if (isAudio) {
+        return '🎤 Voice note';
+      }
+    }
+    final rawMsg = conv.lastMessage;
+    if (rawMsg.contains('voice_') ||
+        rawMsg.endsWith('.m4a') ||
+        rawMsg.endsWith('.aac') ||
+        rawMsg.endsWith('.mp3') ||
+        rawMsg == '🎙️ Voice note') {
+      return '🎤 Voice note';
+    }
+    if (rawMsg.isEmpty) {
+      return 'Drafted message';
+    }
+    return rawMsg;
+  }
+
   void _onSearchChanged() {
     _searchDebounceTimer?.cancel();
     _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
@@ -1405,7 +1443,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     displayList = displayList.where((conv) {
                       final partner = conv.getPartnerHandle(widget.currentUserHandle).toLowerCase();
                       final partnerName = NameCacheService.instance.getDisplayName(partner, fallback: conv.partnerDisplayName).toLowerCase();
-                      final snippet = conv.lastMessage.toLowerCase();
+                      final snippet = _formatLastMessageSnippet(conv).toLowerCase();
                       return partner.contains(_searchQuery) ||
                           partnerName.contains(_searchQuery) ||
                           snippet.contains(_searchQuery);
@@ -2014,9 +2052,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                               ),
                                             )
                                           : Text(
-                                              conv.lastMessage.isNotEmpty
-                                                  ? conv.lastMessage
-                                                  : 'Drafted message',
+                                              _formatLastMessageSnippet(conv),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(

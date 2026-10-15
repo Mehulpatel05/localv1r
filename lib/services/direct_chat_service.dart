@@ -102,7 +102,23 @@ class DirectChatService {
           final partner = chat.getPartnerHandle(userHandle).replaceAll('@', '').trim().toLowerCase();
           if (partner.isNotEmpty && !seenPartners.contains(partner)) {
             seenPartners.add(partner);
-            deduped.add(chat);
+            await _loadMessagesFromPrefs(chat.id, userHandle);
+            final partnerChatId = getChatId(userHandle, partner);
+            await _loadMessagesFromPrefs(partnerChatId, userHandle);
+            final msgs = _lastKnownMessages[chat.id] ?? _lastKnownMessages[partnerChatId] ?? [];
+            ChatConversation resolvedChat = chat;
+            if (msgs.isNotEmpty) {
+              final lastM = msgs.last;
+              final mType = (lastM['type'] ?? lastM['messageType'] ?? '').toString().toLowerCase();
+              final rawA = (lastM['audioUrl'] ?? lastM['mediaR2Path'] ?? lastM['imageUrl'] ?? '').toString();
+              final isV = mType == 'voice_note' || mType == 'audio' || rawA.contains('voice_') || rawA.endsWith('.m4a') || rawA.endsWith('.aac') || rawA.endsWith('.mp3');
+              if (isV) {
+                resolvedChat = resolvedChat.copyWith(lastMessage: '🎤 Voice note', lastMessageType: 'voice_note');
+              }
+            } else if (resolvedChat.lastMessageType == 'voice_note' || resolvedChat.lastMessageType == 'audio' || resolvedChat.lastMessage.contains('voice_') || resolvedChat.lastMessage.endsWith('.m4a') || resolvedChat.lastMessage.endsWith('.aac') || resolvedChat.lastMessage.endsWith('.mp3')) {
+              resolvedChat = resolvedChat.copyWith(lastMessage: '🎤 Voice note', lastMessageType: 'voice_note');
+            }
+            deduped.add(resolvedChat);
           }
         }
         _lastKnownChats = deduped;
@@ -194,7 +210,25 @@ class DirectChatService {
           final partner = chat.getPartnerHandle(clean).replaceAll('@', '').trim().toLowerCase();
           if (partner.isNotEmpty && !seenPartners.contains(partner)) {
             seenPartners.add(partner);
-            deduped.add(chat);
+            final partnerChatId = getChatId(clean, partner);
+            if (!_lastKnownMessages.containsKey(chat.id) && !_lastKnownMessages.containsKey(partnerChatId)) {
+              await _loadMessagesFromPrefs(chat.id, clean);
+              await _loadMessagesFromPrefs(partnerChatId, clean);
+            }
+            final msgs = _lastKnownMessages[chat.id] ?? _lastKnownMessages[partnerChatId] ?? [];
+            ChatConversation resolvedChat = chat;
+            if (msgs.isNotEmpty) {
+              final lastM = msgs.last;
+              final mType = (lastM['type'] ?? lastM['messageType'] ?? '').toString().toLowerCase();
+              final rawA = (lastM['audioUrl'] ?? lastM['mediaR2Path'] ?? lastM['imageUrl'] ?? '').toString();
+              final isV = mType == 'voice_note' || mType == 'audio' || rawA.contains('voice_') || rawA.endsWith('.m4a') || rawA.endsWith('.aac') || rawA.endsWith('.mp3');
+              if (isV) {
+                resolvedChat = resolvedChat.copyWith(lastMessage: '🎤 Voice note', lastMessageType: 'voice_note');
+              }
+            } else if (resolvedChat.lastMessageType == 'voice_note' || resolvedChat.lastMessageType == 'audio' || resolvedChat.lastMessage.contains('voice_') || resolvedChat.lastMessage.endsWith('.m4a') || resolvedChat.lastMessage.endsWith('.aac') || resolvedChat.lastMessage.endsWith('.mp3')) {
+              resolvedChat = resolvedChat.copyWith(lastMessage: '🎤 Voice note', lastMessageType: 'voice_note');
+            }
+            deduped.add(resolvedChat);
           }
         }
         _lastKnownChats = deduped;
@@ -285,11 +319,14 @@ class DirectChatService {
     required String receiver,
     required String content,
     String? imageUrl,
+    String? audioUrl,
     List<String>? mediaUrls,
     String messageType = 'text',
   }) async {
     final cleanSender = sender.replaceAll('@', '').trim();
     final cleanReceiver = receiver.replaceAll('@', '').trim();
+    final isVoice = messageType == 'voice_note' || messageType == 'audio' || (audioUrl != null && audioUrl.isNotEmpty);
+    final resolvedType = isVoice ? 'voice_note' : messageType;
 
     try {
       final token = await AuthService.instance.getAccessToken();
@@ -299,11 +336,17 @@ class DirectChatService {
         'receiverHandle': cleanReceiver,
         'content': content,
         'text': content,
-        'messageType': messageType,
+        'messageType': resolvedType,
       };
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        payload['audioUrl'] = audioUrl;
+        payload['mediaR2Path'] = audioUrl;
+      }
       if (imageUrl != null && imageUrl.isNotEmpty) {
         payload['imageUrl'] = imageUrl;
-        payload['mediaR2Path'] = imageUrl;
+        if (payload['mediaR2Path'] == null) {
+          payload['mediaR2Path'] = imageUrl;
+        }
       }
       if (mediaUrls != null && mediaUrls.isNotEmpty) {
         payload['mediaUrls'] = mediaUrls;
@@ -333,10 +376,12 @@ class DirectChatService {
             'senderHandle': cleanSender,
             'receiverHandle': cleanReceiver,
             'content': content,
-            'imageUrl': imageUrl,
+            'imageUrl': isVoice ? null : imageUrl,
+            'audioUrl': audioUrl,
+            'mediaR2Path': audioUrl ?? imageUrl,
             'mediaUrls': mediaUrls ?? [],
-            'type': messageType,
-            'messageType': messageType,
+            'type': resolvedType,
+            'messageType': resolvedType,
             'reactions': <String, dynamic>{},
             'isRead': false,
             'isEdited': false,
@@ -346,12 +391,67 @@ class DirectChatService {
             'timestamp': nowIso,
           };
 
-          // Seamlessly append to in-memory and disk cache
           final current = _lastKnownMessages[returnedChatId] ?? [];
           if (!current.any((m) => (m['id'] ?? m['messageId']) == messageId)) {
             current.add(localMessage);
             _lastKnownMessages[returnedChatId] = current;
-            _saveMessagesToPrefs(returnedChatId, current);
+            _saveMessagesToPrefs(returnedChatId, current, cleanSender);
+          }
+
+          final fallbackId = getChatId(cleanSender, cleanReceiver);
+          if (fallbackId != returnedChatId) {
+            final fbCurrent = _lastKnownMessages[fallbackId] ?? [];
+            if (!fbCurrent.any((m) => (m['id'] ?? m['messageId']) == messageId)) {
+              fbCurrent.add(localMessage);
+              _lastKnownMessages[fallbackId] = fbCurrent;
+              _saveMessagesToPrefs(fallbackId, fbCurrent, cleanSender);
+            }
+          }
+
+          String lastMsgPreview = content.trim();
+          if (lastMsgPreview.isEmpty) {
+            if (isVoice) {
+              lastMsgPreview = '🎤 Voice note';
+            } else if (imageUrl != null && imageUrl.isNotEmpty) {
+              lastMsgPreview = '📷 Photo';
+            } else {
+              lastMsgPreview = 'Drafted message';
+            }
+          }
+
+          if (_lastKnownChats != null) {
+            final updatedChats = <ChatConversation>[];
+            bool foundChat = false;
+            for (final c in _lastKnownChats!) {
+              final partner = c.getPartnerHandle(cleanSender).replaceAll('@', '').trim().toLowerCase();
+              if (partner == cleanReceiver.toLowerCase() || c.id == returnedChatId || c.id == fallbackId) {
+                foundChat = true;
+                updatedChats.add(c.copyWith(
+                  lastMessage: lastMsgPreview,
+                  lastMessageType: resolvedType,
+                  updatedAt: DateTime.now(),
+                ));
+              } else {
+                updatedChats.add(c);
+              }
+            }
+            if (!foundChat) {
+              updatedChats.insert(
+                0,
+                ChatConversation(
+                  id: returnedChatId,
+                  participants: [cleanSender, cleanReceiver],
+                  partnerDisplayName: cleanReceiver,
+                  partnerAvatarUrl: '',
+                  lastMessage: lastMsgPreview,
+                  lastMessageType: resolvedType,
+                  updatedAt: DateTime.now(),
+                  unreadCounts: const {},
+                ),
+              );
+            }
+            _lastKnownChats = updatedChats;
+            _saveChatsToPrefs(cleanSender, updatedChats);
           }
         }
         return body;

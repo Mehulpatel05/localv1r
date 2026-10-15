@@ -23,7 +23,6 @@ import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
 import 'area_change_request_screen.dart';
 import 'my_posts_screen.dart';
-import '../saved/saved_screen.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
@@ -2106,24 +2105,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               Expanded(
                                 child: _buildActionGridCard(
-                                  icon: Icons.favorite_border_rounded,
-                                  iconBgColor: const Color(0xFFFCE4EC),
-                                  iconColor: const Color(0xFFD81B60),
-                                  title: 'Saved items',
-                                  subtitle: 'Saved items & shops',
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const SavedScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildActionGridCard(
                                   icon: Icons.location_on_outlined,
                                   iconBgColor: const Color(0xFFFFF8E1),
                                   iconColor: const Color(0xFFD97706),
@@ -2145,11 +2126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   },
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: _buildDynamicShopCard(),
                               ),
