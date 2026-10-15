@@ -22,8 +22,8 @@ class ContentFilter {
       return 'Post content cannot be empty.';
     }
 
-    if (cleanText.length < 5) {
-      return 'Post content is too short. Please add more details.';
+    if (cleanText.length < 15) {
+      return 'Post content is too short. Please write at least 15 characters to share with neighbours.';
     }
 
     final lower = cleanText.toLowerCase();

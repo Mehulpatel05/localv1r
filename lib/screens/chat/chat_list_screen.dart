@@ -1181,11 +1181,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
 
     if (selectedHandle != null && mounted) {
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 250),
-          reverseTransitionDuration: const Duration(milliseconds: 250),
+          opaque: true,
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 240),
           pageBuilder: (context, animation, secondaryAnimation) => HeroMode(
             enabled: false,
             child: PersonalChatScreen(
@@ -1194,14 +1194,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-            final scale = Tween<double>(begin: 0.96, end: 1.0).animate(curved);
-            return FadeTransition(
-              opacity: curved,
-              child: ScaleTransition(
-                scale: scale,
-                child: child,
-              ),
+            final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+            return SlideTransition(
+              position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+              child: child,
             );
           },
         ),
@@ -1815,18 +1811,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           _locallyUnreadChatIds.remove(conv.id);
                         });
                         DirectChatService.instance.markChatRead(conv.id, widget.currentUserHandle);
-                        Navigator.push(
-                          context,
+                        Navigator.of(context, rootNavigator: true).push(
                           PageRouteBuilder(
-                            transitionDuration: const Duration(milliseconds: 300),
+                            opaque: true,
+                            transitionDuration: const Duration(milliseconds: 260),
+                            reverseTransitionDuration: const Duration(milliseconds: 240),
                             pageBuilder: (_, animation, secondaryAnimation) => PersonalChatScreen(
                               currentUserHandle: widget.currentUserHandle,
                               partnerHandle: cleanHandle,
                             ),
-                            transitionsBuilder: (_, animation, _, child) => FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            ),
+                            transitionsBuilder: (_, animation, _, child) {
+                              final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                              return SlideTransition(
+                                position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                                child: child,
+                              );
+                            },
                           ),
                         ).then((_) {
                           if (mounted) {

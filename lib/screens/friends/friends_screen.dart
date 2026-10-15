@@ -545,7 +545,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 ),
               ),
               Text(
-                'Your Nearhood connections',
+                'Your Nearhood neighbours',
                 style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12,
@@ -1367,7 +1367,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
             const SizedBox(height: 18),
             const Text(
-              "Couldn't load connections",
+              "Couldn't load neighbours",
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 17,

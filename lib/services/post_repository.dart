@@ -1078,9 +1078,10 @@ class PostRepository extends ChangeNotifier {
     }
 
     if (results.isEmpty) {
-      results = _posts.where((p) => p.authorHandle == handle).toList();
+      final clean = handle.replaceAll('@', '').trim().toLowerCase();
+      results = _posts.where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == clean).toList();
       if (results.isEmpty) {
-        results = _postsRegistry.values.where((p) => p.authorHandle == handle).toList();
+        results = _postsRegistry.values.where((p) => p.authorHandle.replaceAll('@', '').trim().toLowerCase() == clean).toList();
       }
     }
 

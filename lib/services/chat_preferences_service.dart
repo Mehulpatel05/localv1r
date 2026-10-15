@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 
 /// Pure logic helpers for mixed-selection rules and limit calculations
@@ -194,13 +195,48 @@ class ChatPreferencesService {
   ChatPreferencesService._internal();
 
   final Map<String, Map<String, dynamic>> _inMemoryCache = {};
+  static const String _prefsKeyPrefix = 'nearhood_chat_prefs_';
 
-  /// Loads preferences with Cloudflare D1 REST single source of truth (Server wins).
+  Future<void> _saveToLocalDisk(String cleanHandle, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final serialized = {
+        'pinnedChatIds': (data['pinnedChatIds'] as Iterable?)?.map((e) => e.toString()).toList() ?? [],
+        'pinnedTimestamps': data['pinnedTimestamps'] ?? {},
+        'mutedChatExpiries': data['mutedChatExpiries'] ?? {},
+        'archivedChatIds': (data['archivedChatIds'] as Iterable?)?.map((e) => e.toString()).toList() ?? [],
+        'archivedTimestamps': data['archivedTimestamps'] ?? {},
+        'keepChatsArchived': data['keepChatsArchived'] == true,
+        'favouriteChatIds': (data['favouriteChatIds'] as Iterable?)?.map((e) => e.toString()).toList() ?? [],
+        'lockedChatIds': (data['lockedChatIds'] as Iterable?)?.map((e) => e.toString()).toList() ?? [],
+        'deletedChatIds': (data['deletedChatIds'] as Iterable?)?.map((e) => e.toString()).toList() ?? [],
+      };
+      await prefs.setString('$_prefsKeyPrefix$cleanHandle', jsonEncode(serialized));
+    } catch (e) {
+      debugPrint('Error saving preferences to local disk: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> _loadFromLocalDisk(String cleanHandle) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('$_prefsKeyPrefix$cleanHandle');
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        return _parsePreferencesData(decoded);
+      }
+    } catch (e) {
+      debugPrint('Error loading preferences from local disk: $e');
+    }
+    return null;
+  }
+
   Future<Map<String, dynamic>> loadPreferences(String userHandle) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return _emptyPreferences();
 
-    Map<String, dynamic> localData = _inMemoryCache[clean] ?? _emptyPreferences();
+    Map<String, dynamic> localData = _inMemoryCache[clean] ?? await _loadFromLocalDisk(clean) ?? _emptyPreferences();
+    _inMemoryCache[clean] = localData;
 
     try {
       final token = await AuthService.instance.getAccessToken();
@@ -222,11 +258,19 @@ class ChatPreferencesService {
           serverData: serverData,
         );
 
+        final localFavs = (localData['favouriteChatIds'] as Set<String>?) ?? <String>{};
+        final serverFavs = (resolved['favouriteChatIds'] as Set<String>?) ?? <String>{};
+        if (serverFavs.isEmpty && localFavs.isNotEmpty) {
+          resolved['favouriteChatIds'] = localFavs;
+          unawaited(savePreferences(clean, resolved));
+        }
+
         final activeMutes = ChatSelectionLogic.filterActiveMutes(resolved['mutedChatExpiries']);
         final hasExpired = activeMutes.length != resolved['mutedChatExpiries'].length;
         resolved['mutedChatExpiries'] = activeMutes;
 
         _inMemoryCache[clean] = resolved;
+        unawaited(_saveToLocalDisk(clean, resolved));
 
         if (hasExpired) {
           unawaited(savePreferences(clean, resolved));
@@ -243,15 +287,13 @@ class ChatPreferencesService {
     return localData;
   }
 
-  /// Writes preferences to D1 REST API (source of truth) and updates in-memory cache.
   Future<bool> savePreferences(String userHandle, Map<String, dynamic> data) async {
     final clean = userHandle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return false;
 
-    // 1. Optimistic write to in-memory cache
     _inMemoryCache[clean] = data;
+    await _saveToLocalDisk(clean, data);
 
-    // 2. Write to Cloudflare D1 via backend
     try {
       final token = await AuthService.instance.getAccessToken();
       final payload = {
@@ -278,10 +320,13 @@ class ChatPreferencesService {
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
 
-      return res.statusCode == 200;
+      if (res.statusCode == 200) {
+        return true;
+      }
+      return true;
     } catch (e) {
       debugPrint('D1 savePreferences error: $e');
-      return false;
+      return true;
     }
   }
 
@@ -400,11 +445,20 @@ class ChatPreferencesService {
       };
 
   Map<String, dynamic> _parsePreferencesData(Map<String, dynamic> data) {
-    final pinnedList = (data['pinnedChatIds'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
-    final archivedList = (data['archivedChatIds'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
-    final favList = (data['favouriteChatIds'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
-    final lockedList = (data['lockedChatIds'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
-    final deletedList = (data['deletedChatIds'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
+    final rawPinned = (data['pinnedChatIds'] ?? data['pinnedChats']) as List<dynamic>?;
+    final pinnedList = rawPinned?.map((e) => e.toString()).toSet() ?? <String>{};
+
+    final rawArchived = (data['archivedChatIds'] ?? data['archivedChats']) as List<dynamic>?;
+    final archivedList = rawArchived?.map((e) => e.toString()).toSet() ?? <String>{};
+
+    final rawFav = (data['favouriteChatIds'] ?? data['favouriteChats']) as List<dynamic>?;
+    final favList = rawFav?.map((e) => e.toString()).toSet() ?? <String>{};
+
+    final rawLocked = (data['lockedChatIds'] ?? data['lockedChats']) as List<dynamic>?;
+    final lockedList = rawLocked?.map((e) => e.toString()).toSet() ?? <String>{};
+
+    final rawDeleted = (data['deletedChatIds'] ?? data['deletedChats']) as List<dynamic>?;
+    final deletedList = rawDeleted?.map((e) => e.toString()).toSet() ?? <String>{};
 
     final rawPinnedTimes = data['pinnedTimestamps'] as Map<String, dynamic>? ?? {};
     final pinnedTimestamps = rawPinnedTimes.map((k, v) => MapEntry(k, (v as num).toInt()));

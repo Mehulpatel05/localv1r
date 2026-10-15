@@ -378,7 +378,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Text(
-              'You and ${getDisplayName(cleanSender)} are now friends!',
+              'You and ${getDisplayName(cleanSender)} are now connected as neighbours!',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ),
@@ -782,7 +782,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       Icon(Icons.check_rounded, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
-                        'Friends',
+                        'Neighbours',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -861,9 +861,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
       return body.trim().isNotEmpty ? body : 'commented on your post.';
     } else if (type == 'friend_request') {
-      return 'sent you a friend request.';
+      return 'sent you a neighbour request.';
     } else if (type == 'friend_accepted' || type == 'friend_accept') {
-      return 'accepted your friend request.';
+      return 'accepted your neighbour request.';
     } else if (type == 'post_upload') {
       return 'Your post was published successfully.';
     } else if (type == 'mention') {

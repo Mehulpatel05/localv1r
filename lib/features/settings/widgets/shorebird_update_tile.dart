@@ -124,13 +124,13 @@ class _ShorebirdUpdateTileState extends State<ShorebirdUpdateTile> {
       statusText = 'Development build';
       statusColor = AppColors.textMuted;
     } else if (_nextPatchNumber != null) {
-      statusText = 'Patch #$_nextPatchNumber ready (Restart to apply)';
+      statusText = 'Update ready (Restart to apply)';
       statusColor = const Color(0xFFF59E0B);
     } else if (_currentPatchNumber != null) {
-      statusText = 'Patch #$_currentPatchNumber active (Latest)';
+      statusText = 'App is up to date (Version 1.0.1)';
       statusColor = AppColors.primary;
     } else {
-      statusText = 'Base release (Version 1.0.1)';
+      statusText = 'App is up to date (Version 1.0.1)';
       statusColor = AppColors.primary;
     }
 

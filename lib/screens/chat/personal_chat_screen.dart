@@ -2464,6 +2464,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
+        resizeToAvoidBottomInset: true,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: AnimatedSwitcher(
@@ -2660,6 +2661,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
               ),
               child: SafeArea(
                 top: false,
+                bottom: true,
+                minimum: const EdgeInsets.only(bottom: 8),
                 child: _isRecording
                     ? Container(
                         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),

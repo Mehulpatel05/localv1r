@@ -134,7 +134,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
 
   bool _isLoading = true;
   bool _isSubmitting = false;
-  bool _hasPendingRequest = false;
+  bool _isCreatingNewRequest = false;
   Map<String, dynamic>? _pendingRequest;
 
   String _currentAreaName = '';
@@ -211,8 +211,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
       final res = await AuthService.instance.getAreaChangeRequestStatus();
       if (mounted) {
         setState(() {
-          _hasPendingRequest = res['hasPending'] == true;
-          _pendingRequest = res['request'] as Map<String, dynamic>?;
+          _pendingRequest = (res['request'] ?? res['latestRequest']) as Map<String, dynamic>?;
           if (res['currentArea'] is Map<String, dynamic>) {
             final ca = res['currentArea'] as Map<String, dynamic>;
             if ((ca['areaName'] as String?)?.isNotEmpty == true) {
@@ -361,7 +360,6 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
           ),
         );
         setState(() {
-          _hasPendingRequest = true;
           _pendingRequest = res['request'] as Map<String, dynamic>? ?? {
             'requested_area_name': areaName,
             'requested_city_id': cityName,
@@ -448,7 +446,6 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
           ),
         );
         setState(() {
-          _hasPendingRequest = false;
           _pendingRequest = null;
           _isSubmitting = false;
         });
@@ -501,8 +498,8 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                 children: [
                   _buildCurrentAreaCard(),
                   const SizedBox(height: 20),
-                  if (_hasPendingRequest)
-                    _buildPendingRequestCard()
+                  if (_pendingRequest != null && !_isCreatingNewRequest)
+                    _buildRequestStatusCard()
                   else
                     _buildRequestAreaSection(),
                 ],
@@ -596,7 +593,8 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
     );
   }
 
-  Widget _buildPendingRequestCard() {
+  Widget _buildRequestStatusCard() {
+    final status = (_pendingRequest?['status'] ?? 'pending').toString().toLowerCase();
     final requestedArea = _pendingRequest?['requested_area_name'] ?? 'Selected Area';
     final requestedCity = (_pendingRequest?['requested_city_id'] ?? '').toString();
     final rawDate = _pendingRequest?['created_at']?.toString();
@@ -604,13 +602,42 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
         ? DateTime.tryParse(rawDate)?.toLocal().toString().split('.').first ?? ''
         : '';
     final reason = _pendingRequest?['reason']?.toString();
+    final rejectionReason = _pendingRequest?['rejection_reason']?.toString();
+
+    final isApproved = status == 'approved';
+    final isRejected = status == 'rejected' || status == 'declined';
+    final isPending = !isApproved && !isRejected;
+
+    final Color bgColor = isApproved
+        ? const Color(0xFFF0FDF4)
+        : (isRejected ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB));
+    final Color borderColor = isApproved
+        ? const Color(0xFFBBF7D0)
+        : (isRejected ? const Color(0xFFFECACA) : const Color(0xFFFDE68A));
+    final Color iconBgColor = isApproved
+        ? const Color(0xFFDCFCE7)
+        : (isRejected ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
+    final Color iconColor = isApproved
+        ? _primaryGreen
+        : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFD97706));
+    final IconData statusIcon = isApproved
+        ? Icons.check_circle_rounded
+        : (isRejected ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
+    final String titleText = isApproved
+        ? 'Area Change Approved! 🎉'
+        : (isRejected ? 'Area Change Request Declined' : 'Request Pending Admin Approval');
+    final String subtitleText = isApproved
+        ? 'Your home area has been updated'
+        : (isRejected
+            ? (rejectionReason != null && rejectionReason.isNotEmpty ? rejectionReason : 'Your request could not be approved by the admin')
+            : 'Your request is under review');
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
+        color: bgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFDE68A)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -621,33 +648,37 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                 height: 36,
                 width: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: iconBgColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.hourglass_top_rounded,
-                  color: Color(0xFFD97706),
+                child: Icon(
+                  statusIcon,
+                  color: iconColor,
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Request Pending Admin Approval',
+                      titleText,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF92400E),
+                        color: isApproved
+                            ? const Color(0xFF166534)
+                            : (isRejected ? const Color(0xFF991B1B) : const Color(0xFF92400E)),
                       ),
                     ),
                     Text(
-                      'Your request is under review',
+                      subtitleText,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFFB45309),
+                        color: isApproved
+                            ? const Color(0xFF15803D)
+                            : (isRejected ? const Color(0xFFB91C1C) : const Color(0xFFB45309)),
                       ),
                     ),
                   ],
@@ -661,7 +692,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFEEBC8)),
+              border: Border.all(color: borderColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,41 +772,73 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Once the admin approves your request, your neighborhood feed and chats will automatically shift to your new area.',
+          Text(
+            isApproved
+                ? 'Your neighbourhood feed and chats have shifted to your new area.'
+                : (isRejected
+                    ? 'You can submit a new area change request with updated details below.'
+                    : 'Once the admin approves your request, your neighborhood feed and chats will automatically shift to your new area.'),
             style: TextStyle(
               fontSize: 12,
               height: 1.4,
-              color: Color(0xFF78350F),
+              color: isApproved
+                  ? const Color(0xFF166534)
+                  : (isRejected ? const Color(0xFF991B1B) : const Color(0xFF78350F)),
             ),
           ),
           const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: _isSubmitting ? null : _handleCancelRequest,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFDC2626),
-              side: const BorderSide(color: Color(0xFFFCA5A5)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFDC2626)),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.close_rounded, size: 16),
-                      SizedBox(width: 6),
-                      Text(
-                        'Cancel Request',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                    ],
+          if (isPending)
+            OutlinedButton(
+              onPressed: _isSubmitting ? null : _handleCancelRequest,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626),
+                side: const BorderSide(color: Color(0xFFFCA5A5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFDC2626)),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.close_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Cancel Request',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ],
+                    ),
+            )
+          else
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isCreatingNewRequest = true;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isApproved ? _primaryGreen : AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(isApproved ? Icons.swap_horiz_rounded : Icons.refresh_rounded, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    isApproved ? 'Change Area Again' : 'Submit New Request',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-          ),
+                ],
+              ),
+            ),
         ],
       ),
     );

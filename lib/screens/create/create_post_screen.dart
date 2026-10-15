@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../core/location/location_models.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -439,6 +440,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         mediaUrls: uploadedMediaUrls,
       );
 
+      if (_isEmergency) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('last_urgent_alert_timestamp', DateTime.now().millisecondsSinceEpoch);
+      }
+
       if (mounted) {
         Navigator.pop(context, true);
         final awarded = (postResult['pointsAwarded'] as num?)?.toInt() ?? 0;
@@ -683,6 +689,78 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
+  Future<bool> _showUrgentAlertConfirmationDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.error,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Urgent Safety Alert',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This will notify neighbours within 3 km with an urgent safety alert.\n\nPlease use this only for genuine emergencies (e.g. fire, road accident, medical emergency, or lost child).',
+          style: TextStyle(
+            fontSize: 14,
+            height: 1.45,
+            color: AppColors.textMuted,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Confirm',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final locService = widget.repository.locationService;
@@ -880,8 +958,33 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       value: _isEmergency,
                       activeTrackColor: AppColors.error,
                       activeThumbColor: Colors.white,
-                      onChanged: (val) {
-                        setState(() => _isEmergency = val);
+                      onChanged: (val) async {
+                        if (!val) {
+                          setState(() => _isEmergency = false);
+                          return;
+                        }
+
+                        final prefs = await SharedPreferences.getInstance();
+                        final lastTimestamp = prefs.getInt('last_urgent_alert_timestamp') ?? 0;
+                        final lastTime = DateTime.fromMillisecondsSinceEpoch(lastTimestamp);
+                        final elapsed = DateTime.now().difference(lastTime);
+                        if (elapsed.inMinutes < 30) {
+                          final remaining = 30 - elapsed.inMinutes;
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Urgent safety alerts are limited to 1 every 30 minutes. Please wait $remaining more minute${remaining == 1 ? '' : 's'}.'),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
+
+                        final confirmed = await _showUrgentAlertConfirmationDialog();
+                        if (confirmed && mounted) {
+                          setState(() => _isEmergency = true);
+                        }
                       },
                     ),
                   ],
@@ -921,7 +1024,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Ask a question, share traffic status, warn about police checkers, or vent about civic issues...',
+                  hintText: 'Ask a question, share local updates, report civic issues...',
                   hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14.5),
                   filled: true,
                   fillColor: Colors.white,

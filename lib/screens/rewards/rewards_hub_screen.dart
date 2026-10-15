@@ -158,7 +158,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FBF9),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -469,10 +469,19 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                   iconBg: const Color(0xFFE0F2F1),
                   title: 'Shop perks',
                   subtitle: 'Unlock coupons',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ShopPerksScreen(currentUserHandle: widget.currentUserHandle),
+                  onTap: () => Navigator.of(context, rootNavigator: true).push(
+                    PageRouteBuilder(
+                      opaque: true,
+                      transitionDuration: const Duration(milliseconds: 260),
+                      reverseTransitionDuration: const Duration(milliseconds: 240),
+                      pageBuilder: (_, animation, secondaryAnimation) => ShopPerksScreen(currentUserHandle: widget.currentUserHandle),
+                      transitionsBuilder: (_, animation, _, child) {
+                        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                        return SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                          child: child,
+                        );
+                      },
                     ),
                   ).then((_) => _loadData()),
                 ),

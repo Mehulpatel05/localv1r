@@ -241,7 +241,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                       ),
                       child: const Center(
                         child: Text(
-                          'No friends invited yet. Share your code with neighbours to start earning points!',
+                          'No neighbours invited yet. Share your code with neighbours to start earning points!',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 13, color: Color(0xFF5C6B7D), height: 1.4),
                         ),

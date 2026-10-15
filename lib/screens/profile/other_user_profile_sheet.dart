@@ -131,8 +131,8 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
           SnackBar(
             content: Text(
               newStatus == RelationshipStatus.friends
-                  ? 'You and ${getDisplayName(_targetHandle)} are now friends! 🎉'
-                  : 'Friend request sent to ${getDisplayName(_targetHandle)}!',
+                  ? 'You and ${getDisplayName(_targetHandle)} are now connected as neighbours! 🎉'
+                  : 'Neighbour request sent to ${getDisplayName(_targetHandle)}!',
             ),
             backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
@@ -162,7 +162,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         setState(() => _relationshipStatus = RelationshipStatus.friends);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('You and ${getDisplayName(_targetHandle)} are now friends! 🎉'),
+            content: Text('You and ${getDisplayName(_targetHandle)} are now connected as neighbours! 🎉'),
             backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
           ),
@@ -191,7 +191,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         setState(() => _relationshipStatus = RelationshipStatus.none);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Friend request cancelled'),
+            content: Text('Neighbour request cancelled'),
             backgroundColor: AppColors.textMuted,
             behavior: SnackBarBehavior.floating,
           ),
@@ -219,14 +219,14 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
-          'Unfriend ${getDisplayName(_targetHandle)}?',
+          'Remove ${getDisplayName(_targetHandle)} from neighbours?',
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: const Text(
-          'Are you sure you want to remove this person from your friends list?',
+          'Are you sure you want to remove this person from your neighbours list?',
           style: TextStyle(color: AppColors.textMuted, fontSize: 14),
         ),
         actions: [
@@ -241,7 +241,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Unfriend'),
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -256,7 +256,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
         setState(() => _relationshipStatus = RelationshipStatus.none);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Removed ${getDisplayName(_targetHandle)} from friends'),
+            content: Text('Removed ${getDisplayName(_targetHandle)} from neighbours'),
             backgroundColor: AppColors.textMuted,
             behavior: SnackBarBehavior.floating,
           ),
@@ -759,7 +759,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                'Add Friend',
+                'Add Neighbour',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14.5,
@@ -815,7 +815,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                'Accept Friend Request',
+                'Accept Neighbour Request',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14.5,
@@ -843,7 +843,7 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
             label: const FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                'Friends (Tap to Manage)',
+                'Neighbours (Tap to Manage)',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,

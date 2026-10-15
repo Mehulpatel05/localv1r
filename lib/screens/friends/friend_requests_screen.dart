@@ -209,7 +209,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
                 ),
               ),
               Text(
-                'Manage incoming & sent connection requests',
+                'Manage incoming & sent neighbour requests',
                 style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12,
@@ -504,7 +504,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
-                          'New connection',
+                          'New neighbour',
                           style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 10.5,

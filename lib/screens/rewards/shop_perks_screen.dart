@@ -19,6 +19,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
   List<ShopPerkItem> _perks = [];
   final List<UnlockedCouponItem> _myUnlockedCoupons = [];
   bool _isLoading = true;
+  bool _hasError = false;
   int _balance = 0;
 
   @override
@@ -28,15 +29,36 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
   }
 
   Future<void> _loadPerks() async {
-    final summary = await RewardsService.instance.fetchSummary();
-    final perks = await RewardsService.instance.fetchShopPerks();
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
 
-    if (mounted) {
-      setState(() {
-        _balance = summary?.balance ?? 0;
-        _perks = perks;
-        _isLoading = false;
-      });
+    try {
+      final summaryFuture = RewardsService.instance.fetchSummary();
+      final perksFuture = RewardsService.instance.fetchShopPerks();
+
+      final results = await Future.wait([summaryFuture, perksFuture])
+          .timeout(const Duration(seconds: 6));
+
+      final summary = results[0] as RewardsSummary?;
+      final perks = results[1] as List<ShopPerkItem>;
+
+      if (mounted) {
+        setState(() {
+          _balance = summary?.balance ?? 0;
+          _perks = perks;
+          _isLoading = false;
+          _hasError = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+      }
     }
   }
 
@@ -164,12 +186,148 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     );
   }
 
+  Widget _buildSkeletonLoader() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 130,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              Container(
+                width: 90,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...List.generate(3, (index) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 130,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 68,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.refresh_rounded, size: 28, color: Color(0xFFDC2626)),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Could not load Shop Perks',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF16243A),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Please check your internet connection and try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0E8A3E),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _loadPerks,
+              child: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FBF9),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF16243A)),
@@ -186,8 +344,10 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
-          : SingleChildScrollView(
+          ? _buildSkeletonLoader()
+          : _hasError
+              ? _buildErrorState()
+              : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

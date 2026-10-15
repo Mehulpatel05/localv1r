@@ -52,6 +52,22 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     final int initialIndex = widget.selectedIndex.clamp(0, maxIndex);
     _prevIndex = initialIndex;
     _controller.value = 1.0;
+
+    if (widget.isScrollable && initialIndex > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController != null && _scrollController!.hasClients) {
+          final tabWidths = _calculateTabWidths();
+          final tabOffsets = _calculateOffsets(tabWidths);
+          if (initialIndex < tabOffsets.length) {
+            final tabCenter = tabOffsets[initialIndex] + tabWidths[initialIndex] / 2 + 3.0;
+            final viewportWidth = _scrollController!.position.viewportDimension;
+            final maxScroll = _scrollController!.position.maxScrollExtent;
+            final targetScroll = (tabCenter - viewportWidth / 2).clamp(0.0, maxScroll);
+            _scrollController!.jumpTo(targetScroll);
+          }
+        }
+      });
+    }
   }
 
   @override
@@ -59,7 +75,13 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     super.didUpdateWidget(oldWidget);
     if (widget.selectedIndex != oldWidget.selectedIndex &&
         widget.selectedIndex != _prevIndex) {
-      _animateToTab(widget.selectedIndex, _lastTabWidth);
+      if (widget.isScrollable) {
+        final tabWidths = _calculateTabWidths();
+        final tabOffsets = _calculateOffsets(tabWidths);
+        _animateToTab(widget.selectedIndex, 0.0, customOffsets: tabOffsets, customWidths: tabWidths);
+      } else {
+        _animateToTab(widget.selectedIndex, _lastTabWidth);
+      }
     }
   }
 
@@ -140,14 +162,14 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
           text: cat,
           style: const TextStyle(
             fontSize: 12.5,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
           ),
         ),
         textDirection: TextDirection.ltr,
         maxLines: 1,
       )..layout();
-      widths.add(math.max(54.0, painter.width + 30.0));
+      widths.add(math.max(56.0, (painter.width + 28.0).ceilToDouble()));
     }
     return widths;
   }

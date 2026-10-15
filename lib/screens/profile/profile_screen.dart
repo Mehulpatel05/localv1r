@@ -22,6 +22,8 @@ import '../../core/services/badge_cache_service.dart';
 import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
 import 'area_change_request_screen.dart';
+import 'my_posts_screen.dart';
+import '../saved/saved_screen.dart';
 import '../bazar/bazar_screen.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../shop/register_shop_screen.dart';
@@ -1482,7 +1484,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             builder: (context, _) {
               final areaLabel = widget.repository.locationService.displayLabel;
               return SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               padding: EdgeInsets.only(
                 bottom: 72 + MediaQuery.paddingOf(context).bottom,
               ),
@@ -1909,6 +1913,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 child: _buildStatCard(
                                   count: '${_userPosts.length}',
                                   label: 'Posts',
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => MyPostsScreen(
+                                          currentUserHandle: widget.currentUserHandle,
+                                          repository: widget.repository,
+                                        ),
+                                      ),
+                                    ).then((_) => _loadProfileData());
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -2045,6 +2060,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               Expanded(
                                 child: _buildActionGridCard(
+                                  icon: Icons.article_outlined,
+                                  iconBgColor: const Color(0xFFEEF2FF),
+                                  iconColor: const Color(0xFF4F46E5),
+                                  title: 'My posts',
+                                  subtitle: '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => MyPostsScreen(
+                                          currentUserHandle: widget.currentUserHandle,
+                                          repository: widget.repository,
+                                        ),
+                                      ),
+                                    ).then((_) => _loadProfileData());
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildActionGridCard(
                                   icon: Icons.shopping_bag_outlined,
                                   iconBgColor: const Color(0xFFE0F2F1),
                                   iconColor: const Color(0xFF00897B),
@@ -2063,51 +2099,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
                               Expanded(
                                 child: _buildActionGridCard(
                                   icon: Icons.favorite_border_rounded,
                                   iconBgColor: const Color(0xFFFCE4EC),
                                   iconColor: const Color(0xFFD81B60),
                                   title: 'Saved items',
-                                  subtitle: 'Coming soon',
+                                  subtitle: 'Saved items & shops',
                                   onTap: () {
-                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Row(
-                                          children: [
-                                            Icon(
-                                              Icons.stars_rounded,
-                                              color: Color(0xFF0E8A3E),
-                                              size: 20,
-                                            ),
-                                            SizedBox(width: 10),
-                                            Text(
-                                              'Saved items feature is coming soon! ✨',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        backgroundColor: const Color(0xFF16243A),
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        duration: const Duration(seconds: 2),
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const SavedScreen(),
                                       ),
                                     );
                                   },
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: _buildActionGridCard(
                                   icon: Icons.location_on_outlined,
@@ -2131,7 +2145,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
                               Expanded(
                                 child: _buildDynamicShopCard(),
                               ),

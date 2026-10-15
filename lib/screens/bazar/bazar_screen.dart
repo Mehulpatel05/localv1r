@@ -18,6 +18,7 @@ import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../core/services/badge_cache_service.dart';
+import '../shop/register_shop_screen.dart';
 import '../../theme/app_colors.dart';
 
 class BazarProduct {
@@ -561,10 +562,19 @@ class _BazarScreenState extends State<BazarScreen> {
               padding: const EdgeInsets.only(right: 6),
               child: PressableScale(
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ShopPerksScreen(),
+                  Navigator.of(context, rootNavigator: true).push(
+                    PageRouteBuilder(
+                      opaque: true,
+                      transitionDuration: const Duration(milliseconds: 260),
+                      reverseTransitionDuration: const Duration(milliseconds: 240),
+                      pageBuilder: (_, animation, secondaryAnimation) => const ShopPerksScreen(),
+                      transitionsBuilder: (_, animation, _, child) {
+                        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                        return SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                          child: child,
+                        );
+                      },
                     ),
                   );
                 },
@@ -782,12 +792,48 @@ class _BazarScreenState extends State<BazarScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.storefront_rounded, color: AppColors.textMuted, size: 28),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 22),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          'No local shops registered near you yet.',
-                          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'No local shops registered near you yet.',
+                              style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Own a shop in your neighbourhood?',
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Register free',
+                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                     ],
@@ -1693,10 +1739,19 @@ class _BazarScreenState extends State<BazarScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: PressableScale(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const ShopPerksScreen(),
+          Navigator.of(context, rootNavigator: true).push(
+            PageRouteBuilder(
+              opaque: true,
+              transitionDuration: const Duration(milliseconds: 260),
+              reverseTransitionDuration: const Duration(milliseconds: 240),
+              pageBuilder: (_, animation, secondaryAnimation) => const ShopPerksScreen(),
+              transitionsBuilder: (_, animation, _, child) {
+                final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                return SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                  child: child,
+                );
+              },
             ),
           );
         },
