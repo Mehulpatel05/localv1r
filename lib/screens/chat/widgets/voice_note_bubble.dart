@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -126,7 +127,7 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
     try {
       if (_player.processingState == ProcessingState.idle ||
           _player.processingState == ProcessingState.completed) {
-        await _player.setUrl(widget.audioUrl);
+        await _setupAudioSource(widget.audioUrl);
       }
       await _player.seek(Duration(milliseconds: targetMs));
     } catch (e) {
@@ -134,16 +135,42 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> with SingleTickerProv
     }
   }
 
+  Future<void> _setupAudioSource(String url) async {
+    final clean = url.trim();
+    if (clean.isEmpty) return;
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      await _player.setUrl(clean);
+    } else if (File(clean).existsSync()) {
+      await _player.setFilePath(clean);
+    } else {
+      await _player.setUrl(clean);
+    }
+  }
+
   Future<void> _togglePlay() async {
+    final url = widget.audioUrl.trim();
+    if (url.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio file is unavailable'),
+            duration: Duration(milliseconds: 1500),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     try {
       if (_isPlaying) {
         await _player.pause();
       } else {
-        VoiceNoteBubble.activeAudioUrlNotifier.value = widget.audioUrl;
-        if (_player.processingState == ProcessingState.idle ||
-            _player.processingState == ProcessingState.completed) {
-          await _player.setUrl(widget.audioUrl);
+        VoiceNoteBubble.activeAudioUrlNotifier.value = url;
+        if (_player.processingState == ProcessingState.idle) {
+          await _setupAudioSource(url);
           await _player.setSpeed(_playbackSpeed);
+        } else if (_player.processingState == ProcessingState.completed) {
+          await _player.seek(Duration.zero);
         }
         await _player.play();
       }

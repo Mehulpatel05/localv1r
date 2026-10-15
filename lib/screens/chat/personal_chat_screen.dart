@@ -1050,9 +1050,11 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   }
 
   void _onSwipeToReply(Map<String, dynamic> msg, String msgId) {
-    final type = (msg['type'] ?? 'text') as String;
+    final type = (msg['type'] ?? msg['messageType'] ?? 'text') as String;
+    final rawAudio = (msg['audioUrl'] ?? msg['mediaR2Path'] ?? '').toString();
+    final isVoice = type == 'voice_note' || type == 'audio' || rawAudio.endsWith('.m4a') || rawAudio.endsWith('.aac') || rawAudio.contains('voice_');
     String preview;
-    if (type == 'voice_note') {
+    if (isVoice) {
       preview = '🎤 Voice note';
     } else if (type == 'image' || type == 'image_group') {
       preview = '📷 Photo';
@@ -1777,20 +1779,25 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     final imageUrl = msg['imageUrl'] as String?;
     final rawMediaUrls = msg['mediaUrls'];
     final timeStr = _formatMsgTime(msg['timestamp']);
-    final isVoiceNote = msg['type'] == 'voice_note';
+    final rawType = (msg['type'] ?? msg['messageType'] ?? '').toString();
+    final rawAudioUrl = ((msg['audioUrl'] ?? msg['mediaR2Path'] ?? msg['imageUrl'] ?? '') as String).trim();
+    final isVoiceAudioExt = rawAudioUrl.endsWith('.m4a') || rawAudioUrl.endsWith('.aac') || rawAudioUrl.endsWith('.mp3') || rawAudioUrl.contains('/voice_') || rawAudioUrl.contains('voice_');
+    final isVoiceNote = rawType == 'voice_note' || rawType == 'audio' || isVoiceAudioExt;
     final isRead = msg['isRead'] == true || msg['status'] == 'read';
     final status = (msg['status'] ?? 'sent') as String;
     final isForwarded = msg['isForwarded'] == true;
 
     final List<String> mediaUrls = [];
-    if (rawMediaUrls is List) {
-      for (final u in rawMediaUrls) {
-        if (u != null && u.toString().isNotEmpty) {
-          mediaUrls.add(u.toString());
+    if (!isVoiceNote) {
+      if (rawMediaUrls is List) {
+        for (final u in rawMediaUrls) {
+          if (u != null && u.toString().isNotEmpty) {
+            mediaUrls.add(u.toString());
+          }
         }
+      } else if (imageUrl != null && imageUrl.isNotEmpty) {
+        mediaUrls.add(imageUrl);
       }
-    } else if (imageUrl != null && imageUrl.isNotEmpty) {
-      mediaUrls.add(imageUrl);
     }
 
     final hasImages = mediaUrls.isNotEmpty;
@@ -1810,7 +1817,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
 
     Widget bubbleContent;
     if (isVoiceNote) {
-      final audioUrl = (msg['audioUrl'] ?? '') as String;
+      final audioUrl = rawAudioUrl;
       final durationSecs = (msg['durationSeconds'] as num?)?.toInt() ?? 0;
       final rawWave = msg['waveformData'];
       final List<double> waveform = [];
@@ -2160,7 +2167,10 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       final docId = (doc['id'] ?? doc['messageId'] ?? '').toString();
       if (docId.isNotEmpty && docId == opt.id) return true;
       if (opt.id.startsWith('temp_') && doc['content'] == opt.content && doc['senderHandle'] == opt.senderHandle) {
-        return true;
+        final docTime = _parseTimestamp(doc['timestamp'] ?? doc['createdAt']);
+        if (docTime.isAfter(opt.timestamp.subtract(const Duration(seconds: 15)))) {
+          return true;
+        }
       }
       return false;
     }));

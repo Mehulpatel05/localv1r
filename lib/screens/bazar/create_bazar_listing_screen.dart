@@ -73,11 +73,11 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
+  void _showMediaPickerSheet() {
     if (_pickedImagePaths.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Maximum 5 photos/videos allowed.'),
+        const SnackBar(
+          content: Text('Maximum 5 photos/videos allowed.'),
           backgroundColor: AppColors.textPrimary,
           behavior: SnackBarBehavior.floating,
         ),
@@ -85,21 +85,166 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       return;
     }
 
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  'Add Media',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFAF5FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
+                ),
+                title: const Text(
+                  'Photos from Gallery',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Select multiple photos from gallery',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickPhotos();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
+                ),
+                title: const Text(
+                  'Video from Gallery',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Select a product video from gallery',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickVideo();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
+                ),
+                title: const Text(
+                  'Camera',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Take a photo with camera',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickFromCamera();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPhotos() async {
+    try {
+      setState(() => _isPickingImage = true);
+      final picker = ImagePicker();
+      final pickedList = await picker.pickMultiImage(
+        imageQuality: 80,
+      );
+      if (pickedList.isNotEmpty) {
+        setState(() {
+          for (final item in pickedList) {
+            if (_pickedImagePaths.length < 5) {
+              _pickedImagePaths.add(item.path);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking photos: $e');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      setState(() => _isPickingImage = true);
+      final picker = ImagePicker();
+      final picked = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 5),
+      );
+      if (picked != null) {
+        setState(() {
+          if (_pickedImagePaths.length < 5) {
+            _pickedImagePaths.add(picked.path);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking video: $e');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
     try {
       setState(() => _isPickingImage = true);
       final picker = ImagePicker();
       final picked = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: ImageSource.camera,
         imageQuality: 80,
       );
-
       if (picked != null) {
         setState(() {
-          _pickedImagePaths.add(picked.path);
+          if (_pickedImagePaths.length < 5) {
+            _pickedImagePaths.add(picked.path);
+          }
         });
       }
     } catch (e) {
-      debugPrint('Error picking image: $e');
+      debugPrint('Error picking from camera: $e');
     } finally {
       if (mounted) setState(() => _isPickingImage = false);
     }
@@ -146,7 +291,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       try {
         final file = File(_pickedImagePaths.first);
         if (await file.exists()) {
-          final uploaded = await R2StorageService.uploadImage(file);
+          final uploaded = await R2StorageService.uploadMedia(file);
           if (uploaded != null && uploaded.isNotEmpty) {
             imageUrl = uploaded;
           } else {
@@ -316,7 +461,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                 scrollDirection: Axis.horizontal,
                 children: [
                   GestureDetector(
-                    onTap: _pickImage,
+                    onTap: _showMediaPickerSheet,
                     child: Container(
                       width: 76,
                       height: 76,
@@ -404,6 +549,11 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   ..._pickedImagePaths.asMap().entries.map((entry) {
                     final index = entry.key;
                     final path = entry.value;
+                    final isVideo = path.toLowerCase().endsWith('.mp4') ||
+                        path.toLowerCase().endsWith('.mov') ||
+                        path.toLowerCase().endsWith('.mkv') ||
+                        path.toLowerCase().endsWith('.webm') ||
+                        path.toLowerCase().endsWith('.3gp');
                     return Stack(
                       children: [
                         Container(
@@ -411,14 +561,31 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                           height: 76,
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
-                            color: AppColors.surface,
+                            color: isVideo ? const Color(0xFF0F172A) : AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.divider),
-                            image: DecorationImage(
-                              image: FileImage(File(path)),
-                              fit: BoxFit.cover,
-                            ),
+                            image: isVideo
+                                ? null
+                                : DecorationImage(
+                                    image: FileImage(File(path)),
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
+                          child: isVideo
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'VIDEO',
+                                        style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w700),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : null,
                         ),
                         Positioned(
                           top: 4,

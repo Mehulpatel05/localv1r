@@ -78,17 +78,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (mounted) setState(() => _errorMessage = validationError);
   }
 
-  Future<void> _pickMediaFromGallery() async {
+  Future<void> _pickPhotosFromGallery() async {
     try {
       final picker = ImagePicker();
-      final pickedMedia = await picker.pickMultipleMedia(
+      final pickedPhotos = await picker.pickMultiImage(
         imageQuality: 88,
         maxWidth: 1440,
         maxHeight: 1440,
       );
-      if (pickedMedia.isNotEmpty) {
+      if (pickedPhotos.isNotEmpty) {
         setState(() {
-          for (final x in pickedMedia) {
+          for (final x in pickedPhotos) {
             if (_mediaFiles.length < 10) {
               _mediaFiles.add(File(x.path));
             }
@@ -96,7 +96,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting media: $e');
+      setState(() => _errorMessage = 'Error selecting photos: $e');
+    }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final video = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 5),
+      );
+      if (video != null) {
+        setState(() {
+          if (_mediaFiles.length < 10) {
+            _mediaFiles.add(File(video.path));
+          }
+        });
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Error selecting video: $e');
     }
   }
 
@@ -274,22 +293,44 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
+                      color: const Color(0xFFFAF5FF),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
+                    child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                   ),
                   title: const Text(
-                    'Choose Photo from Gallery',
+                    'Photos from Gallery',
                     style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: const Text(
-                    'Select photos or videos',
+                    'Choose photos (multi-select)',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _pickMediaFromGallery();
+                    _pickPhotosFromGallery();
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
+                  ),
+                  title: const Text(
+                    'Video from Gallery',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Choose a video from gallery',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickVideoFromGallery();
                   },
                 ),
               ],

@@ -73,7 +73,7 @@ class MediaAttachmentPicker {
                     color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 22),
                 ),
                 title: Text(
                   'Camera',
@@ -96,17 +96,38 @@ class MediaAttachmentPicker {
                   child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                 ),
                 title: Text(
-                  'Gallery',
+                  'Gallery Photos',
                   style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
                 ),
                 subtitle: Text(
                   remainingSlots > 1
-                      ? 'Choose photos & videos (up to $remainingSlots)'
-                      : 'Choose a photo or video from gallery',
+                      ? 'Choose photos from gallery (up to $remainingSlots)'
+                      : 'Choose a photo from gallery',
                   style: TextStyle(color: subtextColor, fontSize: 13),
                 ),
-                onTap: () => Navigator.pop(ctx, 'gallery'),
+                onTap: () => Navigator.pop(ctx, 'gallery_photos'),
               ),
+              if (mode != MediaPickerMode.photoOnly)
+                ListTile(
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
+                  ),
+                  title: Text(
+                    'Gallery Video',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
+                  ),
+                  subtitle: Text(
+                    'Choose a video from gallery',
+                    style: TextStyle(color: subtextColor, fontSize: 13),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'gallery_video'),
+                ),
               const SizedBox(height: 8),
             ],
           ),
@@ -128,66 +149,35 @@ class MediaAttachmentPicker {
           maxHeight: 1080,
         );
         if (picked != null) selectedFiles.add(File(picked.path));
-      } else if (choice == 'gallery') {
+      } else if (choice == 'gallery_photos' || choice == 'gallery') {
         try {
-          if (mode == MediaPickerMode.photoOnly) {
-            final pickedList = await picker.pickMultiImage(
-              imageQuality: 80,
-              maxWidth: 1080,
-              maxHeight: 1080,
-            );
-            if (pickedList.isNotEmpty) {
-              for (final x in pickedList) {
-                if (selectedFiles.length < remainingSlots) {
-                  selectedFiles.add(File(x.path));
-                }
-              }
-            }
-          } else if (mode == MediaPickerMode.videoOnly) {
-            final picked = await picker.pickVideo(
-              source: ImageSource.gallery,
-              maxDuration: maxVideoDuration,
-            );
-            if (picked != null) selectedFiles.add(File(picked.path));
-          } else {
-            final pickedList = await picker.pickMultipleMedia(
-              imageQuality: 80,
-              maxWidth: 1080,
-              maxHeight: 1080,
-            );
-            if (pickedList.isNotEmpty) {
-              for (final x in pickedList) {
-                if (selectedFiles.length < remainingSlots) {
-                  selectedFiles.add(File(x.path));
-                }
+          final pickedList = await picker.pickMultiImage(
+            imageQuality: 80,
+            maxWidth: 1080,
+            maxHeight: 1080,
+          );
+          if (pickedList.isNotEmpty) {
+            for (final x in pickedList) {
+              if (selectedFiles.length < remainingSlots) {
+                selectedFiles.add(File(x.path));
               }
             }
           }
-        } catch (e) {
-          debugPrint('[MediaAttachmentPicker] pickMultipleMedia fallback: $e');
-          try {
-            final pickedList = await picker.pickMultiImage(
-              imageQuality: 80,
-              maxWidth: 1080,
-              maxHeight: 1080,
-            );
-            if (pickedList.isNotEmpty) {
-              for (final x in pickedList) {
-                if (selectedFiles.length < remainingSlots) {
-                  selectedFiles.add(File(x.path));
-                }
-              }
-            }
-          } catch (_) {
-            final picked = await picker.pickImage(
-              source: ImageSource.gallery,
-              imageQuality: 88,
-              maxWidth: 1440,
-              maxHeight: 1440,
-            );
-            if (picked != null) selectedFiles.add(File(picked.path));
-          }
+        } catch (_) {
+          final picked = await picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 80,
+            maxWidth: 1080,
+            maxHeight: 1080,
+          );
+          if (picked != null) selectedFiles.add(File(picked.path));
         }
+      } else if (choice == 'gallery_video') {
+        final picked = await picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: maxVideoDuration,
+        );
+        if (picked != null) selectedFiles.add(File(picked.path));
       }
     } catch (e) {
       debugPrint('[MediaAttachmentPicker] Error: $e');
