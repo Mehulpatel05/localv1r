@@ -474,7 +474,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 2.1,
+              childAspectRatio: 1.95,
               children: [
                 _buildQuickCard(
                   icon: Icons.military_tech_rounded,
@@ -801,7 +801,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -821,6 +821,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

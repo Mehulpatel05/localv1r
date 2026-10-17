@@ -56,13 +56,12 @@ class SplashController {
     required PostRepository postRepository,
   }) async {
     try {
-      // 1. Parallel execution of Stage A tasks
+      unawaited(_pingServerHealth());
+      unawaited(FoundingService.instance.fetchCounts());
       final results = await Future.wait([
         _resolveAuthSession(),
         locationService.load(),
         AvatarCacheService.instance.ensureInitialized(),
-        _pingServerHealth(),
-        FoundingService.instance.fetchCounts(),
       ]);
 
       final authData = results[0] as Map<String, dynamic>;

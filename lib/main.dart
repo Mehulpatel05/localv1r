@@ -39,16 +39,15 @@ void main() async {
     ),
   );
 
-  await Future.wait([
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]),
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
-    Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ),
-  ]);
+  unawaited(SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]));
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   PaintingBinding.instance.imageCache.maximumSize = 2500;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024;
@@ -60,7 +59,7 @@ void main() async {
 
 void _initNonCriticalServices() {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  AppImageCacheService.instance.ensureInitialized();
+  unawaited(AppImageCacheService.instance.ensureInitialized());
 }
 
 class VadodaraLocalApp extends StatefulWidget {
