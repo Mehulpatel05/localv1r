@@ -2219,8 +2219,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 84,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        height: 94,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),

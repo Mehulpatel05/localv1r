@@ -138,15 +138,13 @@ class SplashController {
       FoundingService.instance.fetchCounts(),
     ];
 
-    unawaited(
-      Future.wait(warmTasks).then((_) {
-        // Pre-warm avatars in AvatarCacheService
-        final cachedUrls = AvatarCacheService.instance.getAllCachedUrls();
-        prewarmImages(cachedUrls);
-      }).catchError((e) {
+    unawaited(() async {
+      try {
+        await Future.wait(warmTasks);
+      } catch (e) {
         debugPrint('[SplashController] Warm fetch background warning: $e');
-      }),
-    );
+      }
+    }());
   }
 
   /// Pre-warms image URLs directly into Flutter's GPU/RAM ImageCache for instant 0ms visual rendering

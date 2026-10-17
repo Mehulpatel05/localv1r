@@ -86,14 +86,9 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.initState();
     locationService = LocationService();
     postRepository = PostRepository(locationService);
-    locationService.addListener(_onLocationChanged);
     _authSub = AuthService.instance.authEvents.listen(_handleAuthEvent);
     NotificationService().initialize();
     _bootstrapApp();
-  }
-
-  void _onLocationChanged() {
-    if (mounted) setState(() {});
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -132,7 +127,6 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   @override
   void dispose() {
     _authSub?.cancel();
-    locationService.removeListener(_onLocationChanged);
     locationService.dispose();
     postRepository.dispose();
     super.dispose();
@@ -197,7 +191,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         theme: NearhoodTheme.lightTheme,
         darkTheme: NearhoodTheme.darkTheme,
         home: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 450),
+          duration: const Duration(milliseconds: 250),
           switchInCurve: Curves.easeInOutCubic,
           switchOutCurve: Curves.easeInOutCubic,
           transitionBuilder: (child, animation) {
