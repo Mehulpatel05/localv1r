@@ -3,13 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import '../bazar/shop_detail_screen.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../core/location/location_engine.dart';
-import '../../core/location/location_service.dart';
 import '../../theme/app_colors.dart';
 
 class RegisterShopScreen extends StatefulWidget {
@@ -66,32 +64,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   bool _isSubmitting = false;
   bool _isLocating = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _prefillLocationIfEmpty();
-    });
-  }
-
-  void _prefillLocationIfEmpty() {
-    if (!mounted || _addressController.text.trim().isNotEmpty) return;
-    try {
-      final locService = Provider.of<LocationService>(context, listen: false);
-      final areaName = locService.area?.name;
-      final cityName = locService.city.name;
-      if (areaName != null && areaName.isNotEmpty) {
-        setState(() {
-          _addressController.text = '$areaName, $cityName';
-        });
-      } else if (cityName.isNotEmpty) {
-        setState(() {
-          _addressController.text = cityName;
-        });
-      }
-    } catch (_) {}
-  }
-
   Future<void> _useCurrentLocation() async {
     if (_isLocating) return;
 
@@ -106,11 +78,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               content: const Text('⚠️ Please enable GPS / Location services on your device.'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
-              action: SnackBarAction(
-                label: 'Settings',
-                textColor: Colors.white,
-                onPressed: () => Geolocator.openLocationSettings(),
-              ),
             ),
           );
         }
@@ -142,53 +109,30 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               content: const Text('⚠️ Location permission permanently denied. Please enable in Settings.'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
-              action: SnackBarAction(
-                label: 'Settings',
-                textColor: Colors.white,
-                onPressed: () => Geolocator.openAppSettings(),
-              ),
             ),
           );
         }
         return;
       }
 
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 8),
-          ),
-        ).timeout(const Duration(seconds: 9));
-      } catch (_) {
-        position = await Geolocator.getLastKnownPosition();
-      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => throw TimeoutException('GPS signal timed out'),
+      );
+
+      final matchResult = LocationEngine.detectLocation(position.latitude, position.longitude);
 
       String detectedAddress = '';
-      if (position != null) {
-        final matchResult = LocationEngine.detectLocation(position.latitude, position.longitude);
-        if (matchResult.area != null) {
-          detectedAddress = '${matchResult.area!.name}, ${matchResult.city.name}';
-        } else if (matchResult.city.name.isNotEmpty) {
-          detectedAddress = matchResult.city.name;
-        }
-      }
-
-      if (detectedAddress.isEmpty && mounted) {
-        try {
-          final locService = Provider.of<LocationService>(context, listen: false);
-          final a = locService.area?.name;
-          final c = locService.city.name;
-          if (a != null && a.isNotEmpty) {
-            detectedAddress = '$a, $c';
-          } else if (c.isNotEmpty) {
-            detectedAddress = c;
-          }
-        } catch (_) {}
-      }
-
-      if (detectedAddress.isEmpty) {
+      if (matchResult.area != null) {
+        detectedAddress = '${matchResult.area!.name}, ${matchResult.city.name}';
+      } else if (matchResult.city.name.isNotEmpty) {
+        detectedAddress = matchResult.city.name;
+      } else {
         detectedAddress = 'Vadodara';
       }
 
@@ -343,20 +287,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       }
     }
 
-    String finalBoardUrl = '';
-    if (_shopBoardPhotoPath != null) {
-      try {
-        final uploaded = await R2StorageService.uploadMedia(
-          File(_shopBoardPhotoPath!),
-        );
-        if (uploaded != null && uploaded.isNotEmpty) {
-          finalBoardUrl = uploaded;
-        }
-      } catch (e) {
-        debugPrint('[RegisterShop] board photo upload error: $e');
-      }
-    }
-
     final categoryIcon = _categories.firstWhere(
       (c) => c['name'] == _selectedCategory,
       orElse: () => {'icon': '🏪'},
@@ -373,9 +303,9 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       categoryIcon: categoryIcon,
       location: _addressController.text.trim(),
       distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
-      isVerified: false,
-      imageUrl: finalLogoUrl.isNotEmpty ? finalLogoUrl : finalBoardUrl,
-      bannerUrl: finalBoardUrl.isNotEmpty ? finalBoardUrl : finalLogoUrl,
+      isVerified: true,
+      imageUrl: finalLogoUrl,
+      bannerUrl: finalLogoUrl,
       phone: _contactController.text.trim(),
       deliveryInfo: _homeDeliveryEnabled ? 'Home delivery available' : 'In-store pickup only',
       timings: '$_openingTime - $_closingTime',
@@ -450,27 +380,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   ),
                 ),
               ),
-        body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: KeyedSubtree(
-            key: ValueKey<int>(_currentStep),
-            child: _buildCurrentStepBody(),
-          ),
-        ),
+        body: _buildCurrentStepBody(),
       ),
     );
   }
@@ -507,24 +417,14 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: List.generate(4, (index) {
-            final isFilled = index < stepNumber;
-            return Expanded(
-              child: Container(
-                margin: EdgeInsets.only(right: index < 3 ? 6.0 : 0.0),
-                height: 4.5,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: isFilled ? AppColors.primary : AppColors.divider,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            );
-          }),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: stepNumber / 4.0,
+            backgroundColor: AppColors.divider,
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            minHeight: 4,
+          ),
         ),
         const SizedBox(height: 16),
       ],
@@ -561,31 +461,16 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
               children: [
                 const SizedBox(height: 10),
 
-                TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0.85, end: 1.0),
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.elasticOut,
-                  builder: (context, scale, child) {
-                    return Transform.scale(scale: scale, child: child);
-                  },
-                  child: Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: AppColors.divider),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.08),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text('🏪', style: TextStyle(fontSize: 42)),
-                    ),
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Center(
+                    child: Text('🏪', style: TextStyle(fontSize: 42)),
                   ),
                 ),
 
@@ -715,26 +600,13 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 Center(
                   child: GestureDetector(
                     onTap: _pickShopLogo,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      width: 88,
-                      height: 88,
+                    child: Container(
+                      width: 84,
+                      height: 84,
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _shopLogoPath != null ? AppColors.primary : AppColors.divider,
-                          width: 2.0,
-                        ),
-                        boxShadow: _shopLogoPath != null
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : null,
+                        border: Border.all(color: AppColors.divider, width: 1.5),
                         image: _shopLogoPath != null
                             ? DecorationImage(
                                 image: FileImage(File(_shopLogoPath!)),
@@ -776,7 +648,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     controller: _shopNameController,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
-                      hintText: "Your shop's name",
+                      hintText: 'e.g. Mehta Pharmacy',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                       border: InputBorder.none,
                     ),
@@ -815,50 +687,31 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                           _selectedCategory = cat['name']!;
                         });
                       },
-                      child: AnimatedScale(
-                        scale: isSelected ? 1.04 : 1.0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutBack,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeInOut,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
-                              width: isSelected ? 1.6 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.25),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(cat['icon']!, style: const TextStyle(fontSize: 15)),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  cat['name']!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(cat['icon']!, style: const TextStyle(fontSize: 15)),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                cat['name']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  fontSize: 13,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -871,7 +724,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   text: TextSpan(
                     style: labelStyle,
                     children: [
-                      const TextSpan(text: 'WHAT DO YOU OFFER? '),
+                      const TextSpan(text: 'SHORT DESCRIPTION '),
                       TextSpan(text: '*', style: TextStyle(color: AppColors.error)),
                     ],
                   ),
@@ -889,7 +742,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     maxLines: 3,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'What do you offer?',
+                      hintText: 'Medicines, health products, home delivery within 1 km.',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       border: InputBorder.none,
                     ),
@@ -946,7 +799,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     controller: _addressController,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'Your shop address',
+                      hintText: 'Shop 4, Alkapuri Main Road',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
                       border: InputBorder.none,
                     ),
@@ -997,38 +850,19 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                           _selectedVisibilityKm = opt;
                         });
                       },
-                      child: AnimatedScale(
-                        scale: isSelected ? 1.05 : 1.0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutBack,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeInOut,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.25),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            opt,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                              fontSize: 14,
-                            ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                        ),
+                        child: Text(
+                          opt,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 14,
                           ),
                         ),
                       ),
@@ -1060,7 +894,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     keyboardType: TextInputType.phone,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
-                      hintText: 'Enter 10-digit mobile number',
+                      hintText: '98xxxxxx10',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                       border: InputBorder.none,
                     ),
@@ -1126,7 +960,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       keyboardType: TextInputType.phone,
                       style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
-                        hintText: 'Enter 10-digit WhatsApp number',
+                        hintText: 'e.g. 98xxxxxx12',
                         hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                         border: InputBorder.none,
                       ),
@@ -1189,40 +1023,21 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                           }
                         });
                       },
-                      child: AnimatedScale(
-                        scale: isSelected ? 1.08 : 1.0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutBack,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeInOut,
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.25),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            day['label']!,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          day['label']!,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
                         ),
                       ),
@@ -1351,38 +1166,19 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                           }
                         });
                       },
-                      child: AnimatedScale(
-                        scale: isSelected ? 1.05 : 1.0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutBack,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeInOut,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : AppColors.divider,
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.25),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            pm,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                              fontSize: 14,
-                            ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                        ),
+                        child: Text(
+                          pm,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 14,
                           ),
                         ),
                       ),
@@ -1445,26 +1241,13 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 const SizedBox(height: 10),
                 GestureDetector(
                   onTap: _pickShopBoardPhoto,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
+                  child: Container(
                     width: double.infinity,
                     height: 140,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _shopBoardPhotoPath != null ? AppColors.primary : AppColors.divider,
-                        width: _shopBoardPhotoPath != null ? 1.8 : 1.0,
-                      ),
-                      boxShadow: _shopBoardPhotoPath != null
-                          ? [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
+                      border: Border.all(color: AppColors.divider),
                       image: _shopBoardPhotoPath != null
                           ? DecorationImage(
                               image: FileImage(File(_shopBoardPhotoPath!)),
@@ -1584,65 +1367,32 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.elasticOut,
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: value,
-                  child: child,
-                );
-              },
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.2),
-                      blurRadius: 20,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.check_rounded, color: AppColors.primary, size: 54),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                shape: BoxShape.circle,
               ),
+              child: Icon(Icons.check_rounded, color: AppColors.primary, size: 48),
             ),
             const SizedBox(height: 24),
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOut,
-              builder: (context, opacity, child) {
-                return Opacity(
-                  opacity: opacity,
-                  child: child,
-                );
-              },
-              child: Column(
-                children: [
-                  Text(
-                    'Shop Submitted!',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'We review shops within 24 hours. You will receive a notification as soon as your shop goes live in Vadodara Bazar.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
+            Text(
+              'Shop Submitted!',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'We review shops within 24 hours. You will receive a notification as soon as your shop goes live in Vadodara Bazar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                height: 1.4,
               ),
             ),
             const SizedBox(height: 32),

@@ -1283,7 +1283,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOut,
                 child: FloatingActionButton(
-                  heroTag: null,
                   backgroundColor: AppColors.primary,
                   elevation: 3,
                   shape: const CircleBorder(),

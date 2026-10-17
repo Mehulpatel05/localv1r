@@ -147,78 +147,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
     );
   }
 
-  void _showDeleteShopDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppColors.divider),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 26),
-            const SizedBox(width: 10),
-            Text(
-              'Delete Shop?',
-              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to permanently delete your shop and all its products? This action cannot be undone.',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              _deleteShop();
-            },
-            child: const Text('Delete Permanently', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteShop() async {
-    setState(() => _isLoading = true);
-    final success = await BazarRepository.instance.deleteShop(_shop.id);
-    if (!mounted) return;
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Shop deleted successfully.'),
-          backgroundColor: AppColors.textPrimary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      Navigator.pop(context, true);
-    } else {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to delete shop. Please try again.'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
-  }
-
   void _showBoostShopBottomSheet() {
     showModalBottomSheet(
       context: context,
@@ -645,14 +573,6 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                       titleColor: AppColors.error,
                       subtitle: 'Hide your shop temporarily',
                       onTap: _showDeactivateDialog,
-                    ),
-
-                    _buildManageItem(
-                      emoji: '🗑️',
-                      title: 'Delete shop',
-                      titleColor: AppColors.error,
-                      subtitle: 'Permanently delete your shop',
-                      onTap: _showDeleteShopDialog,
                     ),
 
                     const SizedBox(height: 30),

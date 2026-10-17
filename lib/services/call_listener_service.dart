@@ -27,7 +27,7 @@ class CallListenerService {
 
     _pollingTimer?.cancel();
 
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 4000), (_) async {
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) async {
       try {
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/calls/active?handle=$cleanHandle'),

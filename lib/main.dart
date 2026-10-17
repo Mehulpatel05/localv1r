@@ -25,7 +25,7 @@ import 'core/services/app_image_cache_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   SystemChrome.setSystemUIOverlayStyle(
@@ -39,21 +39,28 @@ void main() {
     ),
   );
 
-  unawaited(SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]));
-  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-
+  await Future.wait([
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]),
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+    Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+  ]);
+  
   PaintingBinding.instance.imageCache.maximumSize = 2500;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024;
+
+  _initNonCriticalServices();
 
   runApp(const VadodaraLocalApp());
 }
 
 void _initNonCriticalServices() {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  unawaited(AppImageCacheService.instance.ensureInitialized());
+  AppImageCacheService.instance.ensureInitialized();
 }
 
 class VadodaraLocalApp extends StatefulWidget {
@@ -80,8 +87,14 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     super.initState();
     locationService = LocationService();
     postRepository = PostRepository(locationService);
+    locationService.addListener(_onLocationChanged);
     _authSub = AuthService.instance.authEvents.listen(_handleAuthEvent);
+    NotificationService().initialize();
     _bootstrapApp();
+  }
+
+  void _onLocationChanged() {
+    if (mounted) setState(() {});
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -120,6 +133,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
   @override
   void dispose() {
     _authSub?.cancel();
+    locationService.removeListener(_onLocationChanged);
     locationService.dispose();
     postRepository.dispose();
     super.dispose();
@@ -127,12 +141,6 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
 
   Future<void> _bootstrapApp() async {
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      _initNonCriticalServices();
-      NotificationService().initialize();
-
       final result = await SplashController.instance.runColdStartPipeline(
         locationService: locationService,
         postRepository: postRepository,
@@ -162,9 +170,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
       }
     } finally {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          NotificationService().initialize();
-        } catch (_) {}
+        NotificationService().initialize();
       });
     }
   }
@@ -187,7 +193,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         theme: NearhoodTheme.lightTheme,
         darkTheme: NearhoodTheme.darkTheme,
         home: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 450),
           switchInCurve: Curves.easeInOutCubic,
           switchOutCurve: Curves.easeInOutCubic,
           transitionBuilder: (child, animation) {

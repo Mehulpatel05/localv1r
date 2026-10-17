@@ -629,7 +629,6 @@ class _BazarScreenState extends State<BazarScreen> {
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
-          heroTag: null,
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 4,

@@ -56,12 +56,12 @@ class SplashController {
     required PostRepository postRepository,
   }) async {
     try {
-      unawaited(_pingServerHealth());
-      unawaited(FoundingService.instance.fetchCounts());
       final results = await Future.wait([
         _resolveAuthSession(),
         locationService.load(),
         AvatarCacheService.instance.ensureInitialized(),
+        _pingServerHealth(),
+        FoundingService.instance.fetchCounts(),
       ]);
 
       final authData = results[0] as Map<String, dynamic>;
@@ -138,13 +138,14 @@ class SplashController {
       FoundingService.instance.fetchCounts(),
     ];
 
-    unawaited(() async {
-      try {
-        await Future.wait(warmTasks);
-      } catch (e) {
+    unawaited(
+      Future.wait(warmTasks).then((_) {
+        final cachedUrls = AvatarCacheService.instance.getAllCachedUrls();
+        prewarmImages(cachedUrls);
+      }).catchError((e) {
         debugPrint('[SplashController] Warm fetch background warning: $e');
-      }
-    }());
+      }),
+    );
   }
 
   /// Pre-warms image URLs directly into Flutter's GPU/RAM ImageCache for instant 0ms visual rendering
