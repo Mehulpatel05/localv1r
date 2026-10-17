@@ -324,6 +324,12 @@ class ShopPerkItem {
   final String category;
   final String logoUrl;
   final String title;
+  final String description;
+  final String couponCode;
+  final String discountType;
+  final int discountValue;
+  final int minOrderValue;
+  final String terms;
   final int costPoints;
   final int dailyLimit;
   final DateTime? expiresAt;
@@ -335,6 +341,12 @@ class ShopPerkItem {
     required this.category,
     required this.logoUrl,
     required this.title,
+    this.description = '',
+    this.couponCode = '',
+    this.discountType = 'percentage',
+    this.discountValue = 0,
+    this.minOrderValue = 0,
+    this.terms = '',
     required this.costPoints,
     required this.dailyLimit,
     this.expiresAt,
@@ -354,6 +366,12 @@ class ShopPerkItem {
       category: json['category'] as String? ?? 'General',
       logoUrl: (json['logo_r2_path'] ?? json['logoUrl']) as String? ?? '',
       title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      couponCode: (json['coupon_code'] ?? json['couponCode']) as String? ?? '',
+      discountType: (json['discount_type'] ?? json['discountType']) as String? ?? 'percentage',
+      discountValue: (json['discount_value'] as num?)?.toInt() ?? (json['discountValue'] as num?)?.toInt() ?? 0,
+      minOrderValue: (json['min_order_value'] as num?)?.toInt() ?? (json['minOrderValue'] as num?)?.toInt() ?? 0,
+      terms: json['terms'] as String? ?? '',
       costPoints: (json['cost_points'] as num?)?.toInt() ?? (json['costPoints'] as num?)?.toInt() ?? 100,
       dailyLimit: (json['daily_limit'] as num?)?.toInt() ?? (json['dailyLimit'] as num?)?.toInt() ?? 10,
       expiresAt: parsedExp,
@@ -365,13 +383,31 @@ class UnlockedCouponItem {
   final String id;
   final String code;
   final String title;
+  final String description;
+  final String shopName;
+  final String category;
+  final String discountType;
+  final int discountValue;
+  final int minOrderValue;
+  final String terms;
+  final String status;
   final DateTime expiresAt;
+  final DateTime createdAt;
 
   const UnlockedCouponItem({
     required this.id,
     required this.code,
     required this.title,
+    this.description = '',
+    this.shopName = 'Nearhood Bazaar',
+    this.category = 'General',
+    this.discountType = 'percentage',
+    this.discountValue = 0,
+    this.minOrderValue = 0,
+    this.terms = '',
+    this.status = 'active',
     required this.expiresAt,
+    required this.createdAt,
   });
 
   factory UnlockedCouponItem.fromJson(Map<String, dynamic> json) {
@@ -383,11 +419,69 @@ class UnlockedCouponItem {
       parsedExp = DateTime.now().add(const Duration(days: 7));
     }
 
+    DateTime parsedCreated;
+    final rawCreated = json['created_at'] ?? json['createdAt'];
+    if (rawCreated is String) {
+      parsedCreated = DateTime.tryParse(rawCreated) ?? DateTime.now();
+    } else {
+      parsedCreated = DateTime.now();
+    }
+
     return UnlockedCouponItem(
       id: json['id'] as String? ?? '',
       code: json['code'] as String? ?? '',
       title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      shopName: (json['shop_name'] ?? json['shopName']) as String? ?? 'Nearhood Bazaar',
+      category: json['category'] as String? ?? 'General',
+      discountType: (json['discount_type'] ?? json['discountType']) as String? ?? 'percentage',
+      discountValue: (json['discount_value'] as num?)?.toInt() ?? (json['discountValue'] as num?)?.toInt() ?? 0,
+      minOrderValue: (json['min_order_value'] as num?)?.toInt() ?? (json['minOrderValue'] as num?)?.toInt() ?? 0,
+      terms: json['terms'] as String? ?? '',
+      status: json['status'] as String? ?? 'active',
       expiresAt: parsedExp,
+      createdAt: parsedCreated,
+    );
+  }
+}
+
+class ScratchCardItem {
+  final String id;
+  final String userHandle;
+  final String title;
+  final String description;
+  final int pointsAmount;
+  final String cardType;
+  final bool isScratched;
+  final DateTime? scratchedAt;
+  final DateTime? expiresAt;
+  final DateTime createdAt;
+
+  const ScratchCardItem({
+    required this.id,
+    required this.userHandle,
+    required this.title,
+    this.description = '',
+    required this.pointsAmount,
+    this.cardType = 'daily',
+    this.isScratched = false,
+    this.scratchedAt,
+    this.expiresAt,
+    required this.createdAt,
+  });
+
+  factory ScratchCardItem.fromJson(Map<String, dynamic> json) {
+    return ScratchCardItem(
+      id: json['id'] as String? ?? '',
+      userHandle: (json['user_handle'] ?? json['userHandle']) as String? ?? '',
+      title: json['title'] as String? ?? 'Daily Mystery Reward',
+      description: json['description'] as String? ?? '',
+      pointsAmount: (json['points_amount'] as num?)?.toInt() ?? (json['pointsAmount'] as num?)?.toInt() ?? 0,
+      cardType: (json['card_type'] ?? json['cardType']) as String? ?? 'daily',
+      isScratched: json['is_scratched'] == 1 || json['is_scratched'] == true || json['isScratched'] == true,
+      scratchedAt: json['scratched_at'] != null ? DateTime.tryParse(json['scratched_at'].toString()) : null,
+      expiresAt: json['expires_at'] != null ? DateTime.tryParse(json['expires_at'].toString()) : null,
+      createdAt: json['created_at'] != null ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()) : DateTime.now(),
     );
   }
 }

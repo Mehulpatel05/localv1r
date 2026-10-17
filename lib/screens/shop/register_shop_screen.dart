@@ -373,7 +373,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       categoryIcon: categoryIcon,
       location: _addressController.text.trim(),
       distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
-      isVerified: true,
+      isVerified: false,
       imageUrl: finalLogoUrl.isNotEmpty ? finalLogoUrl : finalBoardUrl,
       bannerUrl: finalBoardUrl.isNotEmpty ? finalBoardUrl : finalLogoUrl,
       phone: _contactController.text.trim(),

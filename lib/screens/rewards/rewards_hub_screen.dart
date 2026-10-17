@@ -7,6 +7,7 @@ import 'invite_earn_screen.dart';
 import 'boost_listing_screen.dart';
 import 'shop_perks_screen.dart';
 import 'points_history_screen.dart';
+import 'widgets/scratch_card_sheet.dart';
 
 class RewardsHubScreen extends StatefulWidget {
   final String currentUserHandle;
@@ -22,6 +23,9 @@ class RewardsHubScreen extends StatefulWidget {
 
 class _RewardsHubScreenState extends State<RewardsHubScreen> {
   RewardsSummary? _summary;
+  ScratchCardItem? _todayScratchCard;
+  bool _dailyClaimedToday = false;
+  bool _isLoadingScratchCard = false;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -53,16 +57,28 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
       _errorMessage = null;
     });
 
-    final res = await RewardsService.instance.fetchSummary(forceRefresh: true);
+    final results = await Future.wait([
+      RewardsService.instance.fetchSummary(forceRefresh: true),
+      RewardsService.instance.fetchScratchCards(),
+    ]);
+
     if (!mounted) return;
 
-    if (res != null) {
+    final summaryRes = results[0] as RewardsSummary?;
+    final scratchRes = results[1] as Map<String, dynamic>;
+
+    if (summaryRes != null) {
+      final cardsList = (scratchRes['cards'] as List<ScratchCardItem>?) ?? [];
+      final todayCard = cardsList.isNotEmpty ? cardsList.first : null;
+
       setState(() {
-        _summary = res;
+        _summary = summaryRes;
+        _todayScratchCard = todayCard;
+        _dailyClaimedToday = scratchRes['dailyClaimedToday'] == true;
         _isLoading = false;
       });
 
-      if (res.streakAwarded) {
+      if (summaryRes.streakAwarded) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showStreakCelebrationSheet();
         });
@@ -72,6 +88,49 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
         _isLoading = false;
         _errorMessage = 'Failed to load rewards. Please try again.';
       });
+    }
+  }
+
+  Future<void> _openScratchCard() async {
+    if (_todayScratchCard != null) {
+      ScratchCardSheet.show(
+        context,
+        card: _todayScratchCard!,
+        onScratched: _loadData,
+      );
+      return;
+    }
+
+    if (_dailyClaimedToday) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Daily scratch card already claimed today! Come back tomorrow.'),
+          backgroundColor: Color(0xFF0F4C54),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoadingScratchCard = true;
+    });
+
+    final card = await RewardsService.instance.claimDailyScratchCard();
+    if (!mounted) return;
+    setState(() {
+      _isLoadingScratchCard = false;
+      if (card != null) {
+        _todayScratchCard = card;
+      }
+    });
+
+    if (card != null) {
+      ScratchCardSheet.show(
+        context,
+        card: card,
+        onScratched: _loadData,
+      );
     }
   }
 
@@ -402,6 +461,10 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            _buildDailyScratchBanner(),
 
             const SizedBox(height: 16),
 
@@ -913,6 +976,137 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: isLimitReached ? const Color(0xFF9CA3AF) : const Color(0xFFB45309),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyScratchBanner() {
+    final hasUnscratched = _todayScratchCard != null && !_todayScratchCard!.isScratched;
+    final isClaimed = _dailyClaimedToday || (_todayScratchCard != null && _todayScratchCard!.isScratched);
+
+    return InkWell(
+      onTap: _isLoadingScratchCard ? null : _openScratchCard,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isClaimed
+                ? [const Color(0xFF072E33), const Color(0xFF0F4C54)]
+                : [const Color(0xFF134E5E), const Color(0xFF0F766E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isClaimed ? const Color(0xFF134E5E) : const Color(0xFF2DD4BF),
+            width: isClaimed ? 1.0 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2DD4BF).withValues(alpha: isClaimed ? 0.05 : 0.2),
+              blurRadius: 16,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: isClaimed
+                      ? [const Color(0xFF94A3B8), const Color(0xFF475569)]
+                      : [const Color(0xFFFDE68A), const Color(0xFFD97706)],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: isClaimed
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ],
+              ),
+              child: Icon(
+                isClaimed ? Icons.check_circle_rounded : Icons.card_giftcard_rounded,
+                color: isClaimed ? Colors.white : const Color(0xFF78350F),
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        isClaimed ? 'Daily Scratch Card' : 'Daily Mystery Scratch Card',
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (!isClaimed) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'FREE',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF031214),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isClaimed
+                        ? 'Claimed today (+${_todayScratchCard?.pointsAmount ?? 15} pts)! Next card unlocks tomorrow.'
+                        : 'Scratch to reveal 10 to 50 surprise bonus points!',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isClaimed ? const Color(0xFF94A3B8) : const Color(0xFFCCFBF1),
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isClaimed
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : const Color(0xFF2DD4BF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                isClaimed ? 'Viewed' : (hasUnscratched ? 'Scratch' : 'Claim'),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: isClaimed ? const Color(0xFF94A3B8) : const Color(0xFF031214),
                 ),
               ),
             ),

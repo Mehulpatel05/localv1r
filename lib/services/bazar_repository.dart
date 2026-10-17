@@ -510,60 +510,10 @@ class BazarRepository extends ChangeNotifier {
   // --- SHOPS ---
   Future<LocalShop?> fetchMyShop() async {
     await init();
-    final activeHandle = await _getActiveHandle();
-    
-    // 1. Try remote fetch first from Backend V2
     final remote = await _syncMyShopRemote();
     if (remote != null) {
       return remote;
     }
-
-    // 2. Fallback to local memory with calculated real product stats
-    final localIdx = _shops.indexWhere(
-      (s) => s.ownerHandle.replaceAll('@', '').trim().toLowerCase() == activeHandle ||
-             s.id == 'shop_$activeHandle',
-    );
-
-    if (localIdx != -1) {
-      final local = _shops[localIdx];
-      final userProducts = _products.where((p) {
-        final s = p.sellerHandle.replaceAll('@', '').trim().toLowerCase();
-        return s == activeHandle || s == 'me';
-      }).toList();
-
-      final realViews = userProducts.fold<int>(0, (sum, p) => sum + p.viewsCount);
-      final realChats = userProducts.fold<int>(0, (sum, p) => sum + p.chatsCount);
-      final realOrders = (realChats * 0.35).round();
-
-      final sanitized = LocalShop(
-        id: local.id,
-        ownerHandle: local.ownerHandle,
-        name: local.name,
-        category: local.category,
-        categoryIcon: local.categoryIcon,
-        location: local.location,
-        distanceKm: local.distanceKm,
-        isVerified: local.isVerified,
-        imageUrl: local.imageUrl,
-        bannerUrl: local.bannerUrl,
-        phone: local.phone,
-        deliveryInfo: local.deliveryInfo,
-        timings: local.timings,
-        aboutText: local.aboutText,
-        isOpen: local.isOpen,
-        sameWhatsapp: local.sameWhatsapp,
-        homeDelivery: local.homeDelivery,
-        viewsCount: realViews,
-        chatsCount: realChats,
-        ordersCount: realOrders,
-        status: local.status,
-        products: userProducts,
-      );
-
-      _shops[localIdx] = sanitized;
-      return sanitized;
-    }
-
     return null;
   }
 
@@ -579,17 +529,34 @@ class BazarRepository extends ChangeNotifier {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true && data['shop'] != null) {
-          final shop = LocalShop.fromJson(data['shop']);
-          final idx = _shops.indexWhere((s) => s.id == shop.id);
-          if (idx != -1) {
-            _shops[idx] = shop;
+        if (data['success'] == true) {
+          if (data['shop'] != null) {
+            final shop = LocalShop.fromJson(data['shop']);
+            final idx = _shops.indexWhere((s) => s.id == shop.id);
+            if (shop.status == 'active') {
+              if (idx != -1) {
+                _shops[idx] = shop;
+              } else {
+                _shops.insert(0, shop);
+              }
+            } else {
+              if (idx != -1) {
+                _shops.removeAt(idx);
+              }
+            }
+            await _persistShops();
+            notifyListeners();
+            return shop;
           } else {
-            _shops.insert(0, shop);
+            final activeHandle = await _getActiveHandle();
+            _shops.removeWhere(
+              (s) => s.ownerHandle.replaceAll('@', '').trim().toLowerCase() == activeHandle ||
+                     s.id == 'shop_$activeHandle',
+            );
+            await _persistShops();
+            notifyListeners();
+            return null;
           }
-          await _persistShops();
-          notifyListeners();
-          return shop;
         }
       }
     } catch (e) {
@@ -609,7 +576,7 @@ class BazarRepository extends ChangeNotifier {
       categoryIcon: shop.categoryIcon,
       location: shop.location,
       distanceKm: shop.distanceKm,
-      isVerified: shop.isVerified,
+      isVerified: false,
       imageUrl: shop.imageUrl,
       bannerUrl: shop.bannerUrl,
       phone: shop.phone,
@@ -622,18 +589,20 @@ class BazarRepository extends ChangeNotifier {
       viewsCount: 0,
       chatsCount: 0,
       ordersCount: 0,
-      status: shop.status,
+      status: 'pending',
       products: shop.products,
     );
 
-    final idx = _shops.indexWhere((s) => s.id == shopWithOwner.id);
-    if (idx != -1) {
-      _shops[idx] = shopWithOwner;
-    } else {
-      _shops.insert(0, shopWithOwner);
+    if (shopWithOwner.status == 'active') {
+      final idx = _shops.indexWhere((s) => s.id == shopWithOwner.id);
+      if (idx != -1) {
+        _shops[idx] = shopWithOwner;
+      } else {
+        _shops.insert(0, shopWithOwner);
+      }
+      await _persistShops();
+      notifyListeners();
     }
-    await _persistShops();
-    notifyListeners();
 
     try {
       final token = await AuthService.instance.getAccessToken();
@@ -899,9 +868,10 @@ class BazarRepository extends ChangeNotifier {
     };
   }
 
-  Future<void> deleteShop(String shopId) async {
+  Future<bool> deleteShop(String shopId) async {
     await init();
-    _shops.removeWhere((s) => s.id == shopId);
+    final activeHandle = await _getActiveHandle();
+    _shops.removeWhere((s) => s.id == shopId || s.id == 'shop_$activeHandle' || s.ownerHandle.replaceAll('@', '').trim().toLowerCase() == activeHandle);
     await _persistShops();
     notifyListeners();
 
@@ -914,13 +884,13 @@ class BazarRepository extends ChangeNotifier {
           headers: {'Authorization': 'Bearer $token'},
         ).timeout(const Duration(seconds: 8));
 
-        if (res.statusCode == 200) {
-          await fetchShops();
-        }
+        await fetchShops();
+        return res.statusCode == 200;
       }
     } catch (e) {
       debugPrint('[BazarRepository] error deleting shop: $e');
     }
+    return true;
   }
 
   Future<void> _persistShops() async {

@@ -37,17 +37,21 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     try {
       final summaryFuture = RewardsService.instance.fetchSummary();
       final perksFuture = RewardsService.instance.fetchShopPerks();
+      final couponsFuture = RewardsService.instance.fetchMyCoupons();
 
-      final results = await Future.wait([summaryFuture, perksFuture])
-          .timeout(const Duration(seconds: 6));
+      final results = await Future.wait([summaryFuture, perksFuture, couponsFuture])
+          .timeout(const Duration(seconds: 8));
 
       final summary = results[0] as RewardsSummary?;
       final perks = results[1] as List<ShopPerkItem>;
+      final coupons = results[2] as List<UnlockedCouponItem>;
 
       if (mounted) {
         setState(() {
           _balance = summary?.balance ?? 0;
           _perks = perks;
+          _myUnlockedCoupons.clear();
+          _myUnlockedCoupons.addAll(coupons);
           _isLoading = false;
           _hasError = false;
         });
@@ -373,41 +377,84 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    c.title,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF78350F),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          c.title,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF78350F),
+                                          ),
+                                        ),
+                                        if (c.discountValue > 0) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFD97706),
+                                              borderRadius: BorderRadius.circular(5),
+                                            ),
+                                            child: Text(
+                                              c.discountType == 'percentage'
+                                                  ? '${c.discountValue}% OFF'
+                                                  : '₹${c.discountValue} OFF',
+                                              style: const TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    'Code: ${c.code}',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.2,
-                                      color: Color(0xFF0E8A3E),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${c.shopName} · Valid until ${c.expiresAt.day}/${c.expiresAt.month}/${c.expiresAt.year}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF92400E),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFFDE68A)),
+                                      ),
+                                      child: Text(
+                                        'Code: ${c.code}',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1.1,
+                                          color: Color(0xFF0E8A3E),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0E8A3E),
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 ),
                                 onPressed: () => _copyCouponCode(c.code),
                                 child: const Text('Copy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -492,13 +539,39 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      perk.title,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF16243A),
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            perk.title,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF16243A),
+                                            ),
+                                          ),
+                                        ),
+                                        if (perk.discountValue > 0)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            margin: const EdgeInsets.only(left: 4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE8F6EF),
+                                              borderRadius: BorderRadius.circular(5),
+                                              border: Border.all(color: const Color(0xFF0E8A3E).withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              perk.discountType == 'percentage'
+                                                  ? '${perk.discountValue}% OFF'
+                                                  : '₹${perk.discountValue} OFF',
+                                              style: const TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF0E8A3E),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
@@ -508,6 +581,16 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                         color: Color(0xFF5C6B7D),
                                       ),
                                     ),
+                                    if (perk.minOrderValue > 0) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Min order: ₹${perk.minOrderValue}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
