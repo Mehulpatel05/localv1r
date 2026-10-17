@@ -650,13 +650,14 @@ class BazarRepository extends ChangeNotifier {
             'category': shopWithOwner.category,
             'address': shopWithOwner.location,
             'phone': shopWithOwner.phone,
-            'bannerR2Path': shopWithOwner.imageUrl,
+            'bannerR2Path': shopWithOwner.bannerUrl,
             'logoR2Path': shopWithOwner.imageUrl,
             'description': shopWithOwner.aboutText,
             'timings': shopWithOwner.timings,
             'homeDelivery': shopWithOwner.homeDelivery ? 1 : 0,
             'sameWhatsapp': shopWithOwner.sameWhatsapp ? 1 : 0,
             'isOpen': shopWithOwner.isOpen ? 1 : 0,
+            'status': shopWithOwner.status,
           }),
         ).timeout(const Duration(seconds: 10));
 
