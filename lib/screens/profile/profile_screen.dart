@@ -57,6 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isSavingBio = false;
   bool _isUploadingPhoto = false;
+  bool _isRefreshing = false;
   late TextEditingController _bioController;
   late TextEditingController _nameController;
   late TextEditingController _handleController;
@@ -206,6 +207,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint('Error loading profile: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await _loadProfileData();
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
     }
   }
 
@@ -1475,853 +1488,840 @@ class _ProfileScreenState extends State<ProfileScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: Colors.white,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Column(
-                children: [
-                  Container(
-                    height: 260,
-                    color: const Color(0xFF0E8A3E),
-                  ),
-                  Expanded(
-                    child: Container(
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            RefreshIndicator(
-              onRefresh: _loadProfileData,
-              color: const Color(0xFF0E8A3E),
-              child: ListenableBuilder(
-                listenable: Listenable.merge([widget.repository, widget.repository.locationService]),
-                builder: (context, _) {
-                  final areaLabel = widget.repository.locationService.displayLabel;
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
+        backgroundColor: const Color(0xFF0E8A3E),
+        body: ListenableBuilder(
+          listenable: Listenable.merge([widget.repository, widget.repository.locationService]),
+          builder: (context, _) {
+            final areaLabel = widget.repository.locationService.displayLabel;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFF0E8A3E),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            painter: StreetPainter(
+                              strokeColor: Colors.white,
+                              isOtp: false,
+                            ),
                           ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Container(
-                                  width: double.infinity,
-                                  color: const Color(0xFF0E8A3E),
-                                  child: Stack(
+                        ),
+                      ),
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Positioned.fill(
-                                        child: RepaintBoundary(
-                                          child: CustomPaint(
-                                            painter: StreetPainter(
-                                              strokeColor: Colors.white,
-                                              isOtp: false,
+                                      if (Navigator.canPop(context)) ...[
+                                        GestureDetector(
+                                          onTap: () => Navigator.pop(context),
+                                          child: Container(
+                                            width: 34,
+                                            height: 34,
+                                            margin: const EdgeInsets.only(right: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.16),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.22),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.arrow_back_rounded,
+                                              size: 17,
+                                              color: Colors.white,
                                             ),
                                           ),
                                         ),
+                                      ],
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.16),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.22),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_rounded,
+                                              size: 14,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 5),
+                                            ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 160),
+                                              child: Text(
+                                                areaLabel,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      SafeArea(
-                                        bottom: false,
-                                        child: Padding(
-                                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    ],
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: _isRefreshing ? null : _refreshProfile,
+                                        child: Container(
+                                          width: 34,
+                                          height: 34,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.22),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: _isRefreshing
+                                              ? const Center(
+                                                  child: SizedBox(
+                                                    width: 14,
+                                                    height: 14,
+                                                    child: CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.refresh_rounded,
+                                                  size: 18,
+                                                  color: Colors.white,
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _shareProfile,
+                                        child: Container(
+                                          width: 34,
+                                          height: 34,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.22),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.share_outlined,
+                                            size: 17,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _openSettings,
+                                        child: Container(
+                                          width: 34,
+                                          height: 34,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.22),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.settings_outlined,
+                                            size: 17,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Builder(
+                                builder: (context) {
+                                  final cleanHandle = handle.toString().replaceAll('@', '').trim();
+                                  final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
+                                  final cachedName = NameCacheService.instance.getCachedName(cleanHandle);
+                                  final effectiveName = (rawName != null && rawName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(rawName))
+                                      ? rawName.trim()
+                                      : ((cachedName != null && cachedName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(cachedName))
+                                          ? cachedName.trim()
+                                          : null);
+
+                                  final primaryTitle = effectiveName ?? (cleanHandle.isNotEmpty ? cleanHandle : 'Neighbour');
+                                  final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
+
+                                  return Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.white,
+                                          Color(0xFFF0FDF4),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.12),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.stars_rounded,
+                                                  size: 14,
+                                                  color: Color(0xFF0E8A3E),
+                                                ),
+                                                const SizedBox(width: 5),
+                                                const Text(
+                                                  'NEARHOOD RESIDENT PASS',
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0E8A3E),
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            ListenableBuilder(
+                                              listenable: FoundingService.instance,
+                                              builder: (context, _) {
+                                                final foundingStatus = FoundingService.instance.myStatus;
+                                                if (foundingStatus != null && foundingStatus.state == FoundingUserState.approved) {
+                                                  return Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFFEF3C7),
+                                                      borderRadius: BorderRadius.circular(5),
+                                                      border: Border.all(
+                                                        color: const Color(0xFFF59E0B),
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      '#${foundingStatus.seq ?? 1} FOUNDER',
+                                                      style: const TextStyle(
+                                                        color: Color(0xFFB45309),
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                if (isVerified) {
+                                                  return Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFDCFCE7),
+                                                      borderRadius: BorderRadius.circular(5),
+                                                      border: Border.all(
+                                                        color: const Color(0xFF86EFAC),
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: const Text(
+                                                      'VERIFIED',
+                                                      style: TextStyle(
+                                                        color: Color(0xFF15803D),
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                return Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF1F5F9),
+                                                    borderRadius: BorderRadius.circular(5),
+                                                    border: Border.all(
+                                                      color: const Color(0xFFE2E8F0),
+                                                      width: 0.8,
+                                                      ),
+                                                  ),
+                                                  child: const Text(
+                                                    'ACTIVE MEMBER',
+                                                    style: TextStyle(
+                                                      color: Color(0xFF64748B),
+                                                      fontSize: 9.5,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          height: 1,
+                                          color: const Color(0xFFE2E8F0),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            SizedBox(
+                                              width: 58,
+                                              height: 58,
+                                              child: Stack(
+                                                clipBehavior: Clip.none,
+                                                alignment: Alignment.center,
                                                 children: [
-                                                  Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      if (Navigator.canPop(context)) ...[
-                                                        GestureDetector(
-                                                          onTap: () => Navigator.pop(context),
-                                                          child: Container(
-                                                            width: 34,
-                                                            height: 34,
-                                                            margin: const EdgeInsets.only(right: 8),
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.white.withValues(alpha: 0.16),
-                                                              shape: BoxShape.circle,
-                                                              border: Border.all(
-                                                                color: Colors.white.withValues(alpha: 0.22),
-                                                                width: 0.8,
-                                                              ),
-                                                            ),
-                                                            child: const Icon(
-                                                              Icons.arrow_back_rounded,
-                                                              size: 17,
-                                                              color: Colors.white,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                                  UserAvatar(
+                                                    handle: handle,
+                                                    photoUrl: _userData?['photoUrl'] as String?,
+                                                    size: 58,
+                                                    showRing: true,
+                                                    ringGradient: const LinearGradient(
+                                                      colors: [Color(0xFF0E8A3E), Color(0xFF22C55E)],
+                                                    ),
+                                                    ringWidth: 2.2,
+                                                    ringGap: 1.2,
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black.withValues(alpha: 0.10),
+                                                        blurRadius: 6,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                    fontSize: 19,
+                                                    onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                                  ),
+                                                  Positioned(
+                                                    bottom: -2,
+                                                    right: -2,
+                                                    child: GestureDetector(
+                                                      onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                                      child: Container(
+                                                        width: 20,
+                                                        height: 20,
                                                         decoration: BoxDecoration(
-                                                          color: Colors.white.withValues(alpha: 0.16),
-                                                          borderRadius: BorderRadius.circular(20),
+                                                          color: const Color(0xFFF59E0B),
+                                                          shape: BoxShape.circle,
                                                           border: Border.all(
-                                                            color: Colors.white.withValues(alpha: 0.22),
-                                                            width: 0.8,
+                                                            color: Colors.white,
+                                                            width: 1.8,
                                                           ),
-                                                        ),
-                                                        child: Row(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            const Icon(
-                                                              Icons.location_on_rounded,
-                                                              size: 14,
-                                                              color: Colors.white,
-                                                            ),
-                                                            const SizedBox(width: 5),
-                                                            ConstrainedBox(
-                                                              constraints: const BoxConstraints(maxWidth: 160),
-                                                              child: Text(
-                                                                areaLabel,
-                                                                style: const TextStyle(
-                                                                  fontSize: 12,
-                                                                  fontWeight: FontWeight.w700,
-                                                                  color: Colors.white,
-                                                                ),
-                                                                maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: Colors.black.withValues(alpha: 0.12),
+                                                              blurRadius: 4,
+                                                              offset: const Offset(0, 2),
                                                             ),
                                                           ],
                                                         ),
+                                                        child: const Icon(
+                                                          Icons.camera_alt_rounded,
+                                                          color: Colors.white,
+                                                          size: 10,
+                                                        ),
                                                       ),
-                                                    ],
+                                                    ),
                                                   ),
-                                                  Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      GestureDetector(
-                                                        onTap: _shareProfile,
+                                                  if (_isUploadingPhoto)
+                                                    Positioned.fill(
+                                                      child: ClipOval(
                                                         child: Container(
-                                                          width: 34,
-                                                          height: 34,
-                                                          decoration: BoxDecoration(
-                                                            color: Colors.white.withValues(alpha: 0.16),
-                                                            shape: BoxShape.circle,
-                                                            border: Border.all(
-                                                              color: Colors.white.withValues(alpha: 0.22),
-                                                              width: 0.8,
+                                                          color: Colors.black54,
+                                                          child: const Center(
+                                                            child: SizedBox(
+                                                              width: 16,
+                                                              height: 16,
+                                                              child: CircularProgressIndicator(
+                                                                color: Colors.white,
+                                                                strokeWidth: 2,
+                                                              ),
                                                             ),
-                                                          ),
-                                                          child: const Icon(
-                                                            Icons.share_outlined,
-                                                            size: 17,
-                                                            color: Colors.white,
                                                           ),
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 8),
-                                                      GestureDetector(
-                                                        onTap: _openSettings,
-                                                        child: Container(
-                                                          width: 34,
-                                                          height: 34,
-                                                          decoration: BoxDecoration(
-                                                            color: Colors.white.withValues(alpha: 0.16),
-                                                            shape: BoxShape.circle,
-                                                            border: Border.all(
-                                                              color: Colors.white.withValues(alpha: 0.22),
-                                                              width: 0.8,
-                                                            ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Flexible(
+                                                        child: Text(
+                                                          primaryTitle,
+                                                          style: const TextStyle(
+                                                            fontSize: 17,
+                                                            fontWeight: FontWeight.w800,
+                                                            color: Color(0xFF0F172A),
+                                                            letterSpacing: -0.3,
                                                           ),
-                                                          child: const Icon(
-                                                            Icons.settings_outlined,
-                                                            size: 17,
-                                                            color: Colors.white,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
+                                                      if (isVerified) ...[
+                                                        const SizedBox(width: 4),
+                                                        const Icon(
+                                                          Icons.verified_rounded,
+                                                          color: Color(0xFF0E8A3E),
+                                                          size: 15,
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                  if (cleanHandle.isNotEmpty) ...[
+                                                    const SizedBox(height: 1.5),
+                                                    Text(
+                                                      '@$cleanHandle',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: Color(0xFF64748B),
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                  const SizedBox(height: 3),
+                                                  Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: 5.5,
+                                                        height: 5.5,
+                                                        decoration: const BoxDecoration(
+                                                          color: Color(0xFF10B981),
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 5),
+                                                      Flexible(
+                                                        child: Text(
+                                                          isVerified
+                                                              ? 'Verified Citizen · ${widget.repository.locationService.city.name}'
+                                                              : 'Resident · ${widget.repository.locationService.city.name}',
+                                                          style: const TextStyle(
+                                                            fontSize: 10.5,
+                                                            color: Color(0xFF64748B),
+                                                            fontWeight: FontWeight.w500,
                                                           ),
+                                                          overflow: TextOverflow.ellipsis,
                                                         ),
                                                       ),
                                                     ],
                                                   ),
                                                 ],
                                               ),
-                                              const SizedBox(height: 10),
-                                              Builder(
-                                                builder: (context) {
-                                                  final cleanHandle = handle.toString().replaceAll('@', '').trim();
-                                                  final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
-                                                  final cachedName = NameCacheService.instance.getCachedName(cleanHandle);
-                                                  final effectiveName = (rawName != null && rawName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(rawName))
-                                                      ? rawName.trim()
-                                                      : ((cachedName != null && cachedName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(cachedName))
-                                                          ? cachedName.trim()
-                                                          : null);
-
-                                                  final primaryTitle = effectiveName ?? (cleanHandle.isNotEmpty ? cleanHandle : 'Neighbour');
-                                                  final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
-
-                                                  return Container(
-                                                    width: double.infinity,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                                    decoration: BoxDecoration(
-                                                      gradient: const LinearGradient(
-                                                        begin: Alignment.topLeft,
-                                                        end: Alignment.bottomRight,
-                                                        colors: [
-                                                          Colors.white,
-                                                          Color(0xFFF0FDF4),
-                                                        ],
-                                                      ),
-                                                      borderRadius: BorderRadius.circular(16),
-                                                      border: Border.all(
-                                                        color: Colors.white.withValues(alpha: 0.85),
-                                                        width: 1.2,
-                                                      ),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.black.withValues(alpha: 0.12),
-                                                          blurRadius: 14,
-                                                          offset: const Offset(0, 5),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Row(
-                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                                          children: [
-                                                            Row(
-                                                              mainAxisSize: MainAxisSize.min,
-                                                              children: [
-                                                                const Icon(
-                                                                  Icons.stars_rounded,
-                                                                  size: 14,
-                                                                  color: Color(0xFF0E8A3E),
-                                                                ),
-                                                                const SizedBox(width: 5),
-                                                                const Text(
-                                                                  'NEARHOOD RESIDENT PASS',
-                                                                  style: TextStyle(
-                                                                    fontSize: 10.5,
-                                                                    fontWeight: FontWeight.w800,
-                                                                    color: Color(0xFF0E8A3E),
-                                                                    letterSpacing: 0.5,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                            ListenableBuilder(
-                                                              listenable: FoundingService.instance,
-                                                              builder: (context, _) {
-                                                                final foundingStatus = FoundingService.instance.myStatus;
-                                                                if (foundingStatus != null && foundingStatus.state == FoundingUserState.approved) {
-                                                                  return Container(
-                                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                                                    decoration: BoxDecoration(
-                                                                      color: const Color(0xFFFEF3C7),
-                                                                      borderRadius: BorderRadius.circular(5),
-                                                                      border: Border.all(
-                                                                        color: const Color(0xFFF59E0B),
-                                                                        width: 0.8,
-                                                                      ),
-                                                                    ),
-                                                                    child: Text(
-                                                                      '#${foundingStatus.seq ?? 1} FOUNDER',
-                                                                      style: const TextStyle(
-                                                                        color: Color(0xFFB45309),
-                                                                        fontSize: 9.5,
-                                                                        fontWeight: FontWeight.w800,
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                }
-                                                                if (isVerified) {
-                                                                  return Container(
-                                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                                                    decoration: BoxDecoration(
-                                                                      color: const Color(0xFFDCFCE7),
-                                                                      borderRadius: BorderRadius.circular(5),
-                                                                      border: Border.all(
-                                                                        color: const Color(0xFF86EFAC),
-                                                                        width: 0.8,
-                                                                      ),
-                                                                    ),
-                                                                    child: const Text(
-                                                                      'VERIFIED',
-                                                                      style: TextStyle(
-                                                                        color: Color(0xFF15803D),
-                                                                        fontSize: 9.5,
-                                                                        fontWeight: FontWeight.w800,
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                }
-                                                                return Container(
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                                                  decoration: BoxDecoration(
-                                                                    color: const Color(0xFFF1F5F9),
-                                                                    borderRadius: BorderRadius.circular(5),
-                                                                    border: Border.all(
-                                                                      color: const Color(0xFFE2E8F0),
-                                                                      width: 0.8,
-                                                                    ),
-                                                                  ),
-                                                                  child: const Text(
-                                                                    'ACTIVE MEMBER',
-                                                                    style: TextStyle(
-                                                                      color: Color(0xFF64748B),
-                                                                      fontSize: 9.5,
-                                                                      fontWeight: FontWeight.w700,
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              },
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        const SizedBox(height: 6),
-                                                        Container(
-                                                          height: 1,
-                                                          color: const Color(0xFFE2E8F0),
-                                                        ),
-                                                        const SizedBox(height: 8),
-                                                        Row(
-                                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                                          children: [
-                                                            SizedBox(
-                                                              width: 60,
-                                                              height: 60,
-                                                              child: Stack(
-                                                                clipBehavior: Clip.none,
-                                                                alignment: Alignment.center,
-                                                                children: [
-                                                                  UserAvatar(
-                                                                    handle: handle,
-                                                                    photoUrl: _userData?['photoUrl'] as String?,
-                                                                    size: 60,
-                                                                    showRing: true,
-                                                                    ringGradient: const LinearGradient(
-                                                                      colors: [Color(0xFF0E8A3E), Color(0xFF22C55E)],
-                                                                    ),
-                                                                    ringWidth: 2.2,
-                                                                    ringGap: 1.2,
-                                                                    boxShadow: [
-                                                                      BoxShadow(
-                                                                        color: Colors.black.withValues(alpha: 0.10),
-                                                                        blurRadius: 6,
-                                                                        offset: const Offset(0, 2),
-                                                                      ),
-                                                                    ],
-                                                                    fontSize: 20,
-                                                                    onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                                                                  ),
-                                                                  Positioned(
-                                                                    bottom: -2,
-                                                                    right: -2,
-                                                                    child: GestureDetector(
-                                                                      onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                                                                      child: Container(
-                                                                        width: 20,
-                                                                        height: 20,
-                                                                        decoration: BoxDecoration(
-                                                                          color: const Color(0xFFF59E0B),
-                                                                          shape: BoxShape.circle,
-                                                                          border: Border.all(
-                                                                            color: Colors.white,
-                                                                            width: 1.8,
-                                                                          ),
-                                                                          boxShadow: [
-                                                                            BoxShadow(
-                                                                              color: Colors.black.withValues(alpha: 0.12),
-                                                                              blurRadius: 4,
-                                                                              offset: const Offset(0, 2),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                        child: const Icon(
-                                                                          Icons.camera_alt_rounded,
-                                                                          color: Colors.white,
-                                                                          size: 10,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  if (_isUploadingPhoto)
-                                                                    Positioned.fill(
-                                                                      child: ClipOval(
-                                                                        child: Container(
-                                                                          color: Colors.black54,
-                                                                          child: const Center(
-                                                                            child: SizedBox(
-                                                                              width: 16,
-                                                                              height: 16,
-                                                                              child: CircularProgressIndicator(
-                                                                                color: Colors.white,
-                                                                                strokeWidth: 2,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            const SizedBox(width: 12),
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Row(
-                                                                    children: [
-                                                                      Flexible(
-                                                                        child: Text(
-                                                                          primaryTitle,
-                                                                          style: const TextStyle(
-                                                                            fontSize: 17,
-                                                                            fontWeight: FontWeight.w800,
-                                                                            color: Color(0xFF0F172A),
-                                                                            letterSpacing: -0.3,
-                                                                          ),
-                                                                          overflow: TextOverflow.ellipsis,
-                                                                        ),
-                                                                      ),
-                                                                      if (isVerified) ...[
-                                                                        const SizedBox(width: 4),
-                                                                        const Icon(
-                                                                          Icons.verified_rounded,
-                                                                          color: Color(0xFF0E8A3E),
-                                                                          size: 15,
-                                                                        ),
-                                                                      ],
-                                                                    ],
-                                                                  ),
-                                                                  if (cleanHandle.isNotEmpty) ...[
-                                                                    const SizedBox(height: 1.5),
-                                                                    Text(
-                                                                      '@$cleanHandle',
-                                                                      style: const TextStyle(
-                                                                        fontSize: 12,
-                                                                        color: Color(0xFF64748B),
-                                                                        fontWeight: FontWeight.w600,
-                                                                      ),
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                    ),
-                                                                  ],
-                                                                  const SizedBox(height: 3),
-                                                                  Row(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      Container(
-                                                                        width: 5.5,
-                                                                        height: 5.5,
-                                                                        decoration: const BoxDecoration(
-                                                                          color: Color(0xFF10B981),
-                                                                          shape: BoxShape.circle,
-                                                                        ),
-                                                                      ),
-                                                                      const SizedBox(width: 5),
-                                                                      Flexible(
-                                                                        child: Text(
-                                                                          isVerified
-                                                                              ? 'Verified Citizen · ${widget.repository.locationService.city.name}'
-                                                                              : 'Resident · ${widget.repository.locationService.city.name}',
-                                                                          style: const TextStyle(
-                                                                            fontSize: 10.5,
-                                                                            color: Color(0xFF64748B),
-                                                                            fontWeight: FontWeight.w500,
-                                                                          ),
-                                                                          overflow: TextOverflow.ellipsis,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    width: double.infinity,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: Radius.circular(28),
-                                        topRight: Radius.circular(28),
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0x0F0F172A),
-                                          blurRadius: 18,
-                                          offset: Offset(0, -4),
-                                        ),
-                                      ],
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        Center(
-                                          child: Container(
-                                            width: 36,
-                                            height: 4,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFE2E8F0),
-                                              borderRadius: BorderRadius.circular(2),
-                                            ),
-                                          ),
-                                        ),
-                                        if (bio.isNotEmpty) ...[
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                                            child: Text(
-                                              bio,
-                                              textAlign: TextAlign.left,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize: 12.5,
-                                                color: Color(0xFF475569),
-                                                height: 1.3,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 10),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: SizedBox(
-                                                  height: 38,
-                                                  child: ElevatedButton.icon(
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: const Color(0xFF0E8A3E),
-                                                      foregroundColor: Colors.white,
-                                                      elevation: 0,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                                    ),
-                                                    icon: const Icon(Icons.edit_outlined, size: 14),
-                                                    label: const Text(
-                                                      'Edit profile',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.w700,
-                                                        fontSize: 12.5,
-                                                      ),
-                                                    ),
-                                                    onPressed: _showEditProfileSheet,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: SizedBox(
-                                                  height: 38,
-                                                  child: OutlinedButton.icon(
-                                                    style: OutlinedButton.styleFrom(
-                                                      backgroundColor: Colors.white,
-                                                      foregroundColor: const Color(0xFF0F172A),
-                                                      side: const BorderSide(
-                                                        color: Color(0xFFE2E8F0),
-                                                        width: 1.2,
-                                                      ),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                                    ),
-                                                    icon: const Icon(
-                                                      Icons.qr_code_rounded,
-                                                      size: 15,
-                                                      color: Color(0xFF0F172A),
-                                                    ),
-                                                    label: const Text(
-                                                      'My QR',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.w700,
-                                                        fontSize: 12.5,
-                                                        color: Color(0xFF0F172A),
-                                                      ),
-                                                    ),
-                                                    onPressed: _showMyQrModal,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Builder(
-                                          builder: (context) {
-                                            final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
-                                            final postListings = _userPosts.where((p) =>
-                                              p.category == PostCategory.shop ||
-                                              p.category == PostCategory.rooms ||
-                                              p.category == PostCategory.services ||
-                                              p.category == PostCategory.events ||
-                                              p.shopTitle != null ||
-                                              p.roomTitle != null
-                                            ).length;
-                                            final listingsCount = bazarListings > 0 ? bazarListings : postListings;
-
-                                            return Row(
-                                              children: [
-                                                Expanded(
-                                                  child: _buildStatCard(
-                                                    count: '${_userPosts.length}',
-                                                    label: 'Posts',
-                                                    onTap: () {
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => MyPostsScreen(
-                                                            currentUserHandle: widget.currentUserHandle,
-                                                            repository: widget.repository,
-                                                          ),
-                                                        ),
-                                                      ).then((_) => _loadProfileData());
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: _buildStatCard(
-                                                    count: '$listingsCount',
-                                                    label: 'Listings',
-                                                    onTap: () {
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => BazarScreen(
-                                                            initialShowMyListings: true,
-                                                            currentUserHandle: widget.currentUserHandle,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: StreamBuilder<List<Friendship>>(
-                                                    stream: _friendRepository.getFriendsList(),
-                                                    builder: (context, snapshot) {
-                                                      final count = snapshot.hasData
-                                                          ? snapshot.data!.length
-                                                          : (_userData?['friendCount'] as int? ?? 0);
-                                                      return _buildStatCard(
-                                                        count: '$count',
-                                                        label: 'Neighbours',
-                                                        onTap: () {
-                                                          Navigator.push(
-                                                            context,
-                                                            MaterialPageRoute(
-                                                              builder: (_) => FriendsScreen(
-                                                                repository: _friendRepository,
-                                                                currentUserHandle: widget.currentUserHandle,
-                                                                initialTab: FriendsTab.friends,
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                        const SizedBox(height: 8),
-                                        ListenableBuilder(
-                                          listenable: RewardsService.instance,
-                                          builder: (context, _) {
-                                            final summary = RewardsService.instance.summary ?? const RewardsSummary();
-                                            return GestureDetector(
-                                              onTap: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
-                                                  ),
-                                                ).then((_) => setState(() {}));
-                                              },
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFFEF3C7),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.0),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.all(5),
-                                                      decoration: const BoxDecoration(
-                                                        color: Color(0xFFF59E0B),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: const Icon(Icons.star_rounded, color: Colors.white, size: 15),
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          const Text(
-                                                            'Rewards',
-                                                            style: TextStyle(
-                                                              fontSize: 13,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: Color(0xFF78350F),
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 1),
-                                                          Text(
-                                                            '${summary.balance} pts · ${summary.streakCount}-day streak',
-                                                            style: const TextStyle(
-                                                              fontSize: 11,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: Color(0xFF92400E),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const Icon(Icons.chevron_right_rounded, color: Color(0xFFB45309), size: 18),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 8),
-                                          child: _buildFoundingCard(),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Column(
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: _buildActionGridCard(
-                                                    icon: Icons.article_outlined,
-                                                    iconBgColor: const Color(0xFFEEF2FF),
-                                                    iconColor: const Color(0xFF4F46E5),
-                                                    title: 'My posts',
-                                                    subtitle: '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
-                                                    onTap: () {
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => MyPostsScreen(
-                                                            currentUserHandle: widget.currentUserHandle,
-                                                            repository: widget.repository,
-                                                          ),
-                                                        ),
-                                                      ).then((_) => _loadProfileData());
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: _buildActionGridCard(
-                                                    icon: Icons.shopping_bag_outlined,
-                                                    iconBgColor: const Color(0xFFE0F2F1),
-                                                    iconColor: const Color(0xFF00897B),
-                                                    title: 'My listings',
-                                                    subtitle: 'Manage your items',
-                                                    onTap: () {
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => BazarScreen(
-                                                            initialShowMyListings: true,
-                                                            currentUserHandle: widget.currentUserHandle,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: _buildActionGridCard(
-                                                    icon: Icons.location_on_outlined,
-                                                    iconBgColor: const Color(0xFFFFF8E1),
-                                                    iconColor: const Color(0xFFD97706),
-                                                    title: 'Change area',
-                                                    subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
-                                                    onTap: () async {
-                                                      final updated = await Navigator.push<bool>(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => AreaChangeRequestScreen(
-                                                            repository: widget.repository,
-                                                          ),
-                                                        ),
-                                                      );
-                                                      if (updated == true && mounted) {
-                                                        setState(() {});
-                                                        widget.repository.refresh();
-                                                      }
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: _buildDynamicShopCard(),
-                                                ),
-                                              ],
                                             ),
                                           ],
                                         ),
                                       ],
                                     ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(28),
+                        topRight: Radius.circular(28),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x0F0F172A),
+                          blurRadius: 18,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        if (bio.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 2, 4, 0),
+                            child: Text(
+                              bio,
+                              textAlign: TextAlign.left,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(0xFF475569),
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 36,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0E8A3E),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  ),
+                                  icon: const Icon(Icons.edit_outlined, size: 14),
+                                  label: const Text(
+                                    'Edit profile',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                  onPressed: _showEditProfileSheet,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SizedBox(
+                                height: 36,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: const Color(0xFF0F172A),
+                                    side: const BorderSide(
+                                      color: Color(0xFFE2E8F0),
+                                      width: 1.2,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.qr_code_rounded,
+                                    size: 15,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                  label: const Text(
+                                    'My QR',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  onPressed: _showMyQrModal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
+                            final postListings = _userPosts.where((p) =>
+                              p.category == PostCategory.shop ||
+                              p.category == PostCategory.rooms ||
+                              p.category == PostCategory.services ||
+                              p.category == PostCategory.events ||
+                              p.shopTitle != null ||
+                              p.roomTitle != null
+                            ).length;
+                            final listingsCount = bazarListings > 0 ? bazarListings : postListings;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    count: '${_userPosts.length}',
+                                    label: 'Posts',
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => MyPostsScreen(
+                                            currentUserHandle: widget.currentUserHandle,
+                                            repository: widget.repository,
+                                          ),
+                                        ),
+                                      ).then((_) => _loadProfileData());
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    count: '$listingsCount',
+                                    label: 'Listings',
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => BazarScreen(
+                                            initialShowMyListings: true,
+                                            currentUserHandle: widget.currentUserHandle,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: StreamBuilder<List<Friendship>>(
+                                    stream: _friendRepository.getFriendsList(),
+                                    builder: (context, snapshot) {
+                                      final count = snapshot.hasData
+                                          ? snapshot.data!.length
+                                          : (_userData?['friendCount'] as int? ?? 0);
+                                      return _buildStatCard(
+                                        count: '$count',
+                                        label: 'Neighbours',
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => FriendsScreen(
+                                                repository: _friendRepository,
+                                                currentUserHandle: widget.currentUserHandle,
+                                                initialTab: FriendsTab.friends,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        ListenableBuilder(
+                          listenable: RewardsService.instance,
+                          builder: (context, _) {
+                            final summary = RewardsService.instance.summary ?? const RewardsSummary();
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
+                                  ),
+                                ).then((_) => setState(() {}));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.0),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFF59E0B),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.star_rounded, color: Colors.white, size: 15),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Rewards',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF78350F),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 1),
+                                          Text(
+                                            '${summary.balance} pts · ${summary.streakCount}-day streak',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF92400E),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_right_rounded, color: Color(0xFFB45309), size: 18),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildFoundingCard(),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionGridCard(
+                                    icon: Icons.article_outlined,
+                                    iconBgColor: const Color(0xFFEEF2FF),
+                                    iconColor: const Color(0xFF4F46E5),
+                                    title: 'My posts',
+                                    subtitle: '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => MyPostsScreen(
+                                            currentUserHandle: widget.currentUserHandle,
+                                            repository: widget.repository,
+                                          ),
+                                        ),
+                                      ).then((_) => _loadProfileData());
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildActionGridCard(
+                                    icon: Icons.shopping_bag_outlined,
+                                    iconBgColor: const Color(0xFFE0F2F1),
+                                    iconColor: const Color(0xFF00897B),
+                                    title: 'My listings',
+                                    subtitle: 'Manage your items',
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => BazarScreen(
+                                            initialShowMyListings: true,
+                                            currentUserHandle: widget.currentUserHandle,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionGridCard(
+                                    icon: Icons.location_on_outlined,
+                                    iconBgColor: const Color(0xFFFFF8E1),
+                                    iconColor: const Color(0xFFD97706),
+                                    title: 'Change area',
+                                    subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
+                                    onTap: () async {
+                                      final updated = await Navigator.push<bool>(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => AreaChangeRequestScreen(
+                                            repository: widget.repository,
+                                          ),
+                                        ),
+                                      );
+                                      if (updated == true && mounted) {
+                                        setState(() {});
+                                        widget.repository.refresh();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildDynamicShopCard(),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -2333,7 +2333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     VoidCallback? onTap,
   }) {
     final card = Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -2356,7 +2356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             count,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               color: Color(0xFF0F172A),
               height: 1.1,
@@ -2366,7 +2366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11.5,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
               color: Color(0xFF64748B),
             ),
@@ -2399,8 +2399,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 88),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: const BoxConstraints(minHeight: 70),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -2421,8 +2421,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: iconBgColor,
                 borderRadius: BorderRadius.circular(8),
@@ -2430,10 +2430,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Icon(
                 icon,
                 color: iconColor,
-                size: 17,
+                size: 16,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -2441,7 +2441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 13.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF0F172A),
                     height: 1.15,
@@ -2453,7 +2453,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w400,
                     color: Color(0xFF64748B),
                   ),
@@ -2484,7 +2484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         if (status.state == FoundingUserState.approved) {
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFFEF3C7),
               borderRadius: BorderRadius.circular(14),
@@ -2558,56 +2558,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFCBD5E1), width: 1.0),
               ),
               child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF94A3B8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF94A3B8),
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Request Founding badge for $cityName',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475569),
-                          ),
+                  child: const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request Founding badge for $cityName',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Post once in $cityName to request · 0 posts',
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF64748B),
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Post once in $cityName to request · 0 posts',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF64748B),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        }
+          ),
+        );
+      }
 
         if (status.state == FoundingUserState.pending) {
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14),
@@ -2655,7 +2655,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         if (status.state == FoundingUserState.rejected) {
           return Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF1F2),
               borderRadius: BorderRadius.circular(14),
@@ -2700,10 +2700,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
-                  height: 36,
+                  height: 34,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: status.canReapply ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
@@ -2728,7 +2728,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return GestureDetector(
           onTap: () => _submitFoundingRequest(cityId, areaId),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFFEF3C7),
               borderRadius: BorderRadius.circular(14),
