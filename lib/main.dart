@@ -25,7 +25,7 @@ import 'core/services/app_image_cache_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   SystemChrome.setSystemUIOverlayStyle(
@@ -45,14 +45,8 @@ void main() async {
   ]));
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
   PaintingBinding.instance.imageCache.maximumSize = 2500;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 120 * 1024 * 1024;
-
-  _initNonCriticalServices();
 
   runApp(const VadodaraLocalApp());
 }
@@ -87,7 +81,6 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
     locationService = LocationService();
     postRepository = PostRepository(locationService);
     _authSub = AuthService.instance.authEvents.listen(_handleAuthEvent);
-    NotificationService().initialize();
     _bootstrapApp();
   }
 
@@ -134,6 +127,12 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
 
   Future<void> _bootstrapApp() async {
     try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      _initNonCriticalServices();
+      NotificationService().initialize();
+
       final result = await SplashController.instance.runColdStartPipeline(
         locationService: locationService,
         postRepository: postRepository,
@@ -162,13 +161,10 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         setState(() {});
       }
     } finally {
-      // Must run even when the cold-start pipeline throws. initialize() is what
-      // reads getInitialMessage() and registers onMessageOpenedApp — if a
-      // network failure above skipped it, tapping a notification would do
-      // nothing at all. It is idempotent and binds whichever user is logged in,
-      // so it is safe on every path.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        NotificationService().initialize();
+        try {
+          NotificationService().initialize();
+        } catch (_) {}
       });
     }
   }

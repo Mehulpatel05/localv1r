@@ -397,7 +397,16 @@ class PostRepository extends ChangeNotifier {
     );
   }
 
+  Future<void>? _inFlightFetch;
+
   Future<void> _fetchPosts({bool refresh = false}) async {
+    if (_inFlightFetch != null && !refresh) {
+      return _inFlightFetch;
+    }
+
+    final completer = Completer<void>();
+    _inFlightFetch = completer.future;
+
     if (refresh) {
       _nextCursor = null;
       if (_posts.isEmpty) {
@@ -415,7 +424,7 @@ class PostRepository extends ChangeNotifier {
       
       var uri = Uri.parse('$backendBaseUrl/posts');
       final queryParams = <String, String>{
-        'limit': '50',
+        'limit': refresh ? '20' : '30',
         'cityId': cityId,
         'cursor': ?_nextCursor,
         'category': ?categoryStr,
@@ -468,6 +477,8 @@ class PostRepository extends ChangeNotifier {
       _isLoading = false;
       _isLoadingMore = false;
       _hasLoadedOnce = true;
+      _inFlightFetch = null;
+      completer.complete();
       notifyListeners();
     }
   }
