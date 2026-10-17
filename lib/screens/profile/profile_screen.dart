@@ -35,6 +35,7 @@ import '../../services/rewards_service.dart';
 import '../../models/founding_model.dart';
 import '../../services/founding_service.dart';
 import '../rewards/rewards_hub_screen.dart';
+import '../../features/auth/widgets/street_painter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -1474,7 +1475,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0E8A3E),
         body: RefreshIndicator(
           onRefresh: _loadProfileData,
           color: const Color(0xFF0E8A3E),
@@ -1483,46 +1484,108 @@ class _ProfileScreenState extends State<ProfileScreen> {
             builder: (context, _) {
               final areaLabel = widget.repository.locationService.displayLabel;
               return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              padding: EdgeInsets.only(
-                bottom: 72 + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF0E8A3E),
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(26),
-                        bottomRight: Radius.circular(26),
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (Navigator.canPop(context)) ...[
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFF0E8A3E),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                painter: StreetPainter(
+                                  strokeColor: Colors.white,
+                                  isOtp: false,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SafeArea(
+                            bottom: false,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (Navigator.canPop(context)) ...[
+                                            GestureDetector(
+                                              onTap: () => Navigator.pop(context),
+                                              child: Container(
+                                                width: 34,
+                                                height: 34,
+                                                margin: const EdgeInsets.only(right: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.16),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white.withValues(alpha: 0.22),
+                                                    width: 0.8,
+                                                  ),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.arrow_back_rounded,
+                                                  size: 17,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.16),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.22),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.location_on_rounded,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 5),
+                                                ConstrainedBox(
+                                                  constraints: const BoxConstraints(maxWidth: 160),
+                                                  child: Text(
+                                                    areaLabel,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.white,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           GestureDetector(
-                                            onTap: () => Navigator.pop(context),
+                                            onTap: _shareProfile,
                                             child: Container(
                                               width: 34,
                                               height: 34,
-                                              margin: const EdgeInsets.only(right: 8),
                                               decoration: BoxDecoration(
                                                 color: Colors.white.withValues(alpha: 0.16),
                                                 shape: BoxShape.circle,
@@ -1532,611 +1595,709 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 ),
                                               ),
                                               child: const Icon(
-                                                Icons.arrow_back_rounded,
+                                                Icons.share_outlined,
+                                                size: 17,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          GestureDetector(
+                                            onTap: _openSettings,
+                                            child: Container(
+                                              width: 34,
+                                              height: 34,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(alpha: 0.16),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white.withValues(alpha: 0.22),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.settings_outlined,
                                                 size: 17,
                                                 color: Colors.white,
                                               ),
                                             ),
                                           ),
                                         ],
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.16),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(alpha: 0.22),
-                                              width: 0.8,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on_rounded,
-                                                size: 14,
-                                                color: Colors.white,
-                                              ),
-                                              const SizedBox(width: 5),
-                                              ConstrainedBox(
-                                                constraints: const BoxConstraints(maxWidth: 160),
-                                                child: Text(
-                                                  areaLabel,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: Colors.white,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Builder(
+                                    builder: (context) {
+                                      final cleanHandle = handle.toString().replaceAll('@', '').trim();
+                                      final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
+                                      final cachedName = NameCacheService.instance.getCachedName(cleanHandle);
+                                      final effectiveName = (rawName != null && rawName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(rawName))
+                                          ? rawName.trim()
+                                          : ((cachedName != null && cachedName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(cachedName))
+                                              ? cachedName.trim()
+                                              : null);
+
+                                      final primaryTitle = effectiveName ?? (cleanHandle.isNotEmpty ? cleanHandle : 'Neighbour');
+                                      final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
+
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Colors.white,
+                                              Color(0xFFF0FDF4),
                                             ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        GestureDetector(
-                                          onTap: _shareProfile,
-                                          child: Container(
-                                            width: 34,
-                                            height: 34,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.16),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.22),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: const Icon(
-                                              Icons.share_outlined,
-                                              size: 17,
-                                              color: Colors.white,
-                                            ),
+                                          borderRadius: BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.85),
+                                            width: 1.2,
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: _openSettings,
-                                          child: Container(
-                                            width: 34,
-                                            height: 34,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.16),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.22),
-                                                width: 0.8,
-                                              ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.12),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 6),
                                             ),
-                                            child: const Icon(
-                                              Icons.settings_outlined,
-                                              size: 17,
-                                              color: Colors.white,
-                                            ),
-                                          ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Builder(
-                                  builder: (context) {
-                                    final cleanHandle = handle.toString().replaceAll('@', '').trim();
-                                    final rawName = (_userData?['name'] ?? _userData?['displayName'] ?? _userData?['fullName']) as String?;
-                                    final cachedName = NameCacheService.instance.getCachedName(cleanHandle);
-                                    final effectiveName = (rawName != null && rawName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(rawName))
-                                        ? rawName.trim()
-                                        : ((cachedName != null && cachedName.trim().isNotEmpty && !NameCacheService.isPlaceholderName(cachedName))
-                                            ? cachedName.trim()
-                                            : null);
-
-                                    final primaryTitle = effectiveName ?? (cleanHandle.isNotEmpty ? cleanHandle : 'Neighbour');
-                                    final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
-
-                                    return Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 72,
-                                          height: 72,
-                                          child: Stack(
-                                            clipBehavior: Clip.none,
-                                            alignment: Alignment.center,
-                                            children: [
-                                              UserAvatar(
-                                                handle: handle,
-                                                photoUrl: _userData?['photoUrl'] as String?,
-                                                size: 72,
-                                                showRing: true,
-                                                ringGradient: const LinearGradient(
-                                                  colors: [Colors.white, Colors.white],
-                                                ),
-                                                ringWidth: 3.0,
-                                                ringGap: 0,
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black.withValues(alpha: 0.15),
-                                                    blurRadius: 10,
-                                                    offset: const Offset(0, 3),
-                                                  ),
-                                                ],
-                                                fontSize: 24,
-                                                onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                                              ),
-                                              Positioned(
-                                                bottom: 0,
-                                                right: 0,
-                                                child: GestureDetector(
-                                                  onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
-                                                  child: Container(
-                                                    width: 24,
-                                                    height: 24,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFFF59E0B),
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color: Colors.white,
-                                                        width: 2,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.stars_rounded,
+                                                      size: 15,
+                                                      color: Color(0xFF0E8A3E),
+                                                    ),
+                                                    const SizedBox(width: 5),
+                                                    const Text(
+                                                      'NEARHOOD RESIDENT PASS',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w800,
+                                                        color: Color(0xFF0E8A3E),
+                                                        letterSpacing: 0.5,
                                                       ),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.black.withValues(alpha: 0.12),
-                                                          blurRadius: 6,
-                                                          offset: const Offset(0, 2),
-                                                        ),
-                                                      ],
                                                     ),
-                                                    child: const Icon(
-                                                      Icons.camera_alt_rounded,
-                                                      color: Colors.white,
-                                                      size: 12,
-                                                    ),
-                                                  ),
+                                                  ],
                                                 ),
-                                              ),
-                                              if (_isUploadingPhoto)
-                                                Positioned.fill(
-                                                  child: ClipOval(
-                                                    child: Container(
-                                                      color: Colors.black54,
-                                                      child: const Center(
-                                                        child: SizedBox(
-                                                          width: 20,
-                                                          height: 20,
-                                                          child: CircularProgressIndicator(
-                                                            color: Colors.white,
-                                                            strokeWidth: 2,
+                                                ListenableBuilder(
+                                                  listenable: FoundingService.instance,
+                                                  builder: (context, _) {
+                                                    final foundingStatus = FoundingService.instance.myStatus;
+                                                    if (foundingStatus != null && foundingStatus.state == FoundingUserState.approved) {
+                                                      return Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFFEF3C7),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(
+                                                            color: const Color(0xFFF59E0B),
+                                                            width: 0.8,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          '#${foundingStatus.seq ?? 1} FOUNDER',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFFB45309),
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                    if (isVerified) {
+                                                      return Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFDCFCE7),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(
+                                                            color: const Color(0xFF86EFAC),
+                                                            width: 0.8,
+                                                          ),
+                                                        ),
+                                                        child: const Text(
+                                                          'VERIFIED',
+                                                          style: TextStyle(
+                                                            color: Color(0xFF15803D),
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                    return Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFF1F5F9),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(
+                                                          color: const Color(0xFFE2E8F0),
+                                                          width: 0.8,
+                                                        ),
+                                                      ),
+                                                      child: const Text(
+                                                        'ACTIVE MEMBER',
+                                                        style: TextStyle(
+                                                          color: Color(0xFF64748B),
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              height: 1,
+                                              color: const Color(0xFFE2E8F0),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                SizedBox(
+                                                  width: 66,
+                                                  height: 66,
+                                                  child: Stack(
+                                                    clipBehavior: Clip.none,
+                                                    alignment: Alignment.center,
+                                                    children: [
+                                                      UserAvatar(
+                                                        handle: handle,
+                                                        photoUrl: _userData?['photoUrl'] as String?,
+                                                        size: 66,
+                                                        showRing: true,
+                                                        ringGradient: const LinearGradient(
+                                                          colors: [Color(0xFF0E8A3E), Color(0xFF22C55E)],
+                                                        ),
+                                                        ringWidth: 2.5,
+                                                        ringGap: 1.5,
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Colors.black.withValues(alpha: 0.12),
+                                                            blurRadius: 8,
+                                                            offset: const Offset(0, 3),
+                                                          ),
+                                                        ],
+                                                        fontSize: 22,
+                                                        onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                                      ),
+                                                      Positioned(
+                                                        bottom: -2,
+                                                        right: -2,
+                                                        child: GestureDetector(
+                                                          onTap: _isUploadingPhoto ? null : _showChangeProfilePhotoSheet,
+                                                          child: Container(
+                                                            width: 22,
+                                                            height: 22,
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFF59E0B),
+                                                              shape: BoxShape.circle,
+                                                              border: Border.all(
+                                                                color: Colors.white,
+                                                                width: 2,
+                                                              ),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: Colors.black.withValues(alpha: 0.12),
+                                                                  blurRadius: 4,
+                                                                  offset: const Offset(0, 2),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            child: const Icon(
+                                                              Icons.camera_alt_rounded,
+                                                              color: Colors.white,
+                                                              size: 11,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
-                                                    ),
+                                                      if (_isUploadingPhoto)
+                                                        Positioned.fill(
+                                                          child: ClipOval(
+                                                            child: Container(
+                                                              color: Colors.black54,
+                                                              child: const Center(
+                                                                child: SizedBox(
+                                                                  width: 18,
+                                                                  height: 18,
+                                                                  child: CircularProgressIndicator(
+                                                                    color: Colors.white,
+                                                                    strokeWidth: 2,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
                                                 ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      primaryTitle,
-                                                      style: const TextStyle(
-                                                        fontSize: 20,
-                                                        fontWeight: FontWeight.w800,
-                                                        color: Colors.white,
-                                                        letterSpacing: -0.4,
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Flexible(
+                                                            child: Text(
+                                                              primaryTitle,
+                                                              style: const TextStyle(
+                                                                fontSize: 18,
+                                                                fontWeight: FontWeight.w800,
+                                                                color: Color(0xFF0F172A),
+                                                                letterSpacing: -0.3,
+                                                              ),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                          if (isVerified) ...[
+                                                            const SizedBox(width: 4),
+                                                            const Icon(
+                                                              Icons.verified_rounded,
+                                                              color: Color(0xFF0E8A3E),
+                                                              size: 16,
+                                                            ),
+                                                          ],
+                                                        ],
                                                       ),
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
+                                                      if (cleanHandle.isNotEmpty) ...[
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          '@$cleanHandle',
+                                                          style: const TextStyle(
+                                                            fontSize: 12.5,
+                                                            color: Color(0xFF64748B),
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Container(
+                                                            width: 6,
+                                                            height: 6,
+                                                            decoration: const BoxDecoration(
+                                                              color: Color(0xFF10B981),
+                                                              shape: BoxShape.circle,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 5),
+                                                          Flexible(
+                                                            child: Text(
+                                                              isVerified
+                                                                  ? 'Verified Citizen · ${widget.repository.locationService.city.name}'
+                                                                  : 'Resident · ${widget.repository.locationService.city.name}',
+                                                              style: const TextStyle(
+                                                                fontSize: 11,
+                                                                color: Color(0xFF64748B),
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
                                                   ),
-                                                  if (isVerified) ...[
-                                                    const SizedBox(width: 5),
-                                                    const Icon(
-                                                      Icons.verified_rounded,
-                                                      color: Colors.white,
-                                                      size: 17,
-                                                    ),
-                                                  ],
-                                                ],
-                                              ),
-                                              if (cleanHandle.isNotEmpty) ...[
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '@$cleanHandle',
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: Colors.white.withValues(alpha: 0.92),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ],
-                                              const SizedBox(height: 3),
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    isVerified ? 'Verified Citizen · Vadodara' : 'Nearhood member · Vadodara',
-                                                    style: TextStyle(
-                                                      fontSize: 11.5,
-                                                      color: Colors.white.withValues(alpha: 0.85),
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Container(
-                                                    width: 6,
-                                                    height: 6,
-                                                    decoration: const BoxDecoration(
-                                                      color: Color(0xFF4ADE80),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (bio.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          bio,
-                          textAlign: TextAlign.left,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF64748B),
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0E8A3E),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                              ),
-                              icon: const Icon(Icons.edit_outlined, size: 15),
-                              label: const Text(
-                                'Edit profile',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              onPressed: _showEditProfileSheet,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF0F172A),
-                                side: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                  width: 1.2,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                              ),
-                              icon: const Icon(
-                                Icons.qr_code_rounded,
-                                size: 16,
-                                color: Color(0xFF0F172A),
-                              ),
-                              label: const Text(
-                                'My QR',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              onPressed: _showMyQrModal,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                    const SizedBox(height: 10),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Builder(
-                        builder: (context) {
-                          final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
-                          final postListings = _userPosts.where((p) =>
-                            p.category == PostCategory.shop ||
-                            p.category == PostCategory.rooms ||
-                            p.category == PostCategory.services ||
-                            p.category == PostCategory.events ||
-                            p.shopTitle != null ||
-                            p.roomTitle != null
-                          ).length;
-                          final listingsCount = bazarListings > 0 ? bazarListings : postListings;
-
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: _buildStatCard(
-                                  count: '${_userPosts.length}',
-                                  label: 'Posts',
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => MyPostsScreen(
-                                          currentUserHandle: widget.currentUserHandle,
-                                          repository: widget.repository,
-                                        ),
-                                      ),
-                                    ).then((_) => _loadProfileData());
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildStatCard(
-                                  count: '$listingsCount',
-                                  label: 'Listings',
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => BazarScreen(
-                                          initialShowMyListings: true,
-                                          currentUserHandle: widget.currentUserHandle,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: StreamBuilder<List<Friendship>>(
-                                  stream: _friendRepository.getFriendsList(),
-                                  builder: (context, snapshot) {
-                                    final count = snapshot.hasData
-                                        ? snapshot.data!.length
-                                        : (_userData?['friendCount'] as int? ?? 0);
-                                    return _buildStatCard(
-                                      count: '$count',
-                                      label: 'Neighbours',
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => FriendsScreen(
-                                              repository: _friendRepository,
-                                              currentUserHandle: widget.currentUserHandle,
-                                              initialTab: FriendsTab.friends,
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ListenableBuilder(
-                        listenable: RewardsService.instance,
-                        builder: (context, _) {
-                          final summary = RewardsService.instance.summary ?? const RewardsSummary();
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
-                                ),
-                              ).then((_) => setState(() {}));
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFEF3C7),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFF59E0B), width: 1.0),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFF59E0B),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.star_rounded, color: Colors.white, size: 16),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Rewards',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF78350F),
-                                          ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 1),
-                                        Text(
-                                          '${summary.balance} pts · ${summary.streakCount}-day streak',
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF92400E),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                      );
+                                    },
                                   ),
-                                  const Icon(Icons.chevron_right_rounded, color: Color(0xFFB45309), size: 20),
                                 ],
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
-                      child: _buildFoundingCard(),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildActionGridCard(
-                                  icon: Icons.article_outlined,
-                                  iconBgColor: const Color(0xFFEEF2FF),
-                                  iconColor: const Color(0xFF4F46E5),
-                                  title: 'My posts',
-                                  subtitle: '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => MyPostsScreen(
-                                          currentUserHandle: widget.currentUserHandle,
-                                          repository: widget.repository,
-                                        ),
-                                      ),
-                                    ).then((_) => _loadProfileData());
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildActionGridCard(
-                                  icon: Icons.shopping_bag_outlined,
-                                  iconBgColor: const Color(0xFFE0F2F1),
-                                  iconColor: const Color(0xFF00897B),
-                                  title: 'My listings',
-                                  subtitle: 'Manage your items',
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => BazarScreen(
-                                          initialShowMyListings: true,
-                                          currentUserHandle: widget.currentUserHandle,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildActionGridCard(
-                                  icon: Icons.location_on_outlined,
-                                  iconBgColor: const Color(0xFFFFF8E1),
-                                  iconColor: const Color(0xFFD97706),
-                                  title: 'Change area',
-                                  subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
-                                  onTap: () async {
-                                    final updated = await Navigator.push<bool>(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AreaChangeRequestScreen(
-                                          repository: widget.repository,
-                                        ),
-                                      ),
-                                    );
-                                    if (updated == true && mounted) {
-                                      setState(() {});
-                                      widget.repository.refresh();
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildDynamicShopCard(),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
+                    Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(28),
+                          topRight: Radius.circular(28),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x0F0F172A),
+                            blurRadius: 20,
+                            offset: Offset(0, -6),
+                          ),
+                        ],
+                      ),
+                      padding: EdgeInsets.only(
+                        bottom: 72 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 10),
+                          Center(
+                            child: Container(
+                              width: 38,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          if (bio.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                              child: Text(
+                                bio,
+                                textAlign: TextAlign.left,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF475569),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 40,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF0E8A3E),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      ),
+                                      icon: const Icon(Icons.edit_outlined, size: 15),
+                                      label: const Text(
+                                        'Edit profile',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      onPressed: _showEditProfileSheet,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 40,
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        foregroundColor: const Color(0xFF0F172A),
+                                        side: const BorderSide(
+                                          color: Color(0xFFE2E8F0),
+                                          width: 1.2,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.qr_code_rounded,
+                                        size: 16,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                      label: const Text(
+                                        'My QR',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      onPressed: _showMyQrModal,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Builder(
+                              builder: (context) {
+                                final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
+                                final postListings = _userPosts.where((p) =>
+                                  p.category == PostCategory.shop ||
+                                  p.category == PostCategory.rooms ||
+                                  p.category == PostCategory.services ||
+                                  p.category == PostCategory.events ||
+                                  p.shopTitle != null ||
+                                  p.roomTitle != null
+                                ).length;
+                                final listingsCount = bazarListings > 0 ? bazarListings : postListings;
 
-                    const SizedBox(height: 8),
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildStatCard(
+                                        count: '${_userPosts.length}',
+                                        label: 'Posts',
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => MyPostsScreen(
+                                                currentUserHandle: widget.currentUserHandle,
+                                                repository: widget.repository,
+                                              ),
+                                            ),
+                                          ).then((_) => _loadProfileData());
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildStatCard(
+                                        count: '$listingsCount',
+                                        label: 'Listings',
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => BazarScreen(
+                                                initialShowMyListings: true,
+                                                currentUserHandle: widget.currentUserHandle,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: StreamBuilder<List<Friendship>>(
+                                        stream: _friendRepository.getFriendsList(),
+                                        builder: (context, snapshot) {
+                                          final count = snapshot.hasData
+                                              ? snapshot.data!.length
+                                              : (_userData?['friendCount'] as int? ?? 0);
+                                          return _buildStatCard(
+                                            count: '$count',
+                                            label: 'Neighbours',
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => FriendsScreen(
+                                                    repository: _friendRepository,
+                                                    currentUserHandle: widget.currentUserHandle,
+                                                    initialTab: FriendsTab.friends,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: ListenableBuilder(
+                              listenable: RewardsService.instance,
+                              builder: (context, _) {
+                                final summary = RewardsService.instance.summary ?? const RewardsSummary();
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
+                                      ),
+                                    ).then((_) => setState(() {}));
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: const Color(0xFFF59E0B), width: 1.0),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFF59E0B),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.star_rounded, color: Colors.white, size: 16),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'Rewards',
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF78350F),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 1),
+                                              Text(
+                                                '${summary.balance} pts · ${summary.streakCount}-day streak',
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF92400E),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const Icon(Icons.chevron_right_rounded, color: Color(0xFFB45309), size: 20),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
+                            child: _buildFoundingCard(),
+                          ),
+                          const SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildActionGridCard(
+                                        icon: Icons.article_outlined,
+                                        iconBgColor: const Color(0xFFEEF2FF),
+                                        iconColor: const Color(0xFF4F46E5),
+                                        title: 'My posts',
+                                        subtitle: '${_userPosts.length} ${_userPosts.length == 1 ? "post" : "posts"}',
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => MyPostsScreen(
+                                                currentUserHandle: widget.currentUserHandle,
+                                                repository: widget.repository,
+                                              ),
+                                            ),
+                                          ).then((_) => _loadProfileData());
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildActionGridCard(
+                                        icon: Icons.shopping_bag_outlined,
+                                        iconBgColor: const Color(0xFFE0F2F1),
+                                        iconColor: const Color(0xFF00897B),
+                                        title: 'My listings',
+                                        subtitle: 'Manage your items',
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => BazarScreen(
+                                                initialShowMyListings: true,
+                                                currentUserHandle: widget.currentUserHandle,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildActionGridCard(
+                                        icon: Icons.location_on_outlined,
+                                        iconBgColor: const Color(0xFFFFF8E1),
+                                        iconColor: const Color(0xFFD97706),
+                                        title: 'Change area',
+                                        subtitle: widget.repository.locationService.area?.name ?? widget.repository.locationService.city.name,
+                                        onTap: () async {
+                                          final updated = await Navigator.push<bool>(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => AreaChangeRequestScreen(
+                                                repository: widget.repository,
+                                              ),
+                                            ),
+                                          );
+                                          if (updated == true && mounted) {
+                                            setState(() {});
+                                            widget.repository.refresh();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildDynamicShopCard(),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               );

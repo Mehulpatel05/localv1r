@@ -1121,10 +1121,10 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
-        resizeToAvoidBottomInset: false,
+        backgroundColor: const Color(0xFFF6FAF7),
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
@@ -1172,8 +1172,9 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                   margin: const EdgeInsets.only(right: 16),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _borderColor),
                   ),
                   child: Text(
                     '$_currentStep/2',
@@ -1187,45 +1188,97 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
               ),
           ],
         ),
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: StreetPainter(
-                    strokeColor: const Color(0x180B8A3E),
-                    isOtp: true,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  painter: StreetPainter(
+                                    strokeColor: const Color(0x1F0B8A3E),
+                                    isOtp: _currentStep == 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 22,
+                              right: 22,
+                              bottom: 14,
+                              child: _buildHeaderTitles(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x0F0F172A),
+                              blurRadius: 20,
+                              offset: Offset(0, -6),
+                            ),
+                          ],
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          22,
+                          12,
+                          22,
+                          16 + MediaQuery.paddingOf(context).bottom,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 38,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE2E8F0),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: _currentStep == 1
+                                  ? _buildStep1Card()
+                                  : _buildStep2Card(),
+                            ),
+                            const SizedBox(height: 14),
+                            _currentStep == 1
+                                ? _buildStep1ContinueButton(isStep1Valid)
+                                : _buildStep2FinishButton(isStep2Valid),
+                            const SizedBox(height: 10),
+                            _buildFooterText(),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-            SafeArea(
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildHeaderTitles(),
-                    const SizedBox(height: 14),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: _currentStep == 1
-                          ? _buildStep1Card()
-                          : _buildStep2Card(),
-                    ),
-                    const SizedBox(height: 14),
-                    _currentStep == 1
-                        ? _buildStep1ContinueButton(isStep1Valid)
-                        : _buildStep2FinishButton(isStep2Valid),
-                    const SizedBox(height: 10),
-                    _buildFooterText(),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -1234,10 +1287,10 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   Widget _buildHeaderTitles() {
     final title = _currentStep == 1
         ? 'Namaste! Aap kaun?'
-        : 'Aapka ghar kahan hai?';
+        : 'Enter your location';
     final subtitle = _currentStep == 1
         ? 'Apna naam aur username chuniye'
-        : 'Apne area ke padosi aur posts dekhne ke liye';
+        : 'Apne shehar aur area ke padosi se connect karne ke liye';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -1295,43 +1348,28 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Widget _buildStep1Card() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: _buildAvatar()),
-          const SizedBox(height: 8),
-          const Center(
-            child: Text(
-              'Photo optional hai',
-              style: TextStyle(
-                fontSize: 12,
-                color: _textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(child: _buildAvatar()),
+        const SizedBox(height: 8),
+        const Center(
+          child: Text(
+            'Photo optional hai',
+            style: TextStyle(
+              fontSize: 12,
+              color: _textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 20),
-          _buildFullNameField(),
-          const SizedBox(height: 16),
-          _buildUsernameField(),
-          const SizedBox(height: 8),
-          _buildUsernameStatusHelper(),
-        ],
-      ),
+        ),
+        const SizedBox(height: 18),
+        _buildFullNameField(),
+        const SizedBox(height: 14),
+        _buildUsernameField(),
+        const SizedBox(height: 8),
+        _buildUsernameStatusHelper(),
+      ],
     );
   }
 
@@ -1720,61 +1758,46 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   }
 
   Widget _buildStep2Card() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildAreaSearchField(),
-          if (_isAreaSearching &&
-              (_livePredictions.isNotEmpty || _isSearchingPlaces))
-            _buildAreaSuggestionsList(),
-          const SizedBox(height: 14),
-          _buildCurrentLocationButton(),
-          if (_selectedArea != null)
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: _lightGreenTint.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _primaryGreen.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${_selectedArea!.name}${_selectedCityName != null && _selectedCityName!.isNotEmpty ? ", $_selectedCityName" : ""}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildAreaSearchField(),
+        if (_isAreaSearching &&
+            (_livePredictions.isNotEmpty || _isSearchingPlaces))
+          _buildAreaSuggestionsList(),
+        const SizedBox(height: 14),
+        _buildCurrentLocationButton(),
+        if (_selectedArea != null)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _lightGreenTint.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _primaryGreen.withValues(alpha: 0.3)),
             ),
-          const SizedBox(height: 18),
-          _buildAddressNoteField(),
-        ],
-      ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: _primaryGreen, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${_selectedArea!.name}${_selectedCityName != null && _selectedCityName!.isNotEmpty ? ", $_selectedCityName" : ""}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+        _buildAddressNoteField(),
+      ],
     );
   }
 
@@ -1822,7 +1845,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                     color: _textPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Search or choose your area (e.g. Alkapuri)',
+                    hintText: 'Search your city, area or pincode',
                     hintStyle: TextStyle(
                       fontSize: 13.5,
                       color: _textSecondary.withValues(alpha: 0.6),

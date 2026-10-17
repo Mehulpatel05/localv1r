@@ -17,6 +17,16 @@ class StreetPainter extends CustomPainter {
     final sx = size.width / baseWidth;
     final sy = size.height / baseHeight;
 
+    final dotPaint = Paint()
+      ..color = strokeColor.withValues(alpha: 0.22)
+      ..style = PaintingStyle.fill;
+
+    for (double dx = 14.0 * sx; dx < size.width; dx += 24.0 * sx) {
+      for (double dy = 14.0 * sy; dy < size.height; dy += 24.0 * sy) {
+        canvas.drawCircle(Offset(dx, dy), 1.1 * sx, dotPaint);
+      }
+    }
+
     final ringPaint = Paint()
       ..color = strokeColor.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
@@ -33,6 +43,11 @@ class StreetPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 7.5 * sx
       ..strokeCap = StrokeCap.round;
+
+    final dashedPaint = Paint()
+      ..color = strokeColor.withValues(alpha: 0.40)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0 * sx;
 
     final center1 = Offset(330 * sx, 80 * sy);
     canvas.drawCircle(center1, 90 * sx, ringPaint);
@@ -72,6 +87,22 @@ class StreetPainter extends CustomPainter {
       ..moveTo(-20 * sx, 160 * sy)
       ..cubicTo(100 * sx, 130 * sy, 240 * sx, 190 * sy, 430 * sx, 155 * sy);
     canvas.drawPath(p5, roadPaint);
+
+    final p6 = Path()
+      ..moveTo(55 * sx, -20 * sy)
+      ..cubicTo(48 * sx, 80 * sy, 68 * sx, 160 * sy, 58 * sx, 250 * sy)
+      ..cubicTo(52 * sx, 300 * sy, 66 * sx, 330 * sy, 62 * sx, 360 * sy);
+    canvas.drawPath(p6, roadPaint);
+
+    final p7 = Path()
+      ..moveTo(225 * sx, -20 * sy)
+      ..cubicTo(215 * sx, 85 * sy, 235 * sx, 170 * sy, 228 * sx, 255 * sy)
+      ..cubicTo(222 * sx, 305 * sy, 238 * sx, 335 * sy, 232 * sx, 360 * sy);
+    canvas.drawPath(p7, broadRoadPaint);
+
+    for (double y = 0; y < size.height; y += 14 * sy) {
+      canvas.drawLine(Offset(175 * sx, y), Offset(175 * sx, y + 7 * sy), dashedPaint);
+    }
   }
 
   @override

@@ -143,72 +143,106 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF6FAF7),
         body: SafeArea(
           top: false,
           bottom: false,
-          child: Column(
-            children: [
-              AnimatedContainer(
-                duration: disableAnimations
-                    ? Duration.zero
-                    : const Duration(milliseconds: 220),
-                curve: Curves.ease,
-                child: TopSection(
-                  key: ValueKey(isOtp),
-                  isOtp: isOtp,
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: AnimatedSwitcher(
-                    duration: disableAnimations
-                        ? Duration.zero
-                        : const Duration(milliseconds: 220),
-                    switchInCurve: Curves.ease,
-                    switchOutCurve: const Threshold(0),
-                    transitionBuilder: (child, animation) {
-                      if (disableAnimations) return child;
-
-                      final isIncoming = child.key == ValueKey(_currentStep);
-                      if (!isIncoming) {
-                        return const SizedBox.shrink();
-                      }
-
-                      return AnimatedBuilder(
-                        animation: animation,
-                        builder: (context, childWidget) {
-                          final progress = Curves.ease.transform(animation.value);
-                          final dx = (1.0 - progress) * 8.0;
-                          return Opacity(
-                            opacity: animation.value.clamp(0.0, 1.0),
-                            child: Transform.translate(
-                              offset: Offset(dx, 0),
-                              child: childWidget,
-                            ),
-                          );
-                        },
-                        child: child,
-                      );
-                    },
-                    child: isOtp
-                        ? OtpStep(
-                            key: const ValueKey(AuthStep.otp),
-                            phone: _phone,
-                            authRepository: widget.authRepository,
-                            onChangeNumber: _onChangeNumber,
-                            onVerified: _onOtpVerified,
-                          )
-                        : PhoneStep(
-                            key: const ValueKey(AuthStep.phone),
-                            authRepository: widget.authRepository,
-                            onPhoneSubmitted: _onPhoneSubmitted,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: TopSection(
+                            key: ValueKey(isOtp),
+                            isOtp: isOtp,
                           ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0x0F0F172A),
+                                blurRadius: 20,
+                                offset: Offset(0, -6),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 12),
+                              Container(
+                                width: 38,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE2E8F0),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              AnimatedSwitcher(
+                                duration: disableAnimations
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 220),
+                                switchInCurve: Curves.ease,
+                                switchOutCurve: const Threshold(0),
+                                transitionBuilder: (child, animation) {
+                                  if (disableAnimations) return child;
+
+                                  final isIncoming = child.key == ValueKey(_currentStep);
+                                  if (!isIncoming) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return AnimatedBuilder(
+                                    animation: animation,
+                                    builder: (context, childWidget) {
+                                      final progress = Curves.ease.transform(animation.value);
+                                      final dx = (1.0 - progress) * 8.0;
+                                      return Opacity(
+                                        opacity: animation.value.clamp(0.0, 1.0),
+                                        child: Transform.translate(
+                                          offset: Offset(dx, 0),
+                                          child: childWidget,
+                                        ),
+                                      );
+                                    },
+                                    child: child,
+                                  );
+                                },
+                                child: isOtp
+                                    ? OtpStep(
+                                        key: const ValueKey(AuthStep.otp),
+                                        phone: _phone,
+                                        authRepository: widget.authRepository,
+                                        onChangeNumber: _onChangeNumber,
+                                        onVerified: _onOtpVerified,
+                                      )
+                                    : PhoneStep(
+                                        key: const ValueKey(AuthStep.phone),
+                                        authRepository: widget.authRepository,
+                                        onPhoneSubmitted: _onPhoneSubmitted,
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),

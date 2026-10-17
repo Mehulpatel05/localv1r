@@ -63,12 +63,13 @@ class _TopSectionState extends State<TopSection>
   @override
   Widget build(BuildContext context) {
     final statusBar = MediaQuery.paddingOf(context).top;
-    final double targetHeight = widget.isOtp ? 85.0 : 135.0;
 
     return Container(
-      height: targetHeight + statusBar,
+      constraints: BoxConstraints(
+        minHeight: (widget.isOtp ? 100.0 : 165.0) + statusBar,
+      ),
       width: double.infinity,
-      color: Colors.white,
+      color: const Color(0xFFF6FAF7),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -76,14 +77,14 @@ class _TopSectionState extends State<TopSection>
             child: RepaintBoundary(
               child: CustomPaint(
                 painter: StreetPainter(
-                  strokeColor: const Color(0x1A0B8A3E),
+                  strokeColor: const Color(0x280B8A3E),
                   isOtp: widget.isOtp,
                 ),
               ),
             ),
           ),
           Positioned(
-            top: 22.0 + statusBar,
+            top: 20.0 + statusBar,
             left: 24.0,
             right: 24.0,
             child: const Row(
@@ -110,8 +111,8 @@ class _TopSectionState extends State<TopSection>
           ),
           if (!widget.isOtp) ...[
             Positioned(
-              top: 78.0 + statusBar,
               left: 20.0,
+              bottom: 24.0,
               child: NearbyPinChip(
                 service: 'Plumber',
                 distance: '0.4 km',
@@ -120,8 +121,8 @@ class _TopSectionState extends State<TopSection>
               ),
             ),
             Positioned(
-              top: 78.0 + statusBar,
               right: 20.0,
+              bottom: 48.0,
               child: NearbyPinChip(
                 service: 'Tiffin',
                 distance: '0.8 km',
