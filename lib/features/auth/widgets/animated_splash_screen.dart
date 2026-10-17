@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/app_colors.dart';
-import '../../../core/constants/app_static_assets.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
   final VoidCallback? onAnimationComplete;
@@ -42,7 +41,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final TextStyle _tagStyleDark;
   late final TextStyle _tagStyleLight;
 
-  static const int totalDurationMs = 2500;
+  static const int totalDurationMs = 1500;
 
   @override
   void initState() {
@@ -279,8 +278,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
           Positioned.fill(
             child: FadeTransition(
               opacity: _streetsOpacity,
-              child: Image.network(
-                AppStaticAssets.splashBackground,
+              child: Image.asset(
+                'assets/images/nearhood_splash_background.webp',
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),

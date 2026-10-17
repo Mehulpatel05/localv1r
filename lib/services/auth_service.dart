@@ -184,6 +184,7 @@ class AuthService {
           final prefs = await SharedPreferences.getInstance();
           if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
           if (userId.isNotEmpty) await prefs.setString('user_id', userId);
+          if (accessToken.isNotEmpty) await prefs.setString('auth_access_token', accessToken);
           await prefs.remove('phone_number');
         } catch (_) {}
 
@@ -250,6 +251,10 @@ class AuthService {
           final newRefresh = body['refresh_token'] as String;
           await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
           await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('auth_access_token', newAccess);
+          } catch (_) {}
           updateDecisionEngineFromToken(newAccess);
           completer.complete(newAccess);
           return newAccess;
@@ -270,20 +275,46 @@ class AuthService {
   }
 
   Future<String?> getAccessToken() async {
-    return await _secureStorage.read(key: _kAccessTokenKey);
+    try {
+      final token = await _secureStorage.read(key: _kAccessTokenKey).timeout(const Duration(milliseconds: 1500));
+      if (token != null && token.isNotEmpty) return token;
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('auth_access_token') ?? prefs.getString('access_token');
+    } catch (_) {}
+    return null;
   }
 
   Future<String?> getUserId() async {
-    return await _secureStorage.read(key: _kUserIdKey);
+    try {
+      final uid = await _secureStorage.read(key: _kUserIdKey).timeout(const Duration(milliseconds: 1500));
+      if (uid != null && uid.isNotEmpty) return uid;
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('user_id');
+    } catch (_) {}
+    return null;
   }
 
   Future<String?> getPhoneNumber() async {
-    return await _secureStorage.read(key: _kPhoneKey);
+    try {
+      final phone = await _secureStorage.read(key: _kPhoneKey).timeout(const Duration(milliseconds: 1500));
+      if (phone != null && phone.isNotEmpty) return phone;
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('phone_number');
+    } catch (_) {}
+    return null;
   }
 
   Future<String?> getUserHandle() async {
-    final handle = await _secureStorage.read(key: _kHandleKey);
-    if (handle != null && handle.isNotEmpty) return handle;
+    try {
+      final handle = await _secureStorage.read(key: _kHandleKey).timeout(const Duration(milliseconds: 1500));
+      if (handle != null && handle.isNotEmpty) return handle;
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       final prefHandle = prefs.getString('user_handle') ?? prefs.getString('current_user_handle');
@@ -684,6 +715,8 @@ class AuthService {
       await prefs.remove('user_id');
       await prefs.remove('phone_number');
       await prefs.remove('user_display_name');
+      await prefs.remove('auth_access_token');
+      await prefs.remove('access_token');
       debugPrint('[AuthService] Multi-tenancy session purged successfully.');
     } catch (e) {
       debugPrint('[AuthService] Error during session purge: $e');

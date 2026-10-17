@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/post_repository.dart';
@@ -50,18 +51,18 @@ class SplashController {
   SplashController._internal();
   bool isMainFlowVisible = false;
 
-  /// Stage A: Cold Start Pipeline (Executed concurrently at startup)
   Future<BootstrapResult> runColdStartPipeline({
     required LocationService locationService,
     required PostRepository postRepository,
   }) async {
     try {
+      unawaited(_pingServerHealth());
+      unawaited(FoundingService.instance.fetchCounts());
+
       final results = await Future.wait([
         _resolveAuthSession(),
         locationService.load(),
         AvatarCacheService.instance.ensureInitialized(),
-        _pingServerHealth(),
-        FoundingService.instance.fetchCounts(),
       ]);
 
       final authData = results[0] as Map<String, dynamic>;
@@ -71,7 +72,6 @@ class SplashController {
       final userHandle = authData['handle'] as String? ?? 'Guest';
       final cityId = locationService.cityId.isNotEmpty ? locationService.cityId : 'GJ-VAD';
 
-      // 2. Stage B: Token Resolve & Background Warm Fetch (Non-blocking)
       if (isLoggedIn && !isNewUser && userHandle != 'Guest') {
         warmFetchOnLogin(
           uid: userId,
@@ -100,7 +100,6 @@ class SplashController {
     }
   }
 
-  /// 🚀 Stage B: Non-blocking Background Warm Fetch (Fire-and-forget on Login & Boot)
   void warmFetchOnLogin({
     required String uid,
     required String handle,
@@ -110,45 +109,31 @@ class SplashController {
     final cleanHandle = handle.replaceAll('@', '').trim();
     if (cleanHandle.isEmpty || cleanHandle == 'Guest') return;
 
-    // Initialize presence heartbeat & status
     PresenceService.instance.init(cleanHandle);
 
-    final List<Future<dynamic>> warmTasks = [
-      // 1. Pre-warm city feeds (Jobs, Rooms, Shops, Food, Events)
-      postRepo.prefetchCityFeed(cityId),
+    unawaited(postRepo.prefetchCityFeed(cityId));
+    unawaited(DirectChatService.instance.prefetchUnreadSummary(cleanHandle));
 
-      // 2. Pre-warm direct chat conversations and unread badges (0ms Chat list)
-      DirectChatService.instance.getChats(cleanHandle),
-      DirectChatService.instance.prefetchUnreadSummary(cleanHandle),
+    Future.delayed(const Duration(milliseconds: 150), () {
+      final List<Future<dynamic>> warmTasks = [
+        DirectChatService.instance.getChats(cleanHandle),
+        ChatPreferencesService.instance.loadPreferences(cleanHandle),
+        FriendRepository().fetchFriends(),
+        NotificationService.instance.prefetchBadgeCounts(cleanHandle),
+        AuthService.instance.syncCloudProfile(),
+        ActionStateProvider.instance.prefetchActionStateDocument(),
+        FoundingService.instance.fetchCounts(),
+      ];
 
-      // 3. Pre-warm chat preferences (pinned, muted, archived, favourites)
-      ChatPreferencesService.instance.loadPreferences(cleanHandle),
-
-      // 4. Pre-warm friends list for immediate friend picker render
-      FriendRepository().fetchFriends(),
-
-      // 5. Pre-warm notification badge counts
-      NotificationService.instance.prefetchBadgeCounts(cleanHandle),
-
-      // 6. Pre-warm cloud profile & avatar metadata
-      AuthService.instance.syncCloudProfile(),
-
-      // 7. Pre-warm full precomputed user action document (likes, saves, votes)
-      ActionStateProvider.instance.prefetchActionStateDocument(),
-      FoundingService.instance.fetchCounts(),
-    ];
-
-    unawaited(
       Future.wait(warmTasks).then((_) {
         final cachedUrls = AvatarCacheService.instance.getAllCachedUrls();
         prewarmImages(cachedUrls);
       }).catchError((e) {
         debugPrint('[SplashController] Warm fetch background warning: $e');
-      }),
-    );
+      });
+    });
   }
 
-  /// Pre-warms image URLs directly into Flutter's GPU/RAM ImageCache for instant 0ms visual rendering
   static void prewarmImage(String? url) {
     if (url == null || url.trim().isEmpty || !url.startsWith('http')) return;
     try {
@@ -157,7 +142,6 @@ class SplashController {
     } catch (_) {}
   }
 
-  /// Pre-warms a list of image URLs in the background
   static void prewarmImages(List<String?> urls) {
     for (final u in urls) {
       prewarmImage(u);
@@ -166,26 +150,45 @@ class SplashController {
 
   Future<Map<String, dynamic>> _resolveAuthSession() async {
     try {
-      final token = await AuthService.instance.getAccessToken();
-      final handle = await AuthService.instance.getUserHandle();
-      final uid = await AuthService.instance.getUserId();
+      final resolveOperation = () async {
+        final token = await AuthService.instance.getAccessToken();
+        final handle = await AuthService.instance.getUserHandle();
+        final uid = await AuthService.instance.getUserId();
 
-      // Token + handle present = user is logged in.
-      // NOTE: Our tokens are plain secure random hex strings (not JWTs),
-      // so JWT-based isExpired check is meaningless here — the server-side
-      // auth middleware validates every request against D1. Trust the stored
-      // token and let the server reject it if truly invalid.
-      if (token != null && token.isNotEmpty && handle != null && handle.isNotEmpty) {
-        final isNewUser = AuthService.isNewUserHandle(handle);
-        return {
-          'isLoggedIn': true,
-          'isNewUser': isNewUser,
-          'userId': uid ?? '',
-          'handle': handle,
-        };
-      }
+        if (token != null && token.isNotEmpty && handle != null && handle.isNotEmpty) {
+          final isNewUser = AuthService.isNewUserHandle(handle);
+          return {
+            'isLoggedIn': true,
+            'isNewUser': isNewUser,
+            'userId': uid ?? '',
+            'handle': handle,
+          };
+        }
 
-      return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};
+        return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};
+      }();
+
+      return await resolveOperation.timeout(
+        const Duration(milliseconds: 1500),
+        onTimeout: () async {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final prefToken = prefs.getString('auth_access_token') ?? prefs.getString('access_token');
+            final prefHandle = prefs.getString('user_handle') ?? prefs.getString('current_user_handle');
+            final prefUid = prefs.getString('user_id');
+
+            if (prefToken != null && prefToken.isNotEmpty && prefHandle != null && prefHandle.isNotEmpty) {
+              return {
+                'isLoggedIn': true,
+                'isNewUser': AuthService.isNewUserHandle(prefHandle),
+                'userId': prefUid ?? '',
+                'handle': prefHandle,
+              };
+            }
+          } catch (_) {}
+          return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};
+        },
+      );
     } catch (e) {
       debugPrint('[SplashController] Auth resolution error: $e');
       return {'isLoggedIn': false, 'isNewUser': false, 'userId': '', 'handle': 'Guest'};

@@ -141,10 +141,12 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
 
   Future<void> _bootstrapApp() async {
     try {
-      final result = await SplashController.instance.runColdStartPipeline(
-        locationService: locationService,
-        postRepository: postRepository,
-      );
+      final result = await SplashController.instance
+          .runColdStartPipeline(
+            locationService: locationService,
+            postRepository: postRepository,
+          )
+          .timeout(const Duration(seconds: 3));
 
       if (result.isLoggedIn && !result.isNewUser) {
         postRepository.currentUserHandle = result.userHandle;
@@ -193,7 +195,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
         theme: NearhoodTheme.lightTheme,
         darkTheme: NearhoodTheme.darkTheme,
         home: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 450),
+          duration: const Duration(milliseconds: 350),
           switchInCurve: Curves.easeInOutCubic,
           switchOutCurve: Curves.easeInOutCubic,
           transitionBuilder: (child, animation) {
@@ -210,6 +212,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                       SplashController.instance.isMainFlowVisible = true;
                       setState(() {
                         _isSplashFinished = true;
+                        _isReady = true;
                       });
                     }
                   },

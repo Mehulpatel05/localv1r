@@ -33,15 +33,13 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
-  final Set<int> _mountedTabs = {0, 1, 2, 3};
+  final Set<int> _mountedTabs = {0};
   late final List<Widget?> _cachedTabs = [null, null, null, null];
 
   @override
   void initState() {
     super.initState();
-    for (int i = 0; i < 4; i++) {
-      _cachedTabs[i] = _createTab(i);
-    }
+    _cachedTabs[0] = _createTab(0);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAreaAndCityStatus();
       NotificationService.instance.initialize();
@@ -151,6 +149,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 
   void _onTabTapped(int index) {
+    if (!_mountedTabs.contains(index)) {
+      _mountedTabs.add(index);
+      _cachedTabs[index] = _createTab(index);
+      setState(() {});
+    }
     if (_currentIndexNotifier.value == index) return;
     _currentIndexNotifier.value = index;
     if (index == 0 || index == 3) {

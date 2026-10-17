@@ -37,7 +37,12 @@ class LocationEngine {
   /// O(1) Lookup by Area ID (e.g. 'GJ-VAD-ALKAPURI')
   static GeoArea? lookupArea(String areaId) {
     _ensureIndexed();
-    return _areaIndex[areaId];
+    final direct = _areaIndex[areaId];
+    if (direct != null) return direct;
+    if (areaId.endsWith('-ROAD')) {
+      return _areaIndex[areaId.substring(0, areaId.length - 5)];
+    }
+    return null;
   }
 
   /// O(1) Lookup by 6-Digit PIN Code

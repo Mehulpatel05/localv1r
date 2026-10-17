@@ -21,6 +21,7 @@ const kGujarat = GeoState(
         GeoArea(id: 'GJ-VAD-FATEHGUNJ', cityId: 'GJ-VAD', name: 'Fatehgunj', pincode: '390002', lat: 22.3250, lng: 73.1860),
         GeoArea(id: 'GJ-VAD-SUBHANPURA', cityId: 'GJ-VAD', name: 'Subhanpura', pincode: '390023', lat: 22.3210, lng: 73.1550),
         GeoArea(id: 'GJ-VAD-WAGHODIA', cityId: 'GJ-VAD', name: 'Waghodia Road', pincode: '390019', lat: 22.2980, lng: 73.2350),
+        GeoArea(id: 'GJ-VAD-WAGHODIA-ROAD', cityId: 'GJ-VAD', name: 'Waghodia Road', pincode: '390019', lat: 22.2980, lng: 73.2350),
         GeoArea(id: 'GJ-VAD-AKOTA', cityId: 'GJ-VAD', name: 'Akota', pincode: '390020', lat: 22.2960, lng: 73.1700),
         GeoArea(id: 'GJ-VAD-VASNA', cityId: 'GJ-VAD', name: 'Vasna', pincode: '390015', lat: 22.2880, lng: 73.1520),
         GeoArea(id: 'GJ-VAD-BHAYLI', cityId: 'GJ-VAD', name: 'Bhayli', pincode: '391410', lat: 22.2790, lng: 73.1250),
