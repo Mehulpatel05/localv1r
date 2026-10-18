@@ -228,16 +228,30 @@ class LocationService extends ChangeNotifier {
         ? DateTime.fromMillisecondsSinceEpoch(fetchedMs)
         : null;
 
-    if (savedCity != null) {
+    if (savedCityName != null && savedCityName.isNotEmpty) {
+      if (savedCity != null) {
+        _city = (savedCity.name != savedCityName)
+            ? GeoCity(
+                id: savedCity.id,
+                stateId: savedCity.stateId,
+                name: savedCityName,
+                enabled: true,
+                areas: savedCity.areas,
+                lat: savedCity.lat,
+                lng: savedCity.lng,
+              )
+            : savedCity;
+      } else {
+        _city = GeoCity(
+          id: savedCityId,
+          stateId: 'IN',
+          name: savedCityName,
+          enabled: true,
+          areas: const [],
+        );
+      }
+    } else if (savedCity != null) {
       _city = savedCity;
-    } else if (savedCityName != null && savedCityName.isNotEmpty) {
-      _city = GeoCity(
-        id: savedCityId,
-        stateId: 'IN',
-        name: savedCityName,
-        enabled: true,
-        areas: const [],
-      );
     } else {
       _city = LocationEngine.lookupCity(_kDefaultCityId)!;
     }
@@ -284,6 +298,12 @@ class LocationService extends ChangeNotifier {
     double? forceLat,
     double? forceLng,
   }) async {
+    if (_isManualLocation && forceLat == null && forceLng == null) {
+      _state = LocationState.manualLocation;
+      notifyListeners();
+      return true;
+    }
+
     _state = LocationState.detecting;
     notifyListeners();
 

@@ -349,6 +349,7 @@ class AuthService {
     String? phone,
     String? name,
     String? cityId,
+    String? cityName,
     String? areaId,
     String? areaName,
     String? addressNote,
@@ -370,6 +371,7 @@ class AuthService {
           requestBody['displayName'] = cleanName;
         }
         if (cityId != null && cityId.isNotEmpty) requestBody['home_city_id'] = cityId;
+        if (cityName != null && cityName.isNotEmpty) requestBody['home_city_name'] = cityName;
         if (areaId != null && areaId.isNotEmpty) requestBody['home_area_id'] = areaId;
         if (areaName != null && areaName.isNotEmpty) requestBody['home_area_name'] = areaName;
         if (addressNote != null && addressNote.isNotEmpty) requestBody['address_note'] = addressNote;
@@ -392,6 +394,9 @@ class AuthService {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_handle', clean);
             if (cityId != null && cityId.isNotEmpty) await prefs.setString('selected_city_id', cityId);
+            if (cityName != null && cityName.isNotEmpty) {
+              await prefs.setString('selected_city_name', cityName);
+            }
             if (areaId != null && areaId.isNotEmpty) await prefs.setString('selected_area_id', areaId);
             if (areaName != null && areaName.isNotEmpty) {
               await prefs.setString('home_area_name', areaName);
@@ -987,6 +992,7 @@ class AuthService {
     String? areaId,
     String? areaName,
     String? cityId,
+    String? cityName,
     String? addressNote,
   }) async {
     try {
@@ -996,6 +1002,7 @@ class AuthService {
         if (areaId != null && areaId.isNotEmpty) 'area_id': areaId,
         if (areaName != null && areaName.isNotEmpty) 'area_name': areaName,
         if (cityId != null && cityId.isNotEmpty) 'city_id': cityId,
+        if (cityName != null && cityName.isNotEmpty) 'city_name': cityName,
         if (addressNote != null && addressNote.isNotEmpty) 'address_note': addressNote,
       };
       final response = await http.post(
@@ -1012,6 +1019,9 @@ class AuthService {
         try {
           final prefs = await SharedPreferences.getInstance();
           if (cityId != null && cityId.isNotEmpty) await prefs.setString('selected_city_id', cityId);
+          if (cityName != null && cityName.isNotEmpty) {
+            await prefs.setString('selected_city_name', cityName);
+          }
           if (areaId != null && areaId.isNotEmpty) await prefs.setString('selected_area_id', areaId);
           if (areaName != null && areaName.isNotEmpty) {
             await prefs.setString('home_area_name', areaName);

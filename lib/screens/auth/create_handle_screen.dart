@@ -845,6 +845,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           areaId: _selectedArea!.id,
           areaName: _selectedArea!.name,
           cityId: selectedCityId,
+          cityName: _selectedCityName,
           addressNote: _addressNoteController.text.trim(),
         );
 
@@ -940,6 +941,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         phone: widget.phoneNumber,
         name: name,
         cityId: selectedCityId,
+        cityName: _selectedCityName,
         areaId: _selectedArea!.id,
         areaName: _selectedArea!.name,
         addressNote: _addressNoteController.text.trim(),

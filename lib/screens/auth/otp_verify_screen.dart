@@ -8,6 +8,7 @@ import '../../services/post_repository.dart';
 import '../../services/presence_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/auth_service.dart';
+import '../../core/location/location_engine.dart';
 import '../main/main_screen.dart';
 import '../onboarding/permission_request_screen.dart';
 import 'create_handle_screen.dart';
@@ -144,6 +145,36 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
         NotificationService().initialize();
         NotificationService.instance.startListening(handle);
         PresenceService.instance.init(handle);
+
+        final userObj = result['user'] as Map<String, dynamic>?;
+        final serverCityId = (userObj?['cityId'] ?? result['cityId']) as String?;
+        final serverCityName = (userObj?['cityName'] ?? result['cityName']) as String?;
+        final serverAreaId = (userObj?['areaId'] ?? result['areaId']) as String?;
+        final serverAreaName = (userObj?['areaName'] ?? result['areaName']) as String?;
+
+        if (serverCityName != null && serverCityName.isNotEmpty) {
+          final cid = (serverCityId != null && serverCityId.isNotEmpty) ? serverCityId : serverCityName;
+          final matched = LocationEngine.lookupCity(cid);
+          final city = (matched != null && matched.name == serverCityName)
+              ? matched
+              : GeoCity(
+                  id: cid,
+                  stateId: matched?.stateId ?? 'IN',
+                  name: serverCityName,
+                  enabled: true,
+                  areas: matched?.areas ?? const [],
+                );
+          await widget.repository.locationService.setCity(city);
+          if (serverAreaName != null && serverAreaName.isNotEmpty) {
+            await widget.repository.locationService.setArea(
+              GeoArea(
+                id: (serverAreaId != null && serverAreaId.isNotEmpty) ? serverAreaId : cid,
+                cityId: cid,
+                name: serverAreaName,
+              ),
+            );
+          }
+        }
 
         final prefs = await SharedPreferences.getInstance();
         final permsDone = prefs.getString('perms_done');

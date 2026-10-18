@@ -2487,15 +2487,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       listenable: FoundingService.instance,
       builder: (context, _) {
         final status = FoundingService.instance.myStatus;
-        final resolvedCityName = (status?.cityName != null && status!.cityName!.isNotEmpty)
-            ? status.cityName!
-            : loc.city.name;
-        final resolvedCityId = (status?.cityId != null && status!.cityId!.isNotEmpty)
-            ? status.cityId!
-            : loc.city.id;
-        final resolvedAreaId = (status?.areaId != null && status!.areaId!.isNotEmpty)
-            ? status.areaId!
-            : (loc.area?.id ?? resolvedCityId);
+        final resolvedCityName = loc.city.name.isNotEmpty
+            ? loc.city.name
+            : ((status?.cityName != null && status!.cityName!.isNotEmpty)
+                ? status.cityName!
+                : 'your city');
+        final resolvedCityId = loc.city.id.isNotEmpty
+            ? loc.city.id
+            : ((status?.cityId != null && status!.cityId!.isNotEmpty)
+                ? status.cityId!
+                : 'GJ-VAD');
+        final resolvedAreaId = loc.area?.id ??
+            ((status?.areaId != null && status!.areaId!.isNotEmpty)
+                ? status.areaId!
+                : resolvedCityId);
 
         if (status == null) {
           return Container(

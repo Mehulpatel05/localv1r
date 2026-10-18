@@ -58,21 +58,42 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     final serverAreaId = (userObj?['areaId'] ?? userObj?['homeAreaId'] ?? userObj?['home_area_id'] ?? me['area_id']) as String?;
     final serverAreaName = (userObj?['areaName'] ?? userObj?['homeAreaName'] ?? userObj?['home_area_name'] ?? me['area_name']) as String?;
     final serverCityId = (userObj?['cityId'] ?? userObj?['homeCityId'] ?? userObj?['home_city_id'] ?? me['city_id']) as String?;
+    final serverCityName = (userObj?['cityName'] ?? userObj?['homeCityName'] ?? userObj?['home_city_name'] ?? me['city_name']) as String?;
 
     final locService = widget.repository.locationService;
-    if (serverAreaName != null && serverAreaName.trim().isNotEmpty) {
+    if (serverCityName != null && serverCityName.trim().isNotEmpty) {
       final effectiveCityId = (serverCityId != null && serverCityId.isNotEmpty) ? serverCityId : locService.city.id;
-      final resolvedCity = LocationEngine.lookupCity(effectiveCityId) ?? locService.city;
-      if (locService.city.id != resolvedCity.id) {
+      GeoCity resolvedCity = LocationEngine.lookupCity(effectiveCityId) ?? locService.city;
+      if (resolvedCity.name != serverCityName.trim()) {
+        resolvedCity = GeoCity(
+          id: resolvedCity.id,
+          stateId: resolvedCity.stateId,
+          name: serverCityName.trim(),
+          enabled: true,
+          areas: resolvedCity.areas,
+          lat: resolvedCity.lat,
+          lng: resolvedCity.lng,
+        );
+      }
+      if (locService.city.id != resolvedCity.id || locService.city.name != resolvedCity.name) {
         await locService.setCity(resolvedCity);
       }
+    } else if (serverCityId != null && serverCityId.isNotEmpty && locService.city.id != serverCityId) {
+      final resolvedCity = LocationEngine.lookupCity(serverCityId);
+      if (resolvedCity != null) {
+        await locService.setCity(resolvedCity);
+      }
+    }
+
+    if (serverAreaName != null && serverAreaName.trim().isNotEmpty) {
+      final effectiveCityId = (serverCityId != null && serverCityId.isNotEmpty) ? serverCityId : locService.city.id;
       final effectiveAreaId = (serverAreaId != null && serverAreaId.isNotEmpty) ? serverAreaId : effectiveCityId;
       if (locService.area?.name != serverAreaName.trim() || locService.area?.id != effectiveAreaId) {
         final matched = LocationEngine.lookupArea(effectiveAreaId);
         await locService.setArea(
           GeoArea(
             id: effectiveAreaId,
-            cityId: resolvedCity.id,
+            cityId: locService.city.id,
             name: serverAreaName.trim(),
             lat: matched?.lat ?? locService.rawLat,
             lng: matched?.lng ?? locService.rawLng,
