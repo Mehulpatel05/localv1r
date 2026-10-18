@@ -240,11 +240,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       return;
     }
 
-    final filterViolation = ContentFilter.validateContent(trimmed);
+    final filterViolation = ContentFilter.validateUsername(trimmed);
     if (filterViolation != null) {
       setState(() {
         _state = UsernameState.invalid;
-        _customErrorMessage = 'Username contains prohibited words or patterns.';
+        _customErrorMessage = filterViolation;
       });
       return;
     }
@@ -1124,6 +1124,16 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         _currentStep = 1;
         _state = UsernameState.invalid;
         _customErrorMessage = 'Invalid or reserved username.';
+      });
+      return;
+    }
+
+    final handleViolation = ContentFilter.validateUsername(handle);
+    if (handleViolation != null) {
+      setState(() {
+        _currentStep = 1;
+        _state = UsernameState.invalid;
+        _customErrorMessage = handleViolation;
       });
       return;
     }

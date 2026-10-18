@@ -53,4 +53,25 @@ class ContentFilter {
 
     return null;
   }
+
+  static String? validateUsername(String text) {
+    final cleanText = text.trim().toLowerCase();
+    if (cleanText.isEmpty) {
+      return null;
+    }
+
+    for (final word in _profaneKeywords) {
+      if (cleanText == word || (word.length >= 4 && cleanText.contains(word))) {
+        return 'Please choose a respectful username.';
+      }
+    }
+
+    for (final word in _blockedKeywords) {
+      if (cleanText == word || (word.length >= 4 && cleanText.contains(word))) {
+        return 'Username contains prohibited words or patterns.';
+      }
+    }
+
+    return null;
+  }
 }
