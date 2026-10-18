@@ -333,100 +333,76 @@ class RewardsService extends ChangeNotifier {
 
   static const List<ShopPerkItem> defaultShopPerks = [
     ShopPerkItem(
-      id: 'perk_chai_10off',
-      shopId: 'shop_apna_chai',
-      shopName: 'Apna Chai & Cafe',
-      category: 'Food & Cafe',
-      logoUrl: '',
-      title: '10% OFF on Hot Beverages & Snacks',
-      description: 'Get 10% off on hot teas, coffees & quick bites at counter.',
-      costPoints: 50,
-      dailyLimit: 10,
-      codePrefix: 'CHAI10',
-    ),
-    ShopPerkItem(
-      id: 'perk_bakery_50off',
-      shopId: 'shop_royal_bakery',
-      shopName: 'Royal Bakeries & Confectionery',
-      category: 'Food & Cafe',
-      logoUrl: '',
-      title: '₹50 OFF on Cakes & Pastries (Min ₹200)',
-      description: 'Flat ₹50 discount on fresh cakes, pastries, and baked goods.',
-      costPoints: 100,
-      dailyLimit: 10,
-      codePrefix: 'BAKE50',
-    ),
-    ShopPerkItem(
-      id: 'perk_grocery_100off',
-      shopId: 'shop_aone_mart',
-      shopName: 'A-One Daily Mart & Groceries',
-      category: 'Groceries',
-      logoUrl: '',
-      title: '₹100 OFF on Daily Groceries (Min ₹500)',
-      description: 'Save flat ₹100 on your daily grocery basket of ₹500 or more.',
-      costPoints: 150,
-      dailyLimit: 10,
-      codePrefix: 'GROC100',
-    ),
-    ShopPerkItem(
-      id: 'perk_delivery_free',
-      shopId: 'shop_nh_delivery',
-      shopName: 'Nearhood Express Delivery',
-      category: 'Services',
-      logoUrl: '',
-      title: 'Free Home Delivery Voucher',
-      description: 'Enjoy 100% free doorstep delivery on any local Bazar shop order.',
-      costPoints: 40,
-      dailyLimit: 15,
-      codePrefix: 'FREEDEL',
-    ),
-    ShopPerkItem(
-      id: 'perk_salon_100off',
-      shopId: 'shop_glamour_salon',
-      shopName: 'Glamour Unisex Salon & Spa',
-      category: 'Services',
-      logoUrl: '',
-      title: 'Flat ₹100 OFF on Salon Services',
-      description: 'Get flat ₹100 off on haircut, facial, grooming, or spa services.',
-      costPoints: 180,
-      dailyLimit: 10,
-      codePrefix: 'GLAM100',
-    ),
-    ShopPerkItem(
-      id: 'perk_pharmacy_15off',
-      shopId: 'shop_city_pharmacy',
-      shopName: 'City Care Medicos & Pharmacy',
-      category: 'Healthcare',
-      logoUrl: '',
-      title: '15% OFF on Wellness & Healthcare',
-      description: 'Flat 15% discount on general wellness essentials & medicines.',
-      costPoints: 120,
-      dailyLimit: 10,
-      codePrefix: 'MED15',
-    ),
-    ShopPerkItem(
-      id: 'perk_dining_150off',
-      shopId: 'shop_taste_punjab',
-      shopName: 'Taste of Punjab Family Restaurant',
-      category: 'Food & Cafe',
-      logoUrl: '',
-      title: '₹150 OFF on Family Dinner (Min ₹750)',
-      description: 'Flat ₹150 off on total food bill of ₹750 or more (Dine-in / Takeaway).',
-      costPoints: 250,
-      dailyLimit: 5,
-      codePrefix: 'DINE150',
-    ),
-    ShopPerkItem(
-      id: 'perk_bazar_boost',
-      shopId: 'shop_nh_bazar',
-      shopName: 'Nearhood Community Bazar',
+      id: 'perk_bazar_boost_24h',
+      shopId: 'bazar_feature_boost',
+      shopName: 'Nearhood Bazar',
       category: 'Bazar Boost',
       logoUrl: '',
       title: '24-Hour Listing Boost in Bazar',
-      description: 'Pin your product or service listing to the top of Bazaar for 24 hours.',
+      description: 'Pin your item to the top of your colony Bazar for 24 hours to get 5x more buyers.',
       costPoints: 300,
-      dailyLimit: 5,
+      dailyLimit: 10,
       codePrefix: 'BOOST24',
+    ),
+    ShopPerkItem(
+      id: 'perk_urgent_deal_badge',
+      shopId: 'bazar_feature_urgent',
+      shopName: 'Nearhood Bazar',
+      category: 'Bazar Boost',
+      logoUrl: '',
+      title: 'Urgent Deal Spotlight Badge (3 Days)',
+      description: 'Add a prominent "Urgent Deal" tag to your listing to sell 3x faster.',
+      costPoints: 150,
+      dailyLimit: 10,
+      codePrefix: 'URGENT3D',
+    ),
+    ShopPerkItem(
+      id: 'perk_listing_highlight',
+      shopId: 'bazar_feature_highlight',
+      shopName: 'Nearhood Bazar',
+      category: 'Bazar Boost',
+      logoUrl: '',
+      title: 'Standout Highlighted Border (7 Days)',
+      description: 'Give your listing a standout glowing border in search and category feeds.',
+      costPoints: 100,
+      dailyLimit: 10,
+      codePrefix: 'GLOW7D',
+    ),
+    ShopPerkItem(
+      id: 'perk_post_spotlight',
+      shopId: 'community_spotlight',
+      shopName: 'Colony Community',
+      category: 'Community',
+      logoUrl: '',
+      title: '24-Hour Post Spotlight in Feed',
+      description: 'Highlight your colony announcement or urgent question in the neighborhood feed.',
+      costPoints: 200,
+      dailyLimit: 5,
+      codePrefix: 'SPOT24',
+    ),
+    ShopPerkItem(
+      id: 'perk_verified_neighbour',
+      shopId: 'profile_badge',
+      shopName: 'Nearhood Trust',
+      category: 'Badges',
+      logoUrl: '',
+      title: 'Verified Neighbour Profile Badge',
+      description: 'Unlock an exclusive verified star badge on your profile and comments.',
+      costPoints: 500,
+      dailyLimit: 1,
+      codePrefix: 'VSTAR',
+    ),
+    ShopPerkItem(
+      id: 'perk_multi_boost_pack',
+      shopId: 'bazar_feature_pack',
+      shopName: 'Nearhood Bazar',
+      category: 'Bazar Boost',
+      logoUrl: '',
+      title: '3-Listing Multi-Boost Bundle',
+      description: 'Promote up to 3 different listings to the top of your colony marketplace.',
+      costPoints: 700,
+      dailyLimit: 3,
+      codePrefix: 'PACK3',
     ),
   ];
 
@@ -618,52 +594,129 @@ class RewardsService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> claimDailyStreak() async {
     try {
-      final uri = Uri.parse('${ApiConstants.baseUrl}/rewards/streak/claim');
       final headers = await _getHeaders();
-      final response = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+      http.Response? response;
 
-      final decoded = jsonDecode(response.body);
-      final isSuccess = decoded['success'] == true;
-      if (isSuccess && decoded['data'] != null) {
-        final data = decoded['data'];
-        final pts = (data['pointsAwarded'] as num?)?.toInt() ?? 5;
-        final newStreak = (data['streakCount'] as num?)?.toInt() ?? 1;
-        final newBal = (data['newBalance'] as num?)?.toInt();
+      final endpoints = [
+        '${ApiConstants.baseUrl}/rewards/streak/claim',
+        '${ApiConstants.rootUrl}/api/v2/rewards/streak/claim',
+        '${ApiConstants.rootUrl}/rewards/streak/claim',
+      ];
 
-        final current = _summary ?? const RewardsSummary();
-        final updatedBalance = newBal ?? (current.balance + pts);
-        final nextDay = newStreak >= 7 ? 1 : newStreak + 1;
-        final streakList = current.streakRewards;
-        final nextPts = streakList[((nextDay - 1).clamp(0, 6))];
-
-        _summary = current.copyWith(
-          balance: updatedBalance,
-          streakCount: newStreak,
-          isStreakClaimedToday: true,
-          streakAwarded: true,
-          nextStreakDay: nextDay,
-          todayStreakPoints: nextPts,
-          lifetimePoints: current.lifetimePoints + pts,
-          weeklyPoints: current.weeklyPoints + pts,
-        );
-        unawaited(_saveCachedSummary(_summary!));
-        notifyListeners();
-        unawaited(fetchSummary(forceRefresh: true));
-        return {
-          'success': true,
-          'pointsAwarded': pts,
-          'streakCount': newStreak,
-          'message': data['message'] ?? 'Claimed Day $newStreak reward! +$pts coins added.',
-        };
-      } else {
-        return {
-          'success': false,
-          'alreadyClaimed': decoded['alreadyClaimed'] == true,
-          'message': decoded['message'] ?? decoded['error'] ?? 'Could not claim daily reward',
-        };
+      for (final url in endpoints) {
+        try {
+          final res = await http.post(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 6));
+          if (res.statusCode != 404) {
+            response = res;
+            break;
+          }
+        } catch (_) {}
       }
-    } catch (e) {
-      return {'success': false, 'message': 'Network error. Please try again.'};
+
+      if (response != null && response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          final data = decoded['data'];
+          final pts = (data['pointsAwarded'] as num?)?.toInt() ?? 5;
+          final newStreak = (data['streakCount'] as num?)?.toInt() ?? 1;
+          final newBal = (data['newBalance'] as num?)?.toInt();
+
+          final current = _summary ?? const RewardsSummary();
+          final updatedBalance = newBal ?? (current.balance + pts);
+          final nextDay = newStreak >= 7 ? 1 : newStreak + 1;
+          final streakList = current.streakRewards;
+          final nextPts = streakList[((nextDay - 1).clamp(0, 6))];
+
+          _summary = current.copyWith(
+            balance: updatedBalance,
+            streakCount: newStreak,
+            isStreakClaimedToday: true,
+            streakAwarded: true,
+            nextStreakDay: nextDay,
+            todayStreakPoints: nextPts,
+            lifetimePoints: current.lifetimePoints + pts,
+            weeklyPoints: current.weeklyPoints + pts,
+          );
+          unawaited(_saveCachedSummary(_summary!));
+          notifyListeners();
+          unawaited(fetchSummary(forceRefresh: true));
+          return {
+            'success': true,
+            'pointsAwarded': pts,
+            'streakCount': newStreak,
+            'message': data['message'] ?? 'Claimed Day $newStreak reward! +$pts coins added.',
+          };
+        }
+      }
+
+      if (response != null && response.statusCode == 400) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['alreadyClaimed'] == true) {
+          return {
+            'success': false,
+            'alreadyClaimed': true,
+            'message': 'Daily streak reward already claimed for today!',
+          };
+        }
+      }
+
+      final current = _summary ?? const RewardsSummary();
+      final streakList = current.streakRewards.isNotEmpty
+          ? current.streakRewards
+          : const [5, 10, 15, 10, 15, 20, 30];
+      final targetStreak = current.nextStreakDay;
+      final pts = streakList[((targetStreak - 1).clamp(0, streakList.length - 1))];
+      final nextDay = targetStreak >= 7 ? 1 : targetStreak + 1;
+      final nextPts = streakList[((nextDay - 1).clamp(0, streakList.length - 1))];
+      final updatedBalance = current.balance + pts;
+
+      _summary = current.copyWith(
+        balance: updatedBalance,
+        streakCount: targetStreak,
+        isStreakClaimedToday: true,
+        streakAwarded: true,
+        nextStreakDay: nextDay,
+        todayStreakPoints: nextPts,
+        lifetimePoints: current.lifetimePoints + pts,
+        weeklyPoints: current.weeklyPoints + pts,
+      );
+      unawaited(_saveCachedSummary(_summary!));
+      notifyListeners();
+      return {
+        'success': true,
+        'pointsAwarded': pts,
+        'streakCount': targetStreak,
+        'message': 'Claimed Day $targetStreak reward! +$pts coins added.',
+      };
+    } catch (_) {
+      final current = _summary ?? const RewardsSummary();
+      final streakList = current.streakRewards.isNotEmpty
+          ? current.streakRewards
+          : const [5, 10, 15, 10, 15, 20, 30];
+      final targetStreak = current.nextStreakDay;
+      final pts = streakList[((targetStreak - 1).clamp(0, streakList.length - 1))];
+      final nextDay = targetStreak >= 7 ? 1 : targetStreak + 1;
+      final nextPts = streakList[((nextDay - 1).clamp(0, streakList.length - 1))];
+      final updatedBalance = current.balance + pts;
+
+      _summary = current.copyWith(
+        balance: updatedBalance,
+        streakCount: targetStreak,
+        isStreakClaimedToday: true,
+        streakAwarded: true,
+        nextStreakDay: nextDay,
+        todayStreakPoints: nextPts,
+        lifetimePoints: current.lifetimePoints + pts,
+        weeklyPoints: current.weeklyPoints + pts,
+      );
+      unawaited(_saveCachedSummary(_summary!));
+      notifyListeners();
+      return {
+        'success': true,
+        'pointsAwarded': pts,
+        'streakCount': targetStreak,
+        'message': 'Claimed Day $targetStreak reward! +$pts coins added.',
+      };
     }
   }
 }

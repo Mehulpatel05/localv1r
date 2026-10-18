@@ -25,11 +25,9 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
 
   final List<String> _categories = [
     'All',
-    'Food & Cafe',
-    'Groceries',
-    'Services',
-    'Healthcare',
     'Bazar Boost',
+    'Community',
+    'Badges',
   ];
 
   @override
@@ -91,46 +89,28 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
 
   IconData _getCategoryIcon(String category) {
     final cat = category.toLowerCase();
-    if (cat.contains('food') || cat.contains('cafe') || cat.contains('bakery') || cat.contains('restaurant')) {
-      return Icons.restaurant_rounded;
-    }
-    if (cat.contains('groc')) {
-      return Icons.shopping_basket_rounded;
-    }
-    if (cat.contains('salon') || cat.contains('spa')) {
-      return Icons.content_cut_rounded;
-    }
-    if (cat.contains('health') || cat.contains('pharmacy') || cat.contains('med')) {
-      return Icons.medical_services_rounded;
-    }
     if (cat.contains('boost')) {
       return Icons.rocket_launch_rounded;
     }
-    if (cat.contains('deliver')) {
-      return Icons.local_shipping_rounded;
+    if (cat.contains('communit') || cat.contains('post') || cat.contains('feed')) {
+      return Icons.campaign_rounded;
     }
-    return Icons.local_offer_rounded;
+    if (cat.contains('badge') || cat.contains('trust') || cat.contains('verif')) {
+      return Icons.verified_rounded;
+    }
+    return Icons.stars_rounded;
   }
 
   Color _getCategoryColor(String category) {
     final cat = category.toLowerCase();
-    if (cat.contains('food') || cat.contains('cafe') || cat.contains('bakery') || cat.contains('restaurant')) {
-      return const Color(0xFFEA580C);
-    }
-    if (cat.contains('groc')) {
-      return const Color(0xFF16A34A);
-    }
-    if (cat.contains('salon') || cat.contains('spa')) {
-      return const Color(0xFFD946EF);
-    }
-    if (cat.contains('health') || cat.contains('pharmacy') || cat.contains('med')) {
-      return const Color(0xFFE11D48);
-    }
     if (cat.contains('boost')) {
       return const Color(0xFF7C3AED);
     }
-    if (cat.contains('deliver')) {
+    if (cat.contains('communit') || cat.contains('post') || cat.contains('feed')) {
       return const Color(0xFF0284C7);
+    }
+    if (cat.contains('badge') || cat.contains('trust') || cat.contains('verif')) {
+      return const Color(0xFFEA580C);
     }
     return const Color(0xFF0E8A3E);
   }
@@ -190,7 +170,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
             Text(
               perk.description.isNotEmpty
                   ? perk.description
-                  : 'Spend ${perk.costPoints} coins for a 7-day coupon at ${perk.shopName}.',
+                  : 'Spend ${perk.costPoints} coins to unlock ${perk.title}.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, color: Color(0xFF5C6B7D), height: 1.4),
             ),
@@ -290,7 +270,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Coupon unlocked: ${res.code}! Show code at store checkout.'),
+          content: Text('Perk unlocked: ${res.code}! Saved to your wallet.'),
           backgroundColor: const Color(0xFF0E8A3E),
           behavior: SnackBarBehavior.floating,
         ),
@@ -302,7 +282,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     Clipboard.setData(ClipboardData(text: code));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Coupon code copied! Show it to the shopkeeper at checkout.'),
+        content: Text('Perk voucher code copied to clipboard!'),
         backgroundColor: Color(0xFF0E8A3E),
         behavior: SnackBarBehavior.floating,
       ),
@@ -457,7 +437,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Shop Perks',
+          'Bazar & Community Perks',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -600,7 +580,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'My Claimed Coupons',
+                          'My Claimed Perks',
                           style: TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.bold,
@@ -691,7 +671,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Claim Perks with Coins',
+                        'Redeem Perks with Coins',
                         style: TextStyle(
                           fontSize: 15.5,
                           fontWeight: FontWeight.bold,
@@ -847,14 +827,14 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.store_mall_directory_rounded, size: 28, color: Color(0xFF0E8A3E)),
+                        Icon(Icons.storefront_rounded, size: 28, color: Color(0xFF0E8A3E)),
                         SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Own a local business?',
+                                'Selling items in Bazar?',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -863,7 +843,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                               ),
                               SizedBox(height: 2),
                               Text(
-                                'Register your shop in Bazaar to offer perks & discount coupons to neighbours.',
+                                'Use your coins to boost listings, pin posts, and earn verified seller badges.',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF5C6B7D),

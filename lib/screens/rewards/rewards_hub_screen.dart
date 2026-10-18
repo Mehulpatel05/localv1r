@@ -286,6 +286,13 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline_rounded, size: 22, color: Color(0xFF0E8A3E)),
+            tooltip: 'Rewards Policy',
+            onPressed: _showRewardsRulesModal,
+          ),
+        ],
       ),
       body: _buildBody(),
     );
@@ -643,6 +650,10 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
 
             const SizedBox(height: 16),
 
+            _buildRulesSummaryCard(),
+
+            const SizedBox(height: 16),
+
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -862,15 +873,19 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2F1),
-                      borderRadius: BorderRadius.circular(8),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00897B), Color(0xFF00695C)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(9),
                     ),
                     child: const Icon(
                       Icons.redeem_rounded,
                       size: 18,
-                      color: Color(0xFF00897B),
+                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -906,16 +921,16 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
             children: [
               Expanded(
                 child: _buildRedeemOptionCard(
-                  title: 'Shop Perks',
-                  badgeText: 'Coupons',
+                  title: 'Bazar & Badges',
+                  badgeText: 'Perks',
                   badgeColor: const Color(0xFF00897B),
                   badgeBg: const Color(0xFFE0F2F1),
-                  description: 'Discounts on chai, groceries, cafe & food',
-                  costText: 'From 50 coins',
-                  icon: Icons.local_offer_rounded,
+                  description: 'Spotlights, verified badges & boosts',
+                  costText: 'From 100 coins',
+                  icon: Icons.verified_rounded,
                   iconColor: const Color(0xFF00897B),
                   iconBg: const Color(0xFFE0F2F1),
-                  buttonText: 'Unlock Perks',
+                  buttonText: 'Explore Perks',
                   buttonBg: const Color(0xFF00897B),
                   onTap: () => Navigator.of(context, rootNavigator: true).push(
                     PageRouteBuilder(
@@ -1429,6 +1444,313 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRulesSummaryCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFB9DEC6), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E8A3E),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.menu_book_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Rewards Rules & Fair Play',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF16243A),
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: _showRewardsRulesModal,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF0E8A3E), width: 1),
+                  ),
+                  child: const Text(
+                    'Full Rules →',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0E8A3E),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRuleBullet(
+            icon: Icons.calendar_today_rounded,
+            title: 'Daily Streak Bonus (D1 - D7)',
+            desc: 'Earn +5 to +30 coins every day. 7 days in a row unlocks +30 loyalty coins.',
+          ),
+          const SizedBox(height: 8),
+          _buildRuleBullet(
+            icon: Icons.speed_rounded,
+            title: 'Daily 50 Pts Activity Cap',
+            desc: 'Max 50 points/day across posts, replies & likes to ensure authentic community.',
+          ),
+          const SizedBox(height: 8),
+          _buildRuleBullet(
+            icon: Icons.rocket_launch_rounded,
+            title: 'Bazar Boosts & Community Perks',
+            desc: 'Use coins to boost listings, spotlight urgent deals, or unlock verified badges.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleBullet({
+    required IconData icon,
+    required String title,
+    required String desc,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 2),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F6EF),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 13, color: const Color(0xFF0E8A3E)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF16243A),
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                desc,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF5C6B7D),
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showRewardsRulesModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0E8A3E),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.stars_rounded, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Nearhood Rewards Policy',
+                              style: TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF16243A),
+                              ),
+                            ),
+                            Text(
+                              'Rules, limits, and redemption guide',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF5C6B7D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF5C6B7D)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    _buildRuleSectionHeader('1. Daily Check-in Streak (रोजाना हाजिरी)'),
+                    _buildRuleText(
+                      '• Check in every day to collect free reward coins.\n'
+                      '• Day 1: +5, Day 2: +10, Day 3: +15, Day 4: +10, Day 5: +15, Day 6: +20, Day 7: +30 Mega Bonus.\n'
+                      '• Each day must be claimed once between 12:00 AM and 11:59 PM.\n'
+                      '• If you miss a day, the streak resets to Day 1 so everyone gets equal chances.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRuleSectionHeader('2. Daily Activity Cap (50 Points/Day)'),
+                    _buildRuleText(
+                      '• To keep the colony feed clean and spam-free, a maximum of 50 activity points can be earned per day.\n'
+                      '• This cap applies across posts, replies, likes, and listings.\n'
+                      '• Daily Check-in Streak bonuses do NOT count toward this 50-point limit.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRuleSectionHeader('3. Earning Points in Your Colony'),
+                    _buildRuleText(
+                      '• Colony Posts (+5 pts): Share updates, questions, or alerts (min 20 chars, max 3/day).\n'
+                      '• Helpful Replies (+3 pts): Help neighbors with answers (min 20 chars, max 5/day).\n'
+                      '• Likes Received (+5 pts): When neighbours appreciate your advice (max 5/day).\n'
+                      '• Bazaar Listings (+10 pts): List genuine items with photos (credited after 24h live, max 3/day).\n'
+                      '• Invite Neighbours (+25 pts): When an invited neighbor posts their first colony update (max 5/month).',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRuleSectionHeader('4. Redeeming Your Coins'),
+                    _buildRuleText(
+                      '• 24h Bazar Boost: Pin your marketplace listing at the top of your colony for 24 hours (300 coins).\n'
+                      '• Urgent Deal Badge: Highlight item with an eye-catching urgent tag for 3 days (150 coins).\n'
+                      '• Post Spotlight: Feature your community post or notice in the neighborhood feed (200 coins).\n'
+                      '• Verified Neighbour: Unlock an exclusive verified star badge on your profile (500 coins).\n'
+                      '• All unlocked perks and voucher codes are securely saved in your perk wallet.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRuleSectionHeader('5. Fair Play & Trust Policy'),
+                    _buildRuleText(
+                      '• Nearhood is a trusted local neighborhood community.\n'
+                      '• Spamming, bot activity, fake accounts, or artificial upvotes will result in immediate points cancellation and account restriction.',
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0E8A3E),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text(
+                          'I Understand',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRuleSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF0E8A3E),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRuleText(String text) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAF9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12.5,
+          color: Color(0xFF334155),
+          height: 1.45,
         ),
       ),
     );
