@@ -437,7 +437,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                               Text(
                                 post.areaName != null && post.areaName!.isNotEmpty
                                     ? post.areaName!
-                                    : 'Vadodara',
+                                    : (post.cityId != null && post.cityId!.isNotEmpty ? post.cityId! : 'Local Area'),
                                 style: const TextStyle(
                                   color: Color(0xFF64748B),
                                   fontSize: 11.5,

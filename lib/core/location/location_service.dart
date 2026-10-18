@@ -297,8 +297,9 @@ class LocationService extends ChangeNotifier {
   Future<bool> checkLocationAndAutoDetect({
     double? forceLat,
     double? forceLng,
+    bool force = false,
   }) async {
-    if (_isManualLocation && forceLat == null && forceLng == null) {
+    if (!force && _isManualLocation && forceLat == null && forceLng == null) {
       _state = LocationState.manualLocation;
       notifyListeners();
       return true;

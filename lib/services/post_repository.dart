@@ -366,11 +366,11 @@ class PostRepository extends ChangeNotifier {
         return (DateTime.tryParse(s) ?? DateTime.now()).toLocal();
       })(),
       stateId: d['stateId'],
-      cityId: d['cityId'] ?? 'GJ-VAD',
-      areaId: d['areaId'],
+      cityId: d['cityId'] ?? d['city_id'] ?? locationService.cityId,
+      areaId: d['areaId'] ?? d['area_id'],
       areaName: (d['areaName'] != null && d['areaName'].toString().trim().isNotEmpty)
           ? d['areaName'].toString()
-          : (d['areaId'] != null ? LocationEngine.lookupArea(d['areaId'].toString())?.name : null) ?? 'Vadodara',
+          : (d['areaId'] != null ? LocationEngine.lookupArea(d['areaId'].toString())?.name : null) ?? (locationService.area?.name ?? locationService.city.name),
       lat: d['lat'] != null ? (d['lat'] as num).toDouble() : null,
       lng: d['lng'] != null ? (d['lng'] as num).toDouble() : null,
       roomTitle: d['roomTitle'],
@@ -826,7 +826,7 @@ class PostRepository extends ChangeNotifier {
             stateId: null,
             cityId: cityId,
             areaId: areaId ?? cityId,
-            areaName: areaName ?? (areaId != null ? LocationEngine.lookupArea(areaId)?.name : null) ?? 'Vadodara',
+            areaName: areaName ?? (areaId != null ? LocationEngine.lookupArea(areaId)?.name : null) ?? (LocationEngine.lookupCity(cityId)?.name ?? locationService.city.name),
             lat: lat,
             lng: lng,
             roomTitle: roomTitle,

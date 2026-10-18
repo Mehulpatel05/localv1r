@@ -1305,7 +1305,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                 borderRadius: BorderRadius.circular(4),
                                 child: Builder(
                                   builder: (context) {
-                                    String cleanArea = post.areaName != null && post.areaName!.isNotEmpty ? post.areaName! : 'Vadodara';
+                                    final fallbackCity = context.read<LocationService>().city.name;
+                                    String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
+                                        ? post.areaName!
+                                        : fallbackCity;
                                     if (cleanArea.contains('General / All')) {
                                       cleanArea = cleanArea.replaceAll('General / All', 'General · All');
                                     }

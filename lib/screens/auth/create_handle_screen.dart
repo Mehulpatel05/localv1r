@@ -439,6 +439,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     } finally {
       if (mounted) {
         setState(() => _isResolvingArea = false);
+        final effectiveCityName = _selectedCityName ?? '';
+        final effectiveCityId = _selectedCityId ?? '';
+        if (_selectedArea != null && !_isLiveCity(effectiveCityId, effectiveCityName)) {
+          _showWaitlistSheet(effectiveCityName.isNotEmpty ? effectiveCityName : 'your city');
+        }
       }
     }
   }
@@ -607,8 +612,196 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLocating = false);
+        final effectiveCityName = _selectedCityName ?? '';
+        final effectiveCityId = _selectedCityId ?? '';
+        if (_selectedArea != null && !_isLiveCity(effectiveCityId, effectiveCityName)) {
+          _showWaitlistSheet(effectiveCityName.isNotEmpty ? effectiveCityName : 'your city');
+        }
       }
     }
+  }
+
+  bool _isLiveCity(String cityId, String? cityName) {
+    const liveCityIds = {'GJ-VAD', 'RJ-JAI', 'RJ-JDH', 'RJ-UDR', 'RJ-KOT'};
+    if (liveCityIds.contains(cityId.trim().toUpperCase())) return true;
+
+    final clean = (cityName ?? '').trim().toLowerCase();
+    const liveCityNames = {'vadodara', 'jaipur', 'jodhpur', 'udaipur', 'kota'};
+    if (liveCityNames.contains(clean)) return true;
+
+    for (final name in liveCityNames) {
+      if (clean.contains(name) || name.contains(clean)) {
+        if (clean.length >= 4) return true;
+      }
+    }
+    return false;
+  }
+
+  void _showWaitlistSheet(String cityName) {
+    unawaited(
+      AuthService.instance.joinWaitlist(
+        cityText: cityName,
+        contactOrDeviceId: (widget.phoneNumber != null && widget.phoneNumber!.isNotEmpty)
+            ? widget.phoneNumber!
+            : (widget.userId.isNotEmpty ? widget.userId : 'user'),
+      ),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3), width: 1.5),
+              ),
+              child: const Icon(
+                Icons.location_city_rounded,
+                color: Color(0xFFD97706),
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Coming Soon to $cityName!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Nearhood is currently live only in Vadodara, Jaipur, Jodhpur, Udaipur, and Kota.\n\nYou have been added to our early-access waitlist! We will notify you as soon as we launch in your city.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF64748B),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Or explore an active live city:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildLiveCityChip('Vadodara', 'GJ-VAD', 'Alkapuri', ctx),
+                      _buildLiveCityChip('Jaipur', 'RJ-JAI', 'Malviya Nagar', ctx),
+                      _buildLiveCityChip('Jodhpur', 'RJ-JDH', 'Shastri Nagar', ctx),
+                      _buildLiveCityChip('Udaipur', 'RJ-UDR', 'Fatehpura', ctx),
+                      _buildLiveCityChip('Kota', 'RJ-KOT', 'Talwandi', ctx),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryGreen,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  'Got it, Keep Me on Waitlist',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveCityChip(String name, String cityId, String defaultArea, BuildContext sheetCtx) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        final city = LocationEngine.lookupCity(cityId);
+        final area = city?.areas.firstOrNull ?? GeoArea(id: '$cityId-MAIN', cityId: cityId, name: defaultArea);
+        setState(() {
+          _selectedCityId = cityId;
+          _selectedCityName = name;
+          _selectedArea = area;
+          _areaSearchController.text = area.name;
+          _isAreaSearching = false;
+          _livePredictions.clear();
+        });
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _primaryGreen.withValues(alpha: 0.4), width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_outline_rounded, color: _primaryGreen, size: 14),
+            const SizedBox(width: 5),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
 
@@ -841,6 +1034,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         final selectedCityId = _selectedArea!.cityId.isNotEmpty
             ? _selectedArea!.cityId
             : (_selectedCityId ?? _selectedCityName ?? 'IN');
+        final selectedCityName = _selectedCityName ?? _selectedArea!.name;
+
+        if (!_isLiveCity(selectedCityId, selectedCityName)) {
+          setState(() => _isSubmitting = false);
+          _showWaitlistSheet(selectedCityName.isNotEmpty ? selectedCityName : 'your city');
+          return;
+        }
+
         final result = await AuthService.instance.confirmAreaDetails(
           areaId: _selectedArea!.id,
           areaName: _selectedArea!.name,
@@ -852,6 +1053,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         if (!mounted) return;
 
         if (result['success'] != true) {
+          if (result['isWaitlisted'] == true) {
+            setState(() => _isSubmitting = false);
+            _showWaitlistSheet(_selectedCityName ?? 'your city');
+            return;
+          }
           final errorMsg = result['error'] as String? ?? 'Failed to update area. Please try again.';
           setState(() {
             _isSubmitting = false;
@@ -867,14 +1073,25 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
           return;
         }
 
-        final city = LocationEngine.lookupCity(selectedCityId) ??
-            GeoCity(
-              id: selectedCityId,
-              stateId: 'IN',
-              name: _selectedCityName ?? _selectedArea!.cityId,
-              enabled: true,
-              areas: [_selectedArea!],
-            );
+        final lookedUpCity = LocationEngine.lookupCity(selectedCityId);
+        final city = (_selectedCityName != null && _selectedCityName!.isNotEmpty)
+            ? GeoCity(
+                id: selectedCityId,
+                stateId: lookedUpCity?.stateId ?? 'IN',
+                name: _selectedCityName!,
+                enabled: true,
+                areas: lookedUpCity?.areas ?? [_selectedArea!],
+                lat: lookedUpCity?.lat,
+                lng: lookedUpCity?.lng,
+              )
+            : (lookedUpCity ??
+                GeoCity(
+                  id: selectedCityId,
+                  stateId: 'IN',
+                  name: _selectedArea!.cityId,
+                  enabled: true,
+                  areas: [_selectedArea!],
+                ));
         await widget.repository.locationService.setCity(city);
         await widget.repository.locationService.setArea(_selectedArea);
 
@@ -935,6 +1152,14 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       final selectedCityId = _selectedArea!.cityId.isNotEmpty
           ? _selectedArea!.cityId
           : (_selectedCityId ?? _selectedCityName ?? 'IN');
+      final selectedCityName = _selectedCityName ?? _selectedArea!.name;
+
+      if (!_isLiveCity(selectedCityId, selectedCityName)) {
+        setState(() => _isSubmitting = false);
+        _showWaitlistSheet(selectedCityName.isNotEmpty ? selectedCityName : 'your city');
+        return;
+      }
+
       final result = await AuthService.instance.saveUserHandle(
         handle,
         userId: effectiveUid,
@@ -948,6 +1173,11 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
       );
 
       if (result['success'] != true) {
+        if (result['isWaitlisted'] == true) {
+          setState(() => _isSubmitting = false);
+          _showWaitlistSheet(_selectedCityName ?? 'your city');
+          return;
+        }
         final isTaken = result['isTaken'] == true;
         final errorMsg = result['error'] as String? ?? 'Failed to update username.';
 
@@ -980,14 +1210,25 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         await AuthService.instance.removeUserProfileImage();
       }
 
-      final city = LocationEngine.lookupCity(selectedCityId) ??
-          GeoCity(
-            id: selectedCityId,
-            stateId: 'IN',
-            name: _selectedCityName ?? _selectedArea!.cityId,
-            enabled: true,
-            areas: [_selectedArea!],
-          );
+      final lookedUpCity = LocationEngine.lookupCity(selectedCityId);
+      final city = (_selectedCityName != null && _selectedCityName!.isNotEmpty)
+          ? GeoCity(
+              id: selectedCityId,
+              stateId: lookedUpCity?.stateId ?? 'IN',
+              name: _selectedCityName!,
+              enabled: true,
+              areas: lookedUpCity?.areas ?? [_selectedArea!],
+              lat: lookedUpCity?.lat,
+              lng: lookedUpCity?.lng,
+            )
+          : (lookedUpCity ??
+              GeoCity(
+                id: selectedCityId,
+                stateId: 'IN',
+                name: _selectedArea!.cityId,
+                enabled: true,
+                areas: [_selectedArea!],
+              ));
       await widget.repository.locationService.setCity(city);
       await widget.repository.locationService.setArea(_selectedArea);
 

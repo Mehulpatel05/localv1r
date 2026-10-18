@@ -474,7 +474,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         content: text,
         cityId: effectiveCity.id,
         areaId: effectiveArea?.id ?? effectiveCity.id,
-        areaName: effectiveArea?.name ?? 'Vadodara',
+        areaName: effectiveArea?.name ?? effectiveCity.name,
         lat: effectiveLat,
         lng: effectiveLng,
         category: _isEmergency ? PostCategory.safetyAlert : _selectedCategory,

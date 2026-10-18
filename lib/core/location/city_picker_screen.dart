@@ -58,7 +58,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: InkWell(
               onTap: () async {
-                final success = await locService.checkLocationAndAutoDetect();
+                final success = await locService.checkLocationAndAutoDetect(force: true);
                 if (success && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
