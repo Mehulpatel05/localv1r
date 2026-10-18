@@ -324,9 +324,11 @@ class ShopPerkItem {
   final String category;
   final String logoUrl;
   final String title;
+  final String description;
   final int costPoints;
   final int dailyLimit;
   final DateTime? expiresAt;
+  final String codePrefix;
 
   const ShopPerkItem({
     required this.id,
@@ -335,10 +337,28 @@ class ShopPerkItem {
     required this.category,
     required this.logoUrl,
     required this.title,
+    this.description = '',
     required this.costPoints,
     required this.dailyLimit,
     this.expiresAt,
+    this.codePrefix = 'PERK',
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'shop_id': shopId,
+      'shop_name': shopName,
+      'category': category,
+      'logo_r2_path': logoUrl,
+      'title': title,
+      'description': description,
+      'cost_points': costPoints,
+      'daily_limit': dailyLimit,
+      'expires_at': expiresAt?.toIso8601String(),
+      'code_prefix': codePrefix,
+    };
+  }
 
   factory ShopPerkItem.fromJson(Map<String, dynamic> json) {
     DateTime? parsedExp;
@@ -354,9 +374,11 @@ class ShopPerkItem {
       category: json['category'] as String? ?? 'General',
       logoUrl: (json['logo_r2_path'] ?? json['logoUrl']) as String? ?? '',
       title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
       costPoints: (json['cost_points'] as num?)?.toInt() ?? (json['costPoints'] as num?)?.toInt() ?? 100,
       dailyLimit: (json['daily_limit'] as num?)?.toInt() ?? (json['dailyLimit'] as num?)?.toInt() ?? 10,
       expiresAt: parsedExp,
+      codePrefix: (json['code_prefix'] ?? json['codePrefix']) as String? ?? 'PERK',
     );
   }
 }
@@ -373,6 +395,15 @@ class UnlockedCouponItem {
     required this.title,
     required this.expiresAt,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'code': code,
+      'title': title,
+      'expires_at': expiresAt.toIso8601String(),
+    };
+  }
 
   factory UnlockedCouponItem.fromJson(Map<String, dynamic> json) {
     DateTime parsedExp;

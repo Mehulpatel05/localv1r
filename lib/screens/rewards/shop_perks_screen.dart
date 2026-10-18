@@ -17,10 +17,20 @@ class ShopPerksScreen extends StatefulWidget {
 
 class _ShopPerksScreenState extends State<ShopPerksScreen> {
   List<ShopPerkItem> _perks = [];
-  final List<UnlockedCouponItem> _myUnlockedCoupons = [];
+  List<UnlockedCouponItem> _myUnlockedCoupons = [];
   bool _isLoading = true;
   bool _hasError = false;
   int _balance = 0;
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = [
+    'All',
+    'Food & Cafe',
+    'Groceries',
+    'Services',
+    'Healthcare',
+    'Bazar Boost',
+  ];
 
   @override
   void initState() {
@@ -37,42 +47,108 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     try {
       final summaryFuture = RewardsService.instance.fetchSummary();
       final perksFuture = RewardsService.instance.fetchShopPerks();
+      final couponsFuture = RewardsService.instance.fetchMyCoupons();
 
-      final results = await Future.wait([summaryFuture, perksFuture])
-          .timeout(const Duration(seconds: 6));
+      final results = await Future.wait([summaryFuture, perksFuture, couponsFuture])
+          .timeout(const Duration(seconds: 8));
 
       final summary = results[0] as RewardsSummary?;
       final perks = results[1] as List<ShopPerkItem>;
+      final coupons = results[2] as List<UnlockedCouponItem>;
 
       if (mounted) {
         setState(() {
           _balance = summary?.balance ?? 0;
           _perks = perks;
+          _myUnlockedCoupons = coupons;
           _isLoading = false;
           _hasError = false;
         });
       }
     } catch (_) {
+      final fallbackPerks = RewardsService.defaultShopPerks;
+      final cachedCoupons = await RewardsService.instance.loadCachedUnlockedCoupons();
       if (mounted) {
         setState(() {
+          _balance = RewardsService.instance.summary?.balance ?? 0;
+          _perks = fallbackPerks;
+          _myUnlockedCoupons = cachedCoupons;
           _isLoading = false;
-          _hasError = true;
+          _hasError = false;
         });
       }
     }
+  }
+
+  List<ShopPerkItem> get _filteredPerks {
+    if (_selectedCategory == 'All') return _perks;
+    return _perks.where((p) {
+      final perkCat = p.category.toLowerCase();
+      final sel = _selectedCategory.toLowerCase();
+      return perkCat.contains(sel) || sel.contains(perkCat);
+    }).toList();
+  }
+
+  IconData _getCategoryIcon(String category) {
+    final cat = category.toLowerCase();
+    if (cat.contains('food') || cat.contains('cafe') || cat.contains('bakery') || cat.contains('restaurant')) {
+      return Icons.restaurant_rounded;
+    }
+    if (cat.contains('groc')) {
+      return Icons.shopping_basket_rounded;
+    }
+    if (cat.contains('salon') || cat.contains('spa')) {
+      return Icons.content_cut_rounded;
+    }
+    if (cat.contains('health') || cat.contains('pharmacy') || cat.contains('med')) {
+      return Icons.medical_services_rounded;
+    }
+    if (cat.contains('boost')) {
+      return Icons.rocket_launch_rounded;
+    }
+    if (cat.contains('deliver')) {
+      return Icons.local_shipping_rounded;
+    }
+    return Icons.local_offer_rounded;
+  }
+
+  Color _getCategoryColor(String category) {
+    final cat = category.toLowerCase();
+    if (cat.contains('food') || cat.contains('cafe') || cat.contains('bakery') || cat.contains('restaurant')) {
+      return const Color(0xFFEA580C);
+    }
+    if (cat.contains('groc')) {
+      return const Color(0xFF16A34A);
+    }
+    if (cat.contains('salon') || cat.contains('spa')) {
+      return const Color(0xFFD946EF);
+    }
+    if (cat.contains('health') || cat.contains('pharmacy') || cat.contains('med')) {
+      return const Color(0xFFE11D48);
+    }
+    if (cat.contains('boost')) {
+      return const Color(0xFF7C3AED);
+    }
+    if (cat.contains('deliver')) {
+      return const Color(0xFF0284C7);
+    }
+    return const Color(0xFF0E8A3E);
   }
 
   Future<void> _unlockCoupon(ShopPerkItem perk) async {
     if (_balance < perk.costPoints) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('You need ${perk.costPoints - _balance} more points to unlock this offer.'),
+          content: Text('You need ${perk.costPoints - _balance} more coins to claim this perk.'),
           backgroundColor: const Color(0xFFC0333A),
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
+
+    final catColor = _getCategoryColor(perk.category);
+    final catIcon = _getCategoryIcon(perk.category);
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -98,24 +174,70 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
             Container(
               width: 58,
               height: 58,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFEF3C7),
+              decoration: BoxDecoration(
+                color: catColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.local_offer_rounded, size: 30, color: Color(0xFFD97706)),
+              child: Icon(catIcon, size: 28, color: catColor),
             ),
             const SizedBox(height: 16),
             Text(
-              'Unlock ${perk.title}?',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF16243A)),
+              'Claim ${perk.title}?',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF16243A)),
             ),
             const SizedBox(height: 8),
             Text(
-              'Spend ${perk.costPoints} points for a 7-day coupon at ${perk.shopName}.',
+              perk.description.isNotEmpty
+                  ? perk.description
+                  : 'Spend ${perk.costPoints} coins for a 7-day coupon at ${perk.shopName}.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13.5, color: Color(0xFF5C6B7D), height: 1.4),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF5C6B7D), height: 1.4),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Your Balance',
+                        style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$_balance coins',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF16243A)),
+                      ),
+                    ],
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF94A3B8)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'After Claim',
+                        style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_balance - perk.costPoints} coins',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0E8A3E)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
             Row(
               children: [
                 Expanded(
@@ -143,7 +265,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: Text('Unlock (${perk.costPoints} pts)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text('Claim (${perk.costPoints} pts)', style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),
@@ -161,13 +283,14 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
 
     if (res != null) {
       setState(() {
+        _myUnlockedCoupons.removeWhere((c) => c.id == res.id);
         _myUnlockedCoupons.insert(0, res);
-        _balance -= perk.costPoints;
+        _balance = RewardsService.instance.summary?.balance ?? (_balance - perk.costPoints);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Coupon unlocked: ${res.code}! Valid for 7 days.'),
+          content: Text('Coupon unlocked: ${res.code}! Show code at store checkout.'),
           backgroundColor: const Color(0xFF0E8A3E),
           behavior: SnackBarBehavior.floating,
         ),
@@ -192,28 +315,26 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: 130,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              Container(
-                width: 90,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-            ],
+          Container(
+            height: 70,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(18),
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          Row(
+            children: List.generate(4, (index) => Container(
+              width: 80,
+              height: 34,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            )),
+          ),
+          const SizedBox(height: 18),
           ...List.generate(3, (index) => Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(14),
@@ -225,8 +346,8 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(12),
@@ -259,11 +380,11 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  width: 68,
-                  height: 34,
+                  width: 74,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ],
@@ -323,8 +444,10 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredPerks;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -352,62 +475,206 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_myUnlockedCoupons.isNotEmpty) ...[
-                    const Text(
-                      'My Unlocked Coupons',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF16243A),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0E8A3E), Color(0xFF15803D)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0E8A3E).withValues(alpha: 0.22),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.stars_rounded, color: Color(0xFFFEF08A), size: 26),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Coin Balance',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFD5ECDD),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$_balance Coins',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt_rounded, color: Color(0xFFFEF08A), size: 14),
+                              SizedBox(width: 3),
+                              Text(
+                                'Ready to claim',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  SizedBox(
+                    height: 36,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _categories.length,
+                      separatorBuilder: (context, index) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        final isSelected = cat == _selectedCategory;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedCategory = cat),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF0E8A3E) : Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFFE2E8F0),
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                cat,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  if (_myUnlockedCoupons.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'My Claimed Coupons',
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF16243A),
+                          ),
+                        ),
+                        Text(
+                          '${_myUnlockedCoupons.length} active',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0E8A3E),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _myUnlockedCoupons.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 8),
+                      separatorBuilder: (context, index) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final c = _myUnlockedCoupons[index];
                         return Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    c.title,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF78350F),
+                              Container(
+                                padding: const EdgeInsets.all(9),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF59E0B),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      c.title,
+                                      style: const TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF78350F),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    'Code: ${c.code}',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.2,
-                                      color: Color(0xFF0E8A3E),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      c.code,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1.2,
+                                        color: Color(0xFF0E8A3E),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0E8A3E),
                                   foregroundColor: Colors.white,
+                                  elevation: 0,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 ),
                                 onPressed: () => _copyCouponCode(c.code),
                                 child: const Text('Copy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -424,39 +691,39 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Available Perks',
+                        'Claim Perks with Coins',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15.5,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF16243A),
                         ),
                       ),
                       Text(
-                        'Your balance: $_balance pts',
+                        '${filtered.length} available',
                         style: const TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0E8A3E),
+                          color: Color(0xFF64748B),
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  if (_perks.isEmpty)
+                  if (filtered.isEmpty)
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(28),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
                       ),
                       child: const Center(
                         child: Text(
-                          'No active shop perks available in your area yet. Local shops will be adding discounts soon!',
+                          'No perks available in this category right now. Check back soon!',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 13.5, color: Color(0xFF5C6B7D), height: 1.4),
+                          style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
                         ),
                       ),
                     )
@@ -464,28 +731,38 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _perks.length,
+                      itemCount: filtered.length,
                       separatorBuilder: (context, index) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
-                        final perk = _perks[index];
+                        final perk = filtered[index];
                         final canAfford = _balance >= perk.costPoints;
+                        final catColor = _getCategoryColor(perk.category);
+                        final catIcon = _getCategoryIcon(perk.category);
+
                         return Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: Row(
                             children: [
                               Container(
-                                width: 44,
-                                height: 44,
+                                width: 46,
+                                height: 46,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE8F6EF),
+                                  color: catColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(Icons.storefront_rounded, color: Color(0xFF0E8A3E), size: 24),
+                                child: Icon(catIcon, color: catColor, size: 24),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -495,7 +772,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                     Text(
                                       perk.title,
                                       style: const TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 13.5,
                                         fontWeight: FontWeight.bold,
                                         color: Color(0xFF16243A),
                                       ),
@@ -504,13 +781,26 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                     Text(
                                       '${perk.shopName} · ${perk.category}',
                                       style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF5C6B7D),
+                                        fontSize: 11.5,
+                                        color: Color(0xFF64748B),
                                       ),
                                     ),
+                                    if (perk.description.isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        perk.description,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: canAfford ? const Color(0xFF0E8A3E) : const Color(0xFFF1F5F9),
@@ -520,9 +810,24 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 ),
                                 onPressed: () => _unlockCoupon(perk),
-                                child: Text(
-                                  '${perk.costPoints} pts',
-                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      canAfford ? Icons.stars_rounded : Icons.lock_outline_rounded,
+                                      size: 14,
+                                      color: canAfford ? const Color(0xFFFEF08A) : const Color(0xFF94A3B8),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${perk.costPoints} pts',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: canAfford ? Colors.white : const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -531,7 +836,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                       },
                     ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
 
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -540,11 +845,11 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        const Icon(Icons.store_mall_directory_rounded, size: 28, color: Color(0xFF0E8A3E)),
-                        const SizedBox(width: 12),
-                        const Expanded(
+                        Icon(Icons.store_mall_directory_rounded, size: 28, color: Color(0xFF0E8A3E)),
+                        SizedBox(width: 12),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

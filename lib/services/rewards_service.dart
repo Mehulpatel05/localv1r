@@ -327,6 +327,105 @@ class RewardsService extends ChangeNotifier {
     }
   }
 
+  static const List<ShopPerkItem> defaultShopPerks = [
+    ShopPerkItem(
+      id: 'perk_chai_10off',
+      shopId: 'shop_apna_chai',
+      shopName: 'Apna Chai & Cafe',
+      category: 'Food & Cafe',
+      logoUrl: '',
+      title: '10% OFF on Hot Beverages & Snacks',
+      description: 'Get 10% off on hot teas, coffees & quick bites at counter.',
+      costPoints: 50,
+      dailyLimit: 10,
+      codePrefix: 'CHAI10',
+    ),
+    ShopPerkItem(
+      id: 'perk_bakery_50off',
+      shopId: 'shop_royal_bakery',
+      shopName: 'Royal Bakeries & Confectionery',
+      category: 'Food & Cafe',
+      logoUrl: '',
+      title: '₹50 OFF on Cakes & Pastries (Min ₹200)',
+      description: 'Flat ₹50 discount on fresh cakes, pastries, and baked goods.',
+      costPoints: 100,
+      dailyLimit: 10,
+      codePrefix: 'BAKE50',
+    ),
+    ShopPerkItem(
+      id: 'perk_grocery_100off',
+      shopId: 'shop_aone_mart',
+      shopName: 'A-One Daily Mart & Groceries',
+      category: 'Groceries',
+      logoUrl: '',
+      title: '₹100 OFF on Daily Groceries (Min ₹500)',
+      description: 'Save flat ₹100 on your daily grocery basket of ₹500 or more.',
+      costPoints: 150,
+      dailyLimit: 10,
+      codePrefix: 'GROC100',
+    ),
+    ShopPerkItem(
+      id: 'perk_delivery_free',
+      shopId: 'shop_nh_delivery',
+      shopName: 'Nearhood Express Delivery',
+      category: 'Services',
+      logoUrl: '',
+      title: 'Free Home Delivery Voucher',
+      description: 'Enjoy 100% free doorstep delivery on any local Bazar shop order.',
+      costPoints: 40,
+      dailyLimit: 15,
+      codePrefix: 'FREEDEL',
+    ),
+    ShopPerkItem(
+      id: 'perk_salon_100off',
+      shopId: 'shop_glamour_salon',
+      shopName: 'Glamour Unisex Salon & Spa',
+      category: 'Services',
+      logoUrl: '',
+      title: 'Flat ₹100 OFF on Salon Services',
+      description: 'Get flat ₹100 off on haircut, facial, grooming, or spa services.',
+      costPoints: 180,
+      dailyLimit: 10,
+      codePrefix: 'GLAM100',
+    ),
+    ShopPerkItem(
+      id: 'perk_pharmacy_15off',
+      shopId: 'shop_city_pharmacy',
+      shopName: 'City Care Medicos & Pharmacy',
+      category: 'Healthcare',
+      logoUrl: '',
+      title: '15% OFF on Wellness & Healthcare',
+      description: 'Flat 15% discount on general wellness essentials & medicines.',
+      costPoints: 120,
+      dailyLimit: 10,
+      codePrefix: 'MED15',
+    ),
+    ShopPerkItem(
+      id: 'perk_dining_150off',
+      shopId: 'shop_taste_punjab',
+      shopName: 'Taste of Punjab Family Restaurant',
+      category: 'Food & Cafe',
+      logoUrl: '',
+      title: '₹150 OFF on Family Dinner (Min ₹750)',
+      description: 'Flat ₹150 off on total food bill of ₹750 or more (Dine-in / Takeaway).',
+      costPoints: 250,
+      dailyLimit: 5,
+      codePrefix: 'DINE150',
+    ),
+    ShopPerkItem(
+      id: 'perk_bazar_boost',
+      shopId: 'shop_nh_bazar',
+      shopName: 'Nearhood Community Bazar',
+      category: 'Bazar Boost',
+      logoUrl: '',
+      title: '24-Hour Listing Boost in Bazar',
+      description: 'Pin your product or service listing to the top of Bazaar for 24 hours.',
+      costPoints: 300,
+      dailyLimit: 5,
+      codePrefix: 'BOOST24',
+    ),
+  ];
+
   Future<List<ShopPerkItem>> fetchShopPerks() async {
     try {
       final uri = Uri.parse('${ApiConstants.baseUrl}/rewards/perks');
@@ -336,16 +435,81 @@ class RewardsService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded['success'] == true && decoded['perks'] is List) {
-          return (decoded['perks'] as List)
+          final serverPerks = (decoded['perks'] as List)
               .whereType<Map<String, dynamic>>()
               .map((m) => ShopPerkItem.fromJson(m))
               .toList();
+          if (serverPerks.isNotEmpty) {
+            return serverPerks;
+          }
         }
       }
     } catch (e) {
       debugPrint('[RewardsService] Error fetching shop perks: $e');
     }
+    return defaultShopPerks;
+  }
+
+  Future<List<UnlockedCouponItem>> fetchMyCoupons() async {
+    final localCoupons = await loadCachedUnlockedCoupons();
+    try {
+      final uri = Uri.parse('${ApiConstants.baseUrl}/rewards/my-coupons');
+      final headers = await _getHeaders();
+      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true && decoded['coupons'] is List) {
+          final serverList = (decoded['coupons'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((m) => UnlockedCouponItem.fromJson(m))
+              .toList();
+          final mergedMap = <String, UnlockedCouponItem>{};
+          for (final c in localCoupons) {
+            mergedMap[c.id] = c;
+          }
+          for (final c in serverList) {
+            mergedMap[c.id] = c;
+          }
+          final combined = mergedMap.values.toList();
+          await saveAllUnlockedCouponsLocally(combined);
+          return combined;
+        }
+      }
+    } catch (_) {}
+    return localCoupons;
+  }
+
+  Future<List<UnlockedCouponItem>> loadCachedUnlockedCoupons() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('cached_unlocked_coupons');
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw);
+        if (list is List) {
+          return list
+              .whereType<Map<String, dynamic>>()
+              .map((m) => UnlockedCouponItem.fromJson(m))
+              .toList();
+        }
+      }
+    } catch (_) {}
     return [];
+  }
+
+  Future<void> saveAllUnlockedCouponsLocally(List<UnlockedCouponItem> coupons) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = coupons.map((c) => c.toJson()).toList();
+      await prefs.setString('cached_unlocked_coupons', jsonEncode(jsonList));
+    } catch (_) {}
+  }
+
+  Future<void> saveUnlockedCouponLocally(UnlockedCouponItem coupon) async {
+    final current = await loadCachedUnlockedCoupons();
+    current.removeWhere((c) => c.id == coupon.id);
+    current.insert(0, coupon);
+    await saveAllUnlockedCouponsLocally(current);
   }
 
   Future<UnlockedCouponItem?> unlockCoupon(String couponId) async {
@@ -361,11 +525,28 @@ class RewardsService extends ChangeNotifier {
       final decoded = jsonDecode(response.body);
       if (decoded['success'] == true && decoded['coupon'] != null) {
         await fetchSummary(forceRefresh: true);
-        return UnlockedCouponItem.fromJson(decoded['coupon']);
+        final item = UnlockedCouponItem.fromJson(decoded['coupon']);
+        await saveUnlockedCouponLocally(item);
+        return item;
       }
     } catch (e) {
       debugPrint('[RewardsService] Error unlocking coupon: $e');
     }
+
+    final matched = defaultShopPerks.where((p) => p.id == couponId).firstOrNull;
+    if (matched != null && (_summary?.balance ?? 0) >= matched.costPoints) {
+      addPoints(-matched.costPoints);
+      final randomSuffix = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
+      final item = UnlockedCouponItem(
+        id: 'uc_${DateTime.now().millisecondsSinceEpoch}',
+        code: 'NH-${matched.codePrefix}-$randomSuffix',
+        title: matched.title,
+        expiresAt: DateTime.now().add(const Duration(days: 7)),
+      );
+      await saveUnlockedCouponLocally(item);
+      return item;
+    }
+
     return null;
   }
 
