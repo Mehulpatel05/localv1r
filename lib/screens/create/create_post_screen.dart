@@ -13,6 +13,7 @@ import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/token_decision_engine.dart';
+import '../../services/rewards_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -1084,27 +1085,29 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   contentPadding: const EdgeInsets.all(16),
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(
-                    _isEmergency ? Icons.info_outline_rounded : Icons.star_rounded,
-                    size: 14,
-                    color: _isEmergency ? AppColors.textMuted : const Color(0xFFD97706),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _isEmergency
-                        ? "Urgent alerts don't earn points"
-                        : "+5 pts for a post (up to 50 pts/day)",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _isEmergency ? AppColors.textMuted : const Color(0xFFB45309),
+              if (RewardsService.isRewardsEnabled) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      _isEmergency ? Icons.info_outline_rounded : Icons.star_rounded,
+                      size: 14,
+                      color: _isEmergency ? AppColors.textMuted : const Color(0xFFD97706),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isEmergency
+                          ? "Urgent alerts don't earn points"
+                          : "+5 pts for a post (up to 50 pts/day)",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _isEmergency ? AppColors.textMuted : const Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 14),
               Row(
                 children: [

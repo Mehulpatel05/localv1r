@@ -71,6 +71,24 @@ class FoundingMyStatus {
       createdAt: created,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'state': state.name,
+      'seq': seq,
+      'cityId': cityId,
+      'cityName': cityName,
+      'areaId': areaId,
+      'areaName': areaName,
+      'reason': reason,
+      'canReapply': canReapply,
+      'daysRemaining': daysRemaining,
+      'postCount': postCount,
+      'approvedCount': approvedCount,
+      'spotsLeft': spotsLeft,
+      'createdAt': createdAt?.toIso8601String(),
+    };
+  }
 }
 
 class AdminFoundingCity {

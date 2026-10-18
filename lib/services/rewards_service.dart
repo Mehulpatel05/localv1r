@@ -8,6 +8,7 @@ import '../models/rewards_model.dart';
 import 'auth_service.dart';
 
 class RewardsService extends ChangeNotifier {
+  static const bool isRewardsEnabled = false;
   static final RewardsService _instance = RewardsService._internal();
   factory RewardsService() => _instance;
   static RewardsService get instance => _instance;
@@ -139,6 +140,7 @@ class RewardsService extends ChangeNotifier {
   }
 
   Future<RewardsSummary?> fetchSummary({bool forceRefresh = false}) async {
+    if (!isRewardsEnabled) return _summary;
     final now = DateTime.now();
     final isCacheFresh = _summary != null &&
         _lastFetchTime != null &&

@@ -255,7 +255,9 @@ class _BazarScreenState extends State<BazarScreen> {
           SnackBar(
             backgroundColor: AppColors.textPrimary,
             content: Text(
-              '🎉 Listed "${newProduct.title}" on Bazaar! (+10 pts)',
+              RewardsService.isRewardsEnabled
+                  ? '🎉 Listed "${newProduct.title}" on Bazaar! (+10 pts)'
+                  : '🎉 Listed "${newProduct.title}" on Bazaar!',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             behavior: SnackBarBehavior.floating,
@@ -558,7 +560,8 @@ class _BazarScreenState extends State<BazarScreen> {
                   });
                 },
               ),
-            Padding(
+            if (RewardsService.isRewardsEnabled)
+              Padding(
               padding: const EdgeInsets.only(right: 6),
               child: PressableScale(
                 onTap: () {
@@ -1379,7 +1382,7 @@ class _BazarScreenState extends State<BazarScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (!item.isSold) ...[
+              if (RewardsService.isRewardsEnabled && !item.isSold) ...[
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     backgroundColor: const Color(0xFFFEF3C7),
@@ -1735,6 +1738,7 @@ class _BazarScreenState extends State<BazarScreen> {
   }
 
   Widget _buildShopPerksBanner() {
+    if (!RewardsService.isRewardsEnabled) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: PressableScale(

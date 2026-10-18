@@ -228,12 +228,12 @@ class LocationService extends ChangeNotifier {
         ? DateTime.fromMillisecondsSinceEpoch(fetchedMs)
         : null;
 
-    if (savedCity != null && savedCity.enabled) {
+    if (savedCity != null) {
       _city = savedCity;
     } else if (savedCityName != null && savedCityName.isNotEmpty) {
       _city = GeoCity(
         id: savedCityId,
-        stateId: 'GJ',
+        stateId: 'IN',
         name: savedCityName,
         enabled: true,
         areas: const [],
@@ -503,7 +503,6 @@ class LocationService extends ChangeNotifier {
   // Manual Selection
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> setCity(GeoCity c) async {
-    if (!c.enabled) return;
     _city            = c;
     _area            = null;
     _isManualLocation = true;

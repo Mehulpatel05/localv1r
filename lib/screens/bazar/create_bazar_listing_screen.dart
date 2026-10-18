@@ -6,6 +6,7 @@ import '../../core/location/location_service.dart';
 import '../../services/bazar_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../services/rewards_service.dart';
 import 'bazar_screen.dart';
 
 class CreateBazarListingScreen extends StatefulWidget {
@@ -361,13 +362,13 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
             content: Row(
               children: [
                 Icon(
-                  imageUrl.isNotEmpty ? Icons.star_rounded : Icons.check_circle_rounded,
+                  RewardsService.isRewardsEnabled && imageUrl.isNotEmpty ? Icons.star_rounded : Icons.check_circle_rounded,
                   color: const Color(0xFFFEF3C7),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  imageUrl.isNotEmpty ? 'Listed · +10 pts' : 'Item listed successfully!',
+                  RewardsService.isRewardsEnabled && imageUrl.isNotEmpty ? 'Listed · +10 pts' : 'Item listed successfully!',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -430,7 +431,8 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('PHOTOS & VIDEO · UP TO 5', style: labelStyle),
-                Container(
+                if (RewardsService.isRewardsEnabled)
+                  Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),

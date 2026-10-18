@@ -222,54 +222,56 @@ class _FeedScreenState extends State<FeedScreen> {
                 },
               ),
             ),
-            const SizedBox(width: 8),
-            ListenableBuilder(
-              listenable: RewardsService.instance,
-              builder: (context, _) {
-                final points = RewardsService.instance.summary?.balance ?? 0;
-                return PressableScale(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    height: 32,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFD97706),
-                          size: 16,
+            if (RewardsService.isRewardsEnabled) ...[
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: RewardsService.instance,
+                builder: (context, _) {
+                  final points = RewardsService.instance.summary?.balance ?? 0;
+                  return PressableScale(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$points',
-                          style: const TextStyle(
-                            color: Color(0xFFB45309),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
+                      );
+                    },
+                    child: Container(
+                      height: 32,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFD97706),
+                            size: 16,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            '$points',
+                            style: const TextStyle(
+                              color: Color(0xFFB45309),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+            ],
             const SizedBox(width: 8),
             ValueListenableBuilder<int>(
               valueListenable: NotificationService.instance.unreadBadgeNotifier,

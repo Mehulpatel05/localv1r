@@ -93,6 +93,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .toList();
     _isLoading = _userPosts.isEmpty && cachedPhoto == null;
 
+    final loc = widget.repository.locationService;
+    final currentAreaId = loc.area?.id ?? loc.city.id;
+    FoundingService.instance.fetchMyStatus(cityId: loc.city.id, areaId: currentAreaId);
+
     _loadProfileData();
   }
 
@@ -190,12 +194,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
 
-      final freshPosts = await widget.repository.fetchPostsByUser(widget.currentUserHandle);
-      final shop = await BazarRepository.instance.fetchMyShop();
       final loc = widget.repository.locationService;
       final currentAreaId = loc.area?.id ?? loc.city.id;
-      await FoundingService.instance.fetchMyStatus(cityId: loc.city.id, areaId: currentAreaId);
-      await RewardsService.instance.fetchSummary(forceRefresh: true);
+      final results = await Future.wait([
+        widget.repository.fetchPostsByUser(widget.currentUserHandle),
+        BazarRepository.instance.fetchMyShop(),
+        FoundingService.instance.fetchMyStatus(cityId: loc.city.id, areaId: currentAreaId),
+        if (RewardsService.isRewardsEnabled)
+          RewardsService.instance.fetchSummary(forceRefresh: true)
+        else
+          Future.value(null),
+      ]);
+      final freshPosts = results[0] as List<Post>;
+      final shop = results[1] as dynamic;
 
       if (mounted) {
         setState(() {
@@ -2170,9 +2181,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
-                        ListenableBuilder(
-                          listenable: RewardsService.instance,
-                          builder: (context, _) {
+                        if (RewardsService.isRewardsEnabled)
+                          ListenableBuilder(
+                            listenable: RewardsService.instance,
+                            builder: (context, _) {
                             final summary = RewardsService.instance.summary ?? const RewardsSummary();
                             return GestureDetector(
                               onTap: () {
@@ -2470,16 +2482,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildFoundingCard() {
     final loc = widget.repository.locationService;
-    final cityId = loc.city.id;
-    final cityName = loc.city.name;
-    final areaId = loc.area?.id ?? cityId;
 
     return ListenableBuilder(
       listenable: FoundingService.instance,
       builder: (context, _) {
         final status = FoundingService.instance.myStatus;
+        final resolvedCityName = (status?.cityName != null && status!.cityName!.isNotEmpty)
+            ? status.cityName!
+            : loc.city.name;
+        final resolvedCityId = (status?.cityId != null && status!.cityId!.isNotEmpty)
+            ? status.cityId!
+            : loc.city.id;
+        final resolvedAreaId = (status?.areaId != null && status!.areaId!.isNotEmpty)
+            ? status.areaId!
+            : (loc.area?.id ?? resolvedCityId);
+
         if (status == null) {
-          return const SizedBox.shrink();
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7).withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Request Founding badge for $resolvedCityName',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF78350F),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'First come first serve · 100 spots in $resolvedCityName',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         if (status.state == FoundingUserState.approved) {
@@ -2515,7 +2579,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${status.cityName ?? cityName} · 1 of 100 city founders',
+                        '$resolvedCityName · 1 of 100 city founders',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -2551,7 +2615,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Publish at least 1 post in $cityName to request the Founding Neighbour badge.'),
+                  content: Text('Publish at least 1 post in $resolvedCityName to request the Founding Neighbour badge.'),
                   backgroundColor: AppColors.textPrimary,
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -2565,45 +2629,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 border: Border.all(color: const Color(0xFFCBD5E1), width: 1.0),
               ),
               child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF94A3B8),
-                    shape: BoxShape.circle,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF94A3B8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
                   ),
-                  child: const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Request Founding badge for $cityName',
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Request Founding badge for $resolvedCityName',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Post once in $cityName to request · 0 posts',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF64748B),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Post once in $resolvedCityName to request · 0 posts',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      }
+          );
+        }
 
         if (status.state == FoundingUserState.pending) {
           return Container(
@@ -2629,7 +2693,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Request sent · ${status.cityName ?? cityName}',
+                        'Request sent · $resolvedCityName',
                         style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
@@ -2712,7 +2776,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: status.canReapply
-                        ? () => _submitFoundingRequest(cityId, areaId)
+                        ? () => _submitFoundingRequest(resolvedCityId, resolvedAreaId, resolvedCityName)
                         : null,
                     child: Text(
                       status.canReapply ? 'Request again' : 'Request again in ${status.daysRemaining} days',
@@ -2726,7 +2790,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         return GestureDetector(
-          onTap: () => _submitFoundingRequest(cityId, areaId),
+          onTap: () => _submitFoundingRequest(resolvedCityId, resolvedAreaId, resolvedCityName),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
@@ -2750,7 +2814,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Request Founding badge for $cityName',
+                        'Request Founding badge for $resolvedCityName',
                         style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
@@ -2759,7 +2823,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'First come first serve · 100 spots in $cityName',
+                        'First come first serve · 100 spots in $resolvedCityName',
                         style: const TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
@@ -2792,9 +2856,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _submitFoundingRequest(String cityId, String? areaId) async {
-    final loc = widget.repository.locationService;
-    final cityName = loc.city.name;
+  Future<void> _submitFoundingRequest(String cityId, String? areaId, String cityName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

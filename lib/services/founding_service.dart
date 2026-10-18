@@ -13,9 +13,11 @@ class FoundingService extends ChangeNotifier {
   static FoundingService get instance => _instance;
 
   static const String _kFoundingCountsCacheKey = 'founding_approved_counts_cache_v1';
+  static const String _kFoundingStatusCacheKey = 'founding_my_status_cache_v1';
 
   FoundingService._internal() {
     _loadCachedCounts();
+    _loadCachedStatus();
   }
 
   Map<String, int> _approvedCounts = {};
@@ -43,6 +45,18 @@ class FoundingService extends ChangeNotifier {
           _hasLoadedCounts = true;
           notifyListeners();
         }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadCachedStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kFoundingStatusCacheKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        _myStatus = FoundingMyStatus.fromJson(decoded);
+        notifyListeners();
       }
     } catch (_) {}
   }
@@ -132,6 +146,10 @@ class FoundingService extends ChangeNotifier {
               BadgeCacheService.instance.removeBadge(clean);
             }
           }
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(_kFoundingStatusCacheKey, jsonEncode(_myStatus!.toJson()));
+          } catch (_) {}
           notifyListeners();
           return _myStatus;
         }

@@ -25,6 +25,7 @@ import '../screens/notifications/notifications_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../core/services/name_cache_service.dart';
 import '../screens/rewards/rewards_hub_screen.dart';
+import 'rewards_service.dart';
 import '../core/splash_controller.dart';
 import 'chat_preferences_service.dart';
 import 'direct_chat_service.dart';
@@ -1202,11 +1203,15 @@ class NotificationService {
         type == 'points' ||
         type == 'rewards' ||
         type == 'helpful') {
-      navState.push(
-        MaterialPageRoute<void>(
-          builder: (_) => RewardsHubScreen(currentUserHandle: cleanCurrentHandle),
-        ),
-      );
+      if (RewardsService.isRewardsEnabled) {
+        navState.push(
+          MaterialPageRoute<void>(
+            builder: (_) => RewardsHubScreen(currentUserHandle: cleanCurrentHandle),
+          ),
+        );
+      } else if (!fromNotificationCenter) {
+        goToNotifications();
+      }
     } else if (type == 'founding_approved' ||
         type == 'founding_rejected' ||
         type == 'founding' ||
