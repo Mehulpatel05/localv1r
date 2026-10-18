@@ -24,6 +24,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
   RewardsSummary? _summary;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isClaimingStreak = false;
 
   @override
   void initState() {
@@ -61,18 +62,128 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
         _summary = res;
         _isLoading = false;
       });
-
-      if (res.streakAwarded) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showStreakCelebrationSheet();
-        });
-      }
     } else {
       setState(() {
         _isLoading = false;
         _errorMessage = 'Failed to load rewards. Please try again.';
       });
     }
+  }
+
+  Future<void> _claimDailyStreak() async {
+    if (_isClaimingStreak) return;
+    setState(() {
+      _isClaimingStreak = true;
+    });
+
+    final res = await RewardsService.instance.claimDailyStreak();
+    if (!mounted) return;
+
+    setState(() {
+      _isClaimingStreak = false;
+      if (RewardsService.instance.summary != null) {
+        _summary = RewardsService.instance.summary;
+      }
+    });
+
+    if (res['success'] == true) {
+      final pts = (res['pointsAwarded'] as num?)?.toInt() ?? 5;
+      final streak = (res['streakCount'] as num?)?.toInt() ?? 1;
+      _showStreakClaimSuccessSheet(streak, pts);
+    } else {
+      final msg = res['message'] ?? 'Could not claim daily reward';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFF16243A),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showStreakClaimSuccessSheet(int streakDay, int points) {
+    if (streakDay == 7) {
+      _showStreakCelebrationSheet();
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD5ECDD),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Container(
+              width: 68,
+              height: 68,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF3C7),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.local_fire_department_rounded,
+                size: 38,
+                color: Color(0xFFF59E0B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              streakDay == 7 ? '7-Day Grand Streak! 🎉' : 'Day $streakDay Claimed! 🔥',
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF16243A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '+$points Reward Coins added to your wallet!\nCome back tomorrow for Day ${streakDay >= 7 ? 1 : streakDay + 1}.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF5C6B7D),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0E8A3E),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  'Awesome!',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showStreakCelebrationSheet() {
@@ -286,15 +397,61 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${summary.balance}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1,
-                      height: 1.05,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${summary.balance}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 48,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1,
+                          height: 1.05,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context, rootNavigator: true).push(
+                          PageRouteBuilder(
+                            opaque: true,
+                            transitionDuration: const Duration(milliseconds: 260),
+                            reverseTransitionDuration: const Duration(milliseconds: 240),
+                            pageBuilder: (_, animation, secondaryAnimation) => ShopPerksScreen(currentUserHandle: widget.currentUserHandle),
+                            transitionsBuilder: (_, animation, _, child) {
+                              final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                              return SlideTransition(
+                                position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                                child: child,
+                              );
+                            },
+                          ),
+                        ).then((_) => _loadData()),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.redeem_rounded, size: 14, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Redeem',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   ClipRRect(
@@ -323,85 +480,11 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
 
             const SizedBox(height: 16),
 
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFD5ECDD), width: 0.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.local_fire_department_rounded, size: 20, color: Color(0xFFF59E0B)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Daily streak · ${summary.streakCount} of 7',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF16243A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Text(
-                        'Day 7 gives +30 pts',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0E8A3E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(7, (index) {
-                      final dayNum = index + 1;
-                      final isCompleted = dayNum <= summary.streakCount;
-                      return Container(
-                        width: 38,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: isCompleted ? const Color(0xFFFEF3C7) : const Color(0xFFF7FBF9),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isCompleted ? const Color(0xFFF59E0B) : const Color(0xFFD5ECDD),
-                            width: isCompleted ? 1.5 : 1.0,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'D$dayNum',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isCompleted ? const Color(0xFFB45309) : const Color(0xFF5C6B7D),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Icon(
-                              isCompleted ? Icons.check_circle_rounded : Icons.star_border_rounded,
-                              size: 16,
-                              color: isCompleted ? const Color(0xFFF59E0B) : const Color(0xFFB9DEC6),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-            ),
+            _buildRedeemSection(summary),
+
+            const SizedBox(height: 16),
+
+            _buildStreakCard(summary),
 
             const SizedBox(height: 16),
 
@@ -449,41 +532,6 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                       builder: (_) => InviteEarnScreen(currentUserHandle: widget.currentUserHandle),
                     ),
                   ),
-                ),
-                _buildQuickCard(
-                  icon: Icons.bolt_rounded,
-                  iconColor: const Color(0xFFF59E0B),
-                  iconBg: const Color(0xFFFEF3C7),
-                  title: 'Boost listing',
-                  subtitle: '300 pts · 24h feature',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BoostListingScreen(currentUserHandle: widget.currentUserHandle),
-                    ),
-                  ).then((_) => _loadData()),
-                ),
-                _buildQuickCard(
-                  icon: Icons.local_offer_outlined,
-                  iconColor: const Color(0xFF00897B),
-                  iconBg: const Color(0xFFE0F2F1),
-                  title: 'Shop perks',
-                  subtitle: 'Unlock coupons',
-                  onTap: () => Navigator.of(context, rootNavigator: true).push(
-                    PageRouteBuilder(
-                      opaque: true,
-                      transitionDuration: const Duration(milliseconds: 260),
-                      reverseTransitionDuration: const Duration(milliseconds: 240),
-                      pageBuilder: (_, animation, secondaryAnimation) => ShopPerksScreen(currentUserHandle: widget.currentUserHandle),
-                      transitionsBuilder: (_, animation, _, child) {
-                        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-                        return SlideTransition(
-                          position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
-                          child: child,
-                        );
-                      },
-                    ),
-                  ).then((_) => _loadData()),
                 ),
                 _buildQuickCard(
                   icon: Icons.history_rounded,
@@ -786,6 +834,470 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRedeemSection(RewardsSummary summary) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2F1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.redeem_rounded,
+                      size: 18,
+                      color: Color(0xFF00897B),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Redeem Coins',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF16243A),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${summary.balance} coins available',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildRedeemOptionCard(
+                  title: 'Shop Perks',
+                  badgeText: 'Coupons',
+                  badgeColor: const Color(0xFF00897B),
+                  badgeBg: const Color(0xFFE0F2F1),
+                  description: 'Discounts on chai, groceries, cafe & food',
+                  costText: 'From 50 coins',
+                  icon: Icons.local_offer_rounded,
+                  iconColor: const Color(0xFF00897B),
+                  iconBg: const Color(0xFFE0F2F1),
+                  buttonText: 'Unlock Perks',
+                  buttonBg: const Color(0xFF00897B),
+                  onTap: () => Navigator.of(context, rootNavigator: true).push(
+                    PageRouteBuilder(
+                      opaque: true,
+                      transitionDuration: const Duration(milliseconds: 260),
+                      reverseTransitionDuration: const Duration(milliseconds: 240),
+                      pageBuilder: (_, animation, secondaryAnimation) => ShopPerksScreen(currentUserHandle: widget.currentUserHandle),
+                      transitionsBuilder: (_, animation, _, child) {
+                        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+                        return SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(curved),
+                          child: child,
+                        );
+                      },
+                    ),
+                  ).then((_) => _loadData()),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRedeemOptionCard(
+                  title: 'Listing Boost',
+                  badgeText: 'Top Rank',
+                  badgeColor: const Color(0xFFB45309),
+                  badgeBg: const Color(0xFFFEF3C7),
+                  description: 'Feature Bazaar item at the top for 24 hours',
+                  costText: '300 coins',
+                  icon: Icons.bolt_rounded,
+                  iconColor: const Color(0xFFF59E0B),
+                  iconBg: const Color(0xFFFEF3C7),
+                  buttonText: 'Boost Item',
+                  buttonBg: const Color(0xFFF59E0B),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BoostListingScreen(currentUserHandle: widget.currentUserHandle),
+                    ),
+                  ).then((_) => _loadData()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRedeemOptionCard({
+    required String title,
+    required String badgeText,
+    required Color badgeColor,
+    required Color badgeBg,
+    required String description,
+    required String costText,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String buttonText,
+    required Color buttonBg,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAF9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  badgeText,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: badgeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF16243A),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF5C6B7D),
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            costText,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: buttonBg,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 32,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: buttonBg,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              child: Text(
+                buttonText,
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStreakCard(RewardsSummary summary) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 18,
+                      color: Color(0xFFF59E0B),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Daily Check-in Streak',
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF16243A),
+                        ),
+                      ),
+                      Text(
+                        summary.streakCount > 0
+                            ? '${summary.streakCount} of 7 days completed'
+                            : 'Check in daily to earn coins',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF5C6B7D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: summary.isStreakClaimedToday
+                      ? const Color(0xFFE8F6EF)
+                      : const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  summary.isStreakClaimedToday
+                      ? 'Claimed Today ✓'
+                      : '+${summary.todayStreakPoints} pts today',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: summary.isStreakClaimedToday
+                        ? const Color(0xFF0E8A3E)
+                        : const Color(0xFFB45309),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(7, (index) {
+              final dayNum = index + 1;
+              final isClaimed = dayNum <= summary.streakCount;
+              final isNextToClaim = !summary.isStreakClaimedToday && dayNum == summary.nextStreakDay;
+              final pts = index < summary.streakRewards.length ? summary.streakRewards[index] : 5;
+
+              return Expanded(
+                child: Container(
+                  margin: EdgeInsets.only(right: index == 6 ? 0 : 5),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isClaimed
+                        ? const Color(0xFFFEF3C7)
+                        : isNextToClaim
+                            ? const Color(0xFFE8F6EF)
+                            : const Color(0xFFF8FAF9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isClaimed
+                          ? const Color(0xFFF59E0B)
+                          : isNextToClaim
+                              ? const Color(0xFF0E8A3E)
+                              : const Color(0xFFE2E8F0),
+                      width: (isClaimed || isNextToClaim) ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'D$dayNum',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isClaimed
+                              ? const Color(0xFFB45309)
+                              : isNextToClaim
+                                  ? const Color(0xFF0E8A3E)
+                                  : const Color(0xFF5C6B7D),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Icon(
+                        isClaimed
+                            ? Icons.check_circle_rounded
+                            : isNextToClaim
+                                ? Icons.monetization_on_rounded
+                                : (dayNum == 7 ? Icons.emoji_events_rounded : Icons.star_border_rounded),
+                        size: 16,
+                        color: isClaimed
+                            ? const Color(0xFFF59E0B)
+                            : isNextToClaim
+                                ? const Color(0xFF0E8A3E)
+                                : const Color(0xFFB0BEC5),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '+$pts',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: isClaimed
+                              ? const Color(0xFFB45309)
+                              : isNextToClaim
+                                  ? const Color(0xFF0E8A3E)
+                                  : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 14),
+          if (!summary.isStreakClaimedToday)
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0E8A3E),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _isClaimingStreak ? null : _claimDailyStreak,
+                child: _isClaimingStreak
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.bolt_rounded, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Claim Day ${summary.nextStreakDay} (+${summary.todayStreakPoints} Coins)',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F6EF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFB9DEC6), width: 1),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF0E8A3E)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Day ${summary.streakCount} claimed! Return tomorrow for Day ${summary.nextStreakDay}.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0E8A3E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

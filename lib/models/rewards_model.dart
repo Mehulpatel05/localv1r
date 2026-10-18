@@ -40,6 +40,10 @@ class RewardsSummary {
   final int soldCount;
   final int nextGoalPoints;
   final int pointsToNextGoal;
+  final bool isStreakClaimedToday;
+  final int nextStreakDay;
+  final int todayStreakPoints;
+  final List<int> streakRewards;
 
   int get dailyPostsCount => postsProgress.current;
   int get dailyPostsMax => postsProgress.max;
@@ -74,6 +78,10 @@ class RewardsSummary {
     this.soldCount = 0,
     this.nextGoalPoints = 300,
     this.pointsToNextGoal = 300,
+    this.isStreakClaimedToday = false,
+    this.nextStreakDay = 1,
+    this.todayStreakPoints = 5,
+    this.streakRewards = const [5, 10, 15, 10, 15, 20, 30],
   });
 
   factory RewardsSummary.fromJson(Map<String, dynamic> json) {
@@ -84,11 +92,27 @@ class RewardsSummary {
     final votesMap = (dailyProgress['likes'] as Map<String, dynamic>?) ?? (dailyProgress['votes'] as Map<String, dynamic>?) ?? {};
     final listingsMap = dailyProgress['listings'] as Map<String, dynamic>? ?? {};
 
+    final streakRewardsRaw = json['streakRewards'] as List<dynamic>?;
+    final streakRewardsList = streakRewardsRaw != null
+        ? streakRewardsRaw.map((e) => (e as num).toInt()).toList()
+        : const [5, 10, 15, 10, 15, 20, 30];
+
+    final streakCountParsed = (json['streakCount'] as num?)?.toInt() ?? 0;
+    final isClaimedParsed = json['isStreakClaimedToday'] == true;
+    final nextStreakDayParsed = (json['nextStreakDay'] as num?)?.toInt() ??
+        (isClaimedParsed
+            ? (streakCountParsed >= 7 ? 1 : streakCountParsed + 1)
+            : (streakCountParsed == 0 ? 1 : (streakCountParsed >= 7 ? 1 : streakCountParsed + 1)));
+    final todayStreakPointsParsed = (json['todayStreakPoints'] as num?)?.toInt() ??
+        (isClaimedParsed
+            ? streakRewardsList[((streakCountParsed - 1).clamp(0, 6))]
+            : streakRewardsList[((nextStreakDayParsed - 1).clamp(0, 6))]);
+
     return RewardsSummary(
       balance: (json['balance'] as num?)?.toInt() ?? 0,
       lifetimePoints: (json['lifetimePoints'] as num?)?.toInt() ?? 0,
       weeklyPoints: (json['weeklyPoints'] as num?)?.toInt() ?? 0,
-      streakCount: (json['streakCount'] as num?)?.toInt() ?? 0,
+      streakCount: streakCountParsed,
       streakAwarded: json['streakAwarded'] == true,
       dailyPointsToday: (json['dailyPointsToday'] as num?)?.toInt() ?? (dailyProgress['dailyPointsUsed'] as num?)?.toInt() ?? 0,
       dailyCap: (json['dailyCap'] as num?)?.toInt() ?? (dailyProgress['dailyCap'] as num?)?.toInt() ?? 50,
@@ -103,6 +127,10 @@ class RewardsSummary {
       soldCount: (progress['soldCount'] as num?)?.toInt() ?? 0,
       nextGoalPoints: (progress['nextGoalPoints'] as num?)?.toInt() ?? 300,
       pointsToNextGoal: (progress['pointsToNextGoal'] as num?)?.toInt() ?? 300,
+      isStreakClaimedToday: isClaimedParsed,
+      nextStreakDay: nextStreakDayParsed,
+      todayStreakPoints: todayStreakPointsParsed,
+      streakRewards: streakRewardsList,
     );
   }
 
@@ -125,6 +153,10 @@ class RewardsSummary {
     int? soldCount,
     int? nextGoalPoints,
     int? pointsToNextGoal,
+    bool? isStreakClaimedToday,
+    int? nextStreakDay,
+    int? todayStreakPoints,
+    List<int>? streakRewards,
   }) {
     return RewardsSummary(
       balance: balance ?? this.balance,
@@ -145,6 +177,10 @@ class RewardsSummary {
       soldCount: soldCount ?? this.soldCount,
       nextGoalPoints: nextGoalPoints ?? this.nextGoalPoints,
       pointsToNextGoal: pointsToNextGoal ?? this.pointsToNextGoal,
+      isStreakClaimedToday: isStreakClaimedToday ?? this.isStreakClaimedToday,
+      nextStreakDay: nextStreakDay ?? this.nextStreakDay,
+      todayStreakPoints: todayStreakPoints ?? this.todayStreakPoints,
+      streakRewards: streakRewards ?? this.streakRewards,
     );
   }
 }

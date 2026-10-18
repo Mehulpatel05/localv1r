@@ -39,6 +39,10 @@ class RewardsService extends ChangeNotifier {
         'weeklyPoints': summary.weeklyPoints,
         'streakCount': summary.streakCount,
         'streakAwarded': summary.streakAwarded,
+        'isStreakClaimedToday': summary.isStreakClaimedToday,
+        'nextStreakDay': summary.nextStreakDay,
+        'todayStreakPoints': summary.todayStreakPoints,
+        'streakRewards': summary.streakRewards,
         'dailyPointsToday': summary.dailyPointsToday,
         'dailyCap': summary.dailyCap,
         'isCapReached': summary.isCapReached,
@@ -609,6 +613,57 @@ class RewardsService extends ChangeNotifier {
       };
     } catch (e) {
       return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  Future<Map<String, dynamic>> claimDailyStreak() async {
+    try {
+      final uri = Uri.parse('${ApiConstants.baseUrl}/rewards/streak/claim');
+      final headers = await _getHeaders();
+      final response = await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+
+      final decoded = jsonDecode(response.body);
+      final isSuccess = decoded['success'] == true;
+      if (isSuccess && decoded['data'] != null) {
+        final data = decoded['data'];
+        final pts = (data['pointsAwarded'] as num?)?.toInt() ?? 5;
+        final newStreak = (data['streakCount'] as num?)?.toInt() ?? 1;
+        final newBal = (data['newBalance'] as num?)?.toInt();
+
+        final current = _summary ?? const RewardsSummary();
+        final updatedBalance = newBal ?? (current.balance + pts);
+        final nextDay = newStreak >= 7 ? 1 : newStreak + 1;
+        final streakList = current.streakRewards;
+        final nextPts = streakList[((nextDay - 1).clamp(0, 6))];
+
+        _summary = current.copyWith(
+          balance: updatedBalance,
+          streakCount: newStreak,
+          isStreakClaimedToday: true,
+          streakAwarded: true,
+          nextStreakDay: nextDay,
+          todayStreakPoints: nextPts,
+          lifetimePoints: current.lifetimePoints + pts,
+          weeklyPoints: current.weeklyPoints + pts,
+        );
+        unawaited(_saveCachedSummary(_summary!));
+        notifyListeners();
+        unawaited(fetchSummary(forceRefresh: true));
+        return {
+          'success': true,
+          'pointsAwarded': pts,
+          'streakCount': newStreak,
+          'message': data['message'] ?? 'Claimed Day $newStreak reward! +$pts coins added.',
+        };
+      } else {
+        return {
+          'success': false,
+          'alreadyClaimed': decoded['alreadyClaimed'] == true,
+          'message': decoded['message'] ?? decoded['error'] ?? 'Could not claim daily reward',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error. Please try again.'};
     }
   }
 }
