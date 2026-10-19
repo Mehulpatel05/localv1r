@@ -30,13 +30,13 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   String _selectedLocation = 'Vadodara';
   bool _isPublishing = false;
 
-  final List<Map<String, String>> _categories = [
-    {'name': 'Furniture', 'icon': '🪑'},
-    {'name': 'Electronics', 'icon': '📱'},
-    {'name': 'Clothes', 'icon': '👗'},
-    {'name': 'Home food', 'icon': '🍰'},
-    {'name': 'Books', 'icon': '📚'},
-    {'name': 'Other', 'icon': '💬'},
+  final List<String> _categories = [
+    'Furniture',
+    'Electronics',
+    'Clothes',
+    'Home food',
+    'Books',
+    'Other',
   ];
 
   String? _existingImageUrl;
@@ -49,7 +49,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       _titleController.text = product.title;
       _priceController.text = product.price.toString();
       _selectedCategory = product.category;
-      if (!_categories.any((c) => c['name'] == _selectedCategory)) {
+      if (!_categories.contains(_selectedCategory)) {
         _selectedCategory = 'Electronics';
       }
       _existingImageUrl = product.imageUrl;
@@ -121,38 +121,16 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                 ),
                 title: const Text(
-                  'Photos from Gallery',
+                  'Gallery',
                   style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: const Text(
-                  'Select multiple photos from gallery',
+                  'Select photos & videos from gallery',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickPhotos();
-                },
-              ),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
-                ),
-                title: const Text(
-                  'Video from Gallery',
-                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Select a product video from gallery',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickVideo();
+                  _pickMediaFromGallery();
                 },
               ),
               ListTile(
@@ -184,11 +162,11 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     );
   }
 
-  Future<void> _pickPhotos() async {
+  Future<void> _pickMediaFromGallery() async {
     try {
       setState(() => _isPickingImage = true);
       final picker = ImagePicker();
-      final pickedList = await picker.pickMultiImage(
+      final pickedList = await picker.pickMultipleMedia(
         imageQuality: 80,
       );
       if (pickedList.isNotEmpty) {
@@ -201,29 +179,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking photos: $e');
-    } finally {
-      if (mounted) setState(() => _isPickingImage = false);
-    }
-  }
-
-  Future<void> _pickVideo() async {
-    try {
-      setState(() => _isPickingImage = true);
-      final picker = ImagePicker();
-      final picked = await picker.pickVideo(
-        source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5),
-      );
-      if (picked != null) {
-        setState(() {
-          if (_pickedImagePaths.length < 5) {
-            _pickedImagePaths.add(picked.path);
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('Error picking video: $e');
+      debugPrint('Error picking media: $e');
     } finally {
       if (mounted) setState(() => _isPickingImage = false);
     }
@@ -615,286 +571,319 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
 
-            Text('TITLE', style: labelStyle),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: TextField(
-                controller: _titleController,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('TITLE', style: labelStyle),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        alignment: Alignment.centerLeft,
+                        child: TextField(
+                          controller: _titleController,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Item title',
+                            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                decoration: InputDecoration(
-                  hintText: 'Item title (e.g. Wooden Table)',
-                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
-                  border: InputBorder.none,
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PRICE', style: labelStyle),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            const Text(
+                              '₹',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: TextField(
+                                controller: _priceController,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: '0',
+                                  hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5), fontSize: 15),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
 
-            const SizedBox(height: 20),
-
-            Text('PRICE', style: labelStyle),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                children: [
-                  Text(
-                    '₹',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _priceController,
-                      keyboardType: TextInputType.number,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '7,500',
-                        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
 
             Text('CATEGORY', style: labelStyle),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _categories.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
-                childAspectRatio: 2.6,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
+                childAspectRatio: 2.8,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
               ),
               itemBuilder: (context, index) {
                 final cat = _categories[index];
-                final isSelected = _selectedCategory == cat['name'];
+                final isSelected = _selectedCategory == cat;
 
                 return GestureDetector(
                   onTap: () {
                     setState(() {
-                      _selectedCategory = cat['name']!;
+                      _selectedCategory = cat;
                     });
                   },
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected ? AppColors.primary : AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected ? AppColors.primary : AppColors.divider,
                       ),
                     ),
                     alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          cat['icon']!,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            cat['name']!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      cat,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ),
                 );
               },
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
 
-            Text('CONDITION', style: labelStyle),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.chipBg,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCondition = 'New';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CONDITION', style: labelStyle),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 44,
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: _selectedCondition == 'New' ? AppColors.surface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: _selectedCondition == 'New'
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : null,
+                          color: AppColors.chipBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.divider),
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'New',
-                          style: TextStyle(
-                            color: _selectedCondition == 'New' ? AppColors.textPrimary : AppColors.textMuted,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCondition = 'Used';
+                                  });
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _selectedCondition == 'Used' ? AppColors.surface : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: _selectedCondition == 'Used'
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.05),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            )
+                                          ]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Used',
+                                    style: TextStyle(
+                                      color: _selectedCondition == 'Used' ? AppColors.textPrimary : AppColors.textMuted,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCondition = 'New';
+                                  });
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _selectedCondition == 'New' ? AppColors.surface : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: _selectedCondition == 'New'
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.05),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            )
+                                          ]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'New',
+                                    style: TextStyle(
+                                      color: _selectedCondition == 'New' ? AppColors.textPrimary : AppColors.textMuted,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCondition = 'Used';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _selectedCondition == 'Used' ? AppColors.surface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: _selectedCondition == 'Used'
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Used',
-                          style: TextStyle(
-                            color: _selectedCondition == 'Used' ? AppColors.textPrimary : AppColors.textMuted,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            Text('LOCATION', style: labelStyle),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  const Text('📍', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _selectedLocation,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            Text('PREVIEW', style: labelStyle),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
+                    ],
                   ),
                 ),
-                onPressed: _isPublishing ? null : _publishListing,
-                child: _isPublishing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('LOCATION', style: labelStyle),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.divider),
                         ),
-                      )
-                    : Text(
-                        widget.initialProduct != null ? 'Save changes' : 'Publish listing',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: AppColors.primary, size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _selectedLocation,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 6, 18, 12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              onPressed: _isPublishing ? null : _publishListing,
+              child: _isPublishing
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.2,
+                      ),
+                    )
+                  : Text(
+                      widget.initialProduct != null ? 'Save changes' : 'Publish listing',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+            ),
+          ),
         ),
       ),
     );

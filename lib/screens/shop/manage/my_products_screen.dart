@@ -81,7 +81,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
     final titleController = TextEditingController(text: existing?.title ?? '');
     final priceController = TextEditingController(text: existing != null ? '${existing.price}' : '');
     final descController = TextEditingController(text: existing?.description ?? '');
-    String selectedCategory = existing?.category ?? 'Pharmacy';
+    String selectedCategory = existing?.category ?? 'General Store';
     String? localImagePath;
     String? currentImageUrl = existing?.imageUrl;
     bool isSubmitting = false;

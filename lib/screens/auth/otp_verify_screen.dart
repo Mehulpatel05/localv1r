@@ -10,7 +10,6 @@ import '../../services/notification_service.dart';
 import '../../services/auth_service.dart';
 import '../../core/location/location_engine.dart';
 import '../main/main_screen.dart';
-import '../onboarding/permission_request_screen.dart';
 import 'create_handle_screen.dart';
 
 class OtpVerifyScreen extends StatefulWidget {
@@ -177,42 +176,20 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
         }
 
         final prefs = await SharedPreferences.getInstance();
-        final permsDone = prefs.getString('perms_done');
+        await prefs.setString('perms_done', 'true');
+        NotificationService().initialize();
+        NotificationService.instance.startListening(handle);
 
         if (!mounted) return;
-        if (permsDone == 'true') {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => MainScreen(
-                repository: widget.repository,
-                currentUserHandle: handle,
-              ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => MainScreen(
+              repository: widget.repository,
+              currentUserHandle: handle,
             ),
-            (route) => false,
-          );
-        } else {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => PermissionRequestScreen(
-                onComplete: (permContext) async {
-                  final p = await SharedPreferences.getInstance();
-                  await p.setString('perms_done', 'true');
-                  if (permContext.mounted) {
-                    Navigator.of(permContext).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => MainScreen(
-                          repository: widget.repository,
-                          currentUserHandle: handle,
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ),
-            (route) => false,
-          );
-        }
+          ),
+          (route) => false,
+        );
       }
     } else {
       setState(() {

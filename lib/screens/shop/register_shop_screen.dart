@@ -22,19 +22,15 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
 
   String? _shopLogoPath;
   final TextEditingController _shopNameController = TextEditingController();
-  String _selectedCategory = 'Pharmacy';
+  String? _selectedCategory;
   final TextEditingController _shortDescController = TextEditingController();
 
-  final List<Map<String, String>> _categories = [
-    {'name': 'Pharmacy', 'icon': '💊'},
-    {'name': 'Kirana', 'icon': '🛒'},
-    {'name': 'Bakery', 'icon': '🥐'},
-    {'name': 'Salon', 'icon': '💇'},
-    {'name': 'Fashion', 'icon': '👗'},
-    {'name': 'Tailor', 'icon': '👔'},
-    {'name': 'Electronics', 'icon': '📱'},
-    {'name': 'Cafe', 'icon': '☕'},
-    {'name': 'Other', 'icon': '🏪'},
+  final List<String> _categories = [
+    'Clothes & Tailor',
+    'Mobile & Electronics',
+    'General Store',
+    'Salon & Beauty',
+    'Other',
   ];
 
   final TextEditingController _addressController = TextEditingController();
@@ -199,7 +195,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         _showErrorSnackBar('Shop name is required (min 3 characters).');
         return false;
       }
-      if (_selectedCategory.isEmpty) {
+      if (_selectedCategory == null || _selectedCategory!.isEmpty) {
         _showErrorSnackBar('Please select a shop category.');
         return false;
       }
@@ -287,11 +283,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       }
     }
 
-    final categoryIcon = _categories.firstWhere(
-      (c) => c['name'] == _selectedCategory,
-      orElse: () => {'icon': '🏪'},
-    )['icon']!;
-
     final handle = await AuthService.instance.getUserHandle() ?? '@me';
     final cleanHandle = handle.replaceAll('@', '').trim();
 
@@ -299,8 +290,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       id: 'shop_$cleanHandle',
       ownerHandle: cleanHandle,
       name: _shopNameController.text.trim(),
-      category: _selectedCategory,
-      categoryIcon: categoryIcon,
+      category: _selectedCategory ?? 'Other',
+      categoryIcon: '🏪',
       location: _addressController.text.trim(),
       distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
       isVerified: true,
@@ -648,7 +639,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     controller: _shopNameController,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
-                      hintText: 'e.g. Mehta Pharmacy',
+                      hintText: 'e.g. Radhe General Store, Apex Electronics',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
                       border: InputBorder.none,
                     ),
@@ -667,55 +658,39 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _categories.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 2.6,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemBuilder: (context, index) {
-                    final cat = _categories[index];
-                    final isSelected = _selectedCategory == cat['name'];
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 10,
+                  children: _categories.map((cat) {
+                    final isSelected = _selectedCategory == cat;
 
                     return GestureDetector(
                       onTap: () {
                         setState(() {
-                          _selectedCategory = cat['name']!;
+                          _selectedCategory = cat;
                         });
                       },
                       child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
                           color: isSelected ? AppColors.primary : AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : AppColors.divider,
+                            width: 1.2,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(cat['icon']!, style: const TextStyle(fontSize: 15)),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                cat['name']!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: isSelected ? Colors.white : AppColors.textPrimary,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
                         ),
                       ),
                     );
-                  },
+                  }).toList(),
                 ),
 
                 const SizedBox(height: 20),
@@ -742,7 +717,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     maxLines: 3,
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'Medicines, health products, home delivery within 1 km.',
+                      hintText: 'Quality products, daily essentials & services in our neighbourhood.',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       border: InputBorder.none,
                     ),

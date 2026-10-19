@@ -22,7 +22,6 @@ import '../../features/auth/widgets/street_painter.dart';
 import '../../core/auth_repository.dart';
 import '../../features/auth/login_flow_page.dart';
 import '../main/main_screen.dart';
-import '../onboarding/permission_request_screen.dart';
 
 enum UsernameState {
   empty,
@@ -1256,29 +1255,22 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => PermissionRequestScreen(
-            onComplete: (permContext) async {
-              final p = await SharedPreferences.getInstance();
-              await p.setString('perms_done', 'true');
-              NotificationService.instance.initialize();
-              NotificationService.instance.startListening(handle);
-              NotificationService.instance.syncFcmTokenForUser(handle);
-              if (permContext.mounted) {
-                Navigator.of(permContext).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => MainScreen(
-                      repository: widget.repository,
-                      currentUserHandle: handle,
-                    ),
-                  ),
-                );
-              }
-            },
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('perms_done', 'true');
+      NotificationService.instance.initialize();
+      NotificationService.instance.startListening(handle);
+      NotificationService.instance.syncFcmTokenForUser(handle);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => MainScreen(
+              repository: widget.repository,
+              currentUserHandle: handle,
+            ),
           ),
-        ),
-      );
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

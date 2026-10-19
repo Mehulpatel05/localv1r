@@ -27,13 +27,12 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
   late TimeOfDay _closingTime;
   bool _isSaving = false;
 
-  final List<Map<String, String>> _categories = [
-    {'name': 'Pharmacy', 'icon': '💊'},
-    {'name': 'Kirana', 'icon': '🛒'},
-    {'name': 'Bakery', 'icon': '🥐'},
-    {'name': 'Fashion', 'icon': '👗'},
-    {'name': 'Electronics', 'icon': '📱'},
-    {'name': 'Cafe', 'icon': '☕'},
+  final List<String> _categories = [
+    'Clothes & Tailor',
+    'Mobile & Electronics',
+    'General Store',
+    'Salon & Beauty',
+    'Other',
   ];
 
   @override
@@ -43,7 +42,7 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
     _addressController = TextEditingController(text: widget.shop.location);
     _phoneController = TextEditingController(text: widget.shop.phone);
     _descController = TextEditingController(text: widget.shop.aboutText);
-    _selectedCategory = widget.shop.category.isNotEmpty ? widget.shop.category : 'Pharmacy';
+    _selectedCategory = widget.shop.category.isNotEmpty ? widget.shop.category : 'General Store';
     _sameWhatsapp = widget.shop.sameWhatsapp;
     _homeDelivery = widget.shop.homeDelivery;
 
@@ -138,11 +137,6 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
 
     setState(() => _isSaving = true);
 
-    final catObj = _categories.firstWhere(
-      (c) => c['name'] == _selectedCategory,
-      orElse: () => {'name': _selectedCategory, 'icon': '🏪'},
-    );
-
     final timingsStr = '${_formatTimeOfDay(_openingTime)} - ${_formatTimeOfDay(_closingTime)}';
 
     final updated = LocalShop(
@@ -150,7 +144,7 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
       ownerHandle: widget.shop.ownerHandle,
       name: name,
       category: _selectedCategory,
-      categoryIcon: catObj['icon'] ?? '🏪',
+      categoryIcon: widget.shop.categoryIcon.isNotEmpty ? widget.shop.categoryIcon : '🏪',
       location: address,
       distanceKm: widget.shop.distanceKm,
       isVerified: widget.shop.isVerified,
@@ -303,11 +297,11 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: _categories.map((cat) {
-                  final isSelected = _selectedCategory.toLowerCase() == cat['name']!.toLowerCase();
+                  final isSelected = _selectedCategory.toLowerCase() == cat.toLowerCase();
                   return Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cat['name']!),
+                      onTap: () => setState(() => _selectedCategory = cat),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
@@ -317,19 +311,13 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
                             color: isSelected ? AppColors.primary : AppColors.divider,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Text(cat['icon']!, style: const TextStyle(fontSize: 16)),
-                            const SizedBox(width: 8),
-                            Text(
-                              cat['name']!,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
-                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
