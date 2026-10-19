@@ -300,11 +300,79 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                   ),
                   title: const Text(
-                    'Photos from Gallery',
+                    'Gallery',
                     style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: const Text(
-                    'Choose photos (multi-select)',
+                    'Choose photos or video from gallery',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showGalleryPickerChoice();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showGalleryPickerChoice() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    'Choose from Gallery',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAF5FF),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
+                  ),
+                  title: const Text(
+                    'Photos',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Select photos (multi-select)',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                   onTap: () {
@@ -322,11 +390,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
                   ),
                   title: const Text(
-                    'Video from Gallery',
+                    'Video',
                     style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: const Text(
-                    'Choose a video from gallery',
+                    'Select a video from gallery',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                   onTap: () {
@@ -803,6 +871,62 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     return result == true;
   }
 
+  Widget _buildToolbarPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool isActive = false,
+    bool isLoading = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primarySoft : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isActive ? AppColors.primary.withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                )
+              else
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isActive ? AppColors.primary : const Color(0xFF475569),
+                ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? AppColors.primary : const Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final locService = widget.repository.locationService;
@@ -810,13 +934,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final lockedCityName = locService.city.name;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF8FAFC),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.textPrimary),
+          icon: const Icon(Icons.close_rounded, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -861,24 +985,31 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.divider),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     UserAvatar(
                       handle: widget.authorHandle,
-                      size: 34,
-                      fontSize: 12.5,
+                      size: 38,
+                      fontSize: 13.5,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -886,16 +1017,32 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Posting as ${getDisplayName(widget.authorHandle)}',
+                            getDisplayName(widget.authorHandle),
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
+                              fontSize: 14,
                             ),
                           ),
-                          Text(
-                            'Visible to $lockedAreaName, $lockedCityName community members',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                          const SizedBox(height: 1.5),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on_rounded, size: 12, color: AppColors.primary),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  lockedAreaName == lockedCityName
+                                      ? lockedCityName
+                                      : '$lockedAreaName, $lockedCityName',
+                                  style: const TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -903,61 +1050,170 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ],
                 ),
               ),
+              IgnorePointer(
+                ignoring: _isEmergency,
+                child: Opacity(
+                  opacity: _isEmergency ? 0.45 : 1.0,
+                  child: Container(
+                    height: 40,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: SlidingCategoryTabBar(
+                      categories: _categories.map((c) => c.label).toList(),
+                      selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                      onSelected: (index) {
+                        if (!_isEmergency && index >= 0 && index < _categories.length) {
+                          setState(() => _selectedCategory = _categories[index]);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
               Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.divider),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Row(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
+                    TextField(
+                      controller: _contentController,
+                      minLines: 4,
+                      maxLines: 8,
+                      cursorColor: AppColors.primary,
+                      cursorWidth: 2.2,
+                      cursorHeight: 22.0,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
                       ),
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: AppColors.primary,
-                        size: 16,
+                      decoration: const InputDecoration(
+                        hintText: 'Share an update, ask neighbours, or discuss local news...',
+                        hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14.5),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Posting in Neighborhood',
-                            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                          ),
-                          Text(
-                            lockedAreaName == lockedCityName
-                                ? lockedCityName
-                                : '$lockedAreaName, $lockedCityName',
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+                    if (_attachedLocationName != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_rounded, size: 14, color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                _attachedLocationName!,
+                                style: const TextStyle(
+                                  color: AppColors.primaryText,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: _removeAttachedLocation,
+                              child: const Icon(Icons.close_rounded, size: 14, color: AppColors.primaryText),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (_mediaFiles.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildMediaPreviews(),
+                    ],
+                    const Divider(height: 22, color: Color(0xFFF1F5F9)),
+                    Row(
+                      children: [
+                        _buildToolbarPill(
+                          icon: Icons.photo_library_rounded,
+                          label: _mediaFiles.isEmpty ? 'Gallery' : 'Gallery (${_mediaFiles.length})',
+                          isActive: _mediaFiles.isNotEmpty,
+                          onTap: _isPublishing ? null : _showMediaPickerOptions,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildToolbarPill(
+                          icon: Icons.camera_alt_rounded,
+                          label: 'Camera',
+                          onTap: _isPublishing ? null : _showCameraOptions,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildToolbarPill(
+                          icon: _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
+                          label: 'Location',
+                          isActive: _attachedLat != null,
+                          isLoading: _isFetchingLocation,
+                          onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
+                        ),
+                        const Spacer(),
+                        if (RewardsService.isRewardsEnabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star_rounded, size: 13, color: Color(0xFFD97706)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _isEmergency ? 'Alert' : '+5 pts',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFB45309),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ],
                 ),
               ),
               Container(
+                margin: const EdgeInsets.only(top: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: _isEmergency ? AppColors.errorSoft : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: _isEmergency ? AppColors.error : AppColors.divider,
+                    color: _isEmergency ? AppColors.error : const Color(0xFFE2E8F0),
+                    width: 1.2,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -982,7 +1238,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             'Mark as Urgent Safety Alert',
                             style: TextStyle(
                               color: _isEmergency ? AppColors.errorSoftText : AppColors.textPrimary,
-                              fontSize: 13.5,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -1032,178 +1288,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              IgnorePointer(
-                ignoring: _isEmergency,
-                child: Opacity(
-                  opacity: _isEmergency ? 0.45 : 1.0,
-                  child: Container(
-                    height: 42,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    child: SlidingCategoryTabBar(
-                      categories: _categories.map((c) => c.label).toList(),
-                      selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
-                      onSelected: (index) {
-                        if (!_isEmergency && index >= 0 && index < _categories.length) {
-                          setState(() => _selectedCategory = _categories[index]);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              TextField(
-                controller: _contentController,
-                maxLines: 8,
-                cursorColor: AppColors.primary,
-                cursorWidth: 2.2,
-                cursorHeight: 22.0,
-                showCursor: true,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 15.5,
-                  height: 1.45,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Ask a question, share local updates, report civic issues...',
-                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14.5),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-              ),
-              if (RewardsService.isRewardsEnabled) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      _isEmergency ? Icons.info_outline_rounded : Icons.star_rounded,
-                      size: 14,
-                      color: _isEmergency ? AppColors.textMuted : const Color(0xFFD97706),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isEmergency
-                          ? "Urgent alerts don't earn points"
-                          : "+5 pts for a post (up to 50 pts/day)",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: _isEmergency ? AppColors.textMuted : const Color(0xFFB45309),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      backgroundColor: Colors.white,
-                      side: const BorderSide(color: AppColors.divider),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.photo_library_rounded, size: 18, color: AppColors.primary),
-                    label: Text(
-                      _mediaFiles.isEmpty ? 'Add Photos / Videos' : 'Add More (${_mediaFiles.length}/10)',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                    onPressed: _isPublishing ? null : _showMediaPickerOptions,
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _attachedLat != null ? AppColors.primaryText : AppColors.textPrimary,
-                      backgroundColor: _attachedLat != null ? AppColors.primarySoft : Colors.white,
-                      side: BorderSide(
-                        color: _attachedLat != null ? AppColors.primary : AppColors.divider,
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: _isFetchingLocation
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primary,
-                            ),
-                          )
-                        : Icon(
-                            _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
-                            size: 18,
-                            color: _attachedLat != null ? AppColors.primary : AppColors.textMuted,
-                          ),
-                    label: Text(
-                      _attachedLat != null ? 'Location Added' : 'Add Location',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                    onPressed: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
-                  ),
-                ],
-              ),
-              if (_attachedLocationName != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _attachedLocationName!,
-                          style: const TextStyle(
-                            color: AppColors.primaryText,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      InkWell(
-                        onTap: _removeAttachedLocation,
-                        child: const Padding(
-                          padding: EdgeInsets.all(4.0),
-                          child: Icon(Icons.close_rounded, size: 16, color: AppColors.primaryText),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 14),
-              _buildMediaPreviews(),
               if (_isPublishing && _mediaFiles.isNotEmpty) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.divider),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1215,7 +1307,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             'Uploading Media...',
                             style: TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 14,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1223,51 +1315,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             '${(_uploadProgress * 100).toStringAsFixed(0)}%',
                             style: const TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 14,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       LinearProgressIndicator(
                         value: _uploadProgress > 0 ? _uploadProgress : null,
                         backgroundColor: AppColors.chipBg,
                         color: AppColors.primary,
-                        minHeight: 8,
+                        minHeight: 6,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       const Text(
                         'Please wait, this might take a moment depending on your network.',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                       ),
                     ],
                   ),
                 ),
               ],
               if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.errorSoft,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.error_outline, color: AppColors.error, size: 20),
-                      const SizedBox(width: 10),
+                      const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(
-                            color: AppColors.errorSoftText,
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
+                          style: const TextStyle(color: AppColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],

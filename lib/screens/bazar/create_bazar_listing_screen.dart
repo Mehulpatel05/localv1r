@@ -125,7 +125,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: const Text(
-                  'Select photos & videos from gallery',
+                  'Select photos from gallery',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
                 onTap: () {
@@ -166,8 +166,8 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
     try {
       setState(() => _isPickingImage = true);
       final picker = ImagePicker();
-      final pickedList = await picker.pickMultipleMedia(
-        imageQuality: 80,
+      final pickedList = await picker.pickMultiImage(
+        imageQuality: 82,
       );
       if (pickedList.isNotEmpty) {
         setState(() {

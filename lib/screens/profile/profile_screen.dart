@@ -1489,7 +1489,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final handle = _userData?['handle'] ?? widget.currentUserHandle;
     final bio = _userData?['bio'] ?? '';
 
-    final headerHeight = MediaQuery.of(context).padding.top + 134.0;
+    final headerHeight = MediaQuery.of(context).padding.top + 195.0;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -1534,11 +1534,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Image.asset(
                             'assets/images/nearhood_profile_city_header.webp',
                             fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
+                            alignment: Alignment.bottomCenter,
                             errorBuilder: (context, error, stackTrace) => Image.asset(
                               'assets/images/nearhood_profile_city_header.png',
                               fit: BoxFit.cover,
-                              alignment: Alignment.topCenter,
+                              alignment: Alignment.bottomCenter,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
@@ -1546,6 +1546,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                   ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.35),
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.22),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  stops: const [0.0, 0.45, 1.0],
                                 ),
                               ),
                             ),
@@ -1642,6 +1658,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         GestureDetector(
+                                          onTap: _refreshProfile,
+                                          child: Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(alpha: 0.22),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.30),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.refresh_rounded,
+                                              size: 19,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
                                           onTap: _shareProfile,
                                           child: Container(
                                             width: 36,
@@ -1693,30 +1730,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.only(top: headerHeight - 20),
+                      padding: EdgeInsets.only(top: headerHeight - 28),
                       child: Container(
                         width: double.infinity,
                         constraints: BoxConstraints(
-                          minHeight: MediaQuery.of(context).size.height - (headerHeight - 20),
+                          minHeight: MediaQuery.of(context).size.height - (headerHeight - 28),
                         ),
                         decoration: const BoxDecoration(
-                          color: Colors.white,
+                          color: Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(30),
-                            topRight: Radius.circular(30),
+                            topLeft: Radius.circular(28),
+                            topRight: Radius.circular(28),
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0x140F172A),
+                              color: Color(0x180F172A),
                               blurRadius: 18,
-                              offset: Offset(0, -4),
+                              offset: Offset(0, -6),
                             ),
                           ],
                         ),
-                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -2055,9 +2112,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            Builder(
-                              builder: (context) {
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Builder(
+                        builder: (context) {
                                 final bazarListings = BazarRepository.instance.getUserListingsCount(widget.currentUserHandle);
                                 final postListings = _userPosts.where((p) =>
                                   p.category == PostCategory.shop ||
@@ -2312,13 +2372,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFF1F5F9),
+          color: const Color(0xFFE2E8F0),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -2341,7 +2401,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label,
             style: const TextStyle(
               fontSize: 11.5,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               color: Color(0xFF64748B),
             ),
           ),
@@ -2366,7 +2426,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required String subtitle,
     Color? borderColor,
-    double borderWidth = 1.0,
+    double borderWidth = 1.2,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -2379,13 +2439,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: borderColor ?? const Color(0xFFF1F5F9),
+            color: borderColor ?? const Color(0xFFE2E8F0),
             width: borderWidth,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
+              color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
