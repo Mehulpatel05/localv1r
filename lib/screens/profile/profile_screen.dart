@@ -35,6 +35,7 @@ import '../../services/rewards_service.dart';
 import '../../models/founding_model.dart';
 import '../../services/founding_service.dart';
 import '../rewards/rewards_hub_screen.dart';
+import 'profile_header_asset.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -1535,8 +1536,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             'assets/images/nearhood_profile_city_header.webp',
                             fit: BoxFit.cover,
                             alignment: Alignment.bottomCenter,
-                            errorBuilder: (context, error, stackTrace) => Image.asset(
-                              'assets/images/nearhood_profile_city_header.png',
+                            errorBuilder: (context, error, stackTrace) => Image.memory(
+                              getProfileHeaderBytes(),
                               fit: BoxFit.cover,
                               alignment: Alignment.bottomCenter,
                               errorBuilder: (context, error, stackTrace) => Container(
