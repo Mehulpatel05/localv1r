@@ -11,8 +11,6 @@ import '../main.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/personal_chat_screen.dart';
 import '../screens/detail/post_detail_screen.dart';
-import '../screens/friends/friends_screen.dart';
-import '../screens/friends/friend_requests_screen.dart';
 import '../services/auth_service.dart';
 import '../services/friend_repository.dart';
 import '../services/post_repository.dart';
@@ -998,18 +996,7 @@ class NotificationService {
         }
       }
       goToNotifications();
-    } else if (type == 'friend_request' || type == 'friend_req') {
-      final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
-      navState.push(
-        MaterialPageRoute<void>(
-          builder: (_) => FriendRequestsScreen(
-            repository: friendRepo,
-            currentUserHandle: cleanCurrentHandle,
-            initialTab: FriendRequestsTab.requests,
-          ),
-        ),
-      );
-    } else if (type == 'friend_accepted' || type == 'friend_accept' || type == 'friend') {
+    } else if (type == 'friend_request' || type == 'friend_req' || type == 'friend_accepted' || type == 'friend_accept' || type == 'friend') {
       if (partnerHandle != null && partnerHandle.isNotEmpty) {
         navState.push(
           MaterialPageRoute<void>(
@@ -1020,16 +1007,7 @@ class NotificationService {
           ),
         );
       } else {
-        final friendRepo = FriendRepository()..currentUserHandle = cleanCurrentHandle;
-        navState.push(
-          MaterialPageRoute<void>(
-            builder: (_) => FriendsScreen(
-              repository: friendRepo,
-              currentUserHandle: cleanCurrentHandle,
-              initialTab: FriendsTab.friends,
-            ),
-          ),
-        );
+        goToNotifications();
       }
     } else if (type == 'chat' || type == 'message' || type == 'personal_chat' || type == 'direct_chat') {
       if (partnerHandle != null && partnerHandle.isNotEmpty) {

@@ -12,11 +12,10 @@ import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
-import '../friends/friends_screen.dart';
-import '../../services/friend_repository.dart';
 import '../notifications/notifications_screen.dart';
 import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
+import '../profile/profile_screen.dart';
 import '../../core/services/app_image_cache_service.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
@@ -42,8 +41,6 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  late final FriendRepository _friendRepository;
-  late final Stream<int> _pendingRequestsStream;
   String _selectedFilterChip = 'All';
 
   static const List<String> _feedCategoryFilters = [
@@ -110,11 +107,25 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  void _openProfile() {
+    if (widget.onOpenProfileTab != null) {
+      widget.onOpenProfileTab!();
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileScreen(
+            repository: widget.repository,
+            currentUserHandle: widget.currentUserHandle,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _friendRepository = FriendRepository()..currentUserHandle = widget.currentUserHandle;
-    _pendingRequestsStream = _friendRepository.getPendingRequestCount();
     widget.repository.addListener(_onRepositoryUpdated);
     widget.repository.setCategory(null);
     _triggerFeedImagePrefetch();
@@ -337,66 +348,26 @@ class _FeedScreenState extends State<FeedScreen> {
               },
             ),
             const SizedBox(width: 8),
-            StreamBuilder<int>(
-              stream: _pendingRequestsStream,
-              builder: (context, snap) {
-                final count = snap.data ?? 0;
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FriendsScreen(
-                          repository: _friendRepository,
-                          currentUserHandle: widget.currentUserHandle,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.chipBg,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.divider,
-                        width: 1,
-                      ),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(
-                          Icons.people_alt_rounded,
-                          color: AppColors.textPrimary,
-                          size: 20,
-                        ),
-                        if (count > 0)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: AppColors.error,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '$count',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+            GestureDetector(
+              onTap: _openProfile,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.divider,
+                    width: 1.5,
                   ),
-                );
-              },
+                ),
+                child: ClipOval(
+                  child: UserAvatar(
+                    handle: widget.currentUserHandle,
+                    size: 40,
+                    enableFullViewOnTap: false,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -469,7 +440,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                       repository: widget.repository,
                                     );
                                   } else {
-                                    widget.onOpenProfileTab?.call();
+                                    _openProfile();
                                   }
                                 },
                               );

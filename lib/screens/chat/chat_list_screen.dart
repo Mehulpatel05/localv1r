@@ -1172,7 +1172,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ],
         ),
         content: const Text(
-          '• Messages are strictly private between you and your neighbor.\n• You can message any friend or neighbor directly.\n• Be respectful and follow community safety guidelines.\n• You can block or report any user at any time from their profile.\n• Long press any chat to select, pin, mute, archive or batch manage.',
+          '• Messages are strictly private between you and your neighbor.\n• You can message any neighbor directly.\n• Be respectful and follow community safety guidelines.\n• You can block or report any user at any time from their profile.\n• Long press any chat to select, pin, mute, archive or batch manage.',
           style: TextStyle(
             color: AppColors.textMuted,
             fontSize: 14,
@@ -2320,7 +2320,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Connect and chat with neighbors and friends in Vadodara.',
+              'Connect and chat with neighbors in Vadodara.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textMuted,
@@ -2423,7 +2423,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Check your spelling or start a new chat with a friend.',
+              'Check your spelling or start a new chat with a neighbor.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
@@ -2568,7 +2568,7 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                       controller: _filterController,
                       style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
                       decoration: const InputDecoration(
-                        hintText: 'Search friends...',
+                        hintText: 'Search neighbors...',
                         hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
                         prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted, size: 18),
                         border: InputBorder.none,
@@ -2593,6 +2593,9 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                       .map((f) => f.getOtherUser(widget.currentUserHandle))
                       .where((h) => h.toLowerCase().contains(_filter))
                       .toList();
+                  if (_filter.isNotEmpty && !friendHandles.any((h) => h.toLowerCase() == _filter)) {
+                    friendHandles.insert(0, _filter);
+                  }
 
                   if (friendHandles.isEmpty) {
                     return Center(
@@ -2605,8 +2608,8 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                             const SizedBox(height: 10),
                             Text(
                               _filter.isEmpty
-                                  ? 'No friends yet'
-                                  : 'No friends matching "$_filter"',
+                                  ? 'No neighbors yet'
+                                  : 'No neighbors matching "$_filter"',
                               style: const TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w700,
@@ -2615,7 +2618,7 @@ class _NewChatFriendPickerSheetState extends State<_NewChatFriendPickerSheet> {
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'Add neighbors as friends from the feed to start chatting!',
+                              'Type any neighbor\'s username above to start chatting!',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
                             ),

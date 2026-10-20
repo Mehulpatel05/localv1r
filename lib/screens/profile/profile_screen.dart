@@ -15,11 +15,8 @@ import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/r2_storage_service.dart';
-import '../../services/friend_repository.dart';
-import '../../models/friendship_model.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
-import '../friends/friends_screen.dart';
 import '../../features/settings/settings_page.dart';
 import 'area_change_request_screen.dart';
 import 'my_posts_screen.dart';
@@ -61,7 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _bioController;
   late TextEditingController _nameController;
   late TextEditingController _handleController;
-  late final FriendRepository _friendRepository;
   LocalShop? _myRegisteredShop;
 
   @override
@@ -71,8 +67,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _bioController = TextEditingController();
     _nameController = TextEditingController();
     _handleController = TextEditingController();
-    _friendRepository = FriendRepository()
-      ..currentUserHandle = widget.currentUserHandle;
 
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
     final cachedPhoto = AvatarCacheService.instance.getCachedUrl(cleanHandle);
@@ -555,7 +549,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       BadgeCacheService.instance.setBadge(cleanHandle, isVerified: isVer, badgeText: badge);
 
       widget.repository.currentUserHandle = cleanHandle;
-      _friendRepository.currentUserHandle = cleanHandle;
       widget.repository.refresh();
 
       setState(() {
@@ -2167,33 +2160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         },
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: StreamBuilder<List<Friendship>>(
-                                        stream: _friendRepository.getFriendsList(),
-                                        builder: (context, snapshot) {
-                                          final count = snapshot.hasData
-                                              ? snapshot.data!.length
-                                              : (_userData?['friendCount'] as int? ?? 0);
-                                          return _buildStatCard(
-                                            count: '$count',
-                                            label: 'Neighbours',
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => FriendsScreen(
-                                                    repository: _friendRepository,
-                                                    currentUserHandle: widget.currentUserHandle,
-                                                    initialTab: FriendsTab.friends,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        },
-                                      ),
-                                    ),
+
                                   ],
                                 );
                               },

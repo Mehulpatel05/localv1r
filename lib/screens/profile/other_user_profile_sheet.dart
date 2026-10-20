@@ -121,162 +121,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
     }
   }
 
-  Future<void> _sendFriendRequest() async {
-    setState(() => _friendActionLoading = true);
-    try {
-      final newStatus = await _friendRepo.sendFriendRequest(_targetHandle);
-      if (mounted) {
-        setState(() => _relationshipStatus = newStatus);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newStatus == RelationshipStatus.friends
-                  ? 'You and ${getDisplayName(_targetHandle)} are now connected as neighbours! 🎉'
-                  : 'Neighbour request sent to ${getDisplayName(_targetHandle)}!',
-            ),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _friendActionLoading = false);
-    }
-  }
-
-  Future<void> _acceptFriendRequest() async {
-    setState(() => _friendActionLoading = true);
-    try {
-      await _friendRepo.acceptFriendRequest(_targetHandle);
-      if (mounted) {
-        setState(() => _relationshipStatus = RelationshipStatus.friends);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('You and ${getDisplayName(_targetHandle)} are now connected as neighbours! 🎉'),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _friendActionLoading = false);
-    }
-  }
-
-  Future<void> _cancelFriendRequest() async {
-    setState(() => _friendActionLoading = true);
-    try {
-      await _friendRepo.cancelFriendRequest(_targetHandle);
-      if (mounted) {
-        setState(() => _relationshipStatus = RelationshipStatus.none);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Neighbour request cancelled'),
-            backgroundColor: AppColors.textMuted,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _friendActionLoading = false);
-    }
-  }
-
-  Future<void> _unfriendUser() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          'Remove ${getDisplayName(_targetHandle)} from neighbours?',
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: const Text(
-          'Are you sure you want to remove this person from your neighbours list?',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _friendActionLoading = true);
-    try {
-      await _friendRepo.unfriend(_targetHandle);
-      if (mounted) {
-        setState(() => _relationshipStatus = RelationshipStatus.none);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Removed ${getDisplayName(_targetHandle)} from neighbours'),
-            backgroundColor: AppColors.textMuted,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _friendActionLoading = false);
-    }
-  }
-
   Future<void> _unblockUser() async {
     setState(() => _friendActionLoading = true);
     try {
@@ -655,57 +499,59 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
                   ),
                 ),
 
-                const SizedBox(height: 22),
-
-                _buildRelationshipButton(),
-
-                const SizedBox(height: 10),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                if (_relationshipStatus == RelationshipStatus.blockedByMe ||
+                    _relationshipStatus == RelationshipStatus.blockedByThem) ...[
+                  const SizedBox(height: 16),
+                  _buildRelationshipButton(),
+                ],
+                if (_relationshipStatus != RelationshipStatus.blockedByThem &&
+                    _targetHandle.toLowerCase() != _friendRepo.currentUserHandle.toLowerCase()) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
-                    icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                    label: const Text(
-                      'Message',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
+                      icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                      label: const Text(
+                        'Message',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
                       ),
-                    ),
-                    onPressed: _relationshipStatus == RelationshipStatus.blockedByMe ||
-                            _relationshipStatus == RelationshipStatus.blockedByThem
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Cannot message a blocked user.'),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        : () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PersonalChatScreen(
-                                  currentUserHandle: widget.currentUserHandle,
-                                  partnerHandle: _targetHandle,
+                      onPressed: _relationshipStatus == RelationshipStatus.blockedByMe
+                          ? () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Cannot message a blocked user.'),
+                                  backgroundColor: AppColors.error,
+                                  behavior: SnackBarBehavior.floating,
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            }
+                          : () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PersonalChatScreen(
+                                    currentUserHandle: widget.currentUserHandle,
+                                    partnerHandle: _targetHandle,
+                                  ),
+                                ),
+                              );
+                            },
+                    ),
                   ),
-                ),
+                ],
               ],
             ],
           ),
@@ -715,12 +561,6 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
   }
 
   Widget _buildRelationshipButton() {
-    if (_targetHandle.isNotEmpty &&
-        _friendRepo.currentUserHandle.isNotEmpty &&
-        _targetHandle.toLowerCase() == _friendRepo.currentUserHandle.toLowerCase()) {
-      return const SizedBox.shrink();
-    }
-
     if (_friendActionLoading) {
       return Container(
         width: double.infinity,
@@ -741,174 +581,63 @@ class _OtherUserProfileSheetState extends State<OtherUserProfileSheet> {
       );
     }
 
-    switch (_relationshipStatus) {
-      case RelationshipStatus.none:
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+    if (_relationshipStatus == RelationshipStatus.blockedByMe) {
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            backgroundColor: AppColors.errorSoft,
+            foregroundColor: const Color(0xFFB3262A),
+            side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
-            icon: const Icon(Icons.person_add_rounded, size: 18),
-            label: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Add Neighbour',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.5,
-                ),
-              ),
-            ),
-            onPressed: _sendFriendRequest,
           ),
-        );
-
-      case RelationshipStatus.requestSentByMe:
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.divider, width: 1.5),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+          icon: const Icon(Icons.block_rounded, color: AppColors.error, size: 18),
+          label: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'Blocked (Tap to Unblock)',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: Color(0xFFB3262A),
               ),
             ),
-            icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textMuted),
-            label: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Request Sent (Tap to Cancel)',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-            onPressed: _cancelFriendRequest,
           ),
-        );
-
-      case RelationshipStatus.requestReceivedByMe:
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Accept Neighbour Request',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.5,
-                ),
-              ),
-            ),
-            onPressed: _acceptFriendRequest,
-          ),
-        );
-
-      case RelationshipStatus.friends:
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              backgroundColor: AppColors.primarySoft,
-              foregroundColor: AppColors.primaryText,
-              side: const BorderSide(color: AppColors.primary, width: 1.5),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18),
-            label: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Neighbours (Tap to Manage)',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: AppColors.primaryText,
-                ),
-              ),
-            ),
-            onPressed: _unfriendUser,
-          ),
-        );
-
-      case RelationshipStatus.blockedByMe:
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              backgroundColor: AppColors.errorSoft,
-              foregroundColor: const Color(0xFFB3262A),
-              side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: const Icon(Icons.block_rounded, color: AppColors.error, size: 18),
-            label: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Blocked (Tap to Unblock)',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: Color(0xFFB3262A),
-                ),
-              ),
-            ),
-            onPressed: _unblockUser,
-          ),
-        );
-
-      case RelationshipStatus.blockedByThem:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.chipBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.do_not_disturb_on_rounded, color: AppColors.textMuted, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Unavailable',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        );
+          onPressed: _unblockUser,
+        ),
+      );
     }
+
+    if (_relationshipStatus == RelationshipStatus.blockedByThem) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.chipBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.do_not_disturb_on_rounded, color: AppColors.textMuted, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Unavailable',
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

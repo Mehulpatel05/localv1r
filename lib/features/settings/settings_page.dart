@@ -5,8 +5,6 @@ import '../../core/models/user_profile.dart';
 import '../../features/auth/login_flow_page.dart';
 import '../../screens/profile/blocked_users_screen.dart';
 import '../../screens/profile/widgets/support_request_sheet.dart';
-import '../../screens/friends/friend_requests_screen.dart';
-import '../../services/friend_repository.dart';
 import 'widgets/account_info_sheet.dart';
 import 'widgets/confirm_sheet.dart';
 import 'widgets/notification_settings_sheet.dart';
@@ -37,14 +35,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late final FriendRepository _friendRepository;
 
-  @override
-  void initState() {
-    super.initState();
-    _friendRepository = FriendRepository()
-      ..currentUserHandle = widget.profile.handle;
-  }
 
   void _navigateToLogin(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
@@ -161,7 +152,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
-                _FriendsTile(friendRepository: _friendRepository, profile: widget.profile),
               ],
             ),
 
@@ -302,152 +292,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FriendsTile extends StatelessWidget {
-  final FriendRepository friendRepository;
-  final UserProfile profile;
-
-  const _FriendsTile({
-    required this.friendRepository,
-    required this.profile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<int>(
-      stream: friendRepository.getPendingRequestCount(),
-      builder: (context, snap) {
-        final pendingCount = snap.data ?? 0;
-        final description = pendingCount > 0
-            ? '$pendingCount pending request${pendingCount > 1 ? 's' : ''}'
-            : 'View received & sent requests';
-        return _FriendsTileRow(
-          pendingCount: pendingCount,
-          description: description,
-          onTap: () {
-            final repo = FriendRepository()
-              ..currentUserHandle = profile.handle;
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => FriendRequestsScreen(
-                  repository: repo,
-                  currentUserHandle: profile.handle,
-                  initialTab: FriendRequestsTab.requests,
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _FriendsTileRow extends StatefulWidget {
-  final int pendingCount;
-  final String description;
-  final VoidCallback onTap;
-
-  const _FriendsTileRow({
-    required this.pendingCount,
-    required this.description,
-    required this.onTap,
-  });
-
-  @override
-  State<_FriendsTileRow> createState() => _FriendsTileRowState();
-}
-
-class _FriendsTileRowState extends State<_FriendsTileRow> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final disableAnimations = MediaQuery.of(context).disableAnimations;
-    final bg = _pressed && !disableAnimations ? AppColors.chipBg : Colors.transparent;
-
-    return Semantics(
-      label: 'Friend Requests, ${widget.description}, button',
-      button: true,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) {
-          setState(() => _pressed = false);
-          widget.onTap();
-        },
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedContainer(
-          duration: disableAnimations ? Duration.zero : const Duration(milliseconds: 80),
-          color: bg,
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.chipBg,
-                  shape: BoxShape.circle,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(Icons.people_alt_rounded, size: 20, color: AppColors.textPrimary),
-                    if (widget.pendingCount > 0)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Friend Requests',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.description,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textMuted,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
-            ],
-          ),
         ),
       ),
     );

@@ -5,13 +5,11 @@ import '../../services/post_repository.dart';
 import '../feed/feed_screen.dart';
 import '../bazar/bazar_screen.dart';
 import '../chat/chat_list_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../services/notification_service.dart';
 import '../../services/direct_chat_service.dart';
 import '../../services/rewards_service.dart';
 import '../../services/auth_service.dart';
 import '../../core/motion.dart';
-import '../../core/widgets/user_avatar.dart';
 import '../../features/auth/widgets/confirm_area_sheet.dart';
 import '../../features/auth/widgets/city_paused_dialog.dart';
 import '../../core/location/location_engine.dart';
@@ -34,7 +32,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final Set<int> _mountedTabs = {0};
-  late final List<Widget?> _cachedTabs = [null, null, null, null];
+  late final List<Widget?> _cachedTabs = [null, null, null];
 
   @override
   void initState() {
@@ -177,7 +175,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     }
     if (_currentIndexNotifier.value == index) return;
     _currentIndexNotifier.value = index;
-    if (index == 0 || index == 3) {
+    if (index == 0) {
       RewardsService.instance.fetchSummary();
     }
   }
@@ -196,7 +194,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         return FeedScreen(
           repository: widget.repository,
           currentUserHandle: widget.currentUserHandle,
-          onOpenProfileTab: () => _onTabTapped(3),
         );
       case 1:
         return BazarScreen(
@@ -204,11 +201,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         );
       case 2:
         return ChatListScreen(
-          currentUserHandle: widget.currentUserHandle,
-        );
-      case 3:
-        return ProfileScreen(
-          repository: widget.repository,
           currentUserHandle: widget.currentUserHandle,
         );
       default:
@@ -233,7 +225,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             backgroundColor: Colors.white,
             body: IndexedStack(
               index: currentIndex,
-              children: List.generate(4, (index) => _getOrCreateTab(index)),
+              children: List.generate(3, (index) => _getOrCreateTab(index)),
             ),
             bottomNavigationBar: AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
@@ -263,7 +255,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final itemWidth = constraints.maxWidth / 4;
+                          final itemWidth = constraints.maxWidth / 3;
                           final pillColumn = currentIndex;
                           return Stack(
                             alignment: Alignment.centerLeft,
@@ -310,9 +302,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                         badgeCount: unreadCount,
                                       );
                                     },
-                                  ),
-                                  _buildProfileNavItem(
-                                    currentIndex: currentIndex,
                                   ),
                                 ],
                               ),
@@ -400,73 +389,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileNavItem({
-    required int currentIndex,
-  }) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _onTabTapped(3),
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: Tooltip(
-            message: 'Profile',
-            child: SizedBox(
-              height: 48,
-              child: Center(
-                child: _ProfileNavAvatar(
-                  isSelected: currentIndex == 3,
-                  handle: widget.currentUserHandle,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileNavAvatar extends StatelessWidget {
-  final bool isSelected;
-  final String handle;
-
-  const _ProfileNavAvatar({
-    required this.isSelected,
-    required this.handle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final borderWidth = isSelected ? 2.0 : 0.0;
-
-    return AnimatedScale(
-      scale: isSelected ? 1.06 : 1.0,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.transparent,
-            width: borderWidth,
-          ),
-        ),
-        padding: const EdgeInsets.all(2),
-        child: UserAvatar(
-          handle: handle,
-          size: 26,
-          fontSize: 10,
-          enableFullViewOnTap: false,
         ),
       ),
     );
