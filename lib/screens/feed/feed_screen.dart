@@ -445,10 +445,10 @@ class _FeedScreenState extends State<FeedScreen> {
                             addRepaintBoundaries: true,
                             addAutomaticKeepAlives: true,
                             padding: EdgeInsets.only(
-                              top: 8,
+                              top: 0,
                               bottom: 88 + MediaQuery.paddingOf(context).bottom,
-                              left: 16,
-                              right: 16,
+                              left: 0,
+                              right: 0,
                             ),
                             itemCount: posts.length,
                             itemBuilder: (context, index) {
@@ -1057,31 +1057,19 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
 
     return RepaintBoundary(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: isUrgent
-              ? Border.all(color: AppColors.error, width: 1.5)
-              : Border.all(color: AppColors.divider.withValues(alpha: 0.35), width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF94A3B8).withValues(alpha: 0.12),
-              blurRadius: 12,
-              spreadRadius: 0,
-              offset: const Offset(0, 3),
+          border: Border(
+            bottom: BorderSide(
+              color: isUrgent
+                  ? AppColors.error.withValues(alpha: 0.35)
+                  : const Color(0xFFF1F5F9),
+              width: 1.0,
             ),
-            BoxShadow(
-              color: AppColors.divider.withValues(alpha: 0.8),
-              blurRadius: 6,
-              spreadRadius: 0,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          ),
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
           child: InkWell(
             onTap: () {
               Navigator.push(
@@ -1095,9 +1083,8 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                 ),
               );
             },
-            borderRadius: BorderRadius.circular(20),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1138,7 +1125,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           height: 58,
                           decoration: BoxDecoration(
                             color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.primarySoft),
                           ),
                           child: Column(
@@ -1210,154 +1197,131 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                     ),
                   ] else ...[
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         UserAvatar(
                           handle: post.authorHandle,
-                          size: 38,
+                          size: 40,
                           fontSize: 14,
                           onTap: widget.onProfileTap,
                         ),
                         const SizedBox(width: 10),
 
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Builder(
-                                builder: (context) {
-                                  final cleanHandle = post.authorHandle.replaceAll('@', '').trim();
-                                  final authorName = getDisplayName(
-                                    post.authorHandle,
-                                    fallback: post.authorName,
-                                  );
-                                  final showHandle = cleanHandle.isNotEmpty &&
-                                      !cleanHandle.toLowerCase().startsWith('user_') &&
-                                      !cleanHandle.toLowerCase().startsWith('anon');
-                                  final authorBadge = BadgeCacheService.instance.getUserBadge(
-                                    post.authorHandle,
-                                    fallback: post.authorBadge,
-                                  );
-                                  final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
-                                    post.authorHandle,
-                                    fallback: post.isVerified,
-                                  );
+                          child: Builder(
+                            builder: (context) {
+                              final authorName = getDisplayName(
+                                post.authorHandle,
+                                fallback: post.authorName,
+                              );
+                              final authorBadge = BadgeCacheService.instance.getUserBadge(
+                                post.authorHandle,
+                                fallback: post.authorBadge,
+                              );
+                              final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
+                                post.authorHandle,
+                                fallback: post.isVerified,
+                              );
+                              final fallbackCity = context.read<LocationService>().city.name;
+                              String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
+                                  ? post.areaName!
+                                  : fallbackCity;
+                              if (cleanArea.contains('General / All')) {
+                                cleanArea = cleanArea.replaceAll('General / All', 'General · All');
+                              }
 
-                                  return GestureDetector(
+                              return Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 5,
+                                runSpacing: 3,
+                                children: [
+                                  GestureDetector(
                                     onTap: widget.onProfileTap,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            authorName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
-                                              fontSize: 14.5,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        if (showHandle) ...[
-                                          const SizedBox(width: 5),
-                                          Flexible(
-                                            child: Text(
-                                              '@$cleanHandle',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.textMuted,
-                                                fontSize: 12.5,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                        if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
-                                          const SizedBox(width: 5),
-                                          VerifiedBadge(
-                                            isVerified: isAuthorVerified,
-                                            badgeText: authorBadge,
-                                            compact: true,
-                                          ),
-                                        ],
-                                      ],
+                                    child: Text(
+                                      authorName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.textPrimary,
+                                        fontSize: 14.5,
+                                        letterSpacing: -0.2,
+                                      ),
                                     ),
-                                  );
-                                },
-                              ),
-                              InkWell(
-                                onTap: () async {
-                                  final lat = post.lat;
-                                  final lng = post.lng;
-                                  Uri uri;
-                                  if (lat != null && lng != null) {
-                                    uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                                  } else {
-                                    final query = Uri.encodeComponent('${post.areaName ?? "Vadodara"}, Gujarat, India');
-                                    uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-                                  }
-                                  try {
-                                    if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                    }
-                                  } catch (_) {}
-                                },
-                                borderRadius: BorderRadius.circular(4),
-                                child: Builder(
-                                  builder: (context) {
-                                    final fallbackCity = context.read<LocationService>().city.name;
-                                    String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
-                                        ? post.areaName!
-                                        : fallbackCity;
-                                    if (cleanArea.contains('General / All')) {
-                                      cleanArea = cleanArea.replaceAll('General / All', 'General · All');
-                                    }
-
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on_rounded,
-                                          size: 11.5,
-                                          color: AppColors.primary,
+                                  ),
+                                  if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty))
+                                    VerifiedBadge(
+                                      isVerified: isAuthorVerified,
+                                      badgeText: authorBadge,
+                                      compact: true,
+                                    ),
+                                  InkWell(
+                                    onTap: () async {
+                                      final lat = post.lat;
+                                      final lng = post.lng;
+                                      Uri uri;
+                                      if (lat != null && lng != null) {
+                                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                                      } else {
+                                        final query = Uri.encodeComponent('$cleanArea, Gujarat, India');
+                                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+                                      }
+                                      try {
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                        }
+                                      } catch (_) {}
+                                    },
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFECFDF5),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: const Color(0xFF0E8A3E).withValues(alpha: 0.25),
+                                          width: 0.6,
                                         ),
-                                        const SizedBox(width: 3),
-                                        Flexible(
-                                          child: Text(
-                                            cleanArea,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: AppColors.textMuted,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on_rounded,
+                                            size: 10,
+                                            color: Color(0xFF0E8A3E),
+                                          ),
+                                          const SizedBox(width: 2.5),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(maxWidth: 110),
+                                            child: Text(
+                                              cleanArea,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Color(0xFF065F46),
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const Text(
-                                          ' · ',
-                                          style: TextStyle(
-                                            color: AppColors.textMuted,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Text(
-                                          _formatTimeAgo(post.createdAt),
-                                          style: const TextStyle(
-                                            color: AppColors.textMuted,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '• ${_formatTimeAgo(post.createdAt)}',
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
+
+                        const SizedBox(width: 8),
 
                         Builder(
                           builder: (_) {
@@ -1396,7 +1360,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             }
 
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                               decoration: BoxDecoration(
                                 color: bg,
                                 borderRadius: BorderRadius.circular(999),
@@ -1404,7 +1368,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                               child: Text(
                                 label,
                                 style: TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   color: text,
                                 ),
@@ -1463,7 +1427,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           ? post.mediaUrls
                           : [post.imageUrl!],
                       height: 250,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       heroTagPrefix: 'feed_post_${post.id}',
                       caption: post.content,
                       overlay: post.foodRating != null
