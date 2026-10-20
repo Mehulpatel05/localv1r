@@ -40,7 +40,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
           ownerHandle: widget.currentUserHandle,
           name: 'My Shop',
           category: 'General Store',
-          categoryIcon: '🏪',
+          categoryIcon: '🛍️',
           location: 'Alkapuri, Vadodara',
           distanceKm: 0.8,
           isVerified: true,
@@ -351,16 +351,25 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                                         width: 60,
                                         height: 60,
                                         fit: BoxFit.cover,
-                                        errorWidget: Text(
-                                          _shop.categoryIcon,
-                                          style: const TextStyle(fontSize: 28),
+                                        errorWidget: const Icon(
+                                          Icons.storefront_rounded,
+                                          color: AppColors.primary,
+                                          size: 28,
                                         ),
                                       ),
                                     )
-                                  : Text(
-                                      _shop.categoryIcon,
-                                      style: const TextStyle(fontSize: 28),
-                                    ),
+                                  : (_shop.categoryIcon.isNotEmpty &&
+                                          _shop.categoryIcon != '💊' &&
+                                          _shop.categoryIcon != '🏪')
+                                      ? Text(
+                                          _shop.categoryIcon,
+                                          style: const TextStyle(fontSize: 28),
+                                        )
+                                      : const Icon(
+                                          Icons.storefront_rounded,
+                                          color: AppColors.primary,
+                                          size: 28,
+                                        ),
                             ),
                           ),
                           const SizedBox(width: 14),

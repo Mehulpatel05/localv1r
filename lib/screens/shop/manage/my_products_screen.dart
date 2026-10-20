@@ -200,7 +200,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: AppColors.chipBg,
-                      hintText: 'e.g., Vitamin C tabs 500mg',
+                      hintText: 'e.g., Masala Chai Tea (500g), Cotton Kurti',
                       hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -318,14 +318,18 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 
   String _getCategoryEmoji(String title, String category) {
     final lower = title.toLowerCase();
-    if (lower.contains('tab') || lower.contains('capsule') || lower.contains('vitamin') || lower.contains('med')) return '💊';
-    if (lower.contains('kit') || lower.contains('aid') || lower.contains('bandage')) return '🩹';
-    if (lower.contains('thermometer') || lower.contains('digital') || lower.contains('meter')) return '🌡️';
-    if (lower.contains('sanit') || lower.contains('hand') || lower.contains('wash') || lower.contains('soap')) return '🧴';
-    if (lower.contains('mask')) return '😷';
-    if (category == 'Bakery') return '🥐';
-    if (category == 'Kirana') return '🛒';
-    return '📦';
+    if (lower.contains('shirt') || lower.contains('kurti') || lower.contains('pant') || lower.contains('dress') || lower.contains('saree') || lower.contains('cloth')) return '👕';
+    if (lower.contains('mobile') || lower.contains('phone') || lower.contains('charger') || lower.contains('cable') || lower.contains('earphone') || lower.contains('case')) return '📱';
+    if (lower.contains('chai') || lower.contains('tea') || lower.contains('coffee') || lower.contains('biscuit') || lower.contains('cookie') || lower.contains('cake') || lower.contains('bread') || lower.contains('snack')) return '🍞';
+    if (lower.contains('rice') || lower.contains('atta') || lower.contains('dal') || lower.contains('oil') || lower.contains('sugar') || lower.contains('spice') || lower.contains('grocery') || lower.contains('kirana')) return '🛒';
+    if (lower.contains('cream') || lower.contains('shampoo') || lower.contains('lotion') || lower.contains('perfume') || lower.contains('beauty')) return '✨';
+    final cat = category.toLowerCase();
+    if (cat.contains('cloth') || cat.contains('tailor') || cat.contains('fashion')) return '👕';
+    if (cat.contains('mobile') || cat.contains('electronic')) return '📱';
+    if (cat.contains('bakery') || cat.contains('cafe') || cat.contains('food')) return '🍞';
+    if (cat.contains('salon') || cat.contains('beauty')) return '✂️';
+    if (cat.contains('kirana') || cat.contains('grocery') || cat.contains('general')) return '🛒';
+    return '🛍️';
   }
 
   @override

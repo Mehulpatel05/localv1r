@@ -7,6 +7,7 @@ import '../chat/personal_chat_screen.dart';
 import '../shop/manage/my_shop_dashboard_screen.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/services/badge_cache_service.dart';
+import '../../core/widgets/safe_image.dart';
 import '../../theme/app_colors.dart';
 
 class LocalShop {
@@ -86,6 +87,20 @@ class LocalShop {
         'products': products.map((p) => p.toJson()).toList(),
       };
 
+  static String resolveCategoryIcon(dynamic icon, dynamic category) {
+    final rawIcon = (icon ?? '').toString().trim();
+    if (rawIcon.isNotEmpty && rawIcon != '💊' && rawIcon != '🏪') {
+      return rawIcon;
+    }
+    final cat = (category ?? '').toString().toLowerCase();
+    if (cat.contains('cloth') || cat.contains('tailor') || cat.contains('fashion')) return '🛍️';
+    if (cat.contains('mobile') || cat.contains('electronic')) return '📱';
+    if (cat.contains('cafe') || cat.contains('bakery') || cat.contains('food')) return '🍞';
+    if (cat.contains('salon') || cat.contains('beauty')) return '✂️';
+    if (cat.contains('kirana') || cat.contains('grocery') || cat.contains('general')) return '🛒';
+    return '🛍️';
+  }
+
   factory LocalShop.fromJson(Map<String, dynamic> json) {
     final owner = (json['ownerHandle'] ?? json['owner_handle'] ?? '') as String;
     final isVer = json['isVerified'] == true || json['is_verified'] == 1;
@@ -103,7 +118,7 @@ class LocalShop {
       ownerHandle: owner,
       name: json['name'] ?? json['shop_name'] ?? json['shopName'] ?? '',
       category: json['category'] ?? 'General',
-      categoryIcon: json['categoryIcon'] ?? (json['category'] == 'Pharmacy' ? '💊' : (json['category'] == 'Bakery' ? '🥐' : (json['category'] == 'Kirana' ? '🛒' : '🏪'))),
+      categoryIcon: resolveCategoryIcon(json['categoryIcon'], json['category']),
       location: json['location'] ?? json['address'] ?? '',
       distanceKm: json['distanceKm'] is num ? (json['distanceKm'] as num).toDouble() : 0.8,
       isVerified: isVer,
@@ -474,10 +489,26 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     border: Border.all(color: AppColors.divider, width: 1.5),
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    shop.categoryIcon,
-                    style: const TextStyle(fontSize: 32),
-                  ),
+                  child: shop.imageUrl.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
+                          child: SafeImage(
+                            imageUrl: shop.imageUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorWidget: const Icon(
+                              Icons.storefront_rounded,
+                              color: AppColors.primary,
+                              size: 30,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.storefront_rounded,
+                          color: AppColors.primary,
+                          size: 30,
+                        ),
                 ),
                 const SizedBox(width: 14),
 

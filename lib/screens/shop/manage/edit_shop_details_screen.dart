@@ -28,12 +28,24 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
   bool _isSaving = false;
 
   final List<String> _categories = [
+    'General Store',
+    'Kirana & Grocery',
     'Clothes & Tailor',
     'Mobile & Electronics',
-    'General Store',
     'Salon & Beauty',
+    'Bakery & Cafe',
     'Other',
   ];
+
+  String _resolveCategoryIcon(String? category) {
+    final cat = (category ?? '').toLowerCase();
+    if (cat.contains('cloth') || cat.contains('tailor') || cat.contains('fashion')) return '🛍️';
+    if (cat.contains('mobile') || cat.contains('electronic')) return '📱';
+    if (cat.contains('cafe') || cat.contains('bakery') || cat.contains('food')) return '🍞';
+    if (cat.contains('salon') || cat.contains('beauty')) return '✂️';
+    if (cat.contains('kirana') || cat.contains('grocery') || cat.contains('general')) return '🛒';
+    return '🛍️';
+  }
 
   @override
   void initState() {
@@ -144,7 +156,7 @@ class _EditShopDetailsScreenState extends State<EditShopDetailsScreen> {
       ownerHandle: widget.shop.ownerHandle,
       name: name,
       category: _selectedCategory,
-      categoryIcon: widget.shop.categoryIcon.isNotEmpty ? widget.shop.categoryIcon : '🏪',
+      categoryIcon: _resolveCategoryIcon(_selectedCategory),
       location: address,
       distanceKm: widget.shop.distanceKm,
       isVerified: widget.shop.isVerified,

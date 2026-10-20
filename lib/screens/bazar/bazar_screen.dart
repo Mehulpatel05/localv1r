@@ -912,7 +912,30 @@ class _BazarScreenState extends State<BazarScreen> {
                           border: Border.all(color: AppColors.divider, width: 1.5),
                         ),
                         alignment: Alignment.center,
-                        child: Text(shop.categoryIcon, style: const TextStyle(fontSize: 22)),
+                        child: shop.imageUrl.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(23),
+                                child: SafeImage(
+                                  imageUrl: shop.imageUrl,
+                                  width: 46,
+                                  height: 46,
+                                  fit: BoxFit.cover,
+                                  errorWidget: const Icon(
+                                    Icons.storefront_rounded,
+                                    color: AppColors.primary,
+                                    size: 22,
+                                  ),
+                                ),
+                              )
+                            : (shop.categoryIcon.isNotEmpty &&
+                                    shop.categoryIcon != '💊' &&
+                                    shop.categoryIcon != '🏪')
+                                ? Text(shop.categoryIcon, style: const TextStyle(fontSize: 22))
+                                : const Icon(
+                                    Icons.storefront_rounded,
+                                    color: AppColors.primary,
+                                    size: 22,
+                                  ),
                       ),
                       title: Text(
                         shop.name,
@@ -992,10 +1015,33 @@ class _BazarScreenState extends State<BazarScreen> {
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    shop.categoryIcon,
-                    style: const TextStyle(fontSize: 32),
-                  ),
+                  child: shop.imageUrl.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(33),
+                          child: SafeImage(
+                            imageUrl: shop.imageUrl,
+                            width: 66,
+                            height: 66,
+                            fit: BoxFit.cover,
+                            errorWidget: const Icon(
+                              Icons.storefront_rounded,
+                              color: AppColors.primary,
+                              size: 30,
+                            ),
+                          ),
+                        )
+                      : (shop.categoryIcon.isNotEmpty &&
+                              shop.categoryIcon != '💊' &&
+                              shop.categoryIcon != '🏪')
+                          ? Text(
+                              shop.categoryIcon,
+                              style: const TextStyle(fontSize: 32),
+                            )
+                          : const Icon(
+                              Icons.storefront_rounded,
+                              color: AppColors.primary,
+                              size: 30,
+                            ),
                 ),
                 if (shop.isVerified)
                   Positioned(

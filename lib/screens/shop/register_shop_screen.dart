@@ -26,12 +26,24 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   final TextEditingController _shortDescController = TextEditingController();
 
   final List<String> _categories = [
+    'General Store',
+    'Kirana & Grocery',
     'Clothes & Tailor',
     'Mobile & Electronics',
-    'General Store',
     'Salon & Beauty',
+    'Bakery & Cafe',
     'Other',
   ];
+
+  String _resolveCategoryIcon(String? category) {
+    final cat = (category ?? '').toLowerCase();
+    if (cat.contains('cloth') || cat.contains('tailor') || cat.contains('fashion')) return '🛍️';
+    if (cat.contains('mobile') || cat.contains('electronic')) return '📱';
+    if (cat.contains('cafe') || cat.contains('bakery') || cat.contains('food')) return '🍞';
+    if (cat.contains('salon') || cat.contains('beauty')) return '✂️';
+    if (cat.contains('kirana') || cat.contains('grocery') || cat.contains('general')) return '🛒';
+    return '🛍️';
+  }
 
   final TextEditingController _addressController = TextEditingController();
   String _selectedVisibilityKm = '2 km';
@@ -290,8 +302,8 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       id: 'shop_$cleanHandle',
       ownerHandle: cleanHandle,
       name: _shopNameController.text.trim(),
-      category: _selectedCategory ?? 'Other',
-      categoryIcon: '🏪',
+      category: _selectedCategory ?? 'General Store',
+      categoryIcon: _resolveCategoryIcon(_selectedCategory),
       location: _addressController.text.trim(),
       distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
       isVerified: true,
@@ -456,12 +468,16 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.divider),
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                   ),
                   child: const Center(
-                    child: Text('🏪', style: TextStyle(fontSize: 42)),
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      size: 42,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
 
@@ -591,27 +607,40 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                 Center(
                   child: GestureDetector(
                     onTap: _pickShopLogo,
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider, width: 1.5),
-                        image: _shopLogoPath != null
-                            ? DecorationImage(
-                                image: FileImage(File(_shopLogoPath!)),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: _shopLogoPath == null
-                          ? Icon(
-                              Icons.camera_alt_outlined,
-                              color: AppColors.textMuted,
-                              size: 32,
-                            )
-                          : null,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 84,
+                          height: 84,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.divider, width: 1.5),
+                            image: _shopLogoPath != null
+                                ? DecorationImage(
+                                    image: FileImage(File(_shopLogoPath!)),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: _shopLogoPath == null
+                              ? Icon(
+                                  Icons.add_a_photo_outlined,
+                                  color: AppColors.primary,
+                                  size: 32,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _shopLogoPath != null ? 'Change shop logo' : 'Add shop logo / profile',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
