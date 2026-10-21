@@ -267,8 +267,8 @@ class UserAvatar extends StatefulWidget {
 
   static const Gradient brandGradient = LinearGradient(
     colors: [
-      Color(0xFF0B8A3E),
-      Color(0xFF07692D),
+      Color(0xFF2C7880),
+      Color(0xFF1E585E),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

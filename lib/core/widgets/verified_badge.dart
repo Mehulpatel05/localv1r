@@ -19,7 +19,7 @@ class VerifiedBadge extends StatelessWidget {
     double? iconSize,
     this.fontSize = 9.5,
     this.showText = true,
-    this.iconColor = const Color(0xFF0E8A3E),
+    this.iconColor = const Color(0xFF2C7880),
     this.compact = false,
   }) : iconSize = size ?? iconSize ?? 14.0;
 

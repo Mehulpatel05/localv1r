@@ -312,7 +312,7 @@ class _OtpStepState extends State<OtpStep>
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0E8A3E),
+                        color: Color(0xFF2C7880),
                       ),
                     ),
                   ),
@@ -359,7 +359,7 @@ class _OtpStepState extends State<OtpStep>
                   if (_hasError) {
                     boxBorderColor = AppColors.error;
                   } else if (isFocused) {
-                    boxBorderColor = const Color(0xFF0E8A3E);
+                    boxBorderColor = const Color(0xFF2C7880);
                   } else {
                     boxBorderColor = const Color(0xFFE2E8F0);
                   }
@@ -368,7 +368,7 @@ class _OtpStepState extends State<OtpStep>
                   if (isFocused && !_hasError) {
                     shadows.add(
                       BoxShadow(
-                        color: const Color(0xFF0E8A3E).withValues(alpha: 0.12),
+                        color: const Color(0xFF2C7880).withValues(alpha: 0.12),
                         spreadRadius: 4,
                         blurRadius: 0,
                       ),
@@ -477,7 +477,7 @@ class _OtpStepState extends State<OtpStep>
                     child: ElevatedButton(
                       onPressed: isButtonEnabled ? _verifyOtp : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0E8A3E),
+                        backgroundColor: const Color(0xFF2C7880),
                         disabledBackgroundColor: const Color(0xFFE2E8F0),
                         elevation: 0,
                         shadowColor: Colors.transparent,
@@ -545,7 +545,7 @@ class _OtpStepState extends State<OtpStep>
                                 style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0E8A3E),
+                                  color: Color(0xFF2C7880),
                                   decoration: TextDecoration.underline,
                                 ),
                               ),
@@ -562,7 +562,7 @@ class _OtpStepState extends State<OtpStep>
                 Icon(
                   Icons.verified_user_outlined,
                   size: 16,
-                  color: Color(0xFF0E8A3E),
+                  color: Color(0xFF2C7880),
                 ),
                 SizedBox(width: 6),
                 Text(
@@ -570,7 +570,7 @@ class _OtpStepState extends State<OtpStep>
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF0E8A3E),
+                    color: Color(0xFF2C7880),
                   ),
                 ),
               ],

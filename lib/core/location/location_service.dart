@@ -169,7 +169,7 @@ class LocationService extends ChangeNotifier {
     if (isUsingFallback || _state == LocationState.stale) {
       return Colors.orange.shade700;
     }
-    return const Color(0xFF0B8A3E);
+    return const Color(0xFF2C7880);
   }
 
   void setSelectedRadius(double radiusKm) {

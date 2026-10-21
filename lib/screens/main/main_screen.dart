@@ -9,7 +9,6 @@ import '../../services/notification_service.dart';
 import '../../services/direct_chat_service.dart';
 import '../../services/rewards_service.dart';
 import '../../services/auth_service.dart';
-import '../../core/motion.dart';
 import '../../features/auth/widgets/confirm_area_sheet.dart';
 import '../../features/auth/widgets/city_paused_dialog.dart';
 import '../../core/location/location_engine.dart';
@@ -233,82 +232,85 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 systemNavigationBarDividerColor: Colors.transparent,
                 systemNavigationBarIconBrightness: Brightness.dark,
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 16,
-                      offset: const Offset(0, -4),
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Container(
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(36),
+                      border: Border.all(
+                        color: const Color(0xFFE5ECEB),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  left: false,
-                  right: false,
-                  child: SizedBox(
-                    height: 64,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final itemWidth = constraints.maxWidth / 3;
-                          final pillColumn = currentIndex;
-                          return Stack(
-                            alignment: Alignment.centerLeft,
-                            children: [
-                              AnimatedPositioned(
-                                duration: AppMotion.durationMicro,
-                                curve: AppMotion.interactiveCurve,
-                                left: pillColumn * itemWidth + (itemWidth - 58) / 2,
-                                width: 58,
-                                top: 0,
-                                bottom: 0,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFDBF1E3),
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final itemWidth = constraints.maxWidth / 3;
+                        const circleSize = 52.0;
+                        final pillColumn = currentIndex;
+                        return Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            AnimatedPositioned(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutCubic,
+                              left: pillColumn * itemWidth + (itemWidth - circleSize) / 2,
+                              width: circleSize,
+                              height: circleSize,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF2C7880),
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                              Row(
-                                children: [
-                                  _buildNavItem(
-                                    index: 0,
-                                    currentIndex: currentIndex,
-                                    icon: Icons.home_outlined,
-                                    selectedIcon: Icons.home_rounded,
-                                    tooltip: 'Home',
-                                  ),
-                                  _buildNavItem(
-                                    index: 1,
-                                    currentIndex: currentIndex,
-                                    icon: Icons.storefront_outlined,
-                                    selectedIcon: Icons.storefront_rounded,
-                                    tooltip: 'Bazar',
-                                  ),
-                                  ValueListenableBuilder<int>(
-                                    valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                    builder: (context, unreadCount, _) {
-                                      return _buildNavItem(
-                                        index: 2,
-                                        currentIndex: currentIndex,
-                                        icon: Icons.chat_bubble_outline_rounded,
-                                        selectedIcon: Icons.chat_bubble_rounded,
-                                        tooltip: 'Chats',
-                                        badgeCount: unreadCount,
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                            ),
+                            Row(
+                              children: [
+                                _buildNavItem(
+                                  index: 0,
+                                  currentIndex: currentIndex,
+                                  icon: Icons.home_outlined,
+                                  selectedIcon: Icons.home_rounded,
+                                  tooltip: 'Home',
+                                ),
+                                _buildNavItem(
+                                  index: 1,
+                                  currentIndex: currentIndex,
+                                  icon: Icons.storefront_outlined,
+                                  selectedIcon: Icons.storefront_rounded,
+                                  tooltip: 'Bazar',
+                                ),
+                                ValueListenableBuilder<int>(
+                                  valueListenable: DirectChatService.instance.unreadCountNotifier,
+                                  builder: (context, unreadCount, _) {
+                                    return _buildNavItem(
+                                      index: 2,
+                                      currentIndex: currentIndex,
+                                      icon: Icons.chat_bubble_outline_rounded,
+                                      selectedIcon: Icons.chat_bubble_rounded,
+                                      tooltip: 'Chats',
+                                      badgeCount: unreadCount,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -329,64 +331,65 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     int badgeCount = 0,
   }) {
     final isSelected = currentIndex == index;
+    const circleSize = 52.0;
 
     return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _onTabTapped(index),
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: Tooltip(
-            message: tooltip ?? '',
-            child: SizedBox(
-              height: 48,
-              child: Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedScale(
-                      scale: isSelected ? 1.06 : 1.0,
-                      duration: AppMotion.durationMicro,
-                      curve: AppMotion.interactiveCurve,
-                      child: Icon(
-                        isSelected ? selectedIcon : icon,
-                        size: 25,
-                        color: isSelected ? AppColors.primary : AppColors.textMuted,
-                      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _onTabTapped(index);
+        },
+        child: Tooltip(
+          message: tooltip ?? '',
+          child: Center(
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: circleSize,
+                  height: circleSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected ? Colors.transparent : const Color(0xFFEFF5F6),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isSelected ? selectedIcon : icon,
+                      size: 24,
+                      color: isSelected ? Colors.white : const Color(0xFF2C7880),
                     ),
-                    if (badgeCount > 0)
-                      Positioned(
-                        top: -5,
-                        right: -10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                          constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.surface,
-                              width: 1.5,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            badgeCount > 99 ? '99+' : '$badgeCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              height: 1.0,
-                            ),
-                          ),
+                  ),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 1.5,
                         ),
                       ),
-                  ],
-                ),
-              ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
