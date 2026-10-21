@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
@@ -32,11 +33,24 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final Set<int> _mountedTabs = {0};
   late final List<Widget?> _cachedTabs = [null, null, null];
+  double _animFromIndex = 0.0;
+  double _animToIndex = 0.0;
+  late final AnimationController _liquidAnimController;
+  late final Animation<double> _liquidPositionAnim;
 
   @override
   void initState() {
     super.initState();
     _cachedTabs[0] = _createTab(0);
+    _liquidAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _liquidPositionAnim = CurvedAnimation(
+      parent: _liquidAnimController,
+      curve: Curves.easeInOutCubic,
+    );
+    _liquidAnimController.value = 1.0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAreaAndCityStatus();
       NotificationService.instance.initialize();
@@ -162,6 +176,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _liquidAnimController.dispose();
     _currentIndexNotifier.dispose();
     super.dispose();
   }
@@ -173,6 +188,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       setState(() {});
     }
     if (_currentIndexNotifier.value == index) return;
+    final currentProgress = _liquidPositionAnim.value;
+    _animFromIndex = _animFromIndex + (_animToIndex - _animFromIndex) * currentProgress;
+    _animToIndex = index.toDouble();
+    _liquidAnimController.forward(from: 0.0);
     _currentIndexNotifier.value = index;
     if (index == 0) {
       RewardsService.instance.fetchSummary();
@@ -237,80 +256,120 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 left: false,
                 right: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                  child: Container(
-                    height: 68,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(36),
-                      border: Border.all(
-                        color: const Color(0xFFE5ECEB),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Center(
+                    child: Container(
+                      width: 236,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: const Color(0xFFE5ECEB),
+                          width: 1.5,
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final itemWidth = constraints.maxWidth / 3;
-                        const circleSize = 52.0;
-                        final pillColumn = currentIndex;
-                        return Stack(
-                          alignment: Alignment.centerLeft,
-                          children: [
-                            AnimatedPositioned(
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeOutCubic,
-                              left: pillColumn * itemWidth + (itemWidth - circleSize) / 2,
-                              width: circleSize,
-                              height: circleSize,
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF2C7880),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                _buildNavItem(
-                                  index: 0,
-                                  currentIndex: currentIndex,
-                                  icon: Icons.home_outlined,
-                                  selectedIcon: Icons.home_rounded,
-                                  tooltip: 'Home',
-                                ),
-                                _buildNavItem(
-                                  index: 1,
-                                  currentIndex: currentIndex,
-                                  icon: Icons.storefront_outlined,
-                                  selectedIcon: Icons.storefront_rounded,
-                                  tooltip: 'Bazar',
-                                ),
-                                ValueListenableBuilder<int>(
-                                  valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                  builder: (context, unreadCount, _) {
-                                    return _buildNavItem(
-                                      index: 2,
-                                      currentIndex: currentIndex,
-                                      icon: Icons.chat_bubble_outline_rounded,
-                                      selectedIcon: Icons.chat_bubble_rounded,
-                                      tooltip: 'Chats',
-                                      badgeCount: unreadCount,
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2C7880).withValues(alpha: 0.12),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final totalWidth = constraints.maxWidth;
+                          final totalHeight = constraints.maxHeight;
+                          final itemWidth = totalWidth / 3;
+                          const circleSize = 42.0;
+
+                          return AnimatedBuilder(
+                            animation: _liquidAnimController,
+                            builder: (context, _) {
+                              final progress = _liquidPositionAnim.value;
+                              final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
+                              final totalDistance = (_animToIndex - _animFromIndex).abs();
+                              final stretchFactor = (totalDistance > 0.05)
+                                  ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.42 * math.min(totalDistance, 1.7))
+                                  : 0.0;
+                              final stretch = 1.0 + stretchFactor;
+                              final currentW = circleSize * stretch;
+                              final currentH = circleSize / math.sqrt(stretch);
+                              final currentCenterX = currentPos * itemWidth + itemWidth / 2;
+                              final currentLeft = currentCenterX - currentW / 2;
+                              final currentTop = (totalHeight - currentH) / 2;
+
+                              return Stack(
+                                alignment: Alignment.centerLeft,
+                                children: [
+                                  Positioned(
+                                    left: currentLeft,
+                                    top: currentTop,
+                                    width: currentW,
+                                    height: currentH,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(currentH / 2),
+                                        gradient: const LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Color(0xFF338890),
+                                            Color(0xFF23656C),
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF2C7880).withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      _buildNavItem(
+                                        index: 0,
+                                        currentPos: currentPos,
+                                        icon: Icons.home_outlined,
+                                        selectedIcon: Icons.home_rounded,
+                                        tooltip: 'Home',
+                                      ),
+                                      _buildNavItem(
+                                        index: 1,
+                                        currentPos: currentPos,
+                                        icon: Icons.storefront_outlined,
+                                        selectedIcon: Icons.storefront_rounded,
+                                        tooltip: 'Bazar',
+                                      ),
+                                      ValueListenableBuilder<int>(
+                                        valueListenable: DirectChatService.instance.unreadCountNotifier,
+                                        builder: (context, unreadCount, _) {
+                                          return _buildNavItem(
+                                            index: 2,
+                                            currentPos: currentPos,
+                                            icon: Icons.chat_bubble_outline_rounded,
+                                            selectedIcon: Icons.chat_bubble_rounded,
+                                            tooltip: 'Chats',
+                                            badgeCount: unreadCount,
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -324,14 +383,16 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   Widget _buildNavItem({
     required int index,
-    required int currentIndex,
+    required double currentPos,
     required IconData icon,
     required IconData selectedIcon,
     String? tooltip,
     int badgeCount = 0,
   }) {
-    final isSelected = currentIndex == index;
-    const circleSize = 52.0;
+    final dist = (currentPos - index).abs();
+    final activeT = (1.0 - dist / 0.45).clamp(0.0, 1.0);
+    final iconColor = Color.lerp(const Color(0xFF2C7880), Colors.white, activeT)!;
+    const circleSize = 42.0;
 
     return Expanded(
       child: GestureDetector(
@@ -347,18 +408,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                Container(
+                SizedBox(
                   width: circleSize,
                   height: circleSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected ? Colors.transparent : const Color(0xFFEFF5F6),
-                  ),
                   child: Center(
                     child: Icon(
-                      isSelected ? selectedIcon : icon,
-                      size: 24,
-                      color: isSelected ? Colors.white : const Color(0xFF2C7880),
+                      activeT > 0.5 ? selectedIcon : icon,
+                      size: 22,
+                      color: iconColor,
                     ),
                   ),
                 ),
@@ -368,7 +425,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     right: -2,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                       decoration: BoxDecoration(
                         color: AppColors.error,
                         borderRadius: BorderRadius.circular(10),
@@ -382,7 +439,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         badgeCount > 99 ? '99+' : '$badgeCount',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                           height: 1.0,
                         ),

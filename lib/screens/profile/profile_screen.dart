@@ -394,7 +394,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              backgroundColor: Color(0xFF0E8A3E),
+              backgroundColor: AppColors.primary,
               behavior: SnackBarBehavior.floating,
               content: Text('Profile photo updated successfully!'),
             ),
@@ -444,7 +444,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF0E8A3E),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
             content: Text('Profile photo removed.'),
           ),
@@ -564,7 +564,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF0E8A3E),
+            backgroundColor: AppColors.primary,
             behavior: SnackBarBehavior.floating,
             content: Text('Profile updated successfully!'),
           ),
@@ -1086,7 +1086,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   child: LinearProgressIndicator(
                                     value: progressRatio,
                                     backgroundColor: AppColors.divider,
-                                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0E8A3E)),
+                                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                                   ),
                                 ),
                               ),
@@ -1210,7 +1210,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             height: 48,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0E8A3E),
+                                backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -1309,7 +1309,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: const Color(0xFFD5ECDD),
+                color: const Color(0xFFD3E7E9),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1327,7 +1327,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF0E8A3E),
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 24),
@@ -1338,10 +1338,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFD5ECDD), width: 1.5),
+                border: Border.all(color: const Color(0xFFD3E7E9), width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0E8A3E).withValues(alpha: 0.08),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -1354,13 +1354,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF8F1),
+                        color: const Color(0xFFE9F3F4),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
                         Icons.qr_code_2_rounded,
                         size: 88,
-                        color: Color(0xFF0E8A3E),
+                        color: AppColors.primary,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -1384,7 +1384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     height: 46,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFD5ECDD), width: 1.2),
+                        side: const BorderSide(color: Color(0xFFD3E7E9), width: 1.2),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => Navigator.pop(ctx),
@@ -1398,7 +1398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     height: 46,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0E8A3E),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1475,7 +1475,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF0E8A3E)),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -1494,7 +1494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F3B26),
+        backgroundColor: const Color(0xFF11383D),
         body: ListenableBuilder(
           listenable: Listenable.merge([widget.repository, widget.repository.locationService]),
           builder: (context, _) {
@@ -1512,7 +1512,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final isVerified = _userData?['isVerified'] == true || _userData?['is_verified'] == 1;
 
             return RefreshIndicator(
-              color: const Color(0xFF0E8A3E),
+              color: AppColors.primary,
               backgroundColor: Colors.white,
               onRefresh: _refreshProfile,
               child: SingleChildScrollView(
@@ -1529,14 +1529,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             'assets/images/nearhood_profile_city_header.webp',
                             fit: BoxFit.cover,
                             alignment: Alignment.bottomCenter,
+                            color: const Color(0xFF2C7880),
+                            colorBlendMode: BlendMode.color,
                             errorBuilder: (context, error, stackTrace) => Image.memory(
                               getProfileHeaderBytes(),
                               fit: BoxFit.cover,
                               alignment: Alignment.bottomCenter,
+                            color: const Color(0xFF2C7880),
+                            colorBlendMode: BlendMode.color,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Color(0xFF0E8A3E), Color(0xFF0A682E)],
+                                    colors: [Color(0xFF2C7880), Color(0xFF1B4E53)],
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                   ),
@@ -1779,7 +1783,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       width: 18,
                                       height: 18,
                                       decoration: const BoxDecoration(
-                                        color: Color(0xFF0E8A3E),
+                                        color: AppColors.primary,
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
@@ -1794,7 +1798,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       style: TextStyle(
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w800,
-                                        color: Color(0xFF0E8A3E),
+                                        color: AppColors.primary,
                                         letterSpacing: 0.4,
                                       ),
                                     ),
@@ -1829,17 +1833,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       return Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFDCFCE7),
+                                          color: const Color(0xFFE6F2F3),
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(
-                                            color: const Color(0xFF86EFAC),
+                                            color: const Color(0xFFA1D1D5),
                                             width: 0.8,
                                           ),
                                         ),
                                         child: const Text(
                                           'VERIFIED',
                                           style: TextStyle(
-                                            color: Color(0xFF15803D),
+                                            color: Color(0xFF23656C),
                                             fontSize: 9.5,
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -1886,7 +1890,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         size: 66,
                                         showRing: true,
                                         ringGradient: const LinearGradient(
-                                          colors: [Color(0xFF0E8A3E), Color(0xFF22C55E)],
+                                          colors: [Color(0xFF2C7880), Color(0xFF38929B)],
                                         ),
                                         ringWidth: 2.2,
                                         ringGap: 1.2,
@@ -1976,7 +1980,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             const SizedBox(width: 4),
                                             const Icon(
                                               Icons.verified_rounded,
-                                              color: Color(0xFF0E8A3E),
+                                              color: AppColors.primary,
                                               size: 16,
                                             ),
                                           ],
@@ -2003,7 +2007,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             width: 6,
                                             height: 6,
                                             decoration: const BoxDecoration(
-                                              color: Color(0xFF10B981),
+                                              color: AppColors.primary,
                                               shape: BoxShape.circle,
                                             ),
                                           ),
@@ -2050,7 +2054,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     height: 42,
                                     child: ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF0A7E44),
+                                        backgroundColor: AppColors.primary,
                                         foregroundColor: Colors.white,
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
@@ -2867,7 +2871,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0E8A3E), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Submit Request'),
           ),
@@ -2881,7 +2885,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(res['message'] ?? ''),
-            backgroundColor: res['success'] == true ? const Color(0xFF0E8A3E) : AppColors.error,
+            backgroundColor: res['success'] == true ? AppColors.primary : AppColors.error,
           ),
         );
         _loadProfileData();
@@ -2896,11 +2900,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (shop == null) {
       return _buildActionGridCard(
         icon: Icons.storefront_rounded,
-        iconBgColor: const Color(0xFFDCFCE7),
-        iconColor: const Color(0xFF16A34A),
+        iconBgColor: const Color(0xFFE6F2F3),
+        iconColor: AppColors.primary,
         title: 'Register shop',
         subtitle: 'Start selling locally',
-        borderColor: const Color(0xFF86EFAC),
+        borderColor: const Color(0xFFA1D1D5),
         borderWidth: 1.2,
         onTap: () {
           Navigator.push(
@@ -2952,11 +2956,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return _buildActionGridCard(
       icon: Icons.store_rounded,
-      iconBgColor: const Color(0xFFE8F6EF),
-      iconColor: const Color(0xFF0E8A3E),
+      iconBgColor: const Color(0xFFE6F2F3),
+      iconColor: AppColors.primary,
       title: 'My shop',
       subtitle: shop.name.isNotEmpty ? shop.name : 'Live in Bazar',
-      borderColor: const Color(0xFF1BA24F),
+      borderColor: const Color(0xFFA1D1D5),
       borderWidth: 1.5,
       onTap: () {
         Navigator.push(

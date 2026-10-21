@@ -129,8 +129,8 @@ class AreaChangeRequestScreen extends StatefulWidget {
 }
 
 class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
-  static const Color _primaryGreen = Color(0xFF1F6B4A);
-  static const Color _lightGreenTint = Color(0xFFE8F5E9);
+  static const Color _primaryGreen = Color(0xFF2C7880);
+  static const Color _lightGreenTint = Color(0xFFE8F4F5);
 
   bool _isLoading = true;
   bool _isSubmitting = false;
@@ -609,13 +609,13 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
     final isPending = !isApproved && !isRejected;
 
     final Color bgColor = isApproved
-        ? const Color(0xFFF0FDF4)
+        ? const Color(0xFFEBF6F7)
         : (isRejected ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB));
     final Color borderColor = isApproved
-        ? const Color(0xFFBBF7D0)
+        ? const Color(0xFFA1D1D5)
         : (isRejected ? const Color(0xFFFECACA) : const Color(0xFFFDE68A));
     final Color iconBgColor = isApproved
-        ? const Color(0xFFDCFCE7)
+        ? const Color(0xFFD6EFF1)
         : (isRejected ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
     final Color iconColor = isApproved
         ? _primaryGreen
@@ -668,7 +668,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: isApproved
-                            ? const Color(0xFF166534)
+                            ? const Color(0xFF1B4E53)
                             : (isRejected ? const Color(0xFF991B1B) : const Color(0xFF92400E)),
                       ),
                     ),
@@ -677,7 +677,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         color: isApproved
-                            ? const Color(0xFF15803D)
+                            ? const Color(0xFF23656C)
                             : (isRejected ? const Color(0xFFB91C1C) : const Color(0xFFB45309)),
                       ),
                     ),
@@ -1003,9 +1003,9 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
+              color: const Color(0xFFEBF6F7),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
+              border: Border.all(color: const Color(0xFFA1D1D5), width: 1.2),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
