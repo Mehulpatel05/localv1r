@@ -359,7 +359,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                         index: 2,
                                         currentPos: currentPos,
                                         icon: Icons.person_outline_rounded,
-                                        selectedIcon: Icons.person_rounded,
+                                        selectedIcon: Icons.person_outline_rounded,
                                         tooltip: 'Profile',
                                       ),
                                     ],
