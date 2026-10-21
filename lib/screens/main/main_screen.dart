@@ -255,10 +255,13 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 top: false,
                 left: false,
                 right: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Center(
-                    child: Container(
+                child: SizedBox(
+                  height: 78,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
+                    child: Center(
+                      heightFactor: 1.0,
+                      child: Container(
                       width: 236,
                       height: 56,
                       decoration: BoxDecoration(
@@ -373,6 +376,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     ),
                   ),
                 ),
+              ),
               ),
             ),
           ),
