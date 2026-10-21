@@ -1748,7 +1748,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ],
                         ),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.paddingOf(context).bottom),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [

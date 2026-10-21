@@ -5,7 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../services/post_repository.dart';
 import '../feed/feed_screen.dart';
 import '../bazar/bazar_screen.dart';
-import '../chat/chat_list_screen.dart';
+import '../profile/profile_screen.dart';
 import '../../services/notification_service.dart';
 import '../../services/direct_chat_service.dart';
 import '../../services/rewards_service.dart';
@@ -212,13 +212,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         return FeedScreen(
           repository: widget.repository,
           currentUserHandle: widget.currentUserHandle,
+          onOpenProfileTab: () => _onTabTapped(2),
         );
       case 1:
         return BazarScreen(
           currentUserHandle: widget.currentUserHandle,
         );
       case 2:
-        return ChatListScreen(
+        return ProfileScreen(
+          repository: widget.repository,
           currentUserHandle: widget.currentUserHandle,
         );
       default:
@@ -241,6 +243,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           },
           child: Scaffold(
             backgroundColor: Colors.white,
+            extendBody: true,
             body: IndexedStack(
               index: currentIndex,
               children: List.generate(3, (index) => _getOrCreateTab(index)),
@@ -352,18 +355,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                         selectedIcon: Icons.storefront_rounded,
                                         tooltip: 'Bazar',
                                       ),
-                                      ValueListenableBuilder<int>(
-                                        valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                        builder: (context, unreadCount, _) {
-                                          return _buildNavItem(
-                                            index: 2,
-                                            currentPos: currentPos,
-                                            icon: Icons.chat_bubble_outline_rounded,
-                                            selectedIcon: Icons.chat_bubble_rounded,
-                                            tooltip: 'Chats',
-                                            badgeCount: unreadCount,
-                                          );
-                                        },
+                                      _buildNavItem(
+                                        index: 2,
+                                        currentPos: currentPos,
+                                        icon: Icons.person_outline_rounded,
+                                        selectedIcon: Icons.person_rounded,
+                                        tooltip: 'Profile',
                                       ),
                                     ],
                                   ),

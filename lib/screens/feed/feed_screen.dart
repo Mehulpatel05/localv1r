@@ -14,6 +14,8 @@ import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../../services/notification_service.dart';
+import '../chat/chat_list_screen.dart';
+import '../../services/direct_chat_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../profile/profile_screen.dart';
 import '../../core/services/app_image_cache_service.dart';
@@ -348,26 +350,64 @@ class _FeedScreenState extends State<FeedScreen> {
               },
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _openProfile,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.divider,
-                    width: 1.5,
+            ValueListenableBuilder<int>(
+              valueListenable: DirectChatService.instance.unreadCountNotifier,
+              builder: (context, unreadCount, _) {
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChatListScreen(
+                          currentUserHandle: widget.currentUserHandle,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.chipBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.divider,
+                        width: 1,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          color: AppColors.textPrimary,
+                          size: 20,
+                        ),
+                        if (unreadCount > 0)
+                          Positioned(
+                            right: 4,
+                            top: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                child: ClipOval(
-                  child: UserAvatar(
-                    handle: widget.currentUserHandle,
-                    size: 40,
-                    enableFullViewOnTap: false,
-                  ),
-                ),
-              ),
+                );
+              },
             ),
           ],
         ),
