@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../services/splash_asset_service.dart';
 import '../../../theme/app_colors.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
@@ -47,8 +47,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   @override
   void initState() {
     super.initState();
-    SplashAssetService.instance.init();
-    SplashAssetService.instance.syncFromServer();
 
     _controller = AnimationController(
       vsync: this,
@@ -65,10 +63,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _wordStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 34,
       fontWeight: FontWeight.w800,
-      color: Colors.white,
-      shadows: const [
-        Shadow(color: Color(0xB3000000), blurRadius: 16, offset: Offset(0, 2)),
-      ],
+      color: AppColors.primary,
       letterSpacing: -0.03 * 34,
       height: 1.0,
     );
@@ -81,10 +76,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _tagStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 13.5,
       fontWeight: FontWeight.w500,
-      color: Colors.white,
-      shadows: const [
-        Shadow(color: Color(0xB3000000), blurRadius: 14, offset: Offset(0, 2)),
-      ],
+      color: AppColors.primary.withValues(alpha: 0.70),
       letterSpacing: 0,
     );
 
@@ -274,184 +266,159 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
 
     final isDark = widget.isDarkMode ??
         (Theme.of(context).brightness == Brightness.dark);
-    final sbg = isDark ? Colors.black : AppColors.background;
-    final sfg = Colors.white;
+    final sbg = isDark ? Colors.black : AppColors.softBackground;
+    final sfg = isDark ? Colors.white : AppColors.primary;
+    final pinInnerColor = isDark ? sbg : Colors.white;
     final wordStyle = isDark ? _wordStyleDark : _wordStyleLight;
     final tagStyle = isDark ? _tagStyleDark : _tagStyleLight;
 
     return Scaffold(
       backgroundColor: sbg,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: FadeTransition(
-              opacity: _streetsOpacity,
-              child: ValueListenableBuilder<int>(
-                valueListenable: SplashAssetService.instance.revisionNotifier,
-                builder: (context, revision, child) {
-                  return Image(
-                    image: SplashAssetService.instance.getSplashImageProvider(),
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.high,
-                    gaplessPlayback: true,
-                    errorBuilder: (context, error, stackTrace) => Image.asset(
-                      'assets/images/nearhood_splash_background.webp',
-                      fit: BoxFit.cover,
-                    filterQuality: FilterQuality.high,
-                      gaplessPlayback: true,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.15),
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.40),
-                  ],
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: sbg,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(
+              child: FadeTransition(
+                opacity: _streetsOpacity,
+                child: CustomPaint(
+                  painter: _SplashStreetsPainter(
+                    strokeColor: sfg.withValues(alpha: isDark ? 0.09 : 0.08),
+                  ),
                 ),
               ),
             ),
-          ),
-          RepaintBoundary(
-            child: FadeTransition(
-              opacity: _streetsOpacity,
-              child: CustomPaint(
-                painter: _SplashStreetsPainter(
-                  strokeColor: sfg.withValues(alpha: 0.09),
-                ),
-              ),
-            ),
-          ),
-          RepaintBoundary(
-            child: Center(
-              child: Transform.translate(
-                offset: const Offset(0, -20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 86,
-                      height: 108,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.bottomCenter,
-                        children: [
-                          AnimatedBuilder(
-                            animation: _rippleOpacity,
-                            builder: (context, child) {
-                              final opacity = _rippleOpacity.value;
-                              if (opacity <= 0.001) return const SizedBox.shrink();
-                              final scale = _rippleScale.value;
-                              return Positioned(
-                                bottom: -24,
-                                child: Opacity(
-                                  opacity: opacity,
-                                  child: Transform.scale(
-                                    scaleX: scale * 1.0,
-                                    scaleY: scale * 0.32,
-                                    alignment: Alignment.center,
-                                    child: child,
+            RepaintBoundary(
+              child: Center(
+                child: Transform.translate(
+                  offset: const Offset(0, -20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 86,
+                        height: 108,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.bottomCenter,
+                          children: [
+                            AnimatedBuilder(
+                              animation: _rippleOpacity,
+                              builder: (context, child) {
+                                final opacity = _rippleOpacity.value;
+                                if (opacity <= 0.001) return const SizedBox.shrink();
+                                final scale = _rippleScale.value;
+                                return Positioned(
+                                  bottom: -24,
+                                  child: Opacity(
+                                    opacity: opacity,
+                                    child: Transform.scale(
+                                      scaleX: scale * 1.0,
+                                      scaleY: scale * 0.32,
+                                      alignment: Alignment.center,
+                                      child: child,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                width: 160,
+                                height: 160,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: sfg.withValues(alpha: isDark ? 0.35 : 0.25),
+                                    width: 1.5,
                                   ),
                                 ),
-                              );
-                            },
-                            child: Container(
-                              width: 160,
-                              height: 160,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: sfg, width: 1.5),
                               ),
                             ),
-                          ),
-                          AnimatedBuilder(
-                            animation: _controller,
-                            builder: (context, child) {
-                              final opacity = _pinOpacity.value;
-                              if (opacity <= 0.0) return const SizedBox.shrink();
-                              return Transform.translate(
-                                offset: Offset(0.0, _pinTranslateY.value),
-                                child: Transform.scale(
-                                  scaleX: _pinScaleX.value,
-                                  scaleY: _pinScaleY.value,
-                                  alignment: Alignment.bottomCenter,
-                                  child: opacity < 1.0
-                                      ? Opacity(opacity: opacity, child: child)
-                                      : child,
-                                ),
-                              );
-                            },
-                            child: CustomPaint(
-                              size: const Size(86, 108),
-                              painter: _SplashPinPainter(
-                                pinColor: sfg,
-                                innerColor: sbg,
-                                node1Scale: 0,
-                                node2Scale: 0,
-                                node3Scale: 0,
-                                triangleProgress: 0,
-                              ),
-                            ),
-                          ),
-                          AnimatedBuilder(
-                            animation: _controller,
-                            builder: (context, _) {
-                              return CustomPaint(
+                            AnimatedBuilder(
+                              animation: _controller,
+                              builder: (context, child) {
+                                final opacity = _pinOpacity.value;
+                                if (opacity <= 0.0) return const SizedBox.shrink();
+                                return Transform.translate(
+                                  offset: Offset(0.0, _pinTranslateY.value),
+                                  child: Transform.scale(
+                                    scaleX: _pinScaleX.value,
+                                    scaleY: _pinScaleY.value,
+                                    alignment: Alignment.bottomCenter,
+                                    child: opacity < 1.0
+                                        ? Opacity(opacity: opacity, child: child)
+                                        : child,
+                                  ),
+                                );
+                              },
+                              child: CustomPaint(
                                 size: const Size(86, 108),
                                 painter: _SplashPinPainter(
-                                  pinColor: Colors.transparent,
-                                  innerColor: sbg,
-                                  node1Scale: _node1Scale.value,
-                                  node2Scale: _node2Scale.value,
-                                  node3Scale: _node3Scale.value,
-                                  triangleProgress: _triangleProgress.value,
+                                  pinColor: sfg,
+                                  innerColor: pinInnerColor,
+                                  node1Scale: 0,
+                                  node2Scale: 0,
+                                  node3Scale: 0,
+                                  triangleProgress: 0,
                                 ),
-                              );
-                            },
+                              ),
+                            ),
+                            AnimatedBuilder(
+                              animation: _controller,
+                              builder: (context, _) {
+                                return CustomPaint(
+                                  size: const Size(86, 108),
+                                  painter: _SplashPinPainter(
+                                    pinColor: Colors.transparent,
+                                    innerColor: pinInnerColor,
+                                    node1Scale: _node1Scale.value,
+                                    node2Scale: _node2Scale.value,
+                                    node3Scale: _node3Scale.value,
+                                    triangleProgress: _triangleProgress.value,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeTransition(
+                        opacity: _wordOpacity,
+                        child: AnimatedBuilder(
+                          animation: _wordOffsetY,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(0, _wordOffsetY.value),
+                            child: child,
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    FadeTransition(
-                      opacity: _wordOpacity,
-                      child: AnimatedBuilder(
-                        animation: _wordOffsetY,
-                        builder: (context, child) => Transform.translate(
-                          offset: Offset(0, _wordOffsetY.value),
-                          child: child,
+                          child: Text('nearhood', style: wordStyle),
                         ),
-                        child: Text('nearhood', style: wordStyle),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    FadeTransition(
-                      opacity: _tagOpacity,
-                      child: AnimatedBuilder(
-                        animation: _tagOffsetY,
-                        builder: (context, child) => Transform.translate(
-                          offset: Offset(0, _tagOffsetY.value),
-                          child: child,
+                      const SizedBox(height: 6),
+                      FadeTransition(
+                        opacity: _tagOpacity,
+                        child: AnimatedBuilder(
+                          animation: _tagOffsetY,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(0, _tagOffsetY.value),
+                            child: child,
+                          ),
+                          child: Text('one app. every local need.', style: tagStyle),
                         ),
-                        child: Text('one app. every local need.', style: tagStyle),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
