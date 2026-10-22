@@ -1261,7 +1261,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.softBackground,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: AnimatedSwitcher(
@@ -1535,7 +1535,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   AppBar _buildNormalAppBar() {
     return AppBar(
       key: const ValueKey('normal_app_bar'),
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.softBackground,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: _showArchivedView ? 0 : 20,
@@ -1590,7 +1590,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     return AppBar(
       key: const ValueKey('selection_app_bar'),
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.softBackground,
       elevation: 2,
       scrolledUnderElevation: 2,
       leading: IconButton(

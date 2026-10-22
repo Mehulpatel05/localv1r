@@ -114,23 +114,31 @@ class _InstagramAvatarCropperState extends State<InstagramAvatarCropper> {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             child: TextButton(
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1F1F1F),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
               onPressed: (_isProcessing || !_imageLoaded) ? null : _onDone,
               child: _isProcessing
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(
-                        color: AppColors.primary,
+                        color: Color(0xFF1F1F1F),
                         strokeWidth: 2,
                       ),
                     )
-                  : Text(
+                  : const Text(
                       'Done',
                       style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 16,
+                        color: Color(0xFF1F1F1F),
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
                     ),

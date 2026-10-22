@@ -2265,7 +2265,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   PreferredSizeWidget _buildSelectionAppBar() {
     return AppBar(
       key: const ValueKey('selection_app_bar'),
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.softBackground,
       elevation: 0.5,
       scrolledUnderElevation: 0.5,
       leading: IconButton(
@@ -2351,7 +2351,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   PreferredSizeWidget _buildNormalAppBar() {
     return AppBar(
       key: const ValueKey('normal_app_bar'),
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.softBackground,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: 0,
@@ -2477,7 +2477,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.softBackground,
         resizeToAvoidBottomInset: true,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),

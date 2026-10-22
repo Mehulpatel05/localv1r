@@ -25,19 +25,10 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   final List<String> _pickedImagePaths = [];
   bool _isPickingImage = false;
 
-  String _selectedCategory = 'Electronics';
+  String _selectedCategory = 'General';
   String _selectedCondition = 'Used';
   String _selectedLocation = 'Vadodara';
   bool _isPublishing = false;
-
-  final List<String> _categories = [
-    'Furniture',
-    'Electronics',
-    'Clothes',
-    'Home food',
-    'Books',
-    'Other',
-  ];
 
   String? _existingImageUrl;
 
@@ -49,9 +40,6 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       _titleController.text = product.title;
       _priceController.text = product.price.toString();
       _selectedCategory = product.category;
-      if (!_categories.contains(_selectedCategory)) {
-        _selectedCategory = 'Electronics';
-      }
       _existingImageUrl = product.imageUrl;
     }
   }
@@ -121,7 +109,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   child: const Icon(Icons.photo_library_rounded, color: Color(0xFF9333EA), size: 22),
                 ),
                 title: const Text(
-                  'Gallery',
+                  'Photos',
                   style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: const Text(
@@ -131,6 +119,28 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickMediaFromGallery();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.video_library_rounded, color: Color(0xFF2563EB), size: 22),
+                ),
+                title: const Text(
+                  'Videos',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Select video from gallery',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickVideoFromGallery();
                 },
               ),
               ListTile(
@@ -180,6 +190,28 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       }
     } catch (e) {
       debugPrint('Error picking media: $e');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
+    }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    try {
+      setState(() => _isPickingImage = true);
+      final picker = ImagePicker();
+      final picked = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 3),
+      );
+      if (picked != null) {
+        setState(() {
+          if (_pickedImagePaths.length < 5) {
+            _pickedImagePaths.add(picked.path);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking video: $e');
     } finally {
       if (mounted) setState(() => _isPickingImage = false);
     }
@@ -664,55 +696,6 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   ),
                 ),
               ],
-            ),
-
-            const SizedBox(height: 14),
-
-            Text('CATEGORY', style: labelStyle),
-            const SizedBox(height: 8),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _categories.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 2.8,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                final cat = _categories[index];
-                final isSelected = _selectedCategory == cat;
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedCategory = cat;
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : AppColors.divider,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      cat,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ),
-                );
-              },
             ),
 
             const SizedBox(height: 14),

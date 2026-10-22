@@ -214,21 +214,10 @@ class BazarScreen extends StatefulWidget {
 
 class _BazarScreenState extends State<BazarScreen> {
   late bool _showMyListings;
-  String _selectedCategory = 'All';
   String _myListingsTab = 'Active';
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-
-  final List<String> _categories = [
-    'All',
-    'Furniture',
-    'Electronics',
-    'Clothes',
-    'Home food',
-    'Books',
-    'Other',
-  ];
 
   Future<void> _openPostScreen() async {
     final newProduct = await Navigator.push<BazarProduct>(
@@ -329,10 +318,6 @@ class _BazarScreenState extends State<BazarScreen> {
   List<BazarProduct> get _filteredProducts {
     return _allProducts.where((product) {
       if (product.isSold) return false;
-
-      if (_selectedCategory != 'All' && product.category != _selectedCategory) {
-        return false;
-      }
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -702,22 +687,6 @@ class _BazarScreenState extends State<BazarScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 42,
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SlidingCategoryTabBar(
-                categories: _categories,
-                selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
-                isScrollable: true,
-                onSelected: (index) {
-                  setState(() {
-                    _selectedCategory = _categories[index];
-                  });
-                },
-              ),
-            ),
-
             _buildShopPerksBanner(),
             _buildLocalShopsSection(),
 
@@ -1240,24 +1209,6 @@ class _BazarScreenState extends State<BazarScreen> {
                             color: AppColors.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          product.category,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.primaryText,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),

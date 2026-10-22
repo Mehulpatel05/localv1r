@@ -42,7 +42,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final TextStyle _tagStyleDark;
   late final TextStyle _tagStyleLight;
 
-  static const int totalDurationMs = 750;
+  static const int totalDurationMs = 1000;
 
   @override
   void initState() {
@@ -83,14 +83,13 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _streetsOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 750 / totalDurationMs,
-            curve: Curves.easeOutQuart),
+        curve: const Interval(0.0, 0.40, curve: Curves.easeOutQuart),
       ),
     );
 
     const dropInterval = Interval(
-      150 / totalDurationMs,
-      1100 / totalDurationMs,
+      0.08,
+      0.55,
       curve: Curves.linear,
     );
 
@@ -173,8 +172,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     ]).animate(CurvedAnimation(parent: _controller, curve: dropInterval));
 
     const rippleInterval = Interval(
-      850 / totalDurationMs,
-      1650 / totalDurationMs,
+      0.45,
+      0.82,
       curve: Curves.easeOutCubic,
     );
     _rippleScale = Tween<double>(begin: 0.05, end: 1.0).animate(
@@ -188,36 +187,32 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _node1Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Interval(950 / totalDurationMs, 1300 / totalDurationMs,
-            curve: popCurve),
+        curve: const Interval(0.50, 0.68, curve: popCurve),
       ),
     );
     _node2Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Interval(1050 / totalDurationMs, 1400 / totalDurationMs,
-            curve: popCurve),
+        curve: const Interval(0.55, 0.73, curve: popCurve),
       ),
     );
     _node3Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Interval(1150 / totalDurationMs, 1500 / totalDurationMs,
-            curve: popCurve),
+        curve: const Interval(0.60, 0.78, curve: popCurve),
       ),
     );
 
     _triangleProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Interval(1050 / totalDurationMs, 1650 / totalDurationMs,
-            curve: Curves.easeOutCubic),
+        curve: const Interval(0.55, 0.82, curve: Curves.easeOutCubic),
       ),
     );
 
     const wordCurve = Interval(
-      1250 / totalDurationMs,
-      1850 / totalDurationMs,
+      0.65,
+      0.90,
       curve: Curves.easeOutQuart,
     );
     _wordOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -228,8 +223,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     );
 
     const tagCurve = Interval(
-      1450 / totalDurationMs,
-      2050 / totalDurationMs,
+      0.75,
+      1.0,
       curve: Curves.easeOutQuart,
     );
     _tagOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
