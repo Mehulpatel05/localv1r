@@ -550,10 +550,9 @@ class _BazarScreenState extends State<BazarScreen> {
                 )
               : Text(
                   _showMyListings ? 'My Listings' : 'NEARHOOD',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.jersey25(
                     color: AppColors.primary,
-                    fontSize: 18.5,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 26,
                     letterSpacing: 1.2,
                   ),
                 ),

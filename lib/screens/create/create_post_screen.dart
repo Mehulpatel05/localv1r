@@ -9,7 +9,6 @@ import '../../core/constants/areas_and_categories.dart';
 import '../../core/services/name_cache_service.dart';
 import '../../core/utils/content_filter.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/token_decision_engine.dart';
@@ -30,18 +29,9 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  static const List<PostCategory> _categories = [
-    PostCategory.general,
-    PostCategory.question,
-    PostCategory.events,
-    PostCategory.alerts,
-    PostCategory.safety,
-  ];
-
   GeoCity? _selectedGeoCity;
   GeoArea? _selectedArea;
   bool _isEmergency = false;
-  PostCategory _selectedCategory = PostCategory.general;
 
   final _contentController = TextEditingController();
   String? _errorMessage;
@@ -79,23 +69,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (mounted) setState(() => _errorMessage = validationError);
   }
 
-  Future<void> _pickMediaFromGallery() async {
+  Future<void> _pickPhotosFromGallery() async {
     try {
       final picker = ImagePicker();
-      List<XFile> pickedList = [];
-      try {
-        pickedList = await picker.pickMultipleMedia(
-          imageQuality: 88,
-          maxWidth: 1440,
-          maxHeight: 1440,
-        );
-      } catch (_) {
-        pickedList = await picker.pickMultiImage(
-          imageQuality: 88,
-          maxWidth: 1440,
-          maxHeight: 1440,
-        );
-      }
+      final pickedList = await picker.pickMultiImage(
+        imageQuality: 88,
+        maxWidth: 1440,
+        maxHeight: 1440,
+      );
       if (pickedList.isNotEmpty) {
         setState(() {
           for (final x in pickedList) {
@@ -106,8 +87,97 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error selecting from gallery: $e');
+      setState(() => _errorMessage = 'Error selecting photos: $e');
     }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final video = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 3),
+      );
+      if (video != null) {
+        setState(() {
+          if (_mediaFiles.length < 10) {
+            _mediaFiles.add(File(video.path));
+          }
+        });
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Error selecting video: $e');
+    }
+  }
+
+  void _showGalleryOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: AppColors.primary, size: 22),
+                  ),
+                  title: const Text(
+                    'Photos',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickPhotosFromGallery();
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.video_library_rounded, color: AppColors.primary, size: 22),
+                  ),
+                  title: const Text(
+                    'Videos',
+                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickVideoFromGallery();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _capturePhotoFromCamera() async {
@@ -357,7 +427,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         areaName: effectiveArea?.name ?? effectiveCity.name,
         lat: effectiveLat,
         lng: effectiveLng,
-        category: _isEmergency ? PostCategory.safetyAlert : _selectedCategory,
+        category: _isEmergency ? PostCategory.safetyAlert : PostCategory.general,
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,
       );
@@ -488,7 +558,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           const SizedBox(height: 10),
           if (_mediaFiles.length < 10)
             TextButton.icon(
-              onPressed: _isPublishing ? null : _pickMediaFromGallery,
+              onPressed: _isPublishing ? null : _showGalleryOptions,
               icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
               label: Text('Add more (${_mediaFiles.length}/10)'),
               style: TextButton.styleFrom(
@@ -512,7 +582,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             itemBuilder: (context, index) {
               if (index == _mediaFiles.length) {
                 return InkWell(
-                  onTap: _isPublishing ? null : _pickMediaFromGallery,
+                  onTap: _isPublishing ? null : _showGalleryOptions,
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     width: 110,
@@ -862,25 +932,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ],
                 ),
               ),
-              IgnorePointer(
-                ignoring: _isEmergency,
-                child: Opacity(
-                  opacity: _isEmergency ? 0.45 : 1.0,
-                  child: Container(
-                    height: 40,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: SlidingCategoryTabBar(
-                      categories: _categories.map((c) => c.label).toList(),
-                      selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
-                      onSelected: (index) {
-                        if (!_isEmergency && index >= 0 && index < _categories.length) {
-                          setState(() => _selectedCategory = _categories[index]);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -964,7 +1015,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           icon: Icons.photo_library_rounded,
                           label: _mediaFiles.isEmpty ? 'Gallery' : 'Gallery (${_mediaFiles.length})',
                           isActive: _mediaFiles.isNotEmpty,
-                          onTap: _isPublishing ? null : _pickMediaFromGallery,
+                          onTap: _isPublishing ? null : _showGalleryOptions,
                         ),
                         const SizedBox(width: 8),
                         _buildToolbarPill(

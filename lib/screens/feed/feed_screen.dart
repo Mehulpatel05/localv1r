@@ -23,7 +23,6 @@ import '../../core/services/badge_cache_service.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../services/rewards_service.dart';
 import '../rewards/rewards_hub_screen.dart';
-import '../../core/widgets/sliding_category_tab_bar.dart';
 import '../../services/app_asset_service.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -43,70 +42,8 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  String _selectedFilterChip = 'All';
-
-  static const List<String> _feedCategoryFilters = [
-    'All',
-    'General',
-    'Question',
-    'Events',
-    'Alerts',
-    'Safety',
-  ];
-
   List<Post> _getFilteredPosts(List<Post> posts) {
-    if (_selectedFilterChip == 'All') return posts;
-
-    if (_selectedFilterChip == 'General') {
-      return posts.where((p) => p.category == PostCategory.general && !p.isEmergency).toList();
-    }
-
-    if (_selectedFilterChip == 'Question') {
-      return posts
-          .where((p) =>
-              p.category == PostCategory.question ||
-              (p.category == PostCategory.general && p.content.contains('?')))
-          .toList();
-    }
-
-    if (_selectedFilterChip == 'Events') {
-      return posts.where((p) => p.category == PostCategory.events || p.eventTitle != null).toList();
-    }
-
-    if (_selectedFilterChip == 'Alerts') {
-      return posts.where((p) => p.category == PostCategory.alerts).toList();
-    }
-
-    if (_selectedFilterChip == 'Safety') {
-      return posts
-          .where((p) =>
-              p.category == PostCategory.safety ||
-              p.category == PostCategory.safetyAlert ||
-              p.isEmergency)
-          .toList();
-    }
-
     return posts;
-  }
-
-  Widget _buildFilterChipsRow() {
-    final selectedIndex = _feedCategoryFilters.indexOf(_selectedFilterChip);
-    return Container(
-      height: 42,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: SlidingCategoryTabBar(
-        categories: _feedCategoryFilters,
-        selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
-        onSelected: (index) {
-          final chip = _feedCategoryFilters[index];
-          if (_selectedFilterChip != chip) {
-            setState(() {
-              _selectedFilterChip = chip;
-            });
-          }
-        },
-      ),
-    );
   }
 
   void _openProfile() {
@@ -238,10 +175,9 @@ class _FeedScreenState extends State<FeedScreen> {
               Center(
                 child: Text(
                   'NEARHOOD',
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.jersey25(
                     color: AppColors.primary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 26,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -383,7 +319,6 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       body: Column(
         children: [
-          _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
@@ -398,7 +333,7 @@ class _FeedScreenState extends State<FeedScreen> {
               child: repo.isLoading
                   ? _buildLoadingSkeleton()
                   : KeyedSubtree(
-                      key: ValueKey('feed_general_chat_$_selectedFilterChip'),
+                      key: const ValueKey('feed_general_all_posts'),
                       child: RefreshIndicator(
                         onRefresh: () async {
                           await Future.wait([
@@ -1024,10 +959,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
         : post.content;
 
     final isEvent = post.category == PostCategory.events || post.eventTitle != null;
-    final isAlert = isEmergency || post.category == PostCategory.safetyAlert;
-    final isLostPet = post.content.toLowerCase().contains('missing') ||
-        post.content.toLowerCase().contains('labrador') ||
-        post.content.toLowerCase().contains('pet');
     final isUrgent = isEmergency || post.content.toLowerCase().contains('water') || post.content.toLowerCase().contains('theft');
 
     final dayStr = post.createdAt.day.toString().padLeft(2, '0');
@@ -1304,61 +1235,24 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           ),
                         ),
 
-                        const SizedBox(width: 8),
-
-                        Builder(
-                          builder: (_) {
-                            Color bg = AppColors.chipBg;
-                            Color text = AppColors.textPrimary;
-                            String label = 'General';
-
-                            if (isUrgent) {
-                              bg = AppColors.error;
-                              text = Colors.white;
-                              label = 'Urgent';
-                            } else if (isAlert || post.category == PostCategory.safetyAlert || post.category == PostCategory.safety) {
-                              bg = AppColors.errorSoft;
-                              text = AppColors.errorSoftText;
-                              label = 'Safety';
-                            } else if (post.category == PostCategory.alerts) {
-                              bg = const Color(0xFFFEF3C7);
-                              text = const Color(0xFFB45309);
-                              label = 'Alerts';
-                            } else if (post.category == PostCategory.question) {
-                              bg = AppColors.primarySoft;
-                              text = AppColors.primaryText;
-                              label = 'Question';
-                            } else if (post.category == PostCategory.events) {
-                              bg = const Color(0xFFEDE9FE);
-                              text = const Color(0xFF6D28D9);
-                              label = 'Events';
-                            } else if (isLostPet) {
-                              bg = const Color(0xFFFEF3C7);
-                              text = const Color(0xFFB45309);
-                              label = 'Lost pet';
-                            } else {
-                              bg = AppColors.chipBg;
-                              text = AppColors.textPrimary;
-                              label = post.category.label;
-                            }
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: bg,
-                                borderRadius: BorderRadius.circular(999),
+                        if (isUrgent) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Urgent',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
                               ),
-                              child: Text(
-                                label,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: text,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

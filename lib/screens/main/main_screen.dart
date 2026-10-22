@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
@@ -30,28 +29,15 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen> {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final Set<int> _mountedTabs = {0};
   late final List<Widget?> _cachedTabs = [null, null, null, null];
-  double _animFromIndex = 0.0;
-  double _animToIndex = 0.0;
-  late final AnimationController _liquidAnimController;
-  late final Animation<double> _liquidPositionAnim;
 
   @override
   void initState() {
     super.initState();
     _cachedTabs[0] = _createTab(0);
-    _liquidAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-    _liquidPositionAnim = CurvedAnimation(
-      parent: _liquidAnimController,
-      curve: Curves.easeInOutCubic,
-    );
-    _liquidAnimController.value = 1.0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAreaAndCityStatus();
       NotificationService.instance.initialize();
@@ -177,7 +163,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
-    _liquidAnimController.dispose();
     _currentIndexNotifier.dispose();
     super.dispose();
   }
@@ -189,10 +174,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       setState(() {});
     }
     if (_currentIndexNotifier.value == index) return;
-    final currentProgress = _liquidPositionAnim.value;
-    _animFromIndex = _animFromIndex + (_animToIndex - _animFromIndex) * currentProgress;
-    _animToIndex = index.toDouble();
-    _liquidAnimController.forward(from: 0.0);
     _currentIndexNotifier.value = index;
     if (index == 0) {
       RewardsService.instance.fetchSummary();
@@ -292,100 +273,34 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             ),
                           ],
                         ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final totalWidth = constraints.maxWidth;
-                            final totalHeight = constraints.maxHeight;
-                            final itemWidth = totalWidth / 4;
-                            const circleSize = 40.0;
-
-                            return AnimatedBuilder(
-                              animation: _liquidAnimController,
-                              builder: (context, _) {
-                                final progress = _liquidPositionAnim.value;
-                                final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
-                                final totalDistance = (_animToIndex - _animFromIndex).abs();
-                                final stretchFactor = (totalDistance > 0.05)
-                                    ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.38 * math.min(totalDistance, 1.7))
-                                    : 0.0;
-                                final stretch = 1.0 + stretchFactor;
-                                final currentW = circleSize * stretch;
-                                final currentH = circleSize / math.sqrt(stretch);
-                                final currentCenterX = currentPos * itemWidth + itemWidth / 2;
-                                final currentLeft = currentCenterX - currentW / 2;
-                                final currentTop = (totalHeight - currentH) / 2;
-
-                                return Stack(
-                                  alignment: Alignment.centerLeft,
-                                  children: [
-                                    Positioned(
-                                      left: currentLeft,
-                                      top: currentTop,
-                                      width: currentW,
-                                      height: currentH,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(currentH / 2),
-                                          gradient: const LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [
-                                              Color(0xFF55194D),
-                                              Color(0xFF3A0F34),
-                                            ],
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.primary.withValues(alpha: 0.35),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        _buildNavItem(
-                                          index: 0,
-                                          currentPos: currentPos,
-                                          isSelected: currentIndex == 0,
-                                          icon: Icons.home_outlined,
-                                          selectedIcon: Icons.home,
-                                          tooltip: 'Home',
-                                        ),
-                                        _buildNavItem(
-                                          index: 1,
-                                          currentPos: currentPos,
-                                          isSelected: currentIndex == 1,
-                                          icon: Icons.storefront_outlined,
-                                          selectedIcon: Icons.storefront,
-                                          tooltip: 'Bazar',
-                                        ),
-                                        _buildNavItem(
-                                          index: 2,
-                                          currentPos: currentPos,
-                                          isSelected: currentIndex == 2,
-                                          icon: Icons.chat_bubble_outline_rounded,
-                                          selectedIcon: Icons.chat_bubble,
-                                          tooltip: 'Chat',
-                                          badgeNotifier: DirectChatService.instance.unreadCountNotifier,
-                                        ),
-                                        _buildNavItem(
-                                          index: 3,
-                                          currentPos: currentPos,
-                                          isSelected: currentIndex == 3,
-                                          icon: Icons.person_outline,
-                                          selectedIcon: Icons.person,
-                                          tooltip: 'Profile',
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
+                        child: Row(
+                          children: [
+                            _buildNavItem(
+                              index: 0,
+                              isSelected: currentIndex == 0,
+                              icon: Icons.home_rounded,
+                              tooltip: 'Home',
+                            ),
+                            _buildNavItem(
+                              index: 1,
+                              isSelected: currentIndex == 1,
+                              icon: Icons.storefront_rounded,
+                              tooltip: 'Bazar',
+                            ),
+                            _buildNavItem(
+                              index: 2,
+                              isSelected: currentIndex == 2,
+                              icon: Icons.chat_bubble_rounded,
+                              tooltip: 'Chat',
+                              badgeNotifier: DirectChatService.instance.unreadCountNotifier,
+                            ),
+                            _buildNavItem(
+                              index: 3,
+                              isSelected: currentIndex == 3,
+                              icon: Icons.person_rounded,
+                              tooltip: 'Profile',
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -401,18 +316,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   Widget _buildNavItem({
     required int index,
-    required double currentPos,
     required bool isSelected,
     required IconData icon,
-    required IconData selectedIcon,
     String? tooltip,
     ValueNotifier<int>? badgeNotifier,
   }) {
-    final dist = (currentPos - index).abs();
-    final isActive = isSelected || dist < 0.45;
-    final iconColor = isActive ? Colors.white : const Color(0xFF5A5258);
-    const circleSize = 40.0;
-
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -427,14 +335,29 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                SizedBox(
-                  width: circleSize,
-                  height: circleSize,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected ? AppColors.primary : Colors.transparent,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
                   child: Center(
                     child: Icon(
-                      isActive ? selectedIcon : icon,
+                      icon,
                       size: 21,
-                      color: iconColor,
+                      color: isSelected ? Colors.white : const Color(0xFF5A5258),
                     ),
                   ),
                 ),
@@ -452,10 +375,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           decoration: BoxDecoration(
                             color: AppColors.error,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 1.5,
-                            ),
+                            border: Border.all(color: Colors.white, width: 1.5),
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -463,7 +383,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 9.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.bold,
                               height: 1.0,
                             ),
                           ),
