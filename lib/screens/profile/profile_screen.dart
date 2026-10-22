@@ -32,7 +32,7 @@ import '../../services/rewards_service.dart';
 import '../../models/founding_model.dart';
 import '../../services/founding_service.dart';
 import '../rewards/rewards_hub_screen.dart';
-import 'profile_header_asset.dart';
+import '../../services/app_asset_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final PostRepository repository;
@@ -63,6 +63,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    AppAssetService.instance.init();
+    AppAssetService.instance.syncAllFromServer();
     RewardsService.instance.fetchSummary(forceRefresh: true);
     _bioController = TextEditingController();
     _nameController = TextEditingController();
@@ -1494,7 +1496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF11383D),
+        backgroundColor: AppColors.primary,
         body: ListenableBuilder(
           listenable: Listenable.merge([widget.repository, widget.repository.locationService]),
           builder: (context, _) {
@@ -1525,28 +1527,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.asset(
-                            'assets/images/nearhood_profile_city_header.webp',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.bottomCenter,
-                            color: AppColors.primary,
-                            colorBlendMode: BlendMode.color,
-                            errorBuilder: (context, error, stackTrace) => Image.memory(
-                              getProfileHeaderBytes(),
-                              fit: BoxFit.cover,
-                              alignment: Alignment.bottomCenter,
-                            color: AppColors.primary,
-                            colorBlendMode: BlendMode.color,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Color(0xFF3A0F34), Color(0xFF240820)],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
+                          ValueListenableBuilder<int>(
+                            valueListenable: AppAssetService.instance.revisionNotifier,
+                            builder: (context, revision, child) {
+                              return Image(
+                                image: AppAssetService.instance.getProfileHeaderProvider(),
+                                fit: BoxFit.cover,
+                                alignment: Alignment.bottomCenter,
+                                gaplessPlayback: true,
+                                errorBuilder: (context, error, stackTrace) => Image.asset(
+                                  'assets/images/nearhood_profile_city_header.webp',
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.bottomCenter,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFF3A0F34), Color(0xFF240820)],
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           ),
                           Positioned.fill(
                             child: DecoratedBox(
@@ -1708,26 +1713,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     Padding(
                       padding: EdgeInsets.only(top: headerHeight - 28),
-                      child: Container(
-                        width: double.infinity,
-                        constraints: BoxConstraints(
-                          minHeight: MediaQuery.of(context).size.height - (headerHeight - 28),
-                        ),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(28),
-                            topRight: Radius.circular(28),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0x180F172A),
-                              blurRadius: 18,
-                              offset: Offset(0, -6),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: AppAssetService.instance.revisionNotifier,
+                        builder: (context, revision, child) {
+                          return Container(
+                            width: double.infinity,
+                            constraints: BoxConstraints(
+                              minHeight: MediaQuery.of(context).size.height - (headerHeight - 28),
                             ),
-                          ],
-                        ),
-                        padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.paddingOf(context).bottom),
+                            decoration: BoxDecoration(
+                              color: AppColors.softBackground,
+                              image: DecorationImage(
+                                image: AppAssetService.instance.getProfileBodyBackgroundProvider(),
+                                fit: BoxFit.cover,
+                                alignment: Alignment.topCenter,
+                              ),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(28),
+                                topRight: Radius.circular(28),
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x180F172A),
+                                  blurRadius: 18,
+                                  offset: Offset(0, -6),
+                                ),
+                              ],
+                            ),
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.paddingOf(context).bottom),
+                            child: child,
+                          );
+                        },
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [

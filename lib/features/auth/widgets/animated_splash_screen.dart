@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../services/splash_asset_service.dart';
 import '../../../theme/app_colors.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
@@ -46,6 +47,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   @override
   void initState() {
     super.initState();
+    SplashAssetService.instance.init();
+    SplashAssetService.instance.syncFromServer();
 
     _controller = AnimationController(
       vsync: this,
@@ -278,11 +281,21 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
           Positioned.fill(
             child: FadeTransition(
               opacity: _streetsOpacity,
-              child: Image.asset(
-                'assets/images/nearhood_splash_background.webp',
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+              child: ValueListenableBuilder<int>(
+                valueListenable: SplashAssetService.instance.revisionNotifier,
+                builder: (context, revision, child) {
+                  return Image(
+                    image: SplashAssetService.instance.getSplashImageProvider(),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (context, error, stackTrace) => Image.asset(
+                      'assets/images/nearhood_splash_background.webp',
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                    ),
+                  );
+                },
               ),
             ),
           ),

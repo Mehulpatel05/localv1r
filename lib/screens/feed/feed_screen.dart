@@ -25,6 +25,7 @@ import '../../core/widgets/verified_badge.dart';
 import '../../services/rewards_service.dart';
 import '../rewards/rewards_hub_screen.dart';
 import '../../core/widgets/sliding_category_tab_bar.dart';
+import '../../services/app_asset_service.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository repository;
@@ -128,6 +129,8 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    AppAssetService.instance.init();
+    AppAssetService.instance.syncAllFromServer();
     widget.repository.addListener(_onRepositoryUpdated);
     widget.repository.setCategory(null);
     _triggerFeedImagePrefetch();
@@ -170,13 +173,49 @@ class _FeedScreenState extends State<FeedScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: 16,
         automaticallyImplyLeading: false,
         toolbarHeight: 62,
+        flexibleSpace: ValueListenableBuilder<int>(
+          valueListenable: AppAssetService.instance.revisionNotifier,
+          builder: (context, revision, child) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Image(
+                  image: AppAssetService.instance.getHomeFeedHeaderProvider(),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  gaplessPlayback: true,
+                  errorBuilder: (context, error, stackTrace) => Image.asset(
+                    'assets/images/nearhood_home_feed_header.webp',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    gaplessPlayback: true,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.35),
+                        Colors.transparent,
+                        Colors.white.withValues(alpha: 0.35),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
         title: Row(
           children: [
             Expanded(
@@ -431,10 +470,13 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ],
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(54),
+          child: _buildFilterChipsRow(),
+        ),
       ),
       body: Column(
         children: [
-          _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
