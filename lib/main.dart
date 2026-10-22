@@ -22,6 +22,7 @@ import 'core/action_state/action_state_provider.dart';
 import 'services/user_action_state_service.dart';
 import 'screens/auth/create_handle_screen.dart';
 import 'core/services/app_image_cache_service.dart';
+import 'services/app_icon_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -61,6 +62,7 @@ void main() async {
 void _initNonCriticalServices() {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   AppImageCacheService.instance.ensureInitialized();
+  AppIconService.instance.syncAppIcon();
 }
 
 class VadodaraLocalApp extends StatefulWidget {
