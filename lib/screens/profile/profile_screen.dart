@@ -1518,7 +1518,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: Colors.white,
               onRefresh: _refreshProfile,
               child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 child: Stack(
                   children: [
                     SizedBox(
@@ -1534,11 +1534,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 image: AppAssetService.instance.getProfileHeaderProvider(),
                                 fit: BoxFit.cover,
                                 alignment: Alignment.bottomCenter,
+                                filterQuality: FilterQuality.high,
                                 gaplessPlayback: true,
                                 errorBuilder: (context, error, stackTrace) => Image.asset(
                                   'assets/images/nearhood_profile_city_header.webp',
                                   fit: BoxFit.cover,
                                   alignment: Alignment.bottomCenter,
+                                  filterQuality: FilterQuality.high,
                                   gaplessPlayback: true,
                                   errorBuilder: (context, error, stackTrace) => Container(
                                     decoration: const BoxDecoration(
@@ -1718,15 +1720,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         builder: (context, revision, child) {
                           return Container(
                             width: double.infinity,
-                            constraints: BoxConstraints(
-                              minHeight: MediaQuery.of(context).size.height - (headerHeight - 28),
-                            ),
                             decoration: BoxDecoration(
                               color: AppColors.softBackground,
                               image: DecorationImage(
                                 image: AppAssetService.instance.getProfileBodyBackgroundProvider(),
                                 fit: BoxFit.cover,
                                 alignment: Alignment.topCenter,
+                                filterQuality: FilterQuality.high,
                               ),
                               borderRadius: const BorderRadius.only(
                                 topLeft: Radius.circular(28),
@@ -1740,7 +1740,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ],
                             ),
-                            padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.paddingOf(context).bottom),
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 76 + MediaQuery.paddingOf(context).bottom),
                             child: child,
                           );
                         },

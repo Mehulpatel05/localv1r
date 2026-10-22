@@ -14,8 +14,6 @@ import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../../services/notification_service.dart';
-import '../chat/chat_list_screen.dart';
-import '../../services/direct_chat_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../profile/profile_screen.dart';
 import '../../core/services/app_image_cache_service.dart';
@@ -179,7 +177,7 @@ class _FeedScreenState extends State<FeedScreen> {
         centerTitle: false,
         titleSpacing: 16,
         automaticallyImplyLeading: false,
-        toolbarHeight: 62,
+        toolbarHeight: 68,
         flexibleSpace: ValueListenableBuilder<int>(
           valueListenable: AppAssetService.instance.revisionNotifier,
           builder: (context, revision, child) {
@@ -190,11 +188,13 @@ class _FeedScreenState extends State<FeedScreen> {
                   image: AppAssetService.instance.getHomeFeedHeaderProvider(),
                   fit: BoxFit.cover,
                   alignment: Alignment.center,
+                  filterQuality: FilterQuality.high,
                   gaplessPlayback: true,
                   errorBuilder: (context, error, stackTrace) => Image.asset(
                     'assets/images/nearhood_home_feed_header.webp',
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
+                    filterQuality: FilterQuality.high,
                     gaplessPlayback: true,
                     errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                   ),
@@ -227,49 +227,66 @@ class _FeedScreenState extends State<FeedScreen> {
                       : (locService.city.areas.firstOrNull?.name ?? locService.city.name);
                   final cityName = locService.city.name;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        areaName,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          height: 1.15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.location_on_rounded,
-                            color: AppColors.primary,
-                            size: 13,
-                          ),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              cityName,
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                height: 1.15,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                    ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            areaName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                              height: 1.15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 1.5),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.location_on_rounded,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  cityName,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.15,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
@@ -398,85 +415,12 @@ class _FeedScreenState extends State<FeedScreen> {
                 );
               },
             ),
-            const SizedBox(width: 8),
-            ValueListenableBuilder<int>(
-              valueListenable: DirectChatService.instance.unreadCountNotifier,
-              builder: (context, unreadCount, _) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatListScreen(
-                          currentUserHandle: widget.currentUserHandle,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(
-                          Icons.chat_bubble_rounded,
-                          color: Colors.white,
-                          size: 19,
-                        ),
-                        if (unreadCount > 0)
-                          Positioned(
-                            right: -1,
-                            top: -1,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                              decoration: BoxDecoration(
-                                color: AppColors.error,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 1.5,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                unreadCount > 99 ? '99+' : '$unreadCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
           ],
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(54),
-          child: _buildFilterChipsRow(),
         ),
       ),
       body: Column(
         children: [
+          _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),

@@ -42,7 +42,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final TextStyle _tagStyleDark;
   late final TextStyle _tagStyleLight;
 
-  static const int totalDurationMs = 1500;
+  static const int totalDurationMs = 750;
 
   @override
   void initState() {
@@ -65,7 +65,10 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _wordStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 34,
       fontWeight: FontWeight.w800,
-      color: AppColors.textPrimary,
+      color: Colors.white,
+      shadows: const [
+        Shadow(color: Color(0xB3000000), blurRadius: 16, offset: Offset(0, 2)),
+      ],
       letterSpacing: -0.03 * 34,
       height: 1.0,
     );
@@ -78,7 +81,10 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     _tagStyleLight = GoogleFonts.plusJakartaSans(
       fontSize: 13.5,
       fontWeight: FontWeight.w500,
-      color: AppColors.textMuted,
+      color: Colors.white,
+      shadows: const [
+        Shadow(color: Color(0xB3000000), blurRadius: 14, offset: Offset(0, 2)),
+      ],
       letterSpacing: 0,
     );
 
@@ -269,7 +275,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     final isDark = widget.isDarkMode ??
         (Theme.of(context).brightness == Brightness.dark);
     final sbg = isDark ? Colors.black : AppColors.background;
-    final sfg = isDark ? Colors.white : AppColors.primary;
+    final sfg = Colors.white;
     final wordStyle = isDark ? _wordStyleDark : _wordStyleLight;
     final tagStyle = isDark ? _tagStyleDark : _tagStyleLight;
 
@@ -287,15 +293,32 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                   return Image(
                     image: SplashAssetService.instance.getSplashImageProvider(),
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
                     gaplessPlayback: true,
                     errorBuilder: (context, error, stackTrace) => Image.asset(
                       'assets/images/nearhood_splash_background.webp',
                       fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
                       gaplessPlayback: true,
                       errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                     ),
                   );
                 },
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.15),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.40),
+                  ],
+                ),
               ),
             ),
           ),

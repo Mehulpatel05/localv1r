@@ -477,6 +477,7 @@ class _BazarScreenState extends State<BazarScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
+          toolbarHeight: 68,
           flexibleSpace: ValueListenableBuilder<int>(
             valueListenable: AppAssetService.instance.revisionNotifier,
             builder: (context, revision, child) {
@@ -487,11 +488,13 @@ class _BazarScreenState extends State<BazarScreen> {
                     image: AppAssetService.instance.getHomeFeedHeaderProvider(),
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
+                    filterQuality: FilterQuality.high,
                     gaplessPlayback: true,
                     errorBuilder: (context, error, stackTrace) => Image.asset(
                       'assets/images/nearhood_home_feed_header.webp',
                       fit: BoxFit.cover,
                       alignment: Alignment.center,
+                      filterQuality: FilterQuality.high,
                       gaplessPlayback: true,
                       errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                     ),
@@ -514,88 +517,183 @@ class _BazarScreenState extends State<BazarScreen> {
             },
           ),
           leading: showBackButton
-              ? IconButton(
-                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-                  onPressed: () {
-                    if (_isSearching) {
-                      setState(() {
-                        _isSearching = false;
-                        _searchQuery = '';
-                        _searchController.clear();
-                      });
-                    } else if (isPushedFromProfile) {
-                      Navigator.pop(context);
-                    } else if (_showMyListings) {
-                      setState(() {
-                        _showMyListings = false;
-                      });
-                    }
-                  },
+              ? Center(
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+                      onPressed: () {
+                        if (_isSearching) {
+                          setState(() {
+                            _isSearching = false;
+                            _searchQuery = '';
+                            _searchController.clear();
+                          });
+                        } else if (isPushedFromProfile) {
+                          Navigator.pop(context);
+                        } else if (_showMyListings) {
+                          setState(() {
+                            _showMyListings = false;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 )
               : null,
           title: _isSearching
-              ? TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                  onChanged: (val) {
-                    setState(() {
-                      _searchQuery = val;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Search products in Bazaar...',
-                    hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-                    border: InputBorder.none,
+              ? Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 14.5),
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search products in Bazaar...',
+                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 14),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _showMyListings ? 'My Listings' : 'Bazaar',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+              : Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    Builder(
-                      builder: (context) {
-                        final locService = context.watch<LocationService>();
-                        final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
-                            ? locService.area!.name
-                            : locService.city.name;
-                        final cityName = locService.city.name;
-                        final label = areaName == cityName ? cityName : '$areaName, $cityName';
-                        return Text(
-                          label,
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _showMyListings ? 'My Listings' : 'Bazaar',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.2,
+                            height: 1.15,
                           ),
-                        );
-                      },
+                        ),
+                        const SizedBox(height: 1.5),
+                        Builder(
+                          builder: (context) {
+                            final locService = context.watch<LocationService>();
+                            final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
+                                ? locService.area!.name
+                                : locService.city.name;
+                            final cityName = locService.city.name;
+                            final label = areaName == cityName ? cityName : '$areaName, $cityName';
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  color: Colors.white,
+                                  size: 11,
+                                ),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.85),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.15,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
           actions: [
             if (!_showMyListings)
-              IconButton(
-                icon: Icon(
-                  _isSearching ? Icons.close : Icons.search_rounded,
-                  color: AppColors.textPrimary,
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isSearching = !_isSearching;
+                      if (!_isSearching) {
+                        _searchQuery = '';
+                        _searchController.clear();
+                      }
+                    });
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        _isSearching ? Icons.close : Icons.search_rounded,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                    ),
+                  ),
                 ),
-                onPressed: () {
-                  setState(() {
-                    _isSearching = !_isSearching;
-                    if (!_isSearching) {
-                      _searchQuery = '';
-                      _searchController.clear();
-                    }
-                  });
-                },
               ),
             if (RewardsService.isRewardsEnabled)
               Padding(
