@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
@@ -29,16 +30,52 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+  static const List<IconData> _tabUnselectedIcons = [
+    Icons.home_outlined,
+    Icons.storefront_outlined,
+    Icons.chat_bubble_outline_rounded,
+    Icons.person_outline_rounded,
+  ];
+
+  static const List<IconData> _tabSelectedIcons = [
+    Icons.home_rounded,
+    Icons.storefront_rounded,
+    Icons.chat_bubble_rounded,
+    Icons.person_rounded,
+  ];
+
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final Set<int> _mountedTabs = {0};
   late final List<Widget?> _cachedTabs = [null, null, null, null];
+  double _animFromIndex = 0.0;
+  double _animToIndex = 0.0;
+  late final AnimationController _liquidAnimController;
+  late final Animation<double> _liquidPositionAnim;
 
   @override
   void initState() {
     super.initState();
     _cachedTabs[0] = _createTab(0);
+    _liquidAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _liquidPositionAnim = CurvedAnimation(
+      parent: _liquidAnimController,
+      curve: Curves.fastOutSlowIn,
+    );
+    _liquidAnimController.value = 1.0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        for (int i = 1; i < 4; i++) {
+          if (!_mountedTabs.contains(i)) {
+            _mountedTabs.add(i);
+            _cachedTabs[i] = _createTab(i);
+          }
+        }
+        setState(() {});
+      }
       _checkAreaAndCityStatus();
       NotificationService.instance.initialize();
       NotificationService.instance.startListening(widget.currentUserHandle);
@@ -163,17 +200,23 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    _liquidAnimController.dispose();
     _currentIndexNotifier.dispose();
     super.dispose();
   }
 
   void _onTabTapped(int index) {
+    if (_currentIndexNotifier.value == index) return;
+    HapticFeedback.selectionClick();
     if (!_mountedTabs.contains(index)) {
       _mountedTabs.add(index);
       _cachedTabs[index] = _createTab(index);
       setState(() {});
     }
-    if (_currentIndexNotifier.value == index) return;
+    final currentProgress = _liquidPositionAnim.value;
+    _animFromIndex = _animFromIndex + (_animToIndex - _animFromIndex) * currentProgress;
+    _animToIndex = index.toDouble();
+    _liquidAnimController.forward(from: 0.0);
     _currentIndexNotifier.value = index;
     if (index == 0) {
       RewardsService.instance.fetchSummary();
@@ -273,38 +316,93 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                           ],
                         ),
-                        child: Row(
-                          children: [
-                            _buildNavItem(
-                              index: 0,
-                              isSelected: currentIndex == 0,
-                              icon: Icons.home_outlined,
-                              selectedIcon: Icons.home,
-                              tooltip: 'Home',
-                            ),
-                            _buildNavItem(
-                              index: 1,
-                              isSelected: currentIndex == 1,
-                              icon: Icons.storefront_outlined,
-                              selectedIcon: Icons.storefront,
-                              tooltip: 'Bazar',
-                            ),
-                            _buildNavItem(
-                              index: 2,
-                              isSelected: currentIndex == 2,
-                              icon: Icons.chat_bubble_outline_rounded,
-                              selectedIcon: Icons.chat_bubble,
-                              tooltip: 'Chat',
-                              badgeNotifier: DirectChatService.instance.unreadCountNotifier,
-                            ),
-                            _buildNavItem(
-                              index: 3,
-                              isSelected: currentIndex == 3,
-                              icon: Icons.person_outline,
-                              selectedIcon: Icons.person_outline_rounded,
-                              tooltip: 'Profile',
-                            ),
-                          ],
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final totalWidth = constraints.maxWidth;
+                            final totalHeight = constraints.maxHeight;
+                            final itemWidth = totalWidth / 4;
+                            const circleSize = 40.0;
+
+                            return AnimatedBuilder(
+                              animation: _liquidAnimController,
+                              builder: (context, _) {
+                                final progress = _liquidPositionAnim.value;
+                                final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
+                                final totalDistance = (_animToIndex - _animFromIndex).abs();
+                                final stretchFactor = (totalDistance > 0.05)
+                                    ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.38 * math.min(totalDistance, 1.7))
+                                    : 0.0;
+                                final stretch = 1.0 + stretchFactor;
+                                final currentW = circleSize * stretch;
+                                final currentH = circleSize / math.sqrt(stretch);
+                                final currentCenterX = currentPos * itemWidth + itemWidth / 2;
+                                final currentLeft = currentCenterX - currentW / 2;
+                                final currentTop = (totalHeight - currentH) / 2;
+
+                                return Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    Positioned(
+                                      left: currentLeft,
+                                      top: currentTop,
+                                      width: currentW,
+                                      height: currentH,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary,
+                                          borderRadius: BorderRadius.circular(currentH / 2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.primary.withValues(alpha: 0.35),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        _buildNavItem(
+                                          index: 0,
+                                          currentPos: currentPos,
+                                          isSelected: currentIndex == 0,
+                                          icon: _tabUnselectedIcons[0],
+                                          selectedIcon: _tabSelectedIcons[0],
+                                          tooltip: 'Home',
+                                        ),
+                                        _buildNavItem(
+                                          index: 1,
+                                          currentPos: currentPos,
+                                          isSelected: currentIndex == 1,
+                                          icon: _tabUnselectedIcons[1],
+                                          selectedIcon: _tabSelectedIcons[1],
+                                          tooltip: 'Bazar',
+                                        ),
+                                        _buildNavItem(
+                                          index: 2,
+                                          currentPos: currentPos,
+                                          isSelected: currentIndex == 2,
+                                          icon: _tabUnselectedIcons[2],
+                                          selectedIcon: _tabSelectedIcons[2],
+                                          tooltip: 'Chat',
+                                          badgeNotifier: DirectChatService.instance.unreadCountNotifier,
+                                        ),
+                                        _buildNavItem(
+                                          index: 3,
+                                          currentPos: currentPos,
+                                          isSelected: currentIndex == 3,
+                                          icon: _tabUnselectedIcons[3],
+                                          selectedIcon: _tabSelectedIcons[3],
+                                          tooltip: 'Profile',
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -320,20 +418,23 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildNavItem({
     required int index,
+    required double currentPos,
     required bool isSelected,
     required IconData icon,
-    IconData? selectedIcon,
+    required IconData selectedIcon,
     String? tooltip,
     ValueNotifier<int>? badgeNotifier,
   }) {
-    final activeIcon = (isSelected && selectedIcon != null) ? selectedIcon : icon;
+    final dist = (currentPos - index).abs();
+    final isActive = isSelected || dist < 0.45;
+    final iconColor = isActive ? Colors.white : const Color(0xFF5A5258);
+    const circleSize = 40.0;
+    final displayedIcon = isActive ? selectedIcon : icon;
+
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          HapticFeedback.selectionClick();
-          _onTabTapped(index);
-        },
+        onTap: () => _onTabTapped(index),
         child: Tooltip(
           message: tooltip ?? '',
           child: Center(
@@ -341,29 +442,14 @@ class _MainScreenState extends State<MainScreen> {
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected ? AppColors.primary : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
+                SizedBox(
+                  width: circleSize,
+                  height: circleSize,
                   child: Center(
                     child: Icon(
-                      activeIcon,
+                      displayedIcon,
                       size: 21,
-                      color: isSelected ? Colors.white : const Color(0xFF5A5258),
+                      color: iconColor,
                     ),
                   ),
                 ),
