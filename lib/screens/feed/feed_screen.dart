@@ -177,46 +177,7 @@ class _FeedScreenState extends State<FeedScreen> {
         centerTitle: false,
         titleSpacing: 16,
         automaticallyImplyLeading: false,
-        toolbarHeight: 68,
-        flexibleSpace: ValueListenableBuilder<int>(
-          valueListenable: AppAssetService.instance.revisionNotifier,
-          builder: (context, revision, child) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(color: AppColors.softBackground),
-                Image(
-                  image: AppAssetService.instance.getHomeFeedHeaderProvider(),
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                  filterQuality: FilterQuality.high,
-                  gaplessPlayback: true,
-                  errorBuilder: (context, error, stackTrace) => Image.asset(
-                    'assets/images/nearhood_home_feed_header.webp',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    filterQuality: FilterQuality.high,
-                    gaplessPlayback: true,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.softBackground.withValues(alpha: 0.35),
-                        Colors.transparent,
-                        AppColors.softBackground.withValues(alpha: 0.35),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+        toolbarHeight: 62,
         title: Row(
           children: [
             Expanded(

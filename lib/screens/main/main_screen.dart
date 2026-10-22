@@ -349,30 +349,34 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                         _buildNavItem(
                                           index: 0,
                                           currentPos: currentPos,
+                                          isSelected: currentIndex == 0,
                                           icon: Icons.home_outlined,
-                                          selectedIcon: Icons.home_rounded,
+                                          selectedIcon: Icons.home,
                                           tooltip: 'Home',
                                         ),
                                         _buildNavItem(
                                           index: 1,
                                           currentPos: currentPos,
+                                          isSelected: currentIndex == 1,
                                           icon: Icons.storefront_outlined,
-                                          selectedIcon: Icons.storefront_rounded,
+                                          selectedIcon: Icons.storefront,
                                           tooltip: 'Bazar',
                                         ),
                                         _buildNavItem(
                                           index: 2,
                                           currentPos: currentPos,
+                                          isSelected: currentIndex == 2,
                                           icon: Icons.chat_bubble_outline_rounded,
-                                          selectedIcon: Icons.chat_bubble_rounded,
+                                          selectedIcon: Icons.chat_bubble,
                                           tooltip: 'Chat',
                                           badgeNotifier: DirectChatService.instance.unreadCountNotifier,
                                         ),
                                         _buildNavItem(
                                           index: 3,
                                           currentPos: currentPos,
+                                          isSelected: currentIndex == 3,
                                           icon: Icons.person_outline,
-                                          selectedIcon: Icons.person_rounded,
+                                          selectedIcon: Icons.person,
                                           tooltip: 'Profile',
                                         ),
                                       ],
@@ -398,14 +402,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   Widget _buildNavItem({
     required int index,
     required double currentPos,
+    required bool isSelected,
     required IconData icon,
     required IconData selectedIcon,
     String? tooltip,
     ValueNotifier<int>? badgeNotifier,
   }) {
     final dist = (currentPos - index).abs();
-    final activeT = (1.0 - dist / 0.45).clamp(0.0, 1.0);
-    final iconColor = Color.lerp(AppColors.primary, Colors.white, activeT)!;
+    final activeT = isSelected ? 1.0 : (1.0 - dist / 0.45).clamp(0.0, 1.0);
+    final iconColor = (activeT >= 0.5 || isSelected)
+        ? Colors.white
+        : Color.lerp(AppColors.primary, Colors.white, activeT)!;
     const circleSize = 40.0;
 
     return Expanded(
@@ -427,7 +434,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   height: circleSize,
                   child: Center(
                     child: Icon(
-                      activeT > 0.5 ? selectedIcon : icon,
+                      (activeT > 0.5 || isSelected) ? selectedIcon : icon,
                       size: 21,
                       color: iconColor,
                     ),

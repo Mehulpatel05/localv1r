@@ -20,7 +20,6 @@ import '../../core/widgets/safe_image.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../shop/register_shop_screen.dart';
 import '../../theme/app_colors.dart';
-import '../../services/app_asset_service.dart';
 
 class BazarProduct {
   final String id;
@@ -472,50 +471,12 @@ class _BazarScreenState extends State<BazarScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.softBackground,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.softBackground,
           elevation: 0,
           scrolledUnderElevation: 0,
-          toolbarHeight: 68,
-          flexibleSpace: ValueListenableBuilder<int>(
-            valueListenable: AppAssetService.instance.revisionNotifier,
-            builder: (context, revision, child) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image(
-                    image: AppAssetService.instance.getHomeFeedHeaderProvider(),
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    filterQuality: FilterQuality.high,
-                    gaplessPlayback: true,
-                    errorBuilder: (context, error, stackTrace) => Image.asset(
-                      'assets/images/nearhood_home_feed_header.webp',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      filterQuality: FilterQuality.high,
-                      gaplessPlayback: true,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                    ),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.35),
-                          Colors.transparent,
-                          Colors.white.withValues(alpha: 0.35),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+          toolbarHeight: 62,
           leading: showBackButton
               ? Center(
                   child: Container(
