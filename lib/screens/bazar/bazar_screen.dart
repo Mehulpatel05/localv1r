@@ -631,15 +631,18 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          onPressed: _openPostScreen,
-          icon: const Icon(Icons.add_rounded, size: 22),
-          label: const Text(
-            'Post Item',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 78),
+          child: FloatingActionButton.extended(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            onPressed: _openPostScreen,
+            icon: const Icon(Icons.add_rounded, size: 22),
+            label: const Text(
+              'Post Item',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
           ),
         ),
         body: _showMyListings ? _buildMyListingsView() : _buildBrowseBazarView(),

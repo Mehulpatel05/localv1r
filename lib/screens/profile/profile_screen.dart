@@ -1656,27 +1656,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         GestureDetector(
-                                          onTap: _refreshProfile,
-                                          child: Container(
-                                            width: 36,
-                                            height: 36,
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withValues(alpha: 0.22),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.30),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: const Icon(
-                                              Icons.refresh_rounded,
-                                              size: 19,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
                                           onTap: _shareProfile,
                                           child: Container(
                                             width: 36,
