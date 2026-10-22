@@ -305,40 +305,50 @@ class _FeedScreenState extends State<FeedScreen> {
                     }
                   },
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      color: AppColors.chipBg,
+                      color: const Color(0xFF2C7880),
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.divider,
-                        width: 1,
-                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2C7880).withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         const Icon(
                           Icons.notifications_rounded,
-                          color: AppColors.textPrimary,
+                          color: Colors.white,
                           size: 20,
                         ),
                         if (count > 0)
                           Positioned(
-                            right: 4,
-                            top: 4,
+                            right: -1,
+                            top: -1,
                             child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              decoration: BoxDecoration(
                                 color: AppColors.error,
                                 shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.5,
+                                ),
                               ),
+                              alignment: Alignment.center,
                               child: Text(
                                 count > 99 ? '99+' : '$count',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
+                                  height: 1.0,
                                 ),
                               ),
                             ),
@@ -365,40 +375,50 @@ class _FeedScreenState extends State<FeedScreen> {
                     );
                   },
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      color: AppColors.chipBg,
+                      color: const Color(0xFF2C7880),
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.divider,
-                        width: 1,
-                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2C7880).withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         const Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          color: AppColors.textPrimary,
-                          size: 20,
+                          Icons.chat_bubble_rounded,
+                          color: Colors.white,
+                          size: 19,
                         ),
                         if (unreadCount > 0)
                           Positioned(
-                            right: 4,
-                            top: 4,
+                            right: -1,
+                            top: -1,
                             child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              decoration: BoxDecoration(
                                 color: AppColors.error,
                                 shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.5,
+                                ),
                               ),
+                              alignment: Alignment.center,
                               child: Text(
                                 unreadCount > 99 ? '99+' : '$unreadCount',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
+                                  height: 1.0,
                                 ),
                               ),
                             ),

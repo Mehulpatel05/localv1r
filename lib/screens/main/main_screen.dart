@@ -259,121 +259,121 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 left: false,
                 right: false,
                 child: SizedBox(
-                  height: 78,
+                  height: 74,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
                     child: Center(
                       heightFactor: 1.0,
                       child: Container(
-                      width: 236,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: const Color(0xFFE5ECEB),
-                          width: 1.5,
+                        width: 180,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: const Color(0xFFE5ECEB),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF2C7880).withValues(alpha: 0.12),
+                              blurRadius: 16,
+                              offset: const Offset(0, 5),
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2C7880).withValues(alpha: 0.12),
-                            blurRadius: 18,
-                            offset: const Offset(0, 6),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final totalWidth = constraints.maxWidth;
-                          final totalHeight = constraints.maxHeight;
-                          final itemWidth = totalWidth / 3;
-                          const circleSize = 42.0;
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final totalWidth = constraints.maxWidth;
+                            final totalHeight = constraints.maxHeight;
+                            final itemWidth = totalWidth / 3;
+                            const circleSize = 40.0;
 
-                          return AnimatedBuilder(
-                            animation: _liquidAnimController,
-                            builder: (context, _) {
-                              final progress = _liquidPositionAnim.value;
-                              final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
-                              final totalDistance = (_animToIndex - _animFromIndex).abs();
-                              final stretchFactor = (totalDistance > 0.05)
-                                  ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.42 * math.min(totalDistance, 1.7))
-                                  : 0.0;
-                              final stretch = 1.0 + stretchFactor;
-                              final currentW = circleSize * stretch;
-                              final currentH = circleSize / math.sqrt(stretch);
-                              final currentCenterX = currentPos * itemWidth + itemWidth / 2;
-                              final currentLeft = currentCenterX - currentW / 2;
-                              final currentTop = (totalHeight - currentH) / 2;
+                            return AnimatedBuilder(
+                              animation: _liquidAnimController,
+                              builder: (context, _) {
+                                final progress = _liquidPositionAnim.value;
+                                final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
+                                final totalDistance = (_animToIndex - _animFromIndex).abs();
+                                final stretchFactor = (totalDistance > 0.05)
+                                    ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.38 * math.min(totalDistance, 1.7))
+                                    : 0.0;
+                                final stretch = 1.0 + stretchFactor;
+                                final currentW = circleSize * stretch;
+                                final currentH = circleSize / math.sqrt(stretch);
+                                final currentCenterX = currentPos * itemWidth + itemWidth / 2;
+                                final currentLeft = currentCenterX - currentW / 2;
+                                final currentTop = (totalHeight - currentH) / 2;
 
-                              return Stack(
-                                alignment: Alignment.centerLeft,
-                                children: [
-                                  Positioned(
-                                    left: currentLeft,
-                                    top: currentTop,
-                                    width: currentW,
-                                    height: currentH,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(currentH / 2),
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Color(0xFF338890),
-                                            Color(0xFF23656C),
+                                return Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    Positioned(
+                                      left: currentLeft,
+                                      top: currentTop,
+                                      width: currentW,
+                                      height: currentH,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(currentH / 2),
+                                          gradient: const LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Color(0xFF338890),
+                                              Color(0xFF23656C),
+                                            ],
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF2C7880).withValues(alpha: 0.35),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            ),
                                           ],
                                         ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFF2C7880).withValues(alpha: 0.35),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
                                       ),
                                     ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      _buildNavItem(
-                                        index: 0,
-                                        currentPos: currentPos,
-                                        icon: Icons.home_outlined,
-                                        selectedIcon: Icons.home_rounded,
-                                        tooltip: 'Home',
-                                      ),
-                                      _buildNavItem(
-                                        index: 1,
-                                        currentPos: currentPos,
-                                        icon: Icons.storefront_outlined,
-                                        selectedIcon: Icons.storefront_rounded,
-                                        tooltip: 'Bazar',
-                                      ),
-                                      _buildNavItem(
-                                        index: 2,
-                                        currentPos: currentPos,
-                                        icon: Icons.person_outline_rounded,
-                                        selectedIcon: Icons.person_outline_rounded,
-                                        tooltip: 'Profile',
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
+                                    Row(
+                                      children: [
+                                        _buildNavItem(
+                                          index: 0,
+                                          currentPos: currentPos,
+                                          icon: Icons.home_outlined,
+                                          selectedIcon: Icons.home_rounded,
+                                          tooltip: 'Home',
+                                        ),
+                                        _buildNavItem(
+                                          index: 1,
+                                          currentPos: currentPos,
+                                          icon: Icons.storefront_outlined,
+                                          selectedIcon: Icons.storefront_rounded,
+                                          tooltip: 'Bazar',
+                                        ),
+                                        _buildNavItem(
+                                          index: 2,
+                                          currentPos: currentPos,
+                                          icon: Icons.person_outline,
+                                          selectedIcon: Icons.person_outline,
+                                          tooltip: 'Profile',
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               ),
             ),
           ),
@@ -393,7 +393,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     final dist = (currentPos - index).abs();
     final activeT = (1.0 - dist / 0.45).clamp(0.0, 1.0);
     final iconColor = Color.lerp(const Color(0xFF2C7880), Colors.white, activeT)!;
-    const circleSize = 42.0;
+    const circleSize = 40.0;
 
     return Expanded(
       child: GestureDetector(
@@ -415,7 +415,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   child: Center(
                     child: Icon(
                       activeT > 0.5 ? selectedIcon : icon,
-                      size: 22,
+                      size: 21,
                       color: iconColor,
                     ),
                   ),
