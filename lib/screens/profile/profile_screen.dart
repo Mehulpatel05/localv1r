@@ -10,6 +10,8 @@ import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/instagram_avatar_cropper.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/auth_repository.dart';
+import '../../core/location/all_india_data.dart';
+import '../../core/location/gujarat_data.dart';
 import '../../core/constants/areas_and_categories.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
@@ -1996,16 +1998,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ),
                                           const SizedBox(width: 5),
                                           Flexible(
-                                            child: Text(
-                                              isVerified
-                                                  ? 'Verified Citizen · ${widget.repository.locationService.city.name}'
-                                                  : 'Resident · ${widget.repository.locationService.city.name}',
-                                              style: const TextStyle(
-                                                fontSize: 11.5,
-                                                color: Color(0xFF64748B),
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            child: Builder(
+                                              builder: (context) {
+                                                final locService = widget.repository.locationService;
+                                                final city = locService.city;
+                                                final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
+                                                    ? locService.area!.name
+                                                    : (city.areas.firstOrNull?.name ?? city.name);
+                                                final cityName = city.name;
+                                                final stateName = kAllIndiaStates.firstWhere(
+                                                  (s) => s.id == city.stateId,
+                                                  orElse: () => kGujarat,
+                                                ).name;
+                                                final locationLine = areaName == cityName
+                                                    ? '$cityName, $stateName'
+                                                    : '$areaName, $cityName, $stateName';
+
+                                                return Text(
+                                                  isVerified
+                                                      ? 'Verified Citizen · $locationLine'
+                                                      : 'Resident · $locationLine',
+                                                  style: const TextStyle(
+                                                    fontSize: 11.5,
+                                                    color: Color(0xFF64748B),
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                );
+                                              },
                                             ),
                                           ),
                                         ],

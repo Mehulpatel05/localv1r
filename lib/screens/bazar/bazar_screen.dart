@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../core/location/location_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'create_bazar_listing_screen.dart';
 import 'shop_detail_screen.dart';
 import '../chat/personal_chat_screen.dart';
@@ -549,73 +548,13 @@ class _BazarScreenState extends State<BazarScreen> {
                     ),
                   ),
                 )
-              : Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _showMyListings ? 'My Listings' : 'Bazaar',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.2,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 1.5),
-                        Builder(
-                          builder: (context) {
-                            final locService = context.watch<LocationService>();
-                            final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
-                                ? locService.area!.name
-                                : locService.city.name;
-                            final cityName = locService.city.name;
-                            final label = areaName == cityName ? cityName : '$areaName, $cityName';
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.location_on_rounded,
-                                  color: Colors.white,
-                                  size: 11,
-                                ),
-                                const SizedBox(width: 3),
-                                Flexible(
-                                  child: Text(
-                                    label,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.85),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.15,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+              : Text(
+                  _showMyListings ? 'My Listings' : 'NEARHOOD',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppColors.primary,
+                    fontSize: 18.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
                   ),
                 ),
           actions: [
@@ -728,7 +667,7 @@ class _BazarScreenState extends State<BazarScreen> {
           ],
         ),
         floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 78),
+          padding: const EdgeInsets.only(bottom: 100),
           child: FloatingActionButton.extended(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,

@@ -264,9 +264,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 left: false,
                 right: false,
                 child: SizedBox(
-                  height: 74,
+                  height: 68,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
                     child: Center(
                       heightFactor: 1.0,
                       child: Container(
@@ -409,10 +409,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     ValueNotifier<int>? badgeNotifier,
   }) {
     final dist = (currentPos - index).abs();
-    final activeT = isSelected ? 1.0 : (1.0 - dist / 0.45).clamp(0.0, 1.0);
-    final iconColor = (activeT >= 0.5 || isSelected)
-        ? Colors.white
-        : Color.lerp(AppColors.primary, Colors.white, activeT)!;
+    final isActive = isSelected || dist < 0.45;
+    final iconColor = isActive ? Colors.white : const Color(0xFF5A5258);
     const circleSize = 40.0;
 
     return Expanded(
@@ -434,7 +432,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   height: circleSize,
                   child: Center(
                     child: Icon(
-                      (activeT > 0.5 || isSelected) ? selectedIcon : icon,
+                      isActive ? selectedIcon : icon,
                       size: 21,
                       color: iconColor,
                     ),

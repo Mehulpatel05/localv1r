@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../core/widgets/pressable_scale.dart';
@@ -178,206 +179,206 @@ class _FeedScreenState extends State<FeedScreen> {
         titleSpacing: 16,
         automaticallyImplyLeading: false,
         toolbarHeight: 62,
-        title: Row(
-          children: [
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final locService = context.watch<LocationService>();
-                  final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
-                      ? locService.area!.name
-                      : (locService.city.areas.firstOrNull?.name ?? locService.city.name);
-                  final cityName = locService.city.name;
+        title: SizedBox(
+          height: 42,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Builder(
+                  builder: (context) {
+                    final locService = context.watch<LocationService>();
+                    final areaName = (locService.area?.name != null && locService.area!.name.trim().isNotEmpty)
+                        ? locService.area!.name
+                        : (locService.city.areas.firstOrNull?.name ?? locService.city.name);
 
-                  return Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.25),
-                            blurRadius: 8,
+                            color: AppColors.primary.withValues(alpha: 0.22),
+                            blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
                         ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            areaName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                              height: 1.15,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 1.5),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.location_on_rounded,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  cityName,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.85),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.15,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            if (RewardsService.isRewardsEnabled) ...[
-              const SizedBox(width: 8),
-              ListenableBuilder(
-                listenable: RewardsService.instance,
-                builder: (context, _) {
-                  final points = RewardsService.instance.summary?.balance ?? 0;
-                  return PressableScale(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      height: 32,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                          width: 1,
-                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(
-                            Icons.star_rounded,
-                            color: Color(0xFFD97706),
-                            size: 16,
+                            Icons.location_on_rounded,
+                            color: Colors.white,
+                            size: 13,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '$points',
-                            style: const TextStyle(
-                              color: Color(0xFFB45309),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 96),
+                            child: Text(
+                              areaName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  );
-                },
-              ),
-            ],
-            const SizedBox(width: 8),
-            ValueListenableBuilder<int>(
-              valueListenable: NotificationService.instance.unreadBadgeNotifier,
-              builder: (context, count, _) {
-                return GestureDetector(
-                  onTap: () async {
-                    NotificationService.instance.unreadBadgeNotifier.value = 0;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => NotificationsScreen(
-                          currentUserHandle: widget.currentUserHandle,
-                        ),
-                      ),
                     );
-                    if (context.mounted) {
-                      NotificationService.instance.prefetchBadgeCounts(widget.currentUserHandle);
-                    }
                   },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(
-                          Icons.notifications_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        if (count > 0)
-                          Positioned(
-                            right: -1,
-                            top: -1,
+                ),
+              ),
+              Center(
+                child: Text(
+                  'NEARHOOD',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppColors.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (RewardsService.isRewardsEnabled) ...[
+                      ListenableBuilder(
+                        listenable: RewardsService.instance,
+                        builder: (context, _) {
+                          final points = RewardsService.instance.summary?.balance ?? 0;
+                          return PressableScale(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RewardsHubScreen(currentUserHandle: widget.currentUserHandle),
+                                ),
+                              );
+                            },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              height: 32,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
                               decoration: BoxDecoration(
-                                color: AppColors.error,
-                                shape: BoxShape.circle,
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Colors.white,
-                                  width: 1.5,
+                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                                  width: 1,
                                 ),
                               ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                count > 99 ? '99+' : '$count',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.0,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    color: Color(0xFFD97706),
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$points',
+                                    style: const TextStyle(
+                                      color: Color(0xFFB45309),
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    ValueListenableBuilder<int>(
+                      valueListenable: NotificationService.instance.unreadBadgeNotifier,
+                      builder: (context, count, _) {
+                        return GestureDetector(
+                          onTap: () async {
+                            NotificationService.instance.unreadBadgeNotifier.value = 0;
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => NotificationsScreen(
+                                  currentUserHandle: widget.currentUserHandle,
+                                ),
+                              ),
+                            );
+                            if (context.mounted) {
+                              NotificationService.instance.prefetchBadgeCounts(widget.currentUserHandle);
+                            }
+                          },
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.notifications_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                if (count > 0)
+                                  Positioned(
+                                    right: -1,
+                                    top: -1,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.error,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        count > 99 ? '99+' : '$count',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                      ],
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
-            ),
-          ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       body: Column(
@@ -661,7 +662,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildFloatingCreateButton() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 78),
+      padding: const EdgeInsets.only(bottom: 100),
       child: PressableScale(
         onTap: _openCreatePostScreen,
         child: Container(
