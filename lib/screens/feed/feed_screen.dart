@@ -169,9 +169,9 @@ class _FeedScreenState extends State<FeedScreen> {
     final repo = widget.repository;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.softBackground,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.softBackground,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
@@ -184,6 +184,7 @@ class _FeedScreenState extends State<FeedScreen> {
             return Stack(
               fit: StackFit.expand,
               children: [
+                Container(color: AppColors.softBackground),
                 Image(
                   image: AppAssetService.instance.getHomeFeedHeaderProvider(),
                   fit: BoxFit.cover,
@@ -205,9 +206,9 @@ class _FeedScreenState extends State<FeedScreen> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.white.withValues(alpha: 0.35),
+                        AppColors.softBackground.withValues(alpha: 0.35),
                         Colors.transparent,
-                        Colors.white.withValues(alpha: 0.35),
+                        AppColors.softBackground.withValues(alpha: 0.35),
                       ],
                     ),
                   ),

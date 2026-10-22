@@ -360,18 +360,13 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                           selectedIcon: Icons.storefront_rounded,
                                           tooltip: 'Bazar',
                                         ),
-                                        ValueListenableBuilder<int>(
-                                          valueListenable: DirectChatService.instance.unreadCountNotifier,
-                                          builder: (context, unreadCount, _) {
-                                            return _buildNavItem(
-                                              index: 2,
-                                              currentPos: currentPos,
-                                              icon: Icons.chat_bubble_outline_rounded,
-                                              selectedIcon: Icons.chat_bubble_rounded,
-                                              tooltip: 'Chat',
-                                              badgeCount: unreadCount,
-                                            );
-                                          },
+                                        _buildNavItem(
+                                          index: 2,
+                                          currentPos: currentPos,
+                                          icon: Icons.chat_bubble_outline_rounded,
+                                          selectedIcon: Icons.chat_bubble_rounded,
+                                          tooltip: 'Chat',
+                                          badgeNotifier: DirectChatService.instance.unreadCountNotifier,
                                         ),
                                         _buildNavItem(
                                           index: 3,
@@ -406,7 +401,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     required IconData icon,
     required IconData selectedIcon,
     String? tooltip,
-    int badgeCount = 0,
+    ValueNotifier<int>? badgeNotifier,
   }) {
     final dist = (currentPos - index).abs();
     final activeT = (1.0 - dist / 0.45).clamp(0.0, 1.0);
@@ -438,31 +433,37 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     ),
                   ),
                 ),
-                if (badgeCount > 0)
+                if (badgeNotifier != null)
                   Positioned(
                     top: -2,
                     right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 1.5,
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        badgeCount > 99 ? '99+' : '$badgeCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          height: 1.0,
-                        ),
-                      ),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: badgeNotifier,
+                      builder: (context, badgeCount, _) {
+                        if (badgeCount <= 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.error,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.5,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            badgeCount > 99 ? '99+' : '$badgeCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              height: 1.0,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],
