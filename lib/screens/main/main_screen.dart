@@ -42,7 +42,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     Icons.home_rounded,
     Icons.storefront_rounded,
     Icons.chat_bubble_rounded,
-    Icons.person_rounded,
+    Icons.person_outline_rounded,
   ];
 
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
@@ -446,11 +446,19 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   width: circleSize,
                   height: circleSize,
                   child: Center(
-                    child: Icon(
-                      displayedIcon,
-                      size: 21,
-                      color: iconColor,
-                    ),
+                    child: (index == 3 && isActive)
+                        ? SizedBox(
+                            width: 21,
+                            height: 21,
+                            child: CustomPaint(
+                              painter: _FilledPersonPainter(color: iconColor),
+                            ),
+                          )
+                        : Icon(
+                            displayedIcon,
+                            size: 21,
+                            color: iconColor,
+                          ),
                   ),
                 ),
                 if (badgeNotifier != null)
@@ -490,4 +498,42 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       ),
     );
   }
+}
+
+class _FilledPersonPainter extends CustomPainter {
+  final Color color;
+
+  const _FilledPersonPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    final scale = size.width / 24.0;
+    canvas.save();
+    canvas.scale(scale, scale);
+
+    canvas.drawCircle(const Offset(12, 7.5), 4.0, paint);
+
+    final path = Path()
+      ..moveTo(12, 13.5)
+      ..cubicTo(9.33, 13.5, 4.0, 14.84, 4.0, 17.5)
+      ..lineTo(4.0, 19.0)
+      ..cubicTo(4.0, 19.55, 4.45, 20.0, 5.0, 20.0)
+      ..lineTo(19.0, 20.0)
+      ..cubicTo(19.55, 20.0, 20.0, 19.55, 20.0, 19.0)
+      ..lineTo(20.0, 17.5)
+      ..cubicTo(20.0, 14.84, 14.67, 13.5, 12, 13.5)
+      ..close();
+
+    canvas.drawPath(path, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _FilledPersonPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

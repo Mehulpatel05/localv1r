@@ -30,6 +30,7 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
   int _viewsThisWeek = 0;
   int _chatsCount = 0;
   int _ordersCount = 0;
+  Map<String, dynamic>? _deletionRequest;
 
   @override
   void initState() {
@@ -59,8 +60,23 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
     try {
       final fetched = await BazarRepository.instance.fetchMyShop();
       final products = await BazarRepository.instance.fetchMyShopProducts();
+      final deletionReq = await BazarRepository.instance.fetchShopDeletionRequest();
       if (mounted) {
+        if (deletionReq != null && deletionReq['status'] == 'approved') {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Your shop has been deleted.'),
+              backgroundColor: AppColors.textPrimary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+          return;
+        }
+
         setState(() {
+          _deletionRequest = deletionReq;
           if (fetched != null) {
             _shop = fetched;
             _isOpen = fetched.isOpen;
@@ -141,6 +157,184 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
               _toggleShopOpen(false);
             },
             child: const Text('Deactivate', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _cancelDeletionRequest() async {
+    final success = await BazarRepository.instance.cancelShopDeletionRequest();
+    if (mounted) {
+      if (success) {
+        setState(() {
+          _deletionRequest = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Shop deletion request withdrawn.'),
+            backgroundColor: AppColors.textPrimary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to withdraw request. Please try again.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showDeleteShopDialog() {
+    if (_deletionRequest != null && _deletionRequest!['status'] == 'pending') {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: AppColors.divider),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.hourglass_top_rounded, color: Color(0xFFF97316), size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Request Pending',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'You have already submitted a deletion request for "${_shop.name}". It is currently pending admin review.\n\nWould you like to withdraw this request?',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Close', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _cancelDeletionRequest();
+              },
+              child: const Text('Withdraw Request', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppColors.divider),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Delete Shop?',
+                style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to request deletion of "${_shop.name}"? If admin approves, your shop and products will be permanently removed.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Reason for deletion (optional)',
+                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                filled: true,
+                fillColor: AppColors.chipBg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.divider),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.divider),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.error),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final reason = reasonController.text.trim();
+              final success = await BazarRepository.instance.requestShopDeletion(reason: reason);
+              if (mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Deletion request sent to admin for review.'),
+                      backgroundColor: AppColors.textPrimary,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                  _loadShopData();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Failed to submit deletion request. Please try again.'),
+                      backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Yes, Delete', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -435,6 +629,125 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                       ),
                     ),
 
+                    if (_deletionRequest != null && _deletionRequest!['status'] == 'pending') ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFED7AA)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF97316),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Deletion Requested',
+                                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: _cancelDeletionRequest,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Withdraw',
+                                    style: TextStyle(color: Color(0xFFC2410C), fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Your shop deletion request is pending admin review. You can withdraw this request at any time before it is approved.',
+                              style: TextStyle(color: Color(0xFF7C2D12), fontSize: 13, height: 1.4),
+                            ),
+                            if ((_deletionRequest!['reason'] as String?)?.isNotEmpty ?? false) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Reason: ${_deletionRequest!['reason']}',
+                                style: const TextStyle(color: Color(0xFF9A3412), fontSize: 12, fontStyle: FontStyle.italic),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ] else if (_deletionRequest != null && _deletionRequest!['status'] == 'rejected') ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.cancel_outlined, color: Colors.white, size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Deletion Request Declined',
+                                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18, color: Color(0xFF991B1B)),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () {
+                                    setState(() {
+                                      _deletionRequest = null;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              (_deletionRequest!['admin_notes'] as String?)?.isNotEmpty ?? false
+                                  ? 'Admin note: ${_deletionRequest!['admin_notes']}'
+                                  : 'Your deletion request was reviewed and declined by admin.',
+                              style: const TextStyle(color: Color(0xFF991B1B), fontSize: 13, height: 1.4),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 22),
 
                     Row(
@@ -582,6 +895,19 @@ class _MyShopDashboardScreenState extends State<MyShopDashboardScreen> {
                       titleColor: AppColors.error,
                       subtitle: 'Hide your shop temporarily',
                       onTap: _showDeactivateDialog,
+                    ),
+
+                    _buildManageItem(
+                      emoji: '🗑️',
+                      title: 'Request shop deletion',
+                      titleColor: AppColors.error,
+                      subtitle: _deletionRequest != null && _deletionRequest!['status'] == 'pending'
+                          ? 'Deletion request is pending review'
+                          : 'Permanently remove your shop and products',
+                      badgeText: _deletionRequest != null && _deletionRequest!['status'] == 'pending'
+                          ? 'PENDING'
+                          : null,
+                      onTap: _showDeleteShopDialog,
                     ),
 
                     const SizedBox(height: 30),

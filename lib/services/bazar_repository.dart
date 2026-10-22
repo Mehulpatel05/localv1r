@@ -920,6 +920,75 @@ class BazarRepository extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> fetchShopDeletionRequest() async {
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token == null || token.isEmpty) return null;
+      final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/my-shop/deletion-request');
+      final res = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true && body['request'] != null) {
+          return Map<String, dynamic>.from(body['request']);
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[BazarRepository] error fetching deletion request: $e');
+      return null;
+    }
+  }
+
+  Future<bool> requestShopDeletion({String reason = ''}) async {
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token == null || token.isEmpty) return false;
+      final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/my-shop/deletion-request');
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'reason': reason}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final body = jsonDecode(res.body);
+        return body['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[BazarRepository] error requesting shop deletion: $e');
+      return false;
+    }
+  }
+
+  Future<bool> cancelShopDeletionRequest() async {
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token == null || token.isEmpty) return false;
+      final uri = Uri.parse('${ApiConstants.baseUrl}/bazar/my-shop/deletion-request');
+      final res = await http.delete(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        return body['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[BazarRepository] error cancelling shop deletion request: $e');
+      return false;
+    }
+  }
+
   Future<void> _persistShops() async {
     try {
       final prefs = await SharedPreferences.getInstance();

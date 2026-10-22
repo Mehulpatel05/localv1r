@@ -46,8 +46,11 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   }
 
   final TextEditingController _addressController = TextEditingController();
-  String _selectedVisibilityKm = '2 km';
-  final List<String> _visibilityKmOptions = ['1 km', '2 km', '5 km', '10 km', '30 km'];
+  final FocusNode _addressFocusNode = FocusNode();
+  List<Map<String, dynamic>> _livePredictions = [];
+  bool _isSearchingPlaces = false;
+  String _autocompleteSessionToken = '';
+  Timer? _addressDebounceTimer;
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _whatsAppController = TextEditingController();
   bool _sameNumberOnWhatsApp = true;
@@ -64,7 +67,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   ];
   String _openingTime = '9:00 AM';
   String _closingTime = '9:00 PM';
-  bool _homeDeliveryEnabled = true;
+  bool _homeDeliveryEnabled = false;
   final Set<String> _selectedPaymentMethods = {'Cash', 'UPI'};
 
   String? _shopBoardPhotoPath;
@@ -172,8 +175,76 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
     }
   }
 
+  void _onAddressChanged(String query) {
+    _addressDebounceTimer?.cancel();
+    final trimmed = query.trim();
+
+    if (trimmed.isEmpty) {
+      setState(() {
+        _livePredictions.clear();
+        _isSearchingPlaces = false;
+        _autocompleteSessionToken = '';
+      });
+      return;
+    }
+
+    if (_autocompleteSessionToken.isEmpty) {
+      _autocompleteSessionToken = DateTime.now().millisecondsSinceEpoch.toString();
+    }
+
+    setState(() {
+      _isSearchingPlaces = true;
+    });
+
+    _addressDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final predictions = await AuthService.instance.searchPlacesAutocomplete(
+          trimmed,
+          sessionToken: _autocompleteSessionToken,
+        );
+        if (!mounted || _addressController.text.trim() != trimmed) return;
+        setState(() {
+          _livePredictions = predictions;
+          _isSearchingPlaces = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isSearchingPlaces = false;
+        });
+      }
+    });
+  }
+
+  void _onSelectPrediction(Map<String, dynamic> prediction) {
+    final mainText = (prediction['mainText'] ??
+            prediction['main_text'] ??
+            prediction['description'] ??
+            prediction['name'] ??
+            '')
+        .toString()
+        .trim();
+    final secondaryText = (prediction['secondaryText'] ??
+            prediction['secondary_text'] ??
+            '')
+        .toString()
+        .trim();
+
+    final fullAddress = secondaryText.isNotEmpty ? '$mainText, $secondaryText' : mainText;
+
+    _addressFocusNode.unfocus();
+    setState(() {
+      _addressController.text = fullAddress;
+      _livePredictions.clear();
+      _isSearchingPlaces = false;
+      _autocompleteSessionToken = '';
+    });
+  }
+
   @override
   void dispose() {
+    _addressDebounceTimer?.cancel();
+    _addressFocusNode.dispose();
     _shopNameController.dispose();
     _shortDescController.dispose();
     _addressController.dispose();
@@ -305,7 +376,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       category: _selectedCategory ?? 'General Store',
       categoryIcon: _resolveCategoryIcon(_selectedCategory),
       location: _addressController.text.trim(),
-      distanceKm: double.tryParse(_selectedVisibilityKm.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1.0,
+      distanceKm: 2.0,
       isVerified: true,
       imageUrl: finalLogoUrl,
       bannerUrl: finalLogoUrl,
@@ -799,16 +870,121 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     border: Border.all(color: AppColors.divider),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: TextField(
-                    controller: _addressController,
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: 'Shop 4, Alkapuri Main Road',
-                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-                      border: InputBorder.none,
-                    ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _addressController,
+                          focusNode: _addressFocusNode,
+                          onChanged: _onAddressChanged,
+                          style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                          decoration: InputDecoration(
+                            hintText: 'Search society, area or landmark...',
+                            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      if (_isSearchingPlaces)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          ),
+                        )
+                      else if (_addressController.text.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            _addressController.clear();
+                            setState(() {
+                              _livePredictions.clear();
+                              _isSearchingPlaces = false;
+                            });
+                          },
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: AppColors.textMuted,
+                            size: 18,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+
+                if (_livePredictions.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.divider),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: _livePredictions.length > 5 ? 5 : _livePredictions.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1, color: AppColors.divider),
+                      itemBuilder: (ctx, index) {
+                        final pred = _livePredictions[index];
+                        final mainText = (pred['mainText'] ??
+                                pred['main_text'] ??
+                                pred['description'] ??
+                                pred['name'] ??
+                                '')
+                            .toString();
+                        final secondaryText = (pred['secondaryText'] ??
+                                pred['secondary_text'] ??
+                                '')
+                            .toString();
+
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(
+                            Icons.location_on_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                          title: Text(
+                            mainText,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          subtitle: secondaryText.isNotEmpty
+                              ? Text(
+                                  secondaryText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                )
+                              : null,
+                          onTap: () => _onSelectPrediction(pred),
+                        );
+                      },
+                    ),
+                  ),
 
                 const SizedBox(height: 12),
 
@@ -837,41 +1013,6 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   onPressed: _isLocating ? null : _useCurrentLocation,
-                ),
-
-                const SizedBox(height: 20),
-
-                Text('VISIBLE TO BUYERS WITHIN', style: labelStyle),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _visibilityKmOptions.map((opt) {
-                    final isSelected = _selectedVisibilityKm == opt;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedVisibilityKm = opt;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary : AppColors.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
-                        ),
-                        child: Text(
-                          opt,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textPrimary,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
                 ),
 
                 const SizedBox(height: 20),
