@@ -1278,7 +1278,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
         ),
         floatingActionButton: !_isSelectionMode && !_showArchivedView
-            ? AnimatedScale(
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 100),
+                child: AnimatedScale(
                 scale: _isFabPressed ? 0.90 : 1.0,
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOut,
@@ -1312,7 +1314,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ),
                   ),
                 ),
-              )
+              ),
+            )
             : null,
         body: Column(
           children: [

@@ -278,26 +278,30 @@ class _MainScreenState extends State<MainScreen> {
                             _buildNavItem(
                               index: 0,
                               isSelected: currentIndex == 0,
-                              icon: Icons.home_rounded,
+                              icon: Icons.home_outlined,
+                              selectedIcon: Icons.home,
                               tooltip: 'Home',
                             ),
                             _buildNavItem(
                               index: 1,
                               isSelected: currentIndex == 1,
-                              icon: Icons.storefront_rounded,
+                              icon: Icons.storefront_outlined,
+                              selectedIcon: Icons.storefront,
                               tooltip: 'Bazar',
                             ),
                             _buildNavItem(
                               index: 2,
                               isSelected: currentIndex == 2,
-                              icon: Icons.chat_bubble_rounded,
+                              icon: Icons.chat_bubble_outline_rounded,
+                              selectedIcon: Icons.chat_bubble,
                               tooltip: 'Chat',
                               badgeNotifier: DirectChatService.instance.unreadCountNotifier,
                             ),
                             _buildNavItem(
                               index: 3,
                               isSelected: currentIndex == 3,
-                              icon: Icons.person_rounded,
+                              icon: Icons.person_outline,
+                              selectedIcon: Icons.person_outline_rounded,
                               tooltip: 'Profile',
                             ),
                           ],
@@ -318,9 +322,11 @@ class _MainScreenState extends State<MainScreen> {
     required int index,
     required bool isSelected,
     required IconData icon,
+    IconData? selectedIcon,
     String? tooltip,
     ValueNotifier<int>? badgeNotifier,
   }) {
+    final activeIcon = (isSelected && selectedIcon != null) ? selectedIcon : icon;
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -355,7 +361,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   child: Center(
                     child: Icon(
-                      icon,
+                      activeIcon,
                       size: 21,
                       color: isSelected ? Colors.white : const Color(0xFF5A5258),
                     ),
