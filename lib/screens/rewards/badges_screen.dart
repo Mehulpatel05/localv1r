@@ -47,7 +47,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: const Color(0xFFD5ECDD),
+                color: const Color(0xFFEADBE7),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -89,7 +89,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: badge.earned ? const Color(0xFF0E8A3E) : const Color(0xFF64748B),
+                  color: badge.earned ? const Color(0xFF3A0F34) : const Color(0xFF64748B),
                 ),
               ),
             ),
@@ -111,7 +111,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
                   value: (badge.current / badge.required).clamp(0.0, 1.0),
                   minHeight: 6,
                   backgroundColor: const Color(0xFFE2E8F0),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0E8A3E)),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF3A0F34)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -130,7 +130,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -182,7 +182,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: const EdgeInsets.all(16),
@@ -211,7 +211,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: badge.earned ? const Color(0xFFF59E0B) : const Color(0xFFD5ECDD),
+                                color: badge.earned ? const Color(0xFFF59E0B) : const Color(0xFFEADBE7),
                                 width: badge.earned ? 1.5 : 0.8,
                               ),
                               boxShadow: [
@@ -256,7 +256,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
-                                    color: badge.earned ? const Color(0xFF0E8A3E) : const Color(0xFF5C6B7D),
+                                    color: badge.earned ? const Color(0xFF3A0F34) : const Color(0xFF5C6B7D),
                                   ),
                                 ),
                               ],
@@ -272,11 +272,11 @@ class _BadgesScreenState extends State<BadgesScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8F6EF),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                      border: Border.all(color: const Color(0xFFEADBE7), width: 0.8),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF0E8A3E)),
+                        Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF3A0F34)),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(

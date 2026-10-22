@@ -41,7 +41,7 @@ class NearhoodColors extends ThemeExtension<NearhoodColors> {
     btnink: Colors.white,
     page: AppColors.background,
     danger: AppColors.error,
-    streets: Color(0x1A0B8A3E),
+    streets: Color(0x1A3A0F34),
   );
 
   static const NearhoodColors light = lightWhiteScheme;

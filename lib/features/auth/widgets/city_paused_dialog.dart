@@ -12,10 +12,10 @@ class CityPausedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF2C7880);
-    const lightGreenTint = Color(0xFFE2F0F1);
-    const textPrimary = Color(0xFF111827);
-    const textSecondary = Color(0xFF6B7280);
+    const primaryGreen = Color(0xFF3A0F34);
+    const lightGreenTint = Color(0xFFF7EAF5);
+    const textPrimary = Color(0xFF1F1F1F);
+    const textSecondary = Color(0xFF706771);
 
     final displayMessage = message ??
         'Nearhood services in ${cityName ?? 'aapke shehar'} are currently paused, but your account and profile data are completely safe.';

@@ -44,12 +44,12 @@ class _ConfirmAreaSheetState extends State<ConfirmAreaSheet> {
 
   @override
   Widget build(BuildContext context) {
-    const primaryGreen = Color(0xFF2C7880);
-    const darkGreen = Color(0xFF164348);
-    const lightGreenTint = Color(0xFFE2F0F1);
-    const textPrimary = Color(0xFF111827);
-    const textSecondary = Color(0xFF6B7280);
-    const borderColor = Color(0xFFE5E7EB);
+    const primaryGreen = Color(0xFF3A0F34);
+    const darkGreen = Color(0xFF250921);
+    const lightGreenTint = Color(0xFFF7EAF5);
+    const textPrimary = Color(0xFF1F1F1F);
+    const textSecondary = Color(0xFF706771);
+    const borderColor = Color(0xFFE8E2EA);
 
     return Container(
       decoration: const BoxDecoration(

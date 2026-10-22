@@ -87,7 +87,7 @@ class _PointsHistoryScreenState extends State<PointsHistoryScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
                 : _history.isEmpty
                     ? _buildEmptyState()
                     : ListView.separated(
@@ -102,7 +102,7 @@ class _PointsHistoryScreenState extends State<PointsHistoryScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                              border: Border.all(color: const Color(0xFFEADBE7), width: 0.8),
                             ),
                             child: Row(
                               children: [
@@ -116,7 +116,7 @@ class _PointsHistoryScreenState extends State<PointsHistoryScreen> {
                                   child: Icon(
                                     isPositive ? Icons.add_circle_outline_rounded : Icons.remove_circle_outline_rounded,
                                     size: 22,
-                                    color: isPositive ? const Color(0xFF0E8A3E) : const Color(0xFFD97706),
+                                    color: isPositive ? const Color(0xFF3A0F34) : const Color(0xFFD97706),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -148,7 +148,7 @@ class _PointsHistoryScreenState extends State<PointsHistoryScreen> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
-                                    color: isPositive ? const Color(0xFF0E8A3E) : const Color(0xFFD97706),
+                                    color: isPositive ? const Color(0xFF3A0F34) : const Color(0xFFD97706),
                                   ),
                                 ),
                               ],
@@ -169,7 +169,7 @@ class _PointsHistoryScreenState extends State<PointsHistoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFFF1F5F9),
+          color: isSelected ? const Color(0xFF3A0F34) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

@@ -271,12 +271,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(26),
                           border: Border.all(
-                            color: const Color(0xFFE5ECEB),
+                            color: AppColors.divider,
                             width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF2C7880).withValues(alpha: 0.12),
+                              color: AppColors.primary.withValues(alpha: 0.12),
                               blurRadius: 16,
                               offset: const Offset(0, 5),
                             ),
@@ -325,13 +325,13 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                             colors: [
-                                              Color(0xFF338890),
-                                              Color(0xFF23656C),
+                                              Color(0xFF55194D),
+                                              Color(0xFF3A0F34),
                                             ],
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: const Color(0xFF2C7880).withValues(alpha: 0.35),
+                                              color: AppColors.primary.withValues(alpha: 0.35),
                                               blurRadius: 10,
                                               offset: const Offset(0, 3),
                                             ),
@@ -392,7 +392,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }) {
     final dist = (currentPos - index).abs();
     final activeT = (1.0 - dist / 0.45).clamp(0.0, 1.0);
-    final iconColor = Color.lerp(const Color(0xFF2C7880), Colors.white, activeT)!;
+    final iconColor = Color.lerp(AppColors.primary, Colors.white, activeT)!;
     const circleSize = 40.0;
 
     return Expanded(

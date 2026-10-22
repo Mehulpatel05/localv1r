@@ -59,7 +59,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Row(
               children: [
-                Icon(Icons.location_city_rounded, color: Color(0xFF0E8A3E), size: 24),
+                Icon(Icons.location_city_rounded, color: Color(0xFF3A0F34), size: 24),
                 SizedBox(width: 8),
                 Text(
                   'Add City & Areas',
@@ -90,10 +90,10 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                       return ChoiceChip(
                         label: Text(s['name']!),
                         selected: isSelected,
-                        selectedColor: const Color(0xFFE8F5E9),
+                        selectedColor: const Color(0xFFF7EAF5),
                         labelStyle: TextStyle(
                           fontSize: 12,
-                          color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFF334155),
+                          color: isSelected ? const Color(0xFF3A0F34) : const Color(0xFF334155),
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                         onSelected: (selected) {
@@ -116,7 +116,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0E8A3E), width: 1.5)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF3A0F34), width: 1.5)),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -129,7 +129,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0E8A3E), width: 1.5)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF3A0F34), width: 1.5)),
                     ),
                     controller: TextEditingController(text: selectedState)..selection = TextSelection.collapsed(offset: selectedState.length),
                     onChanged: (val) => selectedState = val.toUpperCase().trim(),
@@ -144,7 +144,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
@@ -163,7 +163,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text(res['message'] ?? (res['success'] == true ? 'City added!' : 'Failed')),
-                            backgroundColor: res['success'] == true ? const Color(0xFF0E8A3E) : Colors.red,
+                            backgroundColor: res['success'] == true ? const Color(0xFF3A0F34) : Colors.red,
                           ),
                         );
                         if (res['success'] == true) {
@@ -203,23 +203,23 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF0E8A3E)),
+            icon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF3A0F34)),
             tooltip: 'Add City',
             onPressed: _showAddCityDialog,
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0E8A3E)),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF3A0F34)),
             onPressed: _loadCities,
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : _cities.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _loadCities,
-                  color: const Color(0xFF0E8A3E),
+                  color: const Color(0xFF3A0F34),
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _cities.length,
@@ -297,7 +297,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                                           style: const TextStyle(
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF0E8A3E),
+                                            color: Color(0xFF3A0F34),
                                           ),
                                         ),
                                         const Text(' · ', style: TextStyle(color: Color(0xFF94A3B8))),
@@ -306,7 +306,7 @@ class _FoundingAdminScreenState extends State<FoundingAdminScreen> {
                                           style: TextStyle(
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w600,
-                                            color: (100 - city.approvedCount) > 0 ? const Color(0xFF0E8A3E) : const Color(0xFFE11D48),
+                                            color: (100 - city.approvedCount) > 0 ? const Color(0xFF3A0F34) : const Color(0xFFE11D48),
                                           ),
                                         ),
                                       ],
@@ -433,18 +433,18 @@ class _AdminFoundingAreasScreenState extends State<AdminFoundingAreasScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0E8A3E)),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF3A0F34)),
             onPressed: _loadAreas,
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : _areas.isEmpty
               ? const Center(child: Text('No areas found for this city.'))
               : RefreshIndicator(
                   onRefresh: _loadAreas,
-                  color: const Color(0xFF0E8A3E),
+                  color: const Color(0xFF3A0F34),
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _areas.length,
@@ -607,7 +607,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
               child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0E8A3E), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3A0F34), foregroundColor: Colors.white),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Approve anyway'),
             ),
@@ -622,7 +622,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? 'Approved'),
-          backgroundColor: res['success'] == true ? const Color(0xFF0E8A3E) : AppColors.error,
+          backgroundColor: res['success'] == true ? const Color(0xFF3A0F34) : AppColors.error,
         ),
       );
       _loadData();
@@ -715,7 +715,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(res['message'] ?? 'Badge removed'),
-            backgroundColor: res['success'] == true ? const Color(0xFF0E8A3E) : AppColors.error,
+            backgroundColor: res['success'] == true ? const Color(0xFF3A0F34) : AppColors.error,
           ),
         );
         _loadData();
@@ -749,7 +749,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: _spotsLeft > 0 ? const Color(0xFF0E8A3E) : const Color(0xFFE11D48),
+                color: _spotsLeft > 0 ? const Color(0xFF3A0F34) : const Color(0xFFE11D48),
               ),
             ),
           ],
@@ -757,9 +757,9 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF0E8A3E),
+          labelColor: const Color(0xFF3A0F34),
           unselectedLabelColor: const Color(0xFF64748B),
-          indicatorColor: const Color(0xFF0E8A3E),
+          indicatorColor: const Color(0xFF3A0F34),
           tabs: [
             Tab(text: 'Pending (${_pendingRequests.length})'),
             Tab(text: 'Approved (${_founders.length})'),
@@ -768,7 +768,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : TabBarView(
               controller: _tabController,
               children: [
@@ -806,7 +806,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: const Color(0xFF0E8A3E),
+      color: const Color(0xFF3A0F34),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -839,7 +839,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0E8A3E),
+                      backgroundColor: const Color(0xFF3A0F34),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1020,7 +1020,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isSpotsFull ? const Color(0xFF94A3B8) : const Color(0xFF0E8A3E),
+                    backgroundColor: isSpotsFull ? const Color(0xFF94A3B8) : const Color(0xFF3A0F34),
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1059,7 +1059,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: const Color(0xFF0E8A3E),
+      color: const Color(0xFF3A0F34),
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _founders.length,
@@ -1174,7 +1174,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: const Color(0xFF0E8A3E),
+      color: const Color(0xFF3A0F34),
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _rejectedRequests.length,
@@ -1293,7 +1293,7 @@ class _AdminFoundingRequestsScreenState extends State<AdminFoundingRequestsScree
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isSpotsFull ? const Color(0xFF94A3B8) : const Color(0xFF0E8A3E),
+                      backgroundColor: isSpotsFull ? const Color(0xFF94A3B8) : const Color(0xFF3A0F34),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

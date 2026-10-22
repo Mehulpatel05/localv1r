@@ -13,9 +13,9 @@ class ProfileHeaderBackgroundPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Color(0xFF1B4E53),
-          Color(0xFF2C7880),
-          Color(0xFF226369),
+          Color(0xFF250921),
+          Color(0xFF3A0F34),
+          Color(0xFF4C1544),
         ],
       ).createShader(Rect.fromLTWH(0, 0, w, h))
       ..style = PaintingStyle.fill;
@@ -23,11 +23,11 @@ class ProfileHeaderBackgroundPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bgPaint);
 
     final darkCurvePaint = Paint()
-      ..color = const Color(0xFF13383D).withValues(alpha: 0.45)
+      ..color = const Color(0xFF1E071B).withValues(alpha: 0.45)
       ..style = PaintingStyle.fill;
 
     final lightCurvePaint = Paint()
-      ..color = const Color(0xFF38929B).withValues(alpha: 0.22)
+      ..color = const Color(0xFF6B2562).withValues(alpha: 0.22)
       ..style = PaintingStyle.fill;
 
     final path1 = Path()
@@ -45,7 +45,7 @@ class ProfileHeaderBackgroundPainter extends CustomPainter {
     canvas.drawPath(path2, lightCurvePaint);
 
     final circlePaint = Paint()
-      ..color = const Color(0xFF38929B).withValues(alpha: 0.15)
+      ..color = const Color(0xFF6B2562).withValues(alpha: 0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
     canvas.drawCircle(Offset(w * 0.85, h * 0.3), 85, circlePaint);

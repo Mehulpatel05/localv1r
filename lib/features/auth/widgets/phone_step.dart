@@ -92,16 +92,16 @@ class _PhoneStepState extends State<PhoneStep> {
     if (_isInvalidTenDigits) {
       borderColor = AppColors.error;
     } else if (_isFocused) {
-      borderColor = const Color(0xFF2C7880);
+      borderColor = const Color(0xFF3A0F34);
     } else {
-      borderColor = const Color(0xFFE2E8F0);
+      borderColor = const Color(0xFFE8E2EA);
     }
 
     final List<BoxShadow> boxShadows = [];
     if (_isFocused && !_isInvalidTenDigits) {
       boxShadows.add(
         BoxShadow(
-          color: const Color(0xFF2C7880).withValues(alpha: 0.12),
+          color: const Color(0xFF3A0F34).withValues(alpha: 0.12),
           spreadRadius: 4,
           blurRadius: 0,
         ),
@@ -262,7 +262,7 @@ class _PhoneStepState extends State<PhoneStep> {
                         width: 22,
                         height: 22,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF2C7880),
+                          color: Color(0xFF3A0F34),
                           shape: BoxShape.circle,
                         ),
                         alignment: Alignment.center,
@@ -314,8 +314,8 @@ class _PhoneStepState extends State<PhoneStep> {
                   child: ElevatedButton(
                     onPressed: isButtonEnabled ? _submitPhone : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2C7880),
-                      disabledBackgroundColor: const Color(0xFFE2E8F0),
+                      backgroundColor: const Color(0xFF3A0F34),
+                      disabledBackgroundColor: const Color(0xFFE8E2EA),
                       elevation: 0,
                       shadowColor: Colors.transparent,
                       shape: RoundedRectangleBorder(
@@ -356,7 +356,7 @@ class _PhoneStepState extends State<PhoneStep> {
               Icon(
                 Icons.verified_user_outlined,
                 size: 15,
-                color: Color(0xFF2C7880),
+                color: Color(0xFF3A0F34),
               ),
               SizedBox(width: 6),
               Text(
@@ -364,7 +364,7 @@ class _PhoneStepState extends State<PhoneStep> {
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF2C7880),
+                  color: Color(0xFF3A0F34),
                 ),
               ),
             ],
@@ -384,7 +384,7 @@ class _PhoneStepState extends State<PhoneStep> {
                     text: 'Terms of Service',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF2C7880),
+                      color: Color(0xFF3A0F34),
                       decoration: TextDecoration.underline,
                     ),
                     recognizer: TapGestureRecognizer()
@@ -397,7 +397,7 @@ class _PhoneStepState extends State<PhoneStep> {
                     text: 'Privacy Policy',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF2C7880),
+                      color: Color(0xFF3A0F34),
                       decoration: TextDecoration.underline,
                     ),
                     recognizer: TapGestureRecognizer()

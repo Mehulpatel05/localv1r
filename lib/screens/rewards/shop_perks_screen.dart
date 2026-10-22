@@ -112,7 +112,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     if (cat.contains('badge') || cat.contains('trust') || cat.contains('verif')) {
       return const Color(0xFFEA580C);
     }
-    return const Color(0xFF0E8A3E);
+    return const Color(0xFF3A0F34);
   }
 
   Future<void> _unlockCoupon(ShopPerkItem perk) async {
@@ -210,7 +210,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                       const SizedBox(height: 2),
                       Text(
                         '${_balance - perk.costPoints} coins',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0E8A3E)),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF3A0F34)),
                       ),
                     ],
                   ),
@@ -239,7 +239,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0E8A3E),
+                        backgroundColor: const Color(0xFF3A0F34),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -271,7 +271,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Perk unlocked: ${res.code}! Saved to your wallet.'),
-          backgroundColor: const Color(0xFF0E8A3E),
+          backgroundColor: const Color(0xFF3A0F34),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -283,7 +283,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Perk voucher code copied to clipboard!'),
-        backgroundColor: Color(0xFF0E8A3E),
+        backgroundColor: Color(0xFF3A0F34),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -409,7 +409,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
             const SizedBox(height: 18),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0E8A3E),
+                backgroundColor: const Color(0xFF3A0F34),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -459,14 +459,14 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF0E8A3E), Color(0xFF15803D)],
+                        colors: [Color(0xFF3A0F34), Color(0xFF4C1544)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF0E8A3E).withValues(alpha: 0.22),
+                          color: const Color(0xFF3A0F34).withValues(alpha: 0.22),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -550,10 +550,10 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF0E8A3E) : Colors.white,
+                              color: isSelected ? const Color(0xFF3A0F34) : Colors.white,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFFE2E8F0),
+                                color: isSelected ? const Color(0xFF3A0F34) : const Color(0xFFE2E8F0),
                                 width: 1.0,
                               ),
                             ),
@@ -592,7 +592,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF0E8A3E),
+                            color: Color(0xFF3A0F34),
                           ),
                         ),
                       ],
@@ -642,7 +642,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: 1.2,
-                                        color: Color(0xFF0E8A3E),
+                                        color: Color(0xFF3A0F34),
                                       ),
                                     ),
                                   ],
@@ -650,7 +650,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                               ),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0E8A3E),
+                                  backgroundColor: const Color(0xFF3A0F34),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -783,7 +783,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                               const SizedBox(width: 8),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: canAfford ? const Color(0xFF0E8A3E) : const Color(0xFFF1F5F9),
+                                  backgroundColor: canAfford ? const Color(0xFF3A0F34) : const Color(0xFFF1F5F9),
                                   foregroundColor: canAfford ? Colors.white : const Color(0xFF64748B),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -827,7 +827,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.storefront_rounded, size: 28, color: Color(0xFF0E8A3E)),
+                        Icon(Icons.storefront_rounded, size: 28, color: Color(0xFF3A0F34)),
                         SizedBox(width: 12),
                         Expanded(
                           child: Column(

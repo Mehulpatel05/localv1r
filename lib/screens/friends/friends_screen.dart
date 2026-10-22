@@ -595,7 +595,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           width: 9,
                           height: 9,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0E8A3E),
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: AppColors.surface,
@@ -809,7 +809,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0E8A3E),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -833,7 +833,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       Text(
                         'View all',
                         style: TextStyle(
-                          color: Color(0xFF0E8A3E),
+                          color: AppColors.primary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -841,7 +841,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       SizedBox(width: 2),
                       Icon(
                         Icons.chevron_right_rounded,
-                        color: Color(0xFF0E8A3E),
+                        color: AppColors.primary,
                         size: 16,
                       ),
                     ],
@@ -875,10 +875,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FAF4),
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF0E8A3E).withValues(alpha: 0.20),
+          color: AppColors.divider,
           width: 1,
         ),
       ),
@@ -952,7 +952,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               height: 24,
               child: CircularProgressIndicator(
                 strokeWidth: 2.2,
-                color: Color(0xFF0E8A3E),
+                color: AppColors.primary,
               ),
             )
           else
@@ -961,7 +961,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               children: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0E8A3E),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

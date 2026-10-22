@@ -86,7 +86,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: const Color(0xFFD5ECDD),
+                color: const Color(0xFFEADBE7),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -118,7 +118,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                     height: 48,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFD5ECDD), width: 1.2),
+                        side: const BorderSide(color: Color(0xFFEADBE7), width: 1.2),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => Navigator.pop(ctx, false),
@@ -132,7 +132,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0E8A3E),
+                        backgroundColor: const Color(0xFF3A0F34),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -160,7 +160,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Listing boosted! Featured tag active for 24 hours. ✨'),
-          backgroundColor: Color(0xFF0E8A3E),
+          backgroundColor: Color(0xFF3A0F34),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -201,7 +201,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -292,7 +292,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                        border: Border.all(color: const Color(0xFFEADBE7), width: 0.8),
                       ),
                       child: const Center(
                         child: Text(
@@ -319,7 +319,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                               color: isSelected ? const Color(0xFFE8F6EF) : Colors.white,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFFD5ECDD),
+                                color: isSelected ? const Color(0xFF3A0F34) : const Color(0xFFEADBE7),
                                 width: isSelected ? 1.5 : 0.8,
                               ),
                             ),
@@ -361,7 +361,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                                         style: const TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w700,
-                                          color: Color(0xFF0E8A3E),
+                                          color: Color(0xFF3A0F34),
                                         ),
                                       ),
                                     ],
@@ -369,7 +369,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                                 ),
                                 Icon(
                                   isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                  color: isSelected ? const Color(0xFF0E8A3E) : const Color(0xFFCBD5E1),
+                                  color: isSelected ? const Color(0xFF3A0F34) : const Color(0xFFCBD5E1),
                                 ),
                               ],
                             ),
@@ -384,7 +384,7 @@ class _BoostListingScreenState extends State<BoostListingScreen> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: hasEnoughPoints ? const Color(0xFF0E8A3E) : const Color(0xFFCBD5E1),
+                        backgroundColor: hasEnoughPoints ? const Color(0xFF3A0F34) : const Color(0xFFCBD5E1),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

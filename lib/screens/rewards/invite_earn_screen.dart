@@ -44,7 +44,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Referral code copied to clipboard!'),
-        backgroundColor: Color(0xFF0E8A3E),
+        backgroundColor: Color(0xFF3A0F34),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -82,7 +82,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: const EdgeInsets.all(16),
@@ -93,7 +93,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF074E28), Color(0xFF0E8A3E)],
+                        colors: [Color(0xFF250921), Color(0xFF3A0F34)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -140,7 +140,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                      border: Border.all(color: const Color(0xFFEADBE7), width: 0.8),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +159,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF7FBF9),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFD5ECDD), width: 1),
+                            border: Border.all(color: const Color(0xFFEADBE7), width: 1),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -170,12 +170,12 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.5,
-                                  color: Color(0xFF0E8A3E),
+                                  color: Color(0xFF3A0F34),
                                 ),
                               ),
                               TextButton.icon(
                                 style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF0E8A3E),
+                                  foregroundColor: const Color(0xFF3A0F34),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 ),
                                 icon: const Icon(Icons.copy_rounded, size: 16),
@@ -191,7 +191,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                           height: 48,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0E8A3E),
+                              backgroundColor: const Color(0xFF3A0F34),
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -237,7 +237,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFD5ECDD), width: 0.5),
+                        border: Border.all(color: const Color(0xFFEADBE7), width: 0.5),
                       ),
                       child: const Center(
                         child: Text(
@@ -261,7 +261,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFD5ECDD), width: 0.8),
+                            border: Border.all(color: const Color(0xFFEADBE7), width: 0.8),
                           ),
                           child: Row(
                             children: [
@@ -275,7 +275,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                                 child: Icon(
                                   isRewarded ? Icons.check_circle_rounded : Icons.schedule_rounded,
                                   size: 18,
-                                  color: isRewarded ? const Color(0xFF0E8A3E) : const Color(0xFF64748B),
+                                  color: isRewarded ? const Color(0xFF3A0F34) : const Color(0xFF64748B),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -296,7 +296,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                                       isRewarded ? 'Posted · reward earned' : 'Waiting for first post',
                                       style: TextStyle(
                                         fontSize: 11.5,
-                                        color: isRewarded ? const Color(0xFF0E8A3E) : const Color(0xFF5C6B7D),
+                                        color: isRewarded ? const Color(0xFF3A0F34) : const Color(0xFF5C6B7D),
                                       ),
                                     ),
                                   ],

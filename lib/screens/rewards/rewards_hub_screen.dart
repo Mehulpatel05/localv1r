@@ -166,7 +166,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -246,7 +246,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -288,7 +288,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline_rounded, size: 22, color: Color(0xFF0E8A3E)),
+            icon: const Icon(Icons.help_outline_rounded, size: 22, color: Color(0xFF3A0F34)),
             tooltip: 'Rewards Policy',
             onPressed: _showRewardsRulesModal,
           ),
@@ -301,7 +301,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF0E8A3E)),
+        child: CircularProgressIndicator(color: Color(0xFF3A0F34)),
       );
     }
 
@@ -322,7 +322,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -341,7 +341,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: const Color(0xFF0E8A3E),
+      color: const Color(0xFF3A0F34),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -352,14 +352,14 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF074E28), Color(0xFF0E8A3E)],
+                  colors: [Color(0xFF250921), Color(0xFF3A0F34)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0E8A3E).withValues(alpha: 0.25),
+                    color: const Color(0xFF3A0F34).withValues(alpha: 0.25),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -516,7 +516,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                 ),
                 _buildQuickCard(
                   icon: Icons.leaderboard_rounded,
-                  iconColor: const Color(0xFF0E8A3E),
+                  iconColor: const Color(0xFF3A0F34),
                   iconBg: const Color(0xFFE8F6EF),
                   title: 'Top Neighbours',
                   subtitle: 'Weekly ranks',
@@ -583,7 +583,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                             size: 20,
                             color: summary.isCapReached
                                 ? const Color(0xFFF59E0B)
-                                : const Color(0xFF0E8A3E),
+                                : const Color(0xFF3A0F34),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -611,7 +611,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                             fontWeight: FontWeight.bold,
                             color: summary.isCapReached
                                 ? const Color(0xFFB45309)
-                                : const Color(0xFF0E8A3E),
+                                : const Color(0xFF3A0F34),
                           ),
                         ),
                       ),
@@ -627,7 +627,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                       valueColor: AlwaysStoppedAnimation<Color>(
                         summary.isCapReached
                             ? const Color(0xFFF59E0B)
-                            : const Color(0xFF0E8A3E),
+                            : const Color(0xFF3A0F34),
                       ),
                     ),
                   ),
@@ -1162,7 +1162,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: summary.isStreakClaimedToday
-                        ? const Color(0xFF0E8A3E)
+                        ? const Color(0xFF3A0F34)
                         : const Color(0xFFB45309),
                   ),
                 ),
@@ -1193,7 +1193,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                       color: isClaimed
                           ? const Color(0xFFF59E0B)
                           : isNextToClaim
-                              ? const Color(0xFF0E8A3E)
+                              ? const Color(0xFF3A0F34)
                               : const Color(0xFFE2E8F0),
                       width: (isClaimed || isNextToClaim) ? 1.5 : 1.0,
                     ),
@@ -1209,7 +1209,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                           color: isClaimed
                               ? const Color(0xFFB45309)
                               : isNextToClaim
-                                  ? const Color(0xFF0E8A3E)
+                                  ? const Color(0xFF3A0F34)
                                   : const Color(0xFF5C6B7D),
                         ),
                       ),
@@ -1224,7 +1224,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                         color: isClaimed
                             ? const Color(0xFFF59E0B)
                             : isNextToClaim
-                                ? const Color(0xFF0E8A3E)
+                                ? const Color(0xFF3A0F34)
                                 : const Color(0xFFB0BEC5),
                       ),
                       const SizedBox(height: 3),
@@ -1236,7 +1236,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                           color: isClaimed
                               ? const Color(0xFFB45309)
                               : isNextToClaim
-                                  ? const Color(0xFF0E8A3E)
+                                  ? const Color(0xFF3A0F34)
                                   : const Color(0xFF64748B),
                         ),
                       ),
@@ -1253,7 +1253,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               height: 44,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0E8A3E),
+                  backgroundColor: const Color(0xFF3A0F34),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -1297,7 +1297,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF0E8A3E)),
+                  const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF3A0F34)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1305,7 +1305,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                       style: const TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF0E8A3E),
+                        color: Color(0xFF3A0F34),
                       ),
                     ),
                   ),
@@ -1336,7 +1336,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Understood', style: TextStyle(color: Color(0xFF0E8A3E), fontWeight: FontWeight.bold)),
+            child: const Text('Understood', style: TextStyle(color: Color(0xFF3A0F34), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1372,7 +1372,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
               child: Icon(
                 icon,
                 size: 20,
-                color: isLimitReached ? const Color(0xFF9CA3AF) : const Color(0xFF0E8A3E),
+                color: isLimitReached ? const Color(0xFF9CA3AF) : const Color(0xFF3A0F34),
               ),
             ),
             const SizedBox(width: 12),
@@ -1468,7 +1468,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0E8A3E),
+                      color: const Color(0xFF3A0F34),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -1496,14 +1496,14 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF0E8A3E), width: 1),
+                    border: Border.all(color: const Color(0xFF3A0F34), width: 1),
                   ),
                   child: const Text(
                     'Full Rules →',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0E8A3E),
+                      color: Color(0xFF3A0F34),
                     ),
                   ),
                 ),
@@ -1548,7 +1548,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
             color: const Color(0xFFE8F6EF),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(icon, size: 13, color: const Color(0xFF0E8A3E)),
+          child: Icon(icon, size: 13, color: const Color(0xFF3A0F34)),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -1614,7 +1614,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                         Container(
                           padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0E8A3E),
+                            color: const Color(0xFF3A0F34),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.stars_rounded, color: Colors.white, size: 20),
@@ -1699,7 +1699,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
                       height: 46,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0E8A3E),
+                          backgroundColor: const Color(0xFF3A0F34),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -1731,7 +1731,7 @@ class _RewardsHubScreenState extends State<RewardsHubScreen> {
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: Color(0xFF0E8A3E),
+          color: Color(0xFF3A0F34),
         ),
       ),
     );

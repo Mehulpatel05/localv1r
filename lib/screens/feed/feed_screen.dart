@@ -308,11 +308,11 @@ class _FeedScreenState extends State<FeedScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2C7880),
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2C7880).withValues(alpha: 0.25),
+                          color: AppColors.primary.withValues(alpha: 0.25),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -378,11 +378,11 @@ class _FeedScreenState extends State<FeedScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2C7880),
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2C7880).withValues(alpha: 0.25),
+                          color: AppColors.primary.withValues(alpha: 0.25),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -1308,10 +1308,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFECFDF5),
+                                        color: AppColors.primarySoft,
                                         borderRadius: BorderRadius.circular(999),
                                         border: Border.all(
-                                          color: const Color(0xFF0E8A3E).withValues(alpha: 0.25),
+                                          color: AppColors.divider,
                                           width: 0.6,
                                         ),
                                       ),
@@ -1321,7 +1321,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                           const Icon(
                                             Icons.location_on_rounded,
                                             size: 10,
-                                            color: Color(0xFF0E8A3E),
+                                            color: AppColors.primary,
                                           ),
                                           const SizedBox(width: 2.5),
                                           ConstrainedBox(
@@ -1331,7 +1331,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
-                                                color: Color(0xFF065F46),
+                                                color: AppColors.primary,
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.w700,
                                               ),

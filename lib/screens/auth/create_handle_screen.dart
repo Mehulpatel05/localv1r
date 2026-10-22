@@ -54,12 +54,12 @@ class CreateHandleScreen extends StatefulWidget {
 }
 
 class _CreateHandleScreenState extends State<CreateHandleScreen> {
-  static const Color _primaryGreen = Color(0xFF0E8A3E);
-  static const Color _lightGreenTint = Color(0xFFE3F4EA);
-  static const Color _screenBg = Color(0xFFF8FAFC);
-  static const Color _textPrimary = Color(0xFF0F172A);
-  static const Color _textSecondary = Color(0xFF64748B);
-  static const Color _borderColor = Color(0xFFE2E8F0);
+  static const Color _primaryGreen = Color(0xFF3A0F34);
+  static const Color _lightGreenTint = Color(0xFFF7EAF5);
+  static const Color _screenBg = Color(0xFFFFFFFF);
+  static const Color _textPrimary = Color(0xFF1F1F1F);
+  static const Color _textSecondary = Color(0xFF706771);
+  static const Color _borderColor = Color(0xFFE8E2EA);
 
   static const Set<String> _reservedUsernames = {
     'admin',
@@ -91,8 +91,8 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
   static const List<Map<String, Color>> _avatarPresets = [
     {
-      'bg': Color(0xFFE3F4EA),
-      'accent': Color(0xFF0E8A3E),
+      'bg': Color(0xFFF7EAF5),
+      'accent': Color(0xFF3A0F34),
     },
     {
       'bg': Color(0xFFE0F2FE),

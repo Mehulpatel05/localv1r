@@ -78,7 +78,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0E8A3E)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3A0F34)))
           : _items.isEmpty
               ? _buildEmptyState()
               : Column(
@@ -99,7 +99,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          border: const Border(top: BorderSide(color: Color(0xFFD5ECDD), width: 1)),
+                          border: const Border(top: BorderSide(color: Color(0xFFEADBE7), width: 1)),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.04),
@@ -191,7 +191,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         color: isCurrentUser ? const Color(0xFFE8F6EF) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isCurrentUser ? const Color(0xFF0E8A3E) : const Color(0xFFD5ECDD),
+          color: isCurrentUser ? const Color(0xFF3A0F34) : const Color(0xFFEADBE7),
           width: isCurrentUser ? 1.5 : 0.8,
         ),
       ),

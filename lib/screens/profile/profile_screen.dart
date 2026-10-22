@@ -1529,18 +1529,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             'assets/images/nearhood_profile_city_header.webp',
                             fit: BoxFit.cover,
                             alignment: Alignment.bottomCenter,
-                            color: const Color(0xFF2C7880),
+                            color: AppColors.primary,
                             colorBlendMode: BlendMode.color,
                             errorBuilder: (context, error, stackTrace) => Image.memory(
                               getProfileHeaderBytes(),
                               fit: BoxFit.cover,
                               alignment: Alignment.bottomCenter,
-                            color: const Color(0xFF2C7880),
+                            color: AppColors.primary,
                             colorBlendMode: BlendMode.color,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Color(0xFF2C7880), Color(0xFF1B4E53)],
+                                    colors: [Color(0xFF3A0F34), Color(0xFF240820)],
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                   ),
@@ -1812,17 +1812,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       return Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFE6F2F3),
+                                          color: AppColors.primarySoft,
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(
-                                            color: const Color(0xFFA1D1D5),
+                                            color: AppColors.divider,
                                             width: 0.8,
                                           ),
                                         ),
                                         child: const Text(
                                           'VERIFIED',
                                           style: TextStyle(
-                                            color: Color(0xFF23656C),
+                                            color: AppColors.primary,
                                             fontSize: 9.5,
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -1869,7 +1869,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         size: 66,
                                         showRing: true,
                                         ringGradient: const LinearGradient(
-                                          colors: [Color(0xFF2C7880), Color(0xFF38929B)],
+                                          colors: [Color(0xFF3A0F34), Color(0xFF6B2562)],
                                         ),
                                         ringWidth: 2.2,
                                         ringGap: 1.2,
