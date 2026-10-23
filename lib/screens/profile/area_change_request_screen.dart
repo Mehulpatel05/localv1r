@@ -612,7 +612,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
         ? const Color(0xFFF7EAF5)
         : (isRejected ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB));
     final Color borderColor = isApproved
-        ? const Color(0xFFE8E2EA)
+        ? AppColors.cardBorder
         : (isRejected ? const Color(0xFFFECACA) : const Color(0xFFFDE68A));
     final Color iconBgColor = isApproved
         ? const Color(0xFFEADBE7)
@@ -1005,7 +1005,7 @@ class _AreaChangeRequestScreenState extends State<AreaChangeRequestScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFF7EAF5),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE8E2EA), width: 1.2),
+              border: Border.all(color: AppColors.cardBorder, width: 1.2),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

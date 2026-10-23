@@ -771,7 +771,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             color: isActive ? AppColors.primarySoft : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isActive ? AppColors.primary.withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
+              color: isActive ? AppColors.primary.withValues(alpha: 0.4) : AppColors.cardBorder,
               width: 1,
             ),
           ),
@@ -816,9 +816,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final lockedCityName = locService.city.name;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -877,7 +877,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  border: Border.all(color: AppColors.cardBorder, width: 1.2),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF0F172A).withValues(alpha: 0.03),
@@ -936,7 +936,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  border: Border.all(color: AppColors.cardBorder, width: 1.2),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF0F172A).withValues(alpha: 0.03),
@@ -1067,7 +1067,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   color: _isEmergency ? AppColors.errorSoft : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: _isEmergency ? AppColors.error : const Color(0xFFE2E8F0),
+                    color: _isEmergency ? AppColors.error : AppColors.cardBorder,
                     width: 1.2,
                   ),
                   boxShadow: [
@@ -1158,7 +1158,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                    border: Border.all(color: AppColors.cardBorder, width: 1.2),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

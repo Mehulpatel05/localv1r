@@ -48,7 +48,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final isInTop10 = _items.any((item) => item.handle.toLowerCase() == cleanHandle);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FBF9),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,

@@ -59,7 +59,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   static const Color _screenBg = Color(0xFFFFFFFF);
   static const Color _textPrimary = Color(0xFF1F1F1F);
   static const Color _textSecondary = Color(0xFF706771);
-  static const Color _borderColor = Color(0xFFE8E2EA);
+  static const Color _borderColor = AppColors.cardBorder;
 
   static const Set<String> _reservedUsernames = {
     'admin',
@@ -1366,7 +1366,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF6FAF7),
+        backgroundColor: Colors.white,
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,

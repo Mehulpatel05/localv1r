@@ -427,7 +427,7 @@ class _ShopPerksScreenState extends State<ShopPerksScreen> {
     final filtered = _filteredPerks;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,

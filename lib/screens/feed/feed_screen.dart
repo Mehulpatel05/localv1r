@@ -1043,7 +1043,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
           border: Border.all(
             color: isUrgent
                 ? AppColors.error.withValues(alpha: 0.35)
-                : const Color(0xFFEADBEE),
+                : AppColors.cardBorder,
             width: 1.0,
           ),
           boxShadow: [
@@ -1303,7 +1303,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                         color: const Color(0xFFFAF7F9),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: const Color(0xFFEADBEE),
+                          color: AppColors.cardBorder,
                           width: 0.8,
                         ),
                       ),
@@ -1527,7 +1527,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             color: const Color(0xFFF8F5F8),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: const Color(0xFFEADBEE),
+                              color: AppColors.cardBorder,
                               width: 0.8,
                             ),
                           ),
@@ -1571,7 +1571,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             color: const Color(0xFFF8F5F8),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: const Color(0xFFEADBEE),
+                              color: AppColors.cardBorder,
                               width: 0.8,
                             ),
                           ),
