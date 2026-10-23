@@ -1002,6 +1002,36 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (post.isPinned) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFFCBD5E1),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.push_pin_rounded, size: 13, color: Color(0xFF475569)),
+                          SizedBox(width: 4),
+                          Text(
+                            'PINNED CITY GUIDE',
+                            style: TextStyle(
+                              color: Color(0xFF475569),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (isUrgent) ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),

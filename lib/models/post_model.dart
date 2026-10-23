@@ -75,6 +75,8 @@ class Post {
   // 🎉 Phase 2 Events Enhancements
   final int eventRsvpCount;
   final bool isUserRsvped;
+  final String? postType;
+  final bool isPinned;
 
   Post({
     required this.id,
@@ -128,6 +130,8 @@ class Post {
     this.jobWorkMode,
     this.eventRsvpCount = 0,
     this.isUserRsvped = false,
+    this.postType,
+    this.isPinned = false,
   });
 
   int get score => upvotes - downvotes;
@@ -212,6 +216,8 @@ class Post {
       'jobWorkMode': jobWorkMode,
       'eventRsvpCount': eventRsvpCount,
       'isUserRsvped': isUserRsvped,
+      'postType': postType,
+      'isPinned': isPinned,
     };
   }
 
@@ -270,6 +276,8 @@ class Post {
       areaName: json['areaName'] as String?,
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
+      postType: (json['postType'] ?? json['post_type']) as String?,
+      isPinned: json['isPinned'] == true || json['is_pinned'] == 1,
     );
   }
 
@@ -358,6 +366,8 @@ class Post {
       jobWorkMode: json['jobWorkMode'] as String?,
       eventRsvpCount: json['eventRsvpCount'] as int? ?? 0,
       isUserRsvped: json['isUserRsvped'] as bool? ?? false,
+      postType: (json['postType'] ?? json['post_type']) as String?,
+      isPinned: json['isPinned'] == true || json['is_pinned'] == 1,
     );
   }
 

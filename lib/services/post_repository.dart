@@ -303,7 +303,11 @@ class PostRepository extends ChangeNotifier {
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      list.sort((a, b) {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
     }
 
     return list;
@@ -394,6 +398,8 @@ class PostRepository extends ChangeNotifier {
       serviceTitle: d['serviceTitle'],
       serviceCategoryText: d['serviceCategoryText'],
       servicePrice: d['servicePrice'],
+      postType: d['postType'] ?? d['post_type'],
+      isPinned: d['isPinned'] == true || d['is_pinned'] == 1,
     );
   }
 
