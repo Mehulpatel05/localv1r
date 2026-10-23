@@ -6,7 +6,7 @@ import '../services/auth_service.dart';
 import '../services/post_repository.dart';
 import '../services/direct_chat_service.dart';
 import '../services/notification_service.dart';
-
+import '../services/call_listener_service.dart';
 import '../services/chat_preferences_service.dart';
 import '../services/friend_repository.dart';
 import '../services/presence_service.dart';
@@ -110,6 +110,7 @@ class SplashController {
     if (cleanHandle.isEmpty || cleanHandle == 'Guest') return;
 
     PresenceService.instance.init(cleanHandle);
+    CallListenerService.instance.startListening(cleanHandle);
 
     unawaited(postRepo.prefetchCityFeed(cityId));
     unawaited(DirectChatService.instance.prefetchUnreadSummary(cleanHandle));

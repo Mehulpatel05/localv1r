@@ -20,6 +20,7 @@ import '../../services/direct_chat_service.dart';
 import '../../services/friend_repository.dart';
 import '../../models/call_model.dart';
 import '../../services/webrtc_call_service.dart';
+import '../../services/call_listener_service.dart';
 import '../../services/token_decision_engine.dart';
 import '../../core/action_state/action_state_provider.dart';
 import '../../core/widgets/media_attachment_picker.dart';
@@ -157,6 +158,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _messageController.addListener(_onTextChanged);
     _markChatAsRead();
     _checkVoiceCheckpoint();
+    CallListenerService.instance.startListening(widget.currentUserHandle);
   }
 
   void _fireMarkChatRead() {
@@ -274,7 +276,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     } catch (_) {}
   }
 
-  Future<void> _startCall(CallType type) async {
+  Future<void> _startCall([CallType type = CallType.audio]) async {
+    const effectiveType = CallType.audio;
     final cleanPartner = widget.partnerHandle.replaceAll('@', '').trim();
     if (cleanPartner.isEmpty) return;
 
@@ -303,7 +306,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
       callerUid: widget.currentUserHandle,
       receiverHandle: cleanPartner,
       receiverUid: cleanPartner,
-      callType: type,
+      callType: effectiveType,
       status: CallStatus.calling,
       createdAt: DateTime.now(),
     );
@@ -327,7 +330,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         await WebRtcCallService.instance.makeCall(
           callerHandle: widget.currentUserHandle,
           receiverHandle: cleanPartner,
-          callType: type,
+          callType: effectiveType,
           existingCallId: callId,
         );
       } catch (e) {
@@ -1530,7 +1533,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           Future.delayed(const Duration(milliseconds: 200), () {
             if (mounted) {
               setState(() => _pulsingCallLogId = null);
-              _startCall(isVideo ? CallType.video : CallType.audio);
+              _startCall(CallType.audio);
             }
           });
         },
@@ -2453,8 +2456,17 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
           ),
         ),
       ),
-      actions: const [
-        SizedBox(width: 8),
+      actions: [
+        IconButton(
+          icon: const Icon(
+            Icons.call_rounded,
+            color: AppColors.textPrimary,
+            size: 21,
+          ),
+          tooltip: 'Voice Call',
+          onPressed: () => _startCall(CallType.audio),
+        ),
+        const SizedBox(width: 4),
       ],
     );
   }

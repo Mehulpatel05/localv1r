@@ -46,10 +46,7 @@ class AuthService {
   }
 
   Future<void> _initDecisionEngine() async {
-    final token = await getAccessToken();
-    if (token != null) {
-      updateDecisionEngineFromToken(token);
-    }
+    await getActiveClaims();
   }
 
   static const String baseUrl = ApiConstants.baseUrl;
@@ -153,7 +150,6 @@ class AuthService {
 
         if (accessToken.isNotEmpty) {
           await _secureStorage.write(key: _kAccessTokenKey, value: accessToken);
-          updateDecisionEngineFromToken(accessToken);
         }
         if (refreshToken.isNotEmpty) {
           await _secureStorage.write(key: _kRefreshTokenKey, value: refreshToken);
@@ -166,6 +162,10 @@ class AuthService {
         }
         if (handle.isNotEmpty) {
           await _secureStorage.write(key: _kHandleKey, value: handle);
+        }
+
+        if (accessToken.isNotEmpty) {
+          updateDecisionEngineFromToken(accessToken, handle, userId);
         }
 
         if (isNewUser) {
@@ -751,18 +751,24 @@ class AuthService {
   }
 
   /// Updates in-memory Decision Engine synchronously from newly minted or refreshed JWT
-  void updateDecisionEngineFromToken(String token) {
+  void updateDecisionEngineFromToken(String token, [String? explicitHandle, String? explicitUid]) {
     final payload = parseJwtPayload(token);
     final TokenClaims claims;
     if (payload != null) {
       claims = TokenClaims.fromJwtMap(payload);
     } else if (token.isNotEmpty) {
+      final effectiveUid = (explicitUid != null && explicitUid.isNotEmpty)
+          ? explicitUid
+          : _decisionEngine.claims.uid;
+      final effectiveHandle = (explicitHandle != null && explicitHandle.isNotEmpty)
+          ? explicitHandle
+          : _decisionEngine.claims.handle;
       claims = TokenClaims(
-        uid: '',
+        uid: effectiveUid,
         role: 'user',
         cityId: 'GJ-VAD',
         verified: true,
-        handle: '',
+        handle: effectiveHandle,
         planTier: 'free',
         banned: false,
         tokenVersion: 1,

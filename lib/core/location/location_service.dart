@@ -475,14 +475,16 @@ class LocationService extends ChangeNotifier {
   Future<bool> _tryIpGeolocation() async {
     try {
       final response = await http
-          .get(Uri.parse('http://ip-api.com/json?fields=lat,lon,status,city'))
+          .get(Uri.parse('https://ipapi.co/json/'))
           .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        if (data['status'] == 'success') {
-          final lat = (data['lat'] as num).toDouble();
-          final lon = (data['lon'] as num).toDouble();
+        final rawLat = data['latitude'] ?? data['lat'];
+        final rawLon = data['longitude'] ?? data['lon'] ?? data['lng'];
+        if (rawLat != null && rawLon != null) {
+          final lat = (rawLat as num).toDouble();
+          final lon = (rawLon as num).toDouble();
 
           if (kDebugMode) {
             debugPrint('[LocationService v2] IP geolocation: lat=$lat, lon=$lon city=${data['city']}');
