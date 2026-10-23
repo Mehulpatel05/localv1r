@@ -948,6 +948,74 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     }
   }
 
+  Widget _buildCategoryChip(PostCategory category) {
+    Color bg;
+    Color fg;
+
+    switch (category) {
+      case PostCategory.alerts:
+      case PostCategory.safetyAlert:
+      case PostCategory.safety:
+        bg = AppColors.errorSoft;
+        fg = AppColors.errorSoftText;
+        break;
+      case PostCategory.events:
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF1D4ED8);
+        break;
+      case PostCategory.question:
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFFB45309);
+        break;
+      case PostCategory.food:
+        bg = const Color(0xFFFFF7ED);
+        fg = const Color(0xFFC2410C);
+        break;
+      case PostCategory.shop:
+        bg = const Color(0xFFF0FDF4);
+        fg = const Color(0xFF15803D);
+        break;
+      case PostCategory.rooms:
+        bg = const Color(0xFFF5F3FF);
+        fg = const Color(0xFF6D28D9);
+        break;
+      case PostCategory.jobs:
+        bg = const Color(0xFFECFEFF);
+        fg = const Color(0xFF0E7490);
+        break;
+      default:
+        bg = AppColors.chipBg;
+        fg = AppColors.primary;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            category.icon,
+            style: const TextStyle(fontSize: 10),
+          ),
+          const SizedBox(width: 3.5),
+          Text(
+            category.label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -964,24 +1032,31 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     final dayStr = post.createdAt.day.toString().padLeft(2, '0');
     final monthStr = const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][post.createdAt.month - 1];
 
-    Color cardBg = AppColors.surface;
-    if (isUrgent) {
-      cardBg = AppColors.errorSoft;
-    }
+    final cardBg = isUrgent ? const Color(0xFFFFF7F7) : AppColors.surface;
 
     return RepaintBoundary(
       child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: cardBg,
-          border: Border(
-            bottom: BorderSide(
-              color: isUrgent
-                  ? AppColors.error.withValues(alpha: 0.35)
-                  : const Color(0xFFF1F5F9),
-              width: 1.0,
-            ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isUrgent
+                ? AppColors.error.withValues(alpha: 0.35)
+                : const Color(0xFFEADBEE),
+            width: 1.0,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: isUrgent
+                  ? AppColors.error.withValues(alpha: 0.08)
+                  : AppColors.primary.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -997,243 +1072,163 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                 ),
               );
             },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (post.isPinned) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: const Color(0xFFCBD5E1),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (post.isPinned)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: AppColors.divider.withValues(alpha: 0.6),
                           width: 0.8,
                         ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.push_pin_rounded, size: 13, color: Color(0xFF475569)),
-                          SizedBox(width: 4),
-                          Text(
-                            'PINNED CITY GUIDE',
-                            style: TextStyle(
-                              color: Color(0xFF475569),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ],
-                  if (isUrgent) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.white),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '🚨 URGENT SAFETY ALERT • NEIGHBORHOOD BROADCAST',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  if (isEvent) ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: const Row(
                       children: [
-                        Container(
-                          width: 54,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.primarySoft),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                dayStr,
-                                style: const TextStyle(
-                                  color: AppColors.primaryText,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.1,
-                                ),
-                              ),
-                              Text(
-                                monthStr,
-                                style: const TextStyle(
-                                  color: AppColors.primaryText,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                post.eventTitle ?? post.content,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${post.eventLocationText ?? "Society garden, Gotri"} · ${post.eventDate ?? "8:00 AM"}',
-                                style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '${post.eventRsvpCount > 0 ? post.eventRsvpCount : 42} going',
-                                  style: const TextStyle(
-                                    color: AppColors.primaryText,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
+                        Icon(Icons.push_pin_rounded, size: 13, color: AppColors.primary),
+                        SizedBox(width: 6),
+                        Text(
+                          'OFFICIAL CITY GUIDE',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
-                  ] else ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                  ),
+
+                if (isUrgent)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: const BoxDecoration(
+                      color: AppColors.error,
+                    ),
+                    child: const Row(
                       children: [
-                        UserAvatar(
-                          handle: post.authorHandle,
-                          size: 40,
-                          fontSize: 14,
-                          onTap: widget.onProfileTap,
-                        ),
-                        const SizedBox(width: 10),
-
+                        Icon(Icons.warning_amber_rounded, size: 16, color: Colors.white),
+                        SizedBox(width: 7),
                         Expanded(
-                          child: Builder(
-                            builder: (context) {
-                              final authorName = getDisplayName(
-                                post.authorHandle,
-                                fallback: post.authorName,
-                              );
-                              final authorBadge = BadgeCacheService.instance.getUserBadge(
-                                post.authorHandle,
-                                fallback: post.authorBadge,
-                              );
-                              final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
-                                post.authorHandle,
-                                fallback: post.isVerified,
-                              );
-                              final fallbackCity = context.read<LocationService>().city.name;
-                              String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
-                                  ? post.areaName!
-                                  : fallbackCity;
-                              if (cleanArea.contains('General / All')) {
-                                cleanArea = cleanArea.replaceAll('General / All', 'General · All');
-                              }
+                          child: Text(
+                            'URGENT SAFETY ALERT • NEIGHBORHOOD BROADCAST',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                              return Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 5,
-                                runSpacing: 3,
-                                children: [
-                                  GestureDetector(
-                                    onTap: widget.onProfileTap,
-                                    child: Text(
-                                      authorName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.textPrimary,
-                                        fontSize: 14.5,
-                                        letterSpacing: -0.2,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty))
-                                    VerifiedBadge(
-                                      isVerified: isAuthorVerified,
-                                      badgeText: authorBadge,
-                                      compact: true,
-                                    ),
-                                  InkWell(
-                                    onTap: () async {
-                                      final lat = post.lat;
-                                      final lng = post.lng;
-                                      Uri uri;
-                                      if (lat != null && lng != null) {
-                                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                                      } else {
-                                        final query = Uri.encodeComponent('$cleanArea, Gujarat, India');
-                                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-                                      }
-                                      try {
-                                        if (await canLaunchUrl(uri)) {
-                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                        }
-                                      } catch (_) {}
-                                    },
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primarySoft,
-                                        borderRadius: BorderRadius.circular(999),
-                                        border: Border.all(
-                                          color: AppColors.divider,
-                                          width: 0.6,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      UserAvatar(
+                        handle: post.authorHandle,
+                        size: 42,
+                        fontSize: 15,
+                        onTap: widget.onProfileTap,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            final authorName = getDisplayName(
+                              post.authorHandle,
+                              fallback: post.authorName,
+                            );
+                            final authorBadge = BadgeCacheService.instance.getUserBadge(
+                              post.authorHandle,
+                              fallback: post.authorBadge,
+                            );
+                            final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
+                              post.authorHandle,
+                              fallback: post.isVerified,
+                            );
+                            final fallbackCity = context.read<LocationService>().city.name;
+                            String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
+                                ? post.areaName!
+                                : fallbackCity;
+                            if (cleanArea.contains('General / All')) {
+                              cleanArea = cleanArea.replaceAll('General / All', 'General · All');
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: widget.onProfileTap,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          authorName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.textPrimary,
+                                            fontSize: 14.5,
+                                            letterSpacing: -0.2,
+                                          ),
                                         ),
                                       ),
+                                      if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
+                                        const SizedBox(width: 4),
+                                        VerifiedBadge(
+                                          isVerified: isAuthorVerified,
+                                          badgeText: authorBadge,
+                                          compact: true,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    InkWell(
+                                      onTap: () async {
+                                        final lat = post.lat;
+                                        final lng = post.lng;
+                                        Uri uri;
+                                        if (lat != null && lng != null) {
+                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                                        } else {
+                                          final query = Uri.encodeComponent('$cleanArea, Gujarat, India');
+                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+                                        }
+                                        try {
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                          }
+                                        } catch (_) {}
+                                      },
+                                      borderRadius: BorderRadius.circular(999),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           const Icon(
                                             Icons.location_on_rounded,
-                                            size: 10,
+                                            size: 11,
                                             color: AppColors.primary,
                                           ),
-                                          const SizedBox(width: 2.5),
+                                          const SizedBox(width: 2),
                                           ConstrainedBox(
                                             constraints: const BoxConstraints(maxWidth: 110),
                                             child: Text(
@@ -1242,7 +1237,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                 color: AppColors.primary,
-                                                fontSize: 10.5,
+                                                fontSize: 11,
                                                 fontWeight: FontWeight.w700,
                                               ),
                                             ),
@@ -1250,72 +1245,198 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                         ],
                                       ),
                                     ),
-                                  ),
-                                  Text(
-                                    '• ${_formatTimeAgo(post.createdAt)}',
-                                    style: const TextStyle(
-                                      color: AppColors.textMuted,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
+                                    const SizedBox(width: 5),
+                                    const Text(
+                                      '·',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _formatTimeAgo(post.createdAt),
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildCategoryChip(post.category),
+                      const SizedBox(width: 2),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        icon: const Icon(
+                          Icons.more_horiz_rounded,
+                          size: 20,
+                          color: AppColors.textMuted,
+                        ),
+                        onPressed: () {
+                          if (post.authorHandle == widget.currentUserHandle) {
+                            widget.onDelete();
+                          } else {
+                            widget.onReport();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
 
-                        if (isUrgent) ...[
+                if (isEvent)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAF7F9),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFEADBEE),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.15),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  dayStr,
+                                  style: const TextStyle(
+                                    color: AppColors.primaryText,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.1,
+                                  ),
+                                ),
+                                Text(
+                                  monthStr,
+                                  style: const TextStyle(
+                                    color: AppColors.primaryText,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  post.eventTitle ?? post.content,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.schedule_rounded,
+                                      size: 12,
+                                      color: AppColors.textMuted,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Flexible(
+                                      child: Text(
+                                        '${post.eventLocationText ?? "Vadodara"} · ${post.eventDate ?? "8:00 AM"}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                             decoration: BoxDecoration(
-                              color: AppColors.error,
-                              borderRadius: BorderRadius.circular(999),
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Text(
-                              'Urgent',
-                              style: TextStyle(
+                            child: Text(
+                              '${post.eventRsvpCount > 0 ? post.eventRsvpCount : 42} going',
+                              style: const TextStyle(
+                                color: AppColors.primaryText,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
                               ),
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
 
-                  const SizedBox(height: 12),
-
-                  Text.rich(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                  child: Text.rich(
                     TextSpan(
                       text: displayContent,
                       style: const TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 15,
+                        fontSize: 14.5,
                         height: 1.45,
                         fontWeight: FontWeight.w400,
                         letterSpacing: -0.15,
                       ),
                       children: [
-                        if (isLongText && !_isExpanded)
+                        if (isLongText)
                           WidgetSpan(
                             alignment: PlaceholderAlignment.baseline,
                             baseline: TextBaseline.alphabetic,
                             child: GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  _isExpanded = true;
+                                  _isExpanded = !_isExpanded;
                                 });
                               },
-                              child: const Text(
-                                ' Read more',
-                                style: TextStyle(
+                              child: Text(
+                                _isExpanded ? '  Show less' : '  Read more',
+                                style: const TextStyle(
                                   color: AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
                                 ),
                               ),
                             ),
@@ -1323,18 +1444,20 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                       ],
                     ),
                   ),
+                ),
 
-                  if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    PostImageView(
+                if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                    child: PostImageView(
                       imageUrl: (post.imageUrl != null && post.imageUrl!.isNotEmpty)
                           ? post.imageUrl!
                           : post.mediaUrls.first,
                       allImages: post.mediaUrls.isNotEmpty
                           ? post.mediaUrls
                           : [post.imageUrl!],
-                      height: 250,
-                      borderRadius: BorderRadius.circular(16),
+                      height: 240,
+                      borderRadius: BorderRadius.circular(14),
                       heroTagPrefix: 'feed_post_${post.id}',
                       caption: post.content,
                       overlay: post.foodRating != null
@@ -1347,8 +1470,8 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1373,19 +1496,17 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             )
                           : null,
                     ),
-                  ],
+                  ),
 
-                  const SizedBox(height: 14),
-
-                  Row(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: Row(
                     children: [
                       LikeCapsule(
                         post: post,
                         repository: widget.repository,
                       ),
-
-                      const SizedBox(width: 14),
-
+                      const SizedBox(width: 8),
                       InkWell(
                         onTap: () {
                           Navigator.push(
@@ -1399,32 +1520,39 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             ),
                           );
                         },
-                        borderRadius: BorderRadius.circular(18),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F5F8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFEADBEE),
+                              width: 0.8,
+                            ),
+                          ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.chat_bubble_outline_rounded,
-                                size: 18,
-                                color: AppColors.textMuted,
+                                size: 16,
+                                color: AppColors.primary,
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 5),
                               Text(
                                 '${post.commentCount}',
                                 style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-
-                      const SizedBox(width: 14),
-
+                      const Spacer(),
                       InkWell(
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1436,14 +1564,23 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             ),
                           );
                         },
-                        borderRadius: BorderRadius.circular(18),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                          child: Row(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F5F8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFEADBEE),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.share_outlined,
-                                size: 18,
+                                size: 15,
                                 color: AppColors.textMuted,
                               ),
                               SizedBox(width: 4),
@@ -1451,7 +1588,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                 'Share',
                                 style: TextStyle(
                                   color: AppColors.textMuted,
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1459,29 +1596,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           ),
                         ),
                       ),
-
-                      const Spacer(),
-
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(
-                          Icons.more_horiz_rounded,
-                          size: 20,
-                          color: AppColors.textMuted,
-                        ),
-                        onPressed: () {
-                          if (post.authorHandle == widget.currentUserHandle) {
-                            widget.onDelete();
-                          } else {
-                            widget.onReport();
-                          }
-                        },
-                      ),
                     ],
                   ),
-
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
