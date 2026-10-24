@@ -13,6 +13,7 @@ import '../../services/post_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../services/token_decision_engine.dart';
 import '../../services/rewards_service.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final PostRepository repository;
@@ -29,9 +30,18 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
+  static const List<PostCategory> _categories = [
+    PostCategory.general,
+    PostCategory.question,
+    PostCategory.events,
+    PostCategory.alerts,
+    PostCategory.safety,
+  ];
+
   GeoCity? _selectedGeoCity;
   GeoArea? _selectedArea;
   bool _isEmergency = false;
+  PostCategory _selectedCategory = PostCategory.general;
 
   final _contentController = TextEditingController();
   String? _errorMessage;
@@ -427,7 +437,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         areaName: effectiveArea?.name ?? effectiveCity.name,
         lat: effectiveLat,
         lng: effectiveLng,
-        category: _isEmergency ? PostCategory.safetyAlert : PostCategory.general,
+        category: _isEmergency ? PostCategory.safetyAlert : _selectedCategory,
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,
       );
@@ -930,6 +940,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              IgnorePointer(
+                ignoring: _isEmergency,
+                child: Opacity(
+                  opacity: _isEmergency ? 0.45 : 1.0,
+                  child: Container(
+                    height: 40,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: SlidingCategoryTabBar(
+                      categories: _categories.map((c) => c.label).toList(),
+                      selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                      isScrollable: true,
+                      onSelected: (index) {
+                        if (!_isEmergency && index >= 0 && index < _categories.length) {
+                          setState(() => _selectedCategory = _categories[index]);
+                        }
+                      },
+                    ),
+                  ),
                 ),
               ),
               Container(

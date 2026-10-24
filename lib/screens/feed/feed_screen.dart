@@ -24,6 +24,7 @@ import '../../core/widgets/verified_badge.dart';
 import '../../services/rewards_service.dart';
 import '../rewards/rewards_hub_screen.dart';
 import '../../services/app_asset_service.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository repository;
@@ -42,8 +43,72 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  String _selectedFilterChip = 'All';
+
+  static const List<String> _feedCategoryFilters = [
+    'All',
+    'General',
+    'Question',
+    'Events',
+    'Alerts',
+    'Safety',
+  ];
+
   List<Post> _getFilteredPosts(List<Post> posts) {
+    if (_selectedFilterChip == 'All') return posts;
+
+    if (_selectedFilterChip == 'General') {
+      return posts.where((p) => p.category == PostCategory.general && !p.isEmergency).toList();
+    }
+
+    if (_selectedFilterChip == 'Question') {
+      return posts
+          .where((p) =>
+              p.category == PostCategory.question ||
+              (p.category == PostCategory.general && p.content.contains('?')))
+          .toList();
+    }
+
+    if (_selectedFilterChip == 'Events') {
+      return posts.where((p) => p.category == PostCategory.events || p.eventTitle != null).toList();
+    }
+
+    if (_selectedFilterChip == 'Alerts') {
+      return posts.where((p) => p.category == PostCategory.alerts).toList();
+    }
+
+    if (_selectedFilterChip == 'Safety') {
+      return posts
+          .where((p) =>
+              p.category == PostCategory.safety ||
+              p.category == PostCategory.safetyAlert ||
+              p.isEmergency)
+          .toList();
+    }
+
     return posts;
+  }
+
+  Widget _buildFilterChipsRow() {
+    final selectedIndex = _feedCategoryFilters.indexOf(_selectedFilterChip);
+    return Container(
+      height: 42,
+      margin: const EdgeInsets.only(top: 4, bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SlidingCategoryTabBar(
+        categories: _feedCategoryFilters,
+        selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
+        isScrollable: true,
+        onSelected: (index) {
+          final chip = _feedCategoryFilters[index];
+          if (_selectedFilterChip != chip) {
+            setState(() {
+              _selectedFilterChip = chip;
+            });
+          }
+        },
+      ),
+    );
   }
 
   void _openProfile() {
@@ -319,6 +384,7 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       body: Column(
         children: [
+          _buildFilterChipsRow(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
@@ -333,7 +399,7 @@ class _FeedScreenState extends State<FeedScreen> {
               child: repo.isLoading
                   ? _buildLoadingSkeleton()
                   : KeyedSubtree(
-                      key: const ValueKey('feed_general_all_posts'),
+                      key: ValueKey('feed_general_posts_$_selectedFilterChip'),
                       child: RefreshIndicator(
                         onRefresh: () async {
                           await Future.wait([

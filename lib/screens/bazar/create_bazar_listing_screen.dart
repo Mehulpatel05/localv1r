@@ -7,6 +7,7 @@ import '../../services/bazar_repository.dart';
 import '../../services/r2_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../services/rewards_service.dart';
+import '../../core/widgets/sliding_category_tab_bar.dart';
 import 'bazar_screen.dart';
 
 class CreateBazarListingScreen extends StatefulWidget {
@@ -29,6 +30,16 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
   String _selectedCondition = 'Used';
   String _selectedLocation = 'Vadodara';
   bool _isPublishing = false;
+
+  final List<String> _categories = [
+    'General',
+    'Furniture',
+    'Electronics',
+    'Clothes',
+    'Home food',
+    'Books',
+    'Other',
+  ];
 
   String? _existingImageUrl;
 
@@ -696,6 +707,24 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 14),
+
+            Text('CATEGORY', style: labelStyle),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 42,
+              child: SlidingCategoryTabBar(
+                categories: _categories,
+                selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                isScrollable: true,
+                onSelected: (index) {
+                  setState(() {
+                    _selectedCategory = _categories[index];
+                  });
+                },
+              ),
             ),
 
             const SizedBox(height: 14),

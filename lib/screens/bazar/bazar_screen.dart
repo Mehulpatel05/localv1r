@@ -219,6 +219,19 @@ class _BazarScreenState extends State<BazarScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = [
+    'All',
+    'General',
+    'Furniture',
+    'Electronics',
+    'Clothes',
+    'Home food',
+    'Books',
+    'Other',
+  ];
+
   Future<void> _openPostScreen() async {
     final newProduct = await Navigator.push<BazarProduct>(
       context,
@@ -318,6 +331,10 @@ class _BazarScreenState extends State<BazarScreen> {
   List<BazarProduct> get _filteredProducts {
     return _allProducts.where((product) {
       if (product.isSold) return false;
+
+      if (_selectedCategory != 'All' && product.category != _selectedCategory) {
+        return false;
+      }
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -675,7 +692,7 @@ class _BazarScreenState extends State<BazarScreen> {
     return RefreshIndicator(
       onRefresh: () async {
         await Future.wait([
-          BazarRepository.instance.fetchListings(),
+          BazarRepository.instance.fetchListings(category: _selectedCategory == 'All' ? null : _selectedCategory),
           BazarRepository.instance.fetchShops(),
         ]);
         _onBazarRepoChanged();
@@ -687,6 +704,24 @@ class _BazarScreenState extends State<BazarScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              height: 42,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SlidingCategoryTabBar(
+                categories: _categories,
+                selectedIndex: _categories.indexOf(_selectedCategory).clamp(0, _categories.length - 1),
+                isScrollable: true,
+                onSelected: (index) {
+                  setState(() {
+                    _selectedCategory = _categories[index];
+                  });
+                  BazarRepository.instance.fetchListings(
+                    category: _selectedCategory == 'All' ? null : _selectedCategory,
+                  );
+                },
+              ),
+            ),
             _buildShopPerksBanner(),
             _buildLocalShopsSection(),
 
