@@ -77,6 +77,7 @@ class Post {
   final bool isUserRsvped;
   final String? postType;
   final bool isPinned;
+  double? distanceKm;
 
   Post({
     required this.id,
@@ -132,6 +133,7 @@ class Post {
     this.isUserRsvped = false,
     this.postType,
     this.isPinned = false,
+    this.distanceKm,
   });
 
   int get score => upvotes - downvotes;
@@ -178,6 +180,7 @@ class Post {
       'cityId': cityId,
       'areaId': areaId,
       'areaName': areaName,
+      'distanceKm': distanceKm,
       'lat': lat,
       'lng': lng,
       'upvotes': upvotes,
@@ -278,6 +281,9 @@ class Post {
       lng: (json['lng'] as num?)?.toDouble(),
       postType: (json['postType'] ?? json['post_type']) as String?,
       isPinned: json['isPinned'] == true || json['is_pinned'] == 1,
+      distanceKm: (json['distanceKm'] ?? json['distance_km']) is num
+          ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
+          : null,
     );
   }
 
@@ -368,6 +374,9 @@ class Post {
       isUserRsvped: json['isUserRsvped'] as bool? ?? false,
       postType: (json['postType'] ?? json['post_type']) as String?,
       isPinned: json['isPinned'] == true || json['is_pinned'] == 1,
+      distanceKm: (json['distanceKm'] ?? json['distance_km']) is num
+          ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
+          : null,
     );
   }
 
@@ -387,6 +396,7 @@ class Post {
     String? areaName,
     double? lat,
     double? lng,
+    double? distanceKm,
     int? upvotes,
     int? downvotes,
     int? commentCount,
@@ -476,6 +486,7 @@ class Post {
       jobWorkMode: jobWorkMode ?? this.jobWorkMode,
       eventRsvpCount: eventRsvpCount ?? this.eventRsvpCount,
       isUserRsvped: isUserRsvped ?? this.isUserRsvped,
+      distanceKm: distanceKm ?? this.distanceKm,
     );
   }
 }

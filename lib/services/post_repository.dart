@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -303,11 +304,7 @@ class PostRepository extends ChangeNotifier {
     if (_currentTab == FeedTab.trending) {
       list.sort((a, b) => b.score.compareTo(a.score));
     } else {
-      list.sort((a, b) {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt.compareTo(a.createdAt);
-      });
+      _applyDistanceAndRanking(list);
     }
 
     return list;
@@ -377,6 +374,9 @@ class PostRepository extends ChangeNotifier {
           : (d['areaId'] != null ? LocationEngine.lookupArea(d['areaId'].toString())?.name : null) ?? (locationService.area?.name ?? locationService.city.name),
       lat: d['lat'] != null ? (d['lat'] as num).toDouble() : null,
       lng: d['lng'] != null ? (d['lng'] as num).toDouble() : null,
+      distanceKm: (d['distanceKm'] ?? d['distance_km']) != null
+          ? ((d['distanceKm'] ?? d['distance_km']) as num).toDouble()
+          : null,
       roomTitle: d['roomTitle'],
       roomArea: d['roomArea'],
       roomRent: d['roomRent'],
@@ -418,6 +418,8 @@ class PostRepository extends ChangeNotifier {
     try {
       final cityId = locationService.cityId;
       final categoryStr = _selectedCategory?.name;
+      final userLat = locationService.area?.lat ?? locationService.rawLat ?? locationService.city.lat;
+      final userLng = locationService.area?.lng ?? locationService.rawLng ?? locationService.city.lng;
       
       var uri = Uri.parse('$backendBaseUrl/posts');
       final queryParams = <String, String>{
@@ -426,6 +428,10 @@ class PostRepository extends ChangeNotifier {
         'cursor': ?_nextCursor,
         'category': ?categoryStr,
       };
+      if (userLat != null && userLng != null) {
+        queryParams['lat'] = userLat.toString();
+        queryParams['lng'] = userLng.toString();
+      }
       
       uri = uri.replace(queryParameters: queryParams);
         
@@ -451,6 +457,7 @@ class PostRepository extends ChangeNotifier {
         } else {
           _posts.addAll(newPosts);
         }
+        _applyDistanceAndRanking(_posts);
         registerPosts(newPosts);
 
         final mediaUrls = newPosts
@@ -476,6 +483,54 @@ class PostRepository extends ChangeNotifier {
       _hasLoadedOnce = true;
       notifyListeners();
     }
+  }
+
+  void _applyDistanceAndRanking(List<Post> postList) {
+    final userLat = locationService.area?.lat ?? locationService.rawLat ?? locationService.city.lat;
+    final userLng = locationService.area?.lng ?? locationService.rawLng ?? locationService.city.lng;
+    final userAreaId = locationService.area?.id;
+
+    for (final post in postList) {
+      if (userAreaId != null && post.areaId != null && post.areaId == userAreaId) {
+        post.distanceKm = 0.3;
+      } else if (post.distanceKm == null && userLat != null && userLng != null) {
+        double? pLat = post.lat;
+        double? pLng = post.lng;
+        if ((pLat == null || pLng == null) && post.areaId != null) {
+          final matchedArea = LocationEngine.lookupArea(post.areaId!);
+          pLat = matchedArea?.lat;
+          pLng = matchedArea?.lng;
+        }
+        if (pLat != null && pLng != null) {
+          post.distanceKm = double.parse(LocationEngine.calculateDistanceKm(userLat, userLng, pLat, pLng).toStringAsFixed(1));
+        } else {
+          post.distanceKm = 3.5;
+        }
+      }
+    }
+
+    final now = DateTime.now();
+    postList.sort((a, b) {
+      if (a.isEmergency != b.isEmergency) {
+        return a.isEmergency ? -1 : 1;
+      }
+
+      final ageA = now.difference(a.createdAt).inMinutes.clamp(0, 525600);
+      final ageB = now.difference(b.createdAt).inMinutes.clamp(0, 525600);
+
+      final distA = a.distanceKm ?? 3.5;
+      final distB = b.distanceKm ?? 3.5;
+
+      final penaltyA = distA <= 2.0 ? 0.0 : math.min(90.0, (distA - 2.0) * 5.0);
+      final penaltyB = distB <= 2.0 ? 0.0 : math.min(90.0, (distB - 2.0) * 5.0);
+
+      final scoreA = ageA + penaltyA;
+      final scoreB = ageB + penaltyB;
+
+      final cmp = scoreA.compareTo(scoreB);
+      if (cmp != 0) return cmp;
+      return b.createdAt.compareTo(a.createdAt);
+    });
   }
 
   Future<void> refresh() async {
@@ -859,6 +914,7 @@ class PostRepository extends ChangeNotifier {
 
           _posts.removeWhere((p) => p.id == createdPostId);
           _posts.insert(0, newPost);
+          _applyDistanceAndRanking(_posts);
           registerPost(newPost);
           notifyListeners();
 

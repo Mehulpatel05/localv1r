@@ -1231,6 +1231,14 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             if (cleanArea.contains('General / All')) {
                               cleanArea = cleanArea.replaceAll('General / All', 'General · All');
                             }
+                            String locationText = cleanArea;
+                            if (post.distanceKm != null) {
+                              if (post.distanceKm! <= 0.6) {
+                                locationText = '$cleanArea · In your area';
+                              } else {
+                                locationText = '${post.distanceKm!.toStringAsFixed(1)} km · $cleanArea';
+                              }
+                            }
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1296,9 +1304,9 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                           ),
                                           const SizedBox(width: 2),
                                           ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 110),
+                                            constraints: const BoxConstraints(maxWidth: 155),
                                             child: Text(
-                                              cleanArea,
+                                              locationText,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
