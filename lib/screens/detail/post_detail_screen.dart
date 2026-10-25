@@ -404,21 +404,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          UserAvatar(
-                            handle: widget.post.authorHandle,
-                            size: 38,
-                            fontSize: 14,
-                            onTap: () {
-                              if (widget.post.authorHandle != widget.currentUserHandle) {
-                                showOtherUserProfileSheet(
-                                  context,
-                                  partnerHandle: widget.post.authorHandle,
-                                  currentUserHandle: widget.currentUserHandle,
-                                  repository: widget.repository,
-                                );
-                              }
-                            },
-                          ),
+                          if (widget.post.isAnonymous)
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primarySoft,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.visibility_off_rounded,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          else
+                            UserAvatar(
+                              handle: widget.post.authorHandle,
+                              size: 38,
+                              fontSize: 14,
+                              onTap: () {
+                                if (widget.post.authorHandle != widget.currentUserHandle) {
+                                  showOtherUserProfileSheet(
+                                    context,
+                                    partnerHandle: widget.post.authorHandle,
+                                    currentUserHandle: widget.currentUserHandle,
+                                    repository: widget.repository,
+                                  );
+                                }
+                              },
+                            ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -427,26 +442,32 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 Builder(
                                   builder: (context) {
                                     final cleanHandle = widget.post.authorHandle.replaceAll('@', '').trim();
-                                    final authorName = getDisplayName(
-                                      widget.post.authorHandle,
-                                      fallback: widget.post.authorName,
-                                    );
-                                    final showHandleText = cleanHandle.isNotEmpty &&
+                                    final authorName = widget.post.isAnonymous
+                                        ? widget.post.displayAuthorName
+                                        : getDisplayName(
+                                            widget.post.authorHandle,
+                                            fallback: widget.post.authorName,
+                                          );
+                                    final showHandleText = !widget.post.isAnonymous &&
+                                        cleanHandle.isNotEmpty &&
                                         cleanHandle.toLowerCase() != 'anon' &&
                                         !cleanHandle.toLowerCase().startsWith('user_') &&
                                         authorName.toLowerCase() != cleanHandle.toLowerCase();
-                                    final isVerified = BadgeCacheService.instance.isUserVerified(
-                                      widget.post.authorHandle,
-                                      fallback: widget.post.isVerified,
-                                    );
-                                    final badgeText = BadgeCacheService.instance.getUserBadge(
-                                      widget.post.authorHandle,
-                                      fallback: widget.post.authorBadge,
-                                    );
+                                    final isVerified = !widget.post.isAnonymous &&
+                                        BadgeCacheService.instance.isUserVerified(
+                                          widget.post.authorHandle,
+                                          fallback: widget.post.isVerified,
+                                        );
+                                    final badgeText = widget.post.isAnonymous
+                                        ? null
+                                        : BadgeCacheService.instance.getUserBadge(
+                                            widget.post.authorHandle,
+                                            fallback: widget.post.authorBadge,
+                                          );
 
                                     return GestureDetector(
                                       onTap: () {
-                                        if (widget.post.authorHandle != widget.currentUserHandle) {
+                                        if (!widget.post.isAnonymous && widget.post.authorHandle != widget.currentUserHandle) {
                                           showOtherUserProfileSheet(
                                             context,
                                             partnerHandle: widget.post.authorHandle,

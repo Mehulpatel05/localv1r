@@ -52,6 +52,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final List<File> _mediaFiles = [];
   bool _isPublishing = false;
   double _uploadProgress = 0.0;
+  bool _isAnonymous = false;
 
   double? _attachedLat;
   double? _attachedLng;
@@ -543,6 +544,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,
         audioUrl: uploadedAudioUrl,
+        isAnonymous: _isAnonymous,
       );
 
       if (_isEmergency) {
@@ -1002,18 +1004,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ),
                 child: Row(
                   children: [
-                    UserAvatar(
-                      handle: widget.authorHandle,
-                      size: 38,
-                      fontSize: 13.5,
-                    ),
+                    if (_isAnonymous)
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.visibility_off_rounded,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                      )
+                    else
+                      UserAvatar(
+                        handle: widget.authorHandle,
+                        size: 38,
+                        fontSize: 13.5,
+                      ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            getDisplayName(widget.authorHandle),
+                            _isAnonymous
+                                ? '$lockedAreaName Resident'
+                                : getDisplayName(widget.authorHandle),
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -1041,6 +1060,42 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () => setState(() => _isAnonymous = !_isAnonymous),
+                      borderRadius: BorderRadius.circular(20),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _isAnonymous ? AppColors.primary : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _isAnonymous ? AppColors.primary : AppColors.cardBorder,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isAnonymous ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                              size: 13,
+                              color: _isAnonymous ? Colors.white : AppColors.textMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isAnonymous ? 'Anonymous' : 'Public',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _isAnonymous ? Colors.white : AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
