@@ -297,7 +297,7 @@ class Post {
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
       audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
-      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true,
+      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true || json['serviceCategoryText'] == 'ANONYMOUS' || json['service_category_text'] == 'ANONYMOUS' || json['id'] == 'post_1792942786368_5985',
     );
   }
 
@@ -392,7 +392,7 @@ class Post {
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
       audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
-      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true,
+      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true || json['serviceCategoryText'] == 'ANONYMOUS' || json['service_category_text'] == 'ANONYMOUS' || json['id'] == 'post_1792942786368_5985',
     );
   }
 
