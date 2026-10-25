@@ -877,14 +877,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
           decoration: BoxDecoration(
-            color: isActive ? AppColors.primarySoft : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
+            color: isActive ? AppColors.primary : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isActive ? AppColors.primary.withValues(alpha: 0.4) : AppColors.cardBorder,
+              color: isActive ? AppColors.primary : AppColors.cardBorder,
               width: 1,
             ),
           ),
@@ -893,26 +894,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             children: [
               if (isLoading)
                 const SizedBox(
-                  width: 14,
-                  height: 14,
+                  width: 13,
+                  height: 13,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.primary,
+                    color: Colors.white,
                   ),
                 )
               else
                 Icon(
                   icon,
-                  size: 16,
-                  color: isActive ? AppColors.primary : const Color(0xFF475569),
+                  size: 14,
+                  color: isActive ? Colors.white : AppColors.textPrimary,
                 ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 4.5),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: isActive ? AppColors.primary : const Color(0xFF334155),
+                  color: isActive ? Colors.white : AppColors.textPrimary,
                 ),
               ),
             ],
@@ -1228,42 +1229,52 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                       ),
                     ],
-                    const Divider(height: 22, color: Color(0xFFF1F5F9)),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)),
                     Row(
                       children: [
-                        _buildToolbarPill(
-                          icon: Icons.photo_library_rounded,
-                          label: _mediaFiles.isEmpty ? 'Gallery' : 'Gallery (${_mediaFiles.length})',
-                          isActive: _mediaFiles.isNotEmpty,
-                          onTap: _isPublishing ? null : _showGalleryOptions,
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Row(
+                              children: [
+                                _buildToolbarPill(
+                                  icon: Icons.photo_library_rounded,
+                                  label: _mediaFiles.isEmpty ? 'Photos' : 'Photos (${_mediaFiles.length})',
+                                  isActive: _mediaFiles.isNotEmpty,
+                                  onTap: _isPublishing ? null : _showGalleryOptions,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildToolbarPill(
+                                  icon: Icons.camera_alt_rounded,
+                                  label: 'Camera',
+                                  onTap: _isPublishing ? null : _showCameraOptions,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildToolbarPill(
+                                  icon: _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
+                                  label: 'Location',
+                                  isActive: _attachedLat != null,
+                                  isLoading: _isFetchingLocation,
+                                  onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildToolbarPill(
+                                  icon: _isRecordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded,
+                                  label: _recordedAudioFile != null ? 'Voice Note' : (_isRecordingAudio ? 'Stop' : 'Voice Note'),
+                                  isActive: _recordedAudioFile != null || _isRecordingAudio,
+                                  onTap: _isPublishing
+                                      ? null
+                                      : (_isRecordingAudio ? _stopAudioRecording : _startAudioRecording),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _buildToolbarPill(
-                          icon: Icons.camera_alt_rounded,
-                          label: 'Camera',
-                          onTap: _isPublishing ? null : _showCameraOptions,
-                        ),
-                        const SizedBox(width: 8),
-                        _buildToolbarPill(
-                          icon: _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
-                          label: 'Location',
-                          isActive: _attachedLat != null,
-                          isLoading: _isFetchingLocation,
-                          onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
-                        ),
-                        const SizedBox(width: 8),
-                        _buildToolbarPill(
-                          icon: _isRecordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded,
-                          label: _recordedAudioFile != null ? 'Voice' : (_isRecordingAudio ? 'Stop' : 'Voice'),
-                          isActive: _recordedAudioFile != null || _isRecordingAudio,
-                          onTap: _isPublishing
-                              ? null
-                              : (_isRecordingAudio ? _stopAudioRecording : _startAudioRecording),
-                        ),
-                        const Spacer(),
-                        if (RewardsService.isRewardsEnabled)
+                        if (RewardsService.isRewardsEnabled) ...[
+                          const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(8),
@@ -1271,12 +1282,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.star_rounded, size: 13, color: Color(0xFFD97706)),
-                                const SizedBox(width: 3),
+                                const Icon(Icons.star_rounded, size: 12, color: Color(0xFFD97706)),
+                                const SizedBox(width: 2),
                                 Text(
                                   _isEmergency ? 'Alert' : '+5 pts',
                                   style: const TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w700,
                                     color: Color(0xFFB45309),
                                   ),
@@ -1284,6 +1295,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                               ],
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ],

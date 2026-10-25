@@ -1075,24 +1075,25 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      margin: const EdgeInsets.only(top: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             category.icon,
-            style: const TextStyle(fontSize: 10),
+            style: const TextStyle(fontSize: 9.5),
           ),
-          const SizedBox(width: 3.5),
+          const SizedBox(width: 3),
           Text(
             category.label,
             style: TextStyle(
               color: fg,
-              fontSize: 10.5,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1217,17 +1218,17 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       UserAvatar(
                         handle: post.authorHandle,
-                        size: 42,
-                        fontSize: 15,
+                        size: 36,
+                        fontSize: 14,
                         onTap: widget.onProfileTap,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 9),
                       Expanded(
                         child: Builder(
                           builder: (context) {
@@ -1253,9 +1254,9 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                             String locationText = cleanArea;
                             if (post.distanceKm != null) {
                               if (post.distanceKm! <= 0.6) {
-                                locationText = '$cleanArea · In your area';
+                                locationText = '$cleanArea · Nearby';
                               } else {
-                                locationText = '${post.distanceKm!.toStringAsFixed(1)} km · $cleanArea';
+                                locationText = '$cleanArea · ${post.distanceKm!.toStringAsFixed(1)}km';
                               }
                             }
 
@@ -1274,10 +1275,10 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: FontWeight.w700,
                                             color: AppColors.textPrimary,
-                                            fontSize: 14.5,
-                                            letterSpacing: -0.2,
+                                            fontSize: 13.5,
+                                            letterSpacing: -0.1,
                                           ),
                                         ),
                                       ),
@@ -1292,7 +1293,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 2),
                                 Row(
                                   children: [
                                     InkWell(
@@ -1318,42 +1319,41 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                         children: [
                                           const Icon(
                                             Icons.location_on_rounded,
-                                            size: 11,
+                                            size: 10,
                                             color: AppColors.primary,
                                           ),
                                           const SizedBox(width: 2),
                                           ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 155),
+                                            constraints: const BoxConstraints(maxWidth: 135),
                                             child: Text(
                                               locationText,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                 color: AppColors.primary,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(width: 5),
+                                    const SizedBox(width: 4),
                                     const Text(
-                                      '·',
+                                      '•',
                                       style: TextStyle(
                                         color: AppColors.textMuted,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 12,
+                                        fontSize: 9,
                                       ),
                                     ),
-                                    const SizedBox(width: 5),
+                                    const SizedBox(width: 4),
                                     Text(
                                       _formatTimeAgo(post.createdAt),
                                       style: const TextStyle(
                                         color: AppColors.textMuted,
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w500,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ],
@@ -1363,16 +1363,15 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       _buildCategoryChip(post.category),
-                      const SizedBox(width: 2),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                         icon: const Icon(
                           Icons.more_horiz_rounded,
-                          size: 20,
+                          size: 19,
                           color: AppColors.textMuted,
                         ),
                         onPressed: () {
@@ -1502,16 +1501,16 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
                   child: Text.rich(
                     TextSpan(
                       text: displayContent,
                       style: const TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 14.5,
+                        fontSize: 15,
                         height: 1.45,
                         fontWeight: FontWeight.w400,
-                        letterSpacing: -0.15,
+                        letterSpacing: -0.1,
                       ),
                       children: [
                         if (isLongText)
