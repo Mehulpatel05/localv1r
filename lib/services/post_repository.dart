@@ -38,11 +38,6 @@ class PostRepository extends ChangeNotifier {
 
   List<Post> _posts = [];
   static final Map<String, Post> _postsRegistry = {};
-  static final Set<String> _anonymousPostIds = {};
-  static bool isAnonymousPost(String id) => _anonymousPostIds.contains(id);
-  static void registerAnonymousPost(String id) {
-    _anonymousPostIds.add(id);
-  }
   String _currentUserHandle = '';
   final Map<String, int> _localVotes = {};
   final Set<String> _pendingVotePostIds = {};
@@ -405,14 +400,6 @@ class PostRepository extends ChangeNotifier {
       servicePrice: d['servicePrice'],
       postType: d['postType'] ?? d['post_type'],
       isPinned: d['isPinned'] == true || d['is_pinned'] == 1,
-      audioUrl: (d['audioUrl'] ?? d['audio_url']) as String?,
-      isAnonymous: d['isAnonymous'] == true ||
-          d['is_anonymous'] == 1 ||
-          d['is_anonymous'] == true ||
-          d['serviceCategoryText'] == 'ANONYMOUS' ||
-          d['service_category_text'] == 'ANONYMOUS' ||
-          _anonymousPostIds.contains(d['id']) ||
-          d['id'] == 'post_1792942786368_5985',
     );
   }
 
@@ -958,7 +945,6 @@ class PostRepository extends ChangeNotifier {
           if (roomTenantPreference != null) 'roomTenantPreference': _cleanOptional(roomTenantPreference, maxLen: 30),
           if (jobWorkMode != null) 'jobWorkMode': _cleanOptional(jobWorkMode, maxLen: 30),
           if (isAnonymous) 'isAnonymous': true,
-          if (isAnonymous && serviceCategoryText == null) 'serviceCategoryText': 'ANONYMOUS',
         }),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -1014,17 +1000,6 @@ class PostRepository extends ChangeNotifier {
             isAnonymous: isAnonymous,
           );
 
-          if (isAnonymous) {
-            registerAnonymousPost(createdPostId);
-            try {
-              final prefs = await SharedPreferences.getInstance();
-              final list = prefs.getStringList('local_anonymous_post_ids') ?? [];
-              if (!list.contains(createdPostId)) {
-                list.add(createdPostId);
-                await prefs.setStringList('local_anonymous_post_ids', list);
-              }
-            } catch (_) {}
-          }
           _posts.removeWhere((p) => p.id == createdPostId);
           _posts.insert(0, newPost);
           _applyDistanceAndRanking(_posts);

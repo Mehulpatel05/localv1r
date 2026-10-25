@@ -52,7 +52,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final List<File> _mediaFiles = [];
   bool _isPublishing = false;
   double _uploadProgress = 0.0;
-  bool _isAnonymous = true;
+  bool _isAnonymous = false;
 
   double? _attachedLat;
   double? _attachedLng;
@@ -989,14 +989,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             children: [
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _isAnonymous ? AppColors.primarySoft : Colors.white,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isAnonymous ? AppColors.primary.withValues(alpha: 0.3) : AppColors.cardBorder,
-                    width: 1.2,
-                  ),
+                  border: Border.all(color: AppColors.cardBorder, width: 1.2),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF0F172A).withValues(alpha: 0.03),
@@ -1009,73 +1006,58 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   children: [
                     if (_isAnonymous)
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 38,
+                        height: 38,
                         decoration: const BoxDecoration(
-                          color: AppColors.primary,
+                          color: AppColors.primarySoft,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.visibility_off_rounded,
-                          size: 20,
-                          color: Colors.white,
+                          size: 18,
+                          color: AppColors.primary,
                         ),
                       )
                     else
                       UserAvatar(
                         handle: widget.authorHandle,
-                        size: 40,
-                        fontSize: 14,
+                        size: 38,
+                        fontSize: 13.5,
                       ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text(
+                            _isAnonymous
+                                ? '$lockedAreaName Resident'
+                                : getDisplayName(widget.authorHandle),
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 1.5),
                           Row(
                             children: [
+                              const Icon(Icons.location_on_rounded, size: 12, color: AppColors.primary),
+                              const SizedBox(width: 3),
                               Flexible(
                                 child: Text(
-                                  _isAnonymous
-                                      ? '$lockedAreaName Resident'
-                                      : getDisplayName(widget.authorHandle),
+                                  lockedAreaName == lockedCityName
+                                      ? lockedCityName
+                                      : '$lockedAreaName, $lockedCityName',
                                   style: const TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
+                                    color: Color(0xFF64748B),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _isAnonymous ? AppColors.primary : const Color(0xFF64748B),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _isAnonymous ? 'ANONYMOUS' : 'PUBLIC',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.4,
-                                  ),
-                                ),
-                              ),
                             ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _isAnonymous
-                                ? 'Identity hidden from neighbours'
-                                : (lockedAreaName == lockedCityName ? lockedCityName : '$lockedAreaName, $lockedCityName'),
-                            style: TextStyle(
-                              color: _isAnonymous ? AppColors.primaryText : const Color(0xFF64748B),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                            ),
                           ),
                         ],
                       ),
@@ -1084,23 +1066,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     InkWell(
                       onTap: () => setState(() => _isAnonymous = !_isAnonymous),
                       borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: _isAnonymous ? Colors.white : AppColors.primarySoft,
+                          color: _isAnonymous ? AppColors.primary : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: _isAnonymous ? AppColors.primary.withValues(alpha: 0.4) : AppColors.primary,
+                            color: _isAnonymous ? AppColors.primary : AppColors.cardBorder,
                             width: 1,
                           ),
                         ),
-                        child: Text(
-                          _isAnonymous ? 'Go Public' : 'Go Anon',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isAnonymous ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                              size: 13,
+                              color: _isAnonymous ? Colors.white : AppColors.textMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isAnonymous ? 'Anonymous' : 'Public',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _isAnonymous ? Colors.white : AppColors.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
