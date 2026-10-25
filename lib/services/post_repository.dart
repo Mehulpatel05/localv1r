@@ -900,7 +900,6 @@ class PostRepository extends ChangeNotifier {
     String? roomFurnishing,
     String? roomTenantPreference,
     String? jobWorkMode,
-    bool isAnonymous = false,
   }) async {
     try {
       final headers = await _getAuthHeaders();
@@ -944,7 +943,6 @@ class PostRepository extends ChangeNotifier {
           if (roomFurnishing != null) 'roomFurnishing': _cleanOptional(roomFurnishing, maxLen: 30),
           if (roomTenantPreference != null) 'roomTenantPreference': _cleanOptional(roomTenantPreference, maxLen: 30),
           if (jobWorkMode != null) 'jobWorkMode': _cleanOptional(jobWorkMode, maxLen: 30),
-          if (isAnonymous) 'isAnonymous': true,
         }),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -997,7 +995,6 @@ class PostRepository extends ChangeNotifier {
             serviceTitle: serviceTitle,
             serviceCategoryText: serviceCategoryText,
             servicePrice: servicePrice,
-            isAnonymous: isAnonymous,
           );
 
           _posts.removeWhere((p) => p.id == createdPostId);

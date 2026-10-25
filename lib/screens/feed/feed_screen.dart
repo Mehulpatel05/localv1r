@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../chat/widgets/voice_note_bubble.dart';
 import '../../theme/app_colors.dart';
@@ -1217,159 +1218,151 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (post.isAnonymous) ...[
-                        const Icon(
-                          Icons.location_on_rounded,
-                          size: 13,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Builder(
-                            builder: (context) {
-                              final fallbackCity = context.read<LocationService>().city.name;
-                              String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
-                                  ? post.areaName!
-                                  : fallbackCity;
-                              if (cleanArea.contains('General / All')) {
-                                cleanArea = cleanArea.replaceAll('General / All', 'General · All');
+                      UserAvatar(
+                        handle: post.authorHandle,
+                        size: 36,
+                        fontSize: 14,
+                        onTap: widget.onProfileTap,
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            final authorName = getDisplayName(
+                              post.authorHandle,
+                              fallback: post.authorName,
+                            );
+                            final authorBadge = BadgeCacheService.instance.getUserBadge(
+                              post.authorHandle,
+                              fallback: post.authorBadge,
+                            );
+                            final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
+                              post.authorHandle,
+                              fallback: post.isVerified,
+                            );
+                            final fallbackCity = context.read<LocationService>().city.name;
+                            String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
+                                ? post.areaName!
+                                : fallbackCity;
+                            if (cleanArea.contains('General / All')) {
+                              cleanArea = cleanArea.replaceAll('General / All', 'General · All');
+                            }
+                            String locationText = cleanArea;
+                            if (post.distanceKm != null) {
+                              if (post.distanceKm! <= 0.6) {
+                                locationText = '$cleanArea · Nearby';
+                              } else {
+                                locationText = '$cleanArea · ${post.distanceKm!.toStringAsFixed(1)}km';
                               }
-                              return Text(
-                                '$cleanArea Resident • ${_formatTimeAgo(post.createdAt)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ] else ...[
-                        UserAvatar(
-                          handle: post.authorHandle,
-                          size: 34,
-                          fontSize: 13,
-                          onTap: widget.onProfileTap,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Builder(
-                            builder: (context) {
-                              final authorName = getDisplayName(
-                                post.authorHandle,
-                                fallback: post.authorName,
-                              );
-                              final authorBadge = BadgeCacheService.instance.getUserBadge(
-                                post.authorHandle,
-                                fallback: post.authorBadge,
-                              );
-                              final isAuthorVerified = BadgeCacheService.instance.isUserVerified(
-                                post.authorHandle,
-                                fallback: post.isVerified,
-                              );
-                              final fallbackCity = context.read<LocationService>().city.name;
-                              String cleanArea = post.areaName != null && post.areaName!.isNotEmpty
-                                  ? post.areaName!
-                                  : fallbackCity;
-                              if (cleanArea.contains('General / All')) {
-                                cleanArea = cleanArea.replaceAll('General / All', 'General · All');
-                              }
-                              String locationText = cleanArea;
-                              if (post.distanceKm != null) {
-                                if (post.distanceKm! <= 0.6) {
-                                  locationText = '$cleanArea · Nearby';
-                                } else {
-                                  locationText = '$cleanArea · ${post.distanceKm!.toStringAsFixed(1)}km';
-                                }
-                              }
+                            }
 
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  GestureDetector(
-                                    onTap: widget.onProfileTap,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            authorName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
-                                              fontSize: 13,
-                                              letterSpacing: -0.1,
-                                            ),
-                                          ),
-                                        ),
-                                        if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
-                                          const SizedBox(width: 4),
-                                          VerifiedBadge(
-                                            isVerified: isAuthorVerified,
-                                            badgeText: authorBadge,
-                                            compact: true,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1.5),
-                                  Row(
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: widget.onProfileTap,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
-                                        Icons.location_on_rounded,
-                                        size: 10,
-                                        color: AppColors.primary,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      ConstrainedBox(
-                                        constraints: const BoxConstraints(maxWidth: 135),
+                                      Flexible(
                                         child: Text(
-                                          locationText,
+                                          authorName,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            color: AppColors.primary,
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w600,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textPrimary,
+                                            fontSize: 13.5,
+                                            letterSpacing: -0.1,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 4),
-                                      const Text(
-                                        '•',
-                                        style: TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 9,
+                                      if (isAuthorVerified || (authorBadge != null && authorBadge.isNotEmpty)) ...[
+                                        const SizedBox(width: 4),
+                                        VerifiedBadge(
+                                          isVerified: isAuthorVerified,
+                                          badgeText: authorBadge,
+                                          compact: true,
                                         ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _formatTimeAgo(post.createdAt),
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                      ),
+                                      ],
                                     ],
                                   ),
-                                ],
-                              );
-                            },
-                          ),
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    InkWell(
+                                      onTap: () async {
+                                        final lat = post.lat;
+                                        final lng = post.lng;
+                                        Uri uri;
+                                        if (lat != null && lng != null) {
+                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                                        } else {
+                                          final query = Uri.encodeComponent('$cleanArea, Gujarat, India');
+                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+                                        }
+                                        try {
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                          }
+                                        } catch (_) {}
+                                      },
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on_rounded,
+                                            size: 10,
+                                            color: AppColors.primary,
+                                          ),
+                                          const SizedBox(width: 2),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(maxWidth: 135),
+                                            child: Text(
+                                              locationText,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: AppColors.primary,
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Text(
+                                      '•',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatTimeAgo(post.createdAt),
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         ),
-                      ],
+                      ),
                       const SizedBox(width: 6),
                       _buildCategoryChip(post.category),
                       IconButton(
@@ -1508,15 +1501,15 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 9, 14, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
                   child: Text.rich(
                     TextSpan(
                       text: displayContent,
-                      style: TextStyle(
-                        color: const Color(0xFF1E293B),
-                        fontSize: isLongText ? 15.0 : 16.5,
-                        height: 1.5,
-                        fontWeight: isLongText ? FontWeight.w400 : FontWeight.w500,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        height: 1.45,
+                        fontWeight: FontWeight.w400,
                         letterSpacing: -0.1,
                       ),
                       children: [

@@ -79,7 +79,6 @@ class Post {
   final bool isPinned;
   double? distanceKm;
   final String? audioUrl;
-  final bool isAnonymous;
 
   Post({
     required this.id,
@@ -137,7 +136,6 @@ class Post {
     this.isPinned = false,
     this.distanceKm,
     this.audioUrl,
-    this.isAnonymous = false,
   });
 
   int get score => upvotes - downvotes;
@@ -164,12 +162,6 @@ class Post {
   }
 
   String get displayAuthorName {
-    if (isAnonymous) {
-      if (areaName != null && areaName!.trim().isNotEmpty) {
-        return '$areaName Resident';
-      }
-      return 'Nearby Resident';
-    }
     final name = authorName?.trim();
     if (name != null && name.isNotEmpty) return name;
     return authorHandle;
@@ -232,7 +224,6 @@ class Post {
       'postType': postType,
       'isPinned': isPinned,
       'audioUrl': audioUrl,
-      'isAnonymous': isAnonymous,
     };
   }
 
@@ -297,7 +288,6 @@ class Post {
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
       audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
-      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true,
     );
   }
 
@@ -392,7 +382,6 @@ class Post {
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
       audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
-      isAnonymous: json['isAnonymous'] == true || json['is_anonymous'] == 1 || json['is_anonymous'] == true,
     );
   }
 
@@ -450,7 +439,6 @@ class Post {
     int? eventRsvpCount,
     bool? isUserRsvped,
     String? audioUrl,
-    bool? isAnonymous,
   }) {
     return Post(
       id: id ?? this.id,
@@ -506,7 +494,6 @@ class Post {
       isUserRsvped: isUserRsvped ?? this.isUserRsvped,
       distanceKm: distanceKm ?? this.distanceKm,
       audioUrl: audioUrl ?? this.audioUrl,
-      isAnonymous: isAnonymous ?? this.isAnonymous,
     );
   }
 }

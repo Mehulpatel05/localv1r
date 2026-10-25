@@ -12,7 +12,6 @@ class LikeCapsule extends StatefulWidget {
   final bool isCompact;
   final VoidCallback? onLikeSuccess;
   final VoidCallback? onVoteSuccess;
-  final bool isBorderless;
 
   const LikeCapsule({
     super.key,
@@ -21,7 +20,6 @@ class LikeCapsule extends StatefulWidget {
     this.isCompact = false,
     this.onLikeSuccess,
     this.onVoteSuccess,
-    this.isBorderless = false,
   });
 
   @override
@@ -129,17 +127,11 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
     final double height = widget.isCompact ? 32 : 36;
     final double iconSize = widget.isCompact ? 16 : 18;
     final double fontSize = widget.isCompact ? 12 : 13;
-    final double horizontalPadding = widget.isBorderless ? 4 : (widget.isCompact ? 10 : 12);
+    final double horizontalPadding = widget.isCompact ? 10 : 12;
 
-    final Color capsuleBg = widget.isBorderless
-        ? Colors.transparent
-        : (isLiked ? AppColors.primarySoft : AppColors.likeBg);
-    final Color capsuleBorder = widget.isBorderless
-        ? Colors.transparent
-        : (isLiked ? AppColors.primarySoft : AppColors.divider);
-    final Color contentColor = isLiked
-        ? (widget.isBorderless ? AppColors.primary : AppColors.primaryText)
-        : AppColors.textMuted;
+    final Color capsuleBg = isLiked ? AppColors.primarySoft : AppColors.likeBg;
+    final Color capsuleBorder = isLiked ? AppColors.primarySoft : AppColors.divider;
+    final Color contentColor = isLiked ? AppColors.primaryText : AppColors.textMuted;
 
     return Semantics(
       button: true,
