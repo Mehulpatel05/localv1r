@@ -78,6 +78,7 @@ class Post {
   final String? postType;
   final bool isPinned;
   double? distanceKm;
+  final String? audioUrl;
 
   Post({
     required this.id,
@@ -134,6 +135,7 @@ class Post {
     this.postType,
     this.isPinned = false,
     this.distanceKm,
+    this.audioUrl,
   });
 
   int get score => upvotes - downvotes;
@@ -221,6 +223,7 @@ class Post {
       'isUserRsvped': isUserRsvped,
       'postType': postType,
       'isPinned': isPinned,
+      'audioUrl': audioUrl,
     };
   }
 
@@ -284,6 +287,7 @@ class Post {
       distanceKm: (json['distanceKm'] ?? json['distance_km']) is num
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
+      audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
     );
   }
 
@@ -377,6 +381,7 @@ class Post {
       distanceKm: (json['distanceKm'] ?? json['distance_km']) is num
           ? ((json['distanceKm'] ?? json['distance_km']) as num).toDouble()
           : null,
+      audioUrl: (json['audioUrl'] ?? json['audio_url']) as String?,
     );
   }
 
@@ -433,6 +438,7 @@ class Post {
     String? jobWorkMode,
     int? eventRsvpCount,
     bool? isUserRsvped,
+    String? audioUrl,
   }) {
     return Post(
       id: id ?? this.id,
@@ -487,6 +493,7 @@ class Post {
       eventRsvpCount: eventRsvpCount ?? this.eventRsvpCount,
       isUserRsvped: isUserRsvped ?? this.isUserRsvped,
       distanceKm: distanceKm ?? this.distanceKm,
+      audioUrl: audioUrl ?? this.audioUrl,
     );
   }
 }

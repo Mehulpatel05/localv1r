@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import '../chat/widgets/voice_note_bubble.dart';
 import '../../theme/app_colors.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -764,11 +766,23 @@ class _FeedScreenState extends State<FeedScreen> {
                 _buildReportCard(
                   ctx: ctx,
                   postId: postId,
+                  icon: Icons.explicit_rounded,
+                  iconBgColor: const Color(0xFFFEE2E2),
+                  iconColor: const Color(0xFFDC2626),
+                  title: 'Adult / Obscene Content',
+                  subtitle: 'Pornographic, explicit, or sexually inappropriate media',
+                  reason: 'adult_content',
+                ),
+                const SizedBox(height: 12),
+                _buildReportCard(
+                  ctx: ctx,
+                  postId: postId,
                   icon: Icons.warning_amber_rounded,
                   iconBgColor: const Color(0xFFFEF3C7),
                   iconColor: const Color(0xFFD97706),
                   title: 'Harassment / Impersonation',
                   subtitle: 'Targeting or pretending to be someone else',
+                  reason: 'harassment',
                 ),
                 const SizedBox(height: 12),
                 _buildReportCard(
@@ -779,6 +793,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   iconColor: const Color(0xFF2563EB),
                   title: 'Personal information',
                   subtitle: 'Shares private details without consent',
+                  reason: 'personal_info',
                 ),
                 const SizedBox(height: 12),
                 _buildReportCard(
@@ -789,6 +804,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   iconColor: AppColors.textMuted,
                   title: 'Spam / Scams',
                   subtitle: 'Misleading, repetitive, or fraudulent content',
+                  reason: 'spam_scam',
                 ),
                 const SizedBox(height: 12),
                 _buildReportCard(
@@ -799,6 +815,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   iconColor: AppColors.error,
                   title: 'Hate Speech / Civic Threat',
                   subtitle: 'Hateful, violent, or threatening content',
+                  reason: 'hate_speech',
                 ),
                 const SizedBox(height: 12),
                 _buildReportCard(
@@ -809,6 +826,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   iconColor: const Color(0xFFDC2626),
                   title: 'False Safety Alert',
                   subtitle: 'Fake emergency or misleading urgent notification',
+                  reason: 'false_alert',
                 ),
               ],
             ),
@@ -826,6 +844,7 @@ class _FeedScreenState extends State<FeedScreen> {
     required Color iconColor,
     required String title,
     required String subtitle,
+    required String reason,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -839,7 +858,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            widget.repository.reportPost(postId, widget.currentUserHandle);
+            widget.repository.reportPost(postId, widget.currentUserHandle, reason: reason);
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -1520,6 +1539,20 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
                 ),
 
+                if (post.audioUrl != null && post.audioUrl!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                    child: VoiceNoteBubble(
+                      audioUrl: post.audioUrl!,
+                      durationSeconds: 30,
+                      waveformData: const [],
+                      isMe: false,
+                      timeStr: '',
+                      isRead: true,
+                      status: 'sent',
+                    ),
+                  ),
+
                 if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -1628,15 +1661,11 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                       ),
                       const Spacer(),
                       InkWell(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              backgroundColor: AppColors.primary,
-                              content: Text('Post link copied to clipboard!'),
-                              duration: Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                        onTap: () async {
+                          final text = post.content.isNotEmpty ? post.content : 'Community update on Nearhood';
+                          final area = post.areaName ?? 'Vadodara';
+                          final shareMessage = '$text\n\n📍 $area\n🔗 https://nearhood.in/p/${post.id}\n\nJoin the Vadodara Community on Nearhood: https://nearhood.in';
+                          await SharePlus.instance.share(ShareParams(text: shareMessage, subject: 'Nearhood Update'));
                         },
                         borderRadius: BorderRadius.circular(20),
                         child: Container(

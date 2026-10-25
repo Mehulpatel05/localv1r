@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import '../chat/widgets/voice_note_bubble.dart';
 import '../../theme/app_colors.dart';
 import '../../core/motion.dart';
 import '../../core/constants/areas_and_categories.dart';
@@ -325,6 +327,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined, color: AppColors.textPrimary, size: 21),
+            tooltip: 'Share',
+            onPressed: () async {
+              final text = widget.post.content.isNotEmpty ? widget.post.content : 'Community update on Nearhood';
+              final area = widget.post.areaName ?? 'Vadodara';
+              final shareMessage = '$text\n\n📍 $area\n🔗 https://nearhood.in/p/${widget.post.id}\n\nJoin the Vadodara Community on Nearhood: https://nearhood.in';
+              await SharePlus.instance.share(ShareParams(text: shareMessage, subject: 'Nearhood Update'));
+            },
+          ),
           if (_isOwnPost)
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
@@ -542,6 +554,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           height: 1.45,
                         ),
                       ),
+                      if (widget.post.audioUrl != null && widget.post.audioUrl!.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        VoiceNoteBubble(
+                          audioUrl: widget.post.audioUrl!,
+                          durationSeconds: 30,
+                          waveformData: const [],
+                          isMe: false,
+                          timeStr: '',
+                          isRead: true,
+                          status: 'sent',
+                        ),
+                      ],
                       if ((widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) || widget.post.mediaUrls.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         PostImageView(

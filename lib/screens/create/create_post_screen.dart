@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,16 +58,34 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String? _attachedLocationName;
   bool _isFetchingLocation = false;
 
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  File? _recordedAudioFile;
+  bool _isRecordingAudio = false;
+  bool _isPlayingAudioPreview = false;
+  int _audioDurationSeconds = 0;
+  Timer? _audioTimer;
+
   @override
   void initState() {
     super.initState();
     final loc = widget.repository.locationService;
     _selectedArea = loc.area ?? loc.city.areas.firstOrNull;
     _contentController.addListener(_validateLiveInput);
+    _audioPlayer.playerStateStream.listen((state) {
+      if (!mounted) return;
+      final isPlaying = state.playing && state.processingState != ProcessingState.completed;
+      if (isPlaying != _isPlayingAudioPreview) {
+        setState(() => _isPlayingAudioPreview = isPlaying);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _audioTimer?.cancel();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
     _contentController.removeListener(_validateLiveInput);
     _contentController.dispose();
     super.dispose();
@@ -369,8 +391,79 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   bool get _canPublish =>
       !_isPublishing &&
-      _contentController.text.trim().isNotEmpty &&
+      !_isRecordingAudio &&
+      (_contentController.text.trim().isNotEmpty || _mediaFiles.isNotEmpty || _recordedAudioFile != null) &&
       _errorMessage == null;
+
+  Future<void> _startAudioRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final dir = await getTemporaryDirectory();
+        final path = '${dir.path}/post_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+          path: path,
+        );
+        setState(() {
+          _isRecordingAudio = true;
+          _audioDurationSeconds = 0;
+          _recordedAudioFile = null;
+        });
+        _audioTimer?.cancel();
+        _audioTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+          setState(() => _audioDurationSeconds++);
+          if (_audioDurationSeconds >= 120) {
+            _stopAudioRecording();
+          }
+        });
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Microphone error: $e');
+    }
+  }
+
+  Future<void> _stopAudioRecording() async {
+    _audioTimer?.cancel();
+    try {
+      final path = await _audioRecorder.stop();
+      if (path != null && mounted) {
+        final file = File(path);
+        if (await file.exists()) {
+          setState(() {
+            _isRecordingAudio = false;
+            _recordedAudioFile = file;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isRecordingAudio = false);
+    }
+  }
+
+  Future<void> _toggleAudioPreview() async {
+    if (_recordedAudioFile == null) return;
+    if (_isPlayingAudioPreview) {
+      await _audioPlayer.pause();
+    } else {
+      await _audioPlayer.setFilePath(_recordedAudioFile!.path);
+      await _audioPlayer.play();
+    }
+  }
+
+  void _removeVoiceNote() {
+    _audioPlayer.stop();
+    _audioTimer?.cancel();
+    setState(() {
+      _recordedAudioFile = null;
+      _isRecordingAudio = false;
+      _audioDurationSeconds = 0;
+      _isPlayingAudioPreview = false;
+    });
+  }
 
   Future<void> _submitPost() async {
     if (!TokenDecisionEngine.instance.canPost) {
@@ -424,6 +517,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final locService = widget.repository.locationService;
       final effectiveCity = _selectedGeoCity ?? locService.city;
       final effectiveArea = _selectedArea ?? locService.area ?? effectiveCity.areas.firstOrNull;
+      String? uploadedAudioUrl;
+      if (_recordedAudioFile != null) {
+        try {
+          uploadedAudioUrl = await R2StorageService.uploadMedia(_recordedAudioFile!);
+        } catch (e) {
+          debugPrint('Error uploading audio: $e');
+        }
+      }
+
       final String? firstImageUrl = uploadedMediaUrls.isNotEmpty ? uploadedMediaUrls.first : null;
 
       final double? effectiveLat = _attachedLat ?? effectiveArea?.lat ?? locService.rawLat;
@@ -440,6 +542,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         category: _isEmergency ? PostCategory.safetyAlert : _selectedCategory,
         imageUrl: firstImageUrl,
         mediaUrls: uploadedMediaUrls,
+        audioUrl: uploadedAudioUrl,
       );
 
       if (_isEmergency) {
@@ -1038,6 +1141,93 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       const SizedBox(height: 12),
                       _buildMediaPreviews(),
                     ],
+                    if (_recordedAudioFile != null || _isRecordingAudio) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _isRecordingAudio ? AppColors.errorSoft : AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isRecordingAudio
+                                ? AppColors.error.withValues(alpha: 0.3)
+                                : AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (_isRecordingAudio) ...[
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.error,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Recording Audio... ${_audioDurationSeconds}s',
+                                style: const TextStyle(
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const Spacer(),
+                              InkWell(
+                                onTap: _stopAudioRecording,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'DONE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              InkWell(
+                                onTap: _toggleAudioPreview,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _isPlayingAudioPreview ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Voice Note Attached (${_audioDurationSeconds}s)',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const Spacer(),
+                              InkWell(
+                                onTap: _removeVoiceNote,
+                                child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                     const Divider(height: 22, color: Color(0xFFF1F5F9)),
                     Row(
                       children: [
@@ -1060,6 +1250,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           isActive: _attachedLat != null,
                           isLoading: _isFetchingLocation,
                           onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildToolbarPill(
+                          icon: _isRecordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded,
+                          label: _recordedAudioFile != null ? 'Voice' : (_isRecordingAudio ? 'Stop' : 'Voice'),
+                          isActive: _recordedAudioFile != null || _isRecordingAudio,
+                          onTap: _isPublishing
+                              ? null
+                              : (_isRecordingAudio ? _stopAudioRecording : _startAudioRecording),
                         ),
                         const Spacer(),
                         if (RewardsService.isRewardsEnabled)

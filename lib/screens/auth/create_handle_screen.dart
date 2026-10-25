@@ -141,6 +141,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   bool _isLocating = false;
   bool _isSearchingPlaces = false;
   bool _isResolvingArea = false;
+  bool _isAge18PlusConfirmed = false;
   String? _customErrorMessage;
   File? _pickedProfileImage;
   final Map<String, bool> _availabilityCache = {};
@@ -1179,6 +1180,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         areaId: _selectedArea!.id,
         areaName: _selectedArea!.name,
         addressNote: _addressNoteController.text.trim(),
+        isAge18Plus: _isAge18PlusConfirmed,
       );
 
       if (result['success'] != true) {
@@ -1354,7 +1356,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
   Widget build(BuildContext context) {
     final isNameValid = _nameController.text.trim().length >= 2;
     final isStep1Valid =
-        isNameValid && _state == UsernameState.available && !_isSubmitting;
+        isNameValid && _state == UsernameState.available && _isAge18PlusConfirmed && !_isSubmitting;
     final isStep2Valid =
         _selectedArea != null && !_isSubmitting && !_isResolvingArea;
 
@@ -1614,7 +1616,192 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         _buildUsernameField(),
         const SizedBox(height: 8),
         _buildUsernameStatusHelper(),
+        _buildAgeAndTermsCheckbox(),
       ],
+    );
+  }
+
+  Widget _buildAgeAndTermsCheckbox() {
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _isAge18PlusConfirmed ? _lightGreenTint : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isAge18PlusConfirmed ? _primaryGreen : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: Checkbox(
+              value: _isAge18PlusConfirmed,
+              activeColor: _primaryGreen,
+              checkColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+              side: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
+              onChanged: (val) {
+                setState(() {
+                  _isAge18PlusConfirmed = val ?? false;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isAge18PlusConfirmed = !_isAge18PlusConfirmed;
+                });
+              },
+              child: RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: _textPrimary,
+                    height: 1.35,
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'I confirm that I am ',
+                    ),
+                    const TextSpan(
+                      text: '18+ years old',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: _primaryGreen),
+                    ),
+                    const TextSpan(
+                      text: ' & agree to ',
+                    ),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: GestureDetector(
+                        onTap: _showCommunityRulesModal,
+                        child: const Text(
+                          'Community Rules',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: _primaryGreen,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCommunityRulesModal() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.paddingOf(ctx).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Icon(Icons.verified_user_rounded, color: _primaryGreen, size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    'Nearhood Community Rules',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildRuleItem('18+ Adult Content Strictly Forbidden', 'Zero tolerance for obscene, pornographic, or sexually explicit photos and videos. Violators are permanently banned.', Icons.explicit_rounded),
+              _buildRuleItem('No Hate Speech or Communal Threats', 'Respect all neighbors regardless of religion, caste, or background. No cyberbullying or harassment.', Icons.groups_rounded),
+              _buildRuleItem('No Scams or Fraudulent Schemes', 'No lottery links, betting schemes, or financial fraud. Only genuine local community interactions.', Icons.security_rounded),
+              _buildRuleItem('Senior Citizen / Mohalla Guardian Review', 'Community reports are verified by local guardians. Bad actors will be restricted immediately.', Icons.shield_rounded),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryGreen,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isAge18PlusConfirmed = true;
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('I Agree & Accept', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRuleItem(String title, String desc, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _lightGreenTint,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: _primaryGreen, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
+                const SizedBox(height: 2),
+                Text(desc, style: const TextStyle(fontSize: 11.5, color: _textSecondary, height: 1.3)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

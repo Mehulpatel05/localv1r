@@ -643,6 +643,9 @@ class PostRepository extends ChangeNotifier {
 
   /// REST call to Backend for reports
   Future<void> reportPost(String postId, String reporterHandle, {String reason = 'spam'}) async {
+    _posts.removeWhere((p) => p.id == postId);
+    notifyListeners();
+
     try {
       final headers = await _getAuthHeaders();
       final response = await _httpClient.post(
@@ -656,6 +659,85 @@ class PostRepository extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error reporting post via backend: $e');
     }
+  }
+
+  Future<List<Post>> fetchReportedPosts() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _httpClient.get(
+        Uri.parse('$backendBaseUrl/posts/admin/reported'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final rawPosts = data['posts'] as List<dynamic>? ?? [];
+        return rawPosts.map((d) => _parsePost(d)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching reported posts: $e');
+    }
+    return [];
+  }
+
+  Future<bool> adminRestorePost(String postId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _httpClient.post(
+        Uri.parse('$backendBaseUrl/posts/$postId/restore'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        await refresh();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error admin restoring post: $e');
+    }
+    return false;
+  }
+
+  Future<bool> adminBanAuthor(String authorHandle, {String reason = 'Community safety policy violation'}) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _httpClient.post(
+        Uri.parse('$backendBaseUrl/posts/admin/ban'),
+        headers: headers,
+        body: jsonEncode({
+          'handle': authorHandle,
+          'reason': reason,
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        _posts.removeWhere((p) => p.authorHandle.toLowerCase() == authorHandle.toLowerCase());
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error admin banning author: $e');
+    }
+    return false;
+  }
+
+  Future<bool> adminDeletePost(String postId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _httpClient.delete(
+        Uri.parse('$backendBaseUrl/posts/$postId'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        _posts.removeWhere((p) => p.id == postId);
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error admin deleting post: $e');
+    }
+    return false;
   }
 
 
@@ -790,6 +872,7 @@ class PostRepository extends ChangeNotifier {
     String? roomArea,
     String? roomRent,
     List<String> mediaUrls = const [],
+    String? audioUrl,
     // 🛍️ Shop-specific optional fields
     String? shopTitle,
     String? shopPrice,
@@ -838,6 +921,7 @@ class PostRepository extends ChangeNotifier {
           if (roomArea != null) 'roomArea': _cleanOptional(roomArea),
           if (roomRent != null) 'roomRent': _cleanOptional(roomRent, maxLen: 30),
           if (mediaUrls.isNotEmpty) 'mediaUrls': mediaUrls,
+          if (audioUrl != null && audioUrl.isNotEmpty) 'audioUrl': audioUrl,
           if (shopTitle != null) 'shopTitle': _cleanOptional(shopTitle),
           if (shopPrice != null) 'shopPrice': _cleanOptional(shopPrice, maxLen: 30),
           if (shopCategory != null) 'shopCategory': _cleanOptional(shopCategory, maxLen: 50),
@@ -877,6 +961,7 @@ class PostRepository extends ChangeNotifier {
             category: category,
             imageUrl: imageUrl,
             mediaUrls: mediaUrls,
+            audioUrl: audioUrl,
             upvotes: 0,
             downvotes: 0,
             commentCount: 0,

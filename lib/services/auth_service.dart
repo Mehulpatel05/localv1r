@@ -342,7 +342,6 @@ class AuthService {
     }
   }
 
-  /// Updates user handle in Cloudflare D1
   Future<Map<String, dynamic>> saveUserHandle(
     String handle, {
     String? userId,
@@ -353,6 +352,7 @@ class AuthService {
     String? areaId,
     String? areaName,
     String? addressNote,
+    bool isAge18Plus = true,
   }) async {
     final clean = handle.replaceAll('@', '').trim();
     final cleanName = name?.trim();
@@ -365,6 +365,8 @@ class AuthService {
         final uri = Uri.parse('$baseUrl/auth/profile/handle');
         final requestBody = <String, dynamic>{
           'handle': clean,
+          'is_age_18_plus': isAge18Plus ? 1 : 0,
+          'isAge18Plus': isAge18Plus,
         };
         if (cleanName != null && cleanName.isNotEmpty) {
           requestBody['name'] = cleanName;
