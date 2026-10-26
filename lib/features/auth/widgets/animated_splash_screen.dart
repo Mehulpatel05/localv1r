@@ -259,9 +259,8 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       _controller.value = 1.0;
     }
 
-    final isDark = widget.isDarkMode ??
-        (Theme.of(context).brightness == Brightness.dark);
-    final sbg = isDark ? Colors.black : AppColors.softBackground;
+    final isDark = widget.isDarkMode ?? false;
+    final sbg = isDark ? Colors.black : Colors.white;
     final sfg = isDark ? Colors.white : AppColors.primary;
     final pinInnerColor = isDark ? sbg : Colors.white;
     final wordStyle = isDark ? _wordStyleDark : _wordStyleLight;
