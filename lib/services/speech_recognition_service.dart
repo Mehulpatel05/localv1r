@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 class SpeechRecognitionService {
@@ -16,9 +17,31 @@ class SpeechRecognitionService {
   bool get isListening => _speechToText.isListening;
   bool get isAvailable => _speechToText.isAvailable;
 
+  Future<bool> checkPermission() async {
+    return await Permission.microphone.isGranted;
+  }
+
+  Future<bool> requestPermission() async {
+    final status = await Permission.microphone.request();
+    return status.isGranted;
+  }
+
+  Future<bool> isPermissionPermanentlyDenied() async {
+    return await Permission.microphone.isPermanentlyDenied;
+  }
+
+  Future<bool> openSettings() async {
+    return await openAppSettings();
+  }
+
   Future<bool> initialize() async {
-    if (_isInitialized) return true;
+    if (_isInitialized && _speechToText.isAvailable) return true;
     try {
+      final hasPerm = await requestPermission();
+      if (!hasPerm) {
+        return false;
+      }
+
       _isInitialized = await _speechToText.initialize(
         onError: (errorNotification) {
           debugPrint('Speech recognition error: ${errorNotification.errorMsg}');
@@ -26,6 +49,11 @@ class SpeechRecognitionService {
         onStatus: (status) {
           debugPrint('Speech recognition status: $status');
         },
+        options: [
+          SpeechToText.androidNoBluetooth,
+          SpeechToText.androidIntentLookup,
+          SpeechToText.androidAlwaysUseStop,
+        ],
       );
       return _isInitialized;
     } catch (e) {
@@ -48,6 +76,14 @@ class SpeechRecognitionService {
     }
 
     try {
+      String? effectiveLocale = localeId;
+      if (effectiveLocale == null) {
+        try {
+          final sysLocale = await _speechToText.systemLocale();
+          effectiveLocale = sysLocale?.localeId;
+        } catch (_) {}
+      }
+
       await _speechToText.listen(
         onResult: (result) {
           onResult(result.recognizedWords, result.finalResult);
@@ -57,9 +93,9 @@ class SpeechRecognitionService {
           partialResults: true,
           cancelOnError: false,
           listenMode: ListenMode.dictation,
-          listenFor: const Duration(seconds: 40),
+          listenFor: const Duration(seconds: 45),
           pauseFor: const Duration(seconds: 4),
-          localeId: localeId,
+          localeId: effectiveLocale,
         ),
       );
       return true;
