@@ -69,7 +69,7 @@ class _TopSectionState extends State<TopSection>
         minHeight: (widget.isOtp ? 100.0 : 165.0) + statusBar,
       ),
       width: double.infinity,
-      color: const Color(0xFFF6FAF7),
+      color: const Color(0xFFF7EAF5),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -77,7 +77,7 @@ class _TopSectionState extends State<TopSection>
             child: RepaintBoundary(
               child: CustomPaint(
                 painter: StreetPainter(
-                  strokeColor: const Color(0x280B8A3E),
+                  strokeColor: const Color(0x303A0F34),
                   isOtp: widget.isOtp,
                 ),
               ),

@@ -1368,7 +1368,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF7EAF5),
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
@@ -1456,7 +1456,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
                               child: RepaintBoundary(
                                 child: CustomPaint(
                                   painter: StreetPainter(
-                                    strokeColor: const Color(0x1F0B8A3E),
+                                    strokeColor: const Color(0x303A0F34),
                                     isOtp: _currentStep == 2,
                                   ),
                                 ),

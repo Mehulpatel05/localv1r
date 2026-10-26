@@ -143,7 +143,7 @@ class _LoginFlowPageState extends State<LoginFlowPage> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: const Color(0xFFF6FAF7),
+        backgroundColor: const Color(0xFFF7EAF5),
         body: SafeArea(
           top: false,
           bottom: false,
