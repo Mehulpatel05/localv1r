@@ -291,7 +291,7 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
       try {
         final file = File(_pickedImagePaths.first);
         if (await file.exists()) {
-          final uploaded = await R2StorageService.uploadMedia(file);
+          final uploaded = await R2StorageService.uploadMedia(file, folder: 'bazar_listing');
           if (uploaded != null && uploaded.isNotEmpty) {
             imageUrl = uploaded;
           } else {

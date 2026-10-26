@@ -569,7 +569,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     });
 
     try {
-      final uploadFutures = uploadItem.files.map((f) => R2StorageService.uploadImage(f));
+      final uploadFutures = uploadItem.files.map((f) => R2StorageService.uploadImage(f, folder: 'chat', subId: _chatId));
       final uploadedUrls = await Future.wait(uploadFutures);
       final validUrls = uploadedUrls.whereType<String>().toList();
 
@@ -1013,7 +1013,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         return;
       }
 
-      final audioUrl = await AudioUploadService.uploadVoiceNote(file);
+      final audioUrl = await AudioUploadService.uploadVoiceNote(file, chatId: _chatId);
       await file.delete();
 
       if (audioUrl == null || audioUrl.isEmpty) {

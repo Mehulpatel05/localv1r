@@ -16,7 +16,12 @@ class R2StorageService {
   }
 
   /// Upload single media (image or video) with automatic content type detection to Cloudflare R2 storage
-  static Future<String?> uploadMedia(File file, {void Function(double)? onProgress}) async {
+  static Future<String?> uploadMedia(
+    File file, {
+    String folder = 'feed',
+    String subId = '',
+    void Function(double)? onProgress,
+  }) async {
     try {
       if (!await file.exists()) {
         debugPrint('File does not exist: ${file.path}');
@@ -77,7 +82,12 @@ class R2StorageService {
       if (onProgress != null) onProgress(0.3);
 
       Future<http.Response> sendUpload(String? token) async {
-        final uri = Uri.parse(backendUploadUrl);
+        final queryParams = <String, String>{};
+        if (folder.isNotEmpty) queryParams['folder'] = folder;
+        if (subId.isNotEmpty) queryParams['subId'] = subId;
+        final uri = Uri.parse(backendUploadUrl).replace(
+          queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        );
         final request = http.MultipartRequest('POST', uri);
         if (token != null && token.isNotEmpty) {
           request.headers['Authorization'] = 'Bearer $token';
@@ -125,16 +135,19 @@ class R2StorageService {
     }
   }
 
-  /// Upload image through backend proxy — returns backend proxy URL (R2 bucket is private)
-  static Future<String?> uploadImage(File file, {void Function(double)? onProgress}) {
-    return uploadMedia(file, onProgress: onProgress);
+  static Future<String?> uploadImage(
+    File file, {
+    String folder = 'profile',
+    String subId = '',
+    void Function(double)? onProgress,
+  }) {
+    return uploadMedia(file, folder: folder, subId: subId, onProgress: onProgress);
   }
 
-  /// ⚡ Phase 5: Direct Client-to-Cloudflare R2 Presigned Upload
-  /// Bypasses backend server proxy for file bytes, saving 100% backend bandwidth.
-  /// Naming Convention: r2://{cityId}/{moduleType}/{listingId}/{filename}
   static Future<String?> uploadDirectToR2(
     File file, {
+    String folder = 'feed',
+    String subId = '',
     String cityId = 'general',
     String moduleType = 'posts',
     String listingId = 'generic',
@@ -156,7 +169,6 @@ class R2StorageService {
 
       if (onProgress != null) onProgress(0.2);
 
-      // 1. Request Presigned Upload URL from Backend
       final token = await AuthService.instance.getAccessToken();
       final presignedUri = Uri.parse('${PostRepository.backendBaseUrl}/storage/presigned-url');
       final res = await http.post(
@@ -167,8 +179,8 @@ class R2StorageService {
         },
         body: jsonEncode({
           'cityId': cityId,
-          'moduleType': moduleType,
-          'listingId': listingId,
+          'moduleType': folder.isNotEmpty ? folder : moduleType,
+          'listingId': subId.isNotEmpty ? subId : listingId,
           'filename': filename,
           'contentType': contentType,
         }),
@@ -182,7 +194,6 @@ class R2StorageService {
         if (uploadUrl != null && publicUrl != null) {
           if (onProgress != null) onProgress(0.5);
 
-          // 2. Direct HTTP PUT upload to Cloudflare R2 bucket
           final putRes = await http.put(
             Uri.parse(uploadUrl),
             headers: {
@@ -205,11 +216,9 @@ class R2StorageService {
       debugPrint('[R2StorageService] Direct upload exception: $e. Falling back to proxy upload.');
     }
 
-    // Fallback to proxy upload
-    return uploadMedia(file, onProgress: onProgress);
+    return uploadMedia(file, folder: folder, subId: subId, onProgress: onProgress);
   }
 
-  /// ⚡ Phase 5: Trigger Cloudflare CDN Pre-Warming for popular feed items
   static Future<void> prewarmCdn(List<String> mediaUrls) async {
     if (mediaUrls.isEmpty) return;
     try {
@@ -222,9 +231,10 @@ class R2StorageService {
     } catch (_) {}
   }
 
-  /// Upload multiple media files sequentially/in-batches with combined progress callback
   static Future<List<String>> uploadMultipleMedia(
     List<File> files, {
+    String folder = 'feed',
+    String subId = '',
     String cityId = 'general',
     String moduleType = 'posts',
     String listingId = 'generic',
@@ -238,6 +248,8 @@ class R2StorageService {
       final file = files[i];
       final url = await uploadDirectToR2(
         file,
+        folder: folder,
+        subId: subId,
         cityId: cityId,
         moduleType: moduleType,
         listingId: listingId,

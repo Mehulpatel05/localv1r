@@ -385,7 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       AvatarCacheService.instance.setCachedUrl(handle, croppedFile.path);
 
-      final uploadedUrl = await R2StorageService.uploadImage(croppedFile);
+      final uploadedUrl = await R2StorageService.uploadImage(croppedFile, folder: 'profile');
 
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
         await AuthService.instance.updateUserProfileImage(uploadedUrl);

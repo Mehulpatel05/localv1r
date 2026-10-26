@@ -12,7 +12,7 @@ class AudioUploadService {
 
   /// Uploads a voice note file (.m4a / .aac) and returns the public URL.
   /// Returns null on failure.
-  static Future<String?> uploadVoiceNote(File file) async {
+  static Future<String?> uploadVoiceNote(File file, {String chatId = ''}) async {
     try {
       if (!await file.exists()) {
         debugPrint('[AudioUploadService] File does not exist: ${file.path}');
@@ -28,7 +28,12 @@ class AudioUploadService {
       final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       Future<http.Response> sendUpload(String? token) async {
-        final uri = Uri.parse(_backendUploadUrl);
+        final uri = Uri.parse(_backendUploadUrl).replace(
+          queryParameters: {
+            'folder': 'audio',
+            if (chatId.isNotEmpty) 'subId': chatId,
+          },
+        );
         final request = http.MultipartRequest('POST', uri);
         if (token != null && token.isNotEmpty) {
           request.headers['Authorization'] = 'Bearer $token';

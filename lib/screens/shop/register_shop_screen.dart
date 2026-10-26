@@ -357,6 +357,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
       try {
         final uploaded = await R2StorageService.uploadMedia(
           File(_shopLogoPath!),
+          folder: 'bazar_shop',
         );
         if (uploaded != null && uploaded.isNotEmpty) {
           finalLogoUrl = uploaded;

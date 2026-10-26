@@ -495,6 +495,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         try {
           uploadedMediaUrls = await R2StorageService.uploadMultipleMedia(
             _mediaFiles,
+            folder: 'feed',
             onProgress: (p) {
               if (mounted) setState(() => _uploadProgress = p);
             },
@@ -520,7 +521,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       String? uploadedAudioUrl;
       if (_recordedAudioFile != null) {
         try {
-          uploadedAudioUrl = await R2StorageService.uploadMedia(_recordedAudioFile!);
+          uploadedAudioUrl = await R2StorageService.uploadMedia(_recordedAudioFile!, folder: 'audio');
         } catch (e) {
           debugPrint('Error uploading audio: $e');
         }

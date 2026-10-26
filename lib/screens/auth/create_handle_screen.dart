@@ -1210,7 +1210,7 @@ class _CreateHandleScreenState extends State<CreateHandleScreen> {
 
       if (_pickedProfileImage != null) {
         try {
-          final uploadedUrl = await R2StorageService.uploadImage(_pickedProfileImage!);
+          final uploadedUrl = await R2StorageService.uploadImage(_pickedProfileImage!, folder: 'profile');
           if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
             await AuthService.instance.updateUserProfileImage(uploadedUrl);
           }
