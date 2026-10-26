@@ -1075,11 +1075,11 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     }
 
     return Container(
-      margin: const EdgeInsets.only(top: 1),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: fg.withValues(alpha: 0.15), width: 0.8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1113,32 +1113,36 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
         : post.content;
 
     final isEvent = post.category == PostCategory.events || post.eventTitle != null;
-    final isUrgent = isEmergency || post.content.toLowerCase().contains('water') || post.content.toLowerCase().contains('theft');
+    final isUrgent = isEmergency ||
+        post.category == PostCategory.alerts ||
+        post.category == PostCategory.safetyAlert ||
+        post.category == PostCategory.safety ||
+        post.postType == 'emergency';
 
     final dayStr = post.createdAt.day.toString().padLeft(2, '0');
     final monthStr = const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][post.createdAt.month - 1];
 
-    final cardBg = isUrgent ? const Color(0xFFFFF7F7) : AppColors.surface;
+    final cardBg = isUrgent ? const Color(0xFFFFF9F9) : AppColors.surface;
 
     return RepaintBoundary(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isUrgent
-                ? AppColors.error.withValues(alpha: 0.35)
+                ? const Color(0xFFFCA5A5)
                 : AppColors.cardBorder,
-            width: 1.0,
+            width: isUrgent ? 1.2 : 0.8,
           ),
           boxShadow: [
             BoxShadow(
               color: isUrgent
-                  ? AppColors.error.withValues(alpha: 0.08)
-                  : AppColors.primary.withValues(alpha: 0.05),
+                  ? const Color(0xFFEF4444).withValues(alpha: 0.08)
+                  : AppColors.primary.withValues(alpha: 0.04),
               blurRadius: 10,
-              offset: const Offset(0, 3),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -1195,21 +1199,58 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: const BoxDecoration(
-                      color: AppColors.error,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: const Color(0xFFFCA5A5).withValues(alpha: 0.6),
+                          width: 1.0,
+                        ),
+                      ),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 16, color: Colors.white),
-                        SizedBox(width: 7),
-                        Expanded(
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.crisis_alert_rounded,
+                            size: 13,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
                           child: Text(
-                            'URGENT SAFETY ALERT • NEIGHBORHOOD BROADCAST',
+                            'URGENT SAFETY ALERT • LOCAL BROADCAST',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFFB91C1C),
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 0.4,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: const Color(0xFFF87171).withValues(alpha: 0.5),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Text(
+                            'PRIORITY',
+                            style: TextStyle(
+                              color: Color(0xFFB91C1C),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
                             ),
                           ),
                         ),
@@ -1218,17 +1259,17 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       UserAvatar(
                         handle: post.authorHandle,
-                        size: 36,
+                        size: 38,
                         fontSize: 14,
                         onTap: widget.onProfileTap,
                       ),
-                      const SizedBox(width: 9),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Builder(
                           builder: (context) {
@@ -1324,7 +1365,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                           ),
                                           const SizedBox(width: 2),
                                           ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 135),
+                                            constraints: const BoxConstraints(maxWidth: 130),
                                             child: Text(
                                               locationText,
                                               maxLines: 1,
@@ -1364,23 +1405,30 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                         ),
                       ),
                       const SizedBox(width: 6),
-                      _buildCategoryChip(post.category),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                        icon: const Icon(
-                          Icons.more_horiz_rounded,
-                          size: 19,
-                          color: AppColors.textMuted,
-                        ),
-                        onPressed: () {
-                          if (post.authorHandle == widget.currentUserHandle) {
-                            widget.onDelete();
-                          } else {
-                            widget.onReport();
-                          }
-                        },
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _buildCategoryChip(post.category),
+                          const SizedBox(width: 2),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                            icon: const Icon(
+                              Icons.more_horiz_rounded,
+                              size: 20,
+                              color: AppColors.textMuted,
+                            ),
+                            onPressed: () {
+                              if (post.authorHandle == widget.currentUserHandle) {
+                                widget.onDelete();
+                              } else {
+                                widget.onReport();
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),

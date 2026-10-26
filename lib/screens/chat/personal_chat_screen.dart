@@ -90,11 +90,15 @@ class _OptimisticTextMessage {
 class PersonalChatScreen extends StatefulWidget {
   final String currentUserHandle;
   final String partnerHandle;
+  final String? initialMessage;
+  final Map<String, dynamic>? dealProduct;
 
   const PersonalChatScreen({
     super.key,
     required this.currentUserHandle,
     required this.partnerHandle,
+    this.initialMessage,
+    this.dealProduct,
   });
 
   @override
@@ -108,6 +112,7 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
   late String _chatId;
   int _messageLimit = 40;
   bool _isLoadingMore = false;
+  bool _showDealBanner = true;
   bool _hasMoreMessages = true;
   final List<_OptimisticTextMessage> _optimisticMessages = [];
   final List<_PendingImageUpload> _pendingUploads = [];
@@ -157,6 +162,9 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     _initChatCache();
     _messageController.addListener(_onTextChanged);
     _markChatAsRead();
+    if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
+      _messageController.text = widget.initialMessage!.trim();
+    }
     _checkVoiceCheckpoint();
     CallListenerService.instance.startListening(widget.currentUserHandle);
   }
@@ -2471,6 +2479,117 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
     );
   }
 
+  Widget _buildDealDiscussionBanner() {
+    final deal = widget.dealProduct;
+    if (deal == null) return const SizedBox.shrink();
+    final title = deal['title']?.toString() ?? 'Product Deal';
+    final price = deal['price']?.toString() ?? '';
+    final imageUrl = deal['imageUrl']?.toString();
+    final category = deal['category']?.toString() ?? 'Listing';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primarySoft, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          if (imageUrl != null && imageUrl.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                imageUrl,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 44,
+                  height: 44,
+                  color: AppColors.chipBg,
+                  child: const Icon(Icons.storefront_rounded, size: 20, color: AppColors.primary),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.shopping_bag_outlined, size: 22, color: AppColors.primary),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: AppColors.chipBg,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'DISCUSSING DEAL • $category',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₹$price',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+            onPressed: () {
+              setState(() {
+                _showDealBanner = false;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -2503,6 +2622,8 @@ class _PersonalChatScreenState extends State<PersonalChatScreen> {
         body: Column(
           children: [
             const Divider(height: 1, thickness: 1, color: AppColors.divider),
+            if (widget.dealProduct != null && _showDealBanner)
+              _buildDealDiscussionBanner(),
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _messagesStream,

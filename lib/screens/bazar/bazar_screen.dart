@@ -1789,6 +1789,14 @@ class _BazarScreenState extends State<BazarScreen> {
                     builder: (_) => PersonalChatScreen(
                       currentUserHandle: myHandle,
                       partnerHandle: product.sellerHandle,
+                      initialMessage: 'Hi! I am interested in discussing a deal on "${product.title}" listed at ₹${product.price}. Is it still available?',
+                      dealProduct: {
+                        'id': product.id,
+                        'title': product.title,
+                        'price': product.price,
+                        'imageUrl': product.imageUrl.isNotEmpty ? product.imageUrl : null,
+                        'category': product.category,
+                      },
                     ),
                   ),
                 );

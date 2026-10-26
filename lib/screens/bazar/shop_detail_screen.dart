@@ -460,6 +460,14 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                                   builder: (_) => PersonalChatScreen(
                                     currentUserHandle: myHandle,
                                     partnerHandle: targetHandle,
+                                    initialMessage: 'Hi! I am inquiring about products from ${shop.name}. Are your items in stock?',
+                                    dealProduct: {
+                                      'id': shop.id,
+                                      'title': shop.name,
+                                      'price': 'Store Inquiry',
+                                      'imageUrl': shop.imageUrl.isNotEmpty ? shop.imageUrl : null,
+                                      'category': shop.category,
+                                    },
                                   ),
                                 ),
                               );
@@ -861,6 +869,14 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       builder: (_) => PersonalChatScreen(
                         currentUserHandle: myHandle,
                         partnerHandle: targetHandle,
+                        initialMessage: 'Hi! I am interested in discussing a deal on "${product.title}" listed at ₹${product.price} at ${widget.shop.name}. Is it available?',
+                        dealProduct: {
+                          'id': product.id,
+                          'title': product.title,
+                          'price': product.price,
+                          'imageUrl': product.imageUrl.isNotEmpty ? product.imageUrl : null,
+                          'category': product.category,
+                        },
                       ),
                     ),
                   );
