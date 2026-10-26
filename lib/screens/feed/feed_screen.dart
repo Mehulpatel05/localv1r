@@ -13,6 +13,7 @@ import '../../core/widgets/user_avatar.dart';
 import '../../core/widgets/like_capsule.dart';
 import '../../models/post_model.dart';
 import '../../services/post_repository.dart';
+import '../../features/feed/widgets/ai_voice_post_sheet.dart';
 import '../create/create_post_screen.dart';
 import '../detail/post_detail_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -666,40 +667,103 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _buildFloatingCreateButton() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 100),
-      child: PressableScale(
-        onTap: _openCreatePostScreen,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PressableScale(
+            onTap: _openAiVoicePostSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7EAF5),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add, color: Colors.white, size: 18),
-              SizedBox(width: 4),
-              Text(
-                'Create',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                  letterSpacing: -0.2,
-                ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
+                  SizedBox(width: 5),
+                  Icon(Icons.mic, color: AppColors.primary, size: 18),
+                  SizedBox(width: 4),
+                  Text(
+                    'AI Voice',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          PressableScale(
+            onTap: _openCreatePostScreen,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, color: Colors.white, size: 18),
+                  SizedBox(width: 4),
+                  Text(
+                    'Create',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _openAiVoicePostSheet() async {
+    final result = await AiVoicePostSheet.show(context);
+    if (result != null && mounted) {
+      final posted = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreatePostScreen(
+            repository: widget.repository,
+            authorHandle: widget.currentUserHandle,
+            initialContent: result.text,
+            initialCategory: result.category,
+          ),
+        ),
+      );
+      if (posted == true) {
+        RewardsService.instance.fetchSummary(forceRefresh: true);
+      }
+      widget.repository.refresh();
+    }
   }
 
   Future<void> _openCreatePostScreen() async {

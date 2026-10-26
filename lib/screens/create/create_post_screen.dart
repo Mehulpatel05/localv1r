@@ -18,15 +18,20 @@ import '../../services/r2_storage_service.dart';
 import '../../services/token_decision_engine.dart';
 import '../../services/rewards_service.dart';
 import '../../core/widgets/sliding_category_tab_bar.dart';
+import '../../features/feed/widgets/ai_voice_post_sheet.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final PostRepository repository;
   final String authorHandle;
+  final String? initialContent;
+  final PostCategory? initialCategory;
 
   const CreatePostScreen({
     super.key,
     required this.repository,
     required this.authorHandle,
+    this.initialContent,
+    this.initialCategory,
   });
 
   @override
@@ -69,6 +74,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialContent != null && widget.initialContent!.isNotEmpty) {
+      _contentController.text = widget.initialContent!;
+    }
+    if (widget.initialCategory != null) {
+      _selectedCategory = widget.initialCategory!;
+    }
     final loc = widget.repository.locationService;
     _selectedArea = loc.area ?? loc.city.areas.firstOrNull;
     _contentController.addListener(_validateLiveInput);
@@ -99,6 +110,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
     final validationError = ContentFilter.validateContent(text);
     if (mounted) setState(() => _errorMessage = validationError);
+  }
+
+  Future<void> _openAiVoiceSheet() async {
+    final result = await AiVoicePostSheet.show(context);
+    if (result != null && mounted) {
+      setState(() {
+        _contentController.text = result.text;
+        _selectedCategory = result.category;
+      });
+    }
   }
 
   Future<void> _pickPhotosFromGallery() async {
@@ -949,6 +970,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'AI Voice Dictation',
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.mic, size: 20, color: AppColors.primary),
+            ),
+            onPressed: _openAiVoiceSheet,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: ElevatedButton(
@@ -1104,6 +1137,37 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        GestureDetector(
+                          onTap: _openAiVoiceSheet,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7EAF5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.auto_awesome, size: 13, color: AppColors.primary),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Speak with AI',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     if (_attachedLocationName != null) ...[
                       const SizedBox(height: 10),
