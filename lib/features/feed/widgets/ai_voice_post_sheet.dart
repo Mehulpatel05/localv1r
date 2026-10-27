@@ -210,7 +210,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
         return;
       }
 
-      final transcribed = await _groqService.transcribeAudio(stoppedPath);
+      final result = await _groqService.transcribeAudio(stoppedPath);
       try {
         final file = File(stoppedPath);
         if (await file.exists()) await file.delete();
@@ -218,12 +218,22 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
 
       if (!mounted) return;
 
-      if (transcribed != null && transcribed.trim().isNotEmpty) {
-        final clean = transcribed.trim();
+      if (result != null && result.text.trim().isNotEmpty) {
+        final clean = result.text.trim();
+        PostCategory resolvedCategory = _aiClassifier.classify(clean);
+        if (result.category != null) {
+          final catStr = result.category!.toLowerCase();
+          for (final cat in _categories) {
+            if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
+              resolvedCategory = cat;
+              break;
+            }
+          }
+        }
         setState(() {
           _textController.text = clean;
-          _selectedCategory = _aiClassifier.classify(clean);
-          _detectedLang = _aiClassifier.detectLanguage(clean);
+          _selectedCategory = resolvedCategory;
+          _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
           _isTranscribing = false;
         });
       } else {
@@ -359,17 +369,19 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   }
 
   String _formatLanguageLabel(String lang) {
-    switch (lang) {
+    switch (lang.toLowerCase()) {
       case 'gu':
-      case 'gu-Latn':
+      case 'gu-latn':
         return 'Gujarati';
       case 'hi':
-      case 'hi-Latn':
+      case 'hi-latn':
         return 'Hindi';
       case 'en':
         return 'English';
+      case 'hinglish':
+        return 'Hinglish';
       default:
-        return 'Hindi / Hinglish';
+        return 'Hinglish';
     }
   }
 
@@ -509,7 +521,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
                   hintText: _isTranscribing
-                      ? 'Transcribing your voice with Groq Whisper AI...'
+                      ? 'AI is converting to Hinglish & perfecting grammar...'
                       : (_isRecording
                           ? 'Listening now... Speak in Hindi, Gujarati, or English'
                           : 'Tap mic to speak or type your post here...'),
@@ -657,7 +669,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'AI is transcribing your voice with Groq Whisper...',
+                      'AI is perfecting grammar & formatting to Hinglish...',
                       style: TextStyle(
                         color: Color(0xFF15803D),
                         fontWeight: FontWeight.w600,
@@ -728,7 +740,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
               _isRecording
                   ? 'Listening (${_recordSeconds}s) · Tap to finish speaking'
                   : (_isTranscribing
-                      ? 'Converting speech to text...'
+                      ? 'Perfecting grammar & converting to Hinglish...'
                       : (text.isNotEmpty
                           ? 'Tap mic to re-speak or edit text above'
                           : 'Tap mic to speak · Powered by Groq AI')),
