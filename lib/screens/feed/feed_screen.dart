@@ -753,7 +753,6 @@ class _FeedScreenState extends State<FeedScreen> {
       directPublish: true,
     );
     if (result == true && mounted) {
-      RewardsService.instance.fetchSummary(forceRefresh: true);
       widget.repository.refresh();
     }
   }

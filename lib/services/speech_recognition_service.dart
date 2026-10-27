@@ -49,7 +49,9 @@ class SpeechRecognitionService {
         onStatus: (status) {
           debugPrint('Speech recognition status: $status');
         },
+        debugLogging: true,
         options: [
+          SpeechToText.androidIntentLookup,
           SpeechToText.androidNoBluetooth,
           SpeechToText.androidAlwaysUseStop,
         ],
@@ -57,9 +59,9 @@ class SpeechRecognitionService {
 
       if (!success) {
         success = await _speechToText.initialize(
+          debugLogging: true,
           options: [
             SpeechToText.androidNoBluetooth,
-            SpeechToText.androidIntentLookup,
             SpeechToText.androidAlwaysUseStop,
           ],
         );

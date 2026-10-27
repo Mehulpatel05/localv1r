@@ -1,31 +1,23 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
 import '../../../core/constants/areas_and_categories.dart';
 import '../../../core/utils/content_filter.dart';
 import '../../../services/ai_category_classifier_service.dart';
 import '../../../services/post_repository.dart';
-import '../../../services/r2_storage_service.dart';
 import '../../../services/speech_recognition_service.dart';
 import '../../../services/token_decision_engine.dart';
 import '../../../theme/app_colors.dart';
-
-enum VoiceInputMode { speechToText, audioRecord }
 
 class AiVoicePostResult {
   final String text;
   final PostCategory category;
   final String detectedLanguage;
-  final File? audioFile;
 
   const AiVoicePostResult({
     required this.text,
     required this.category,
     required this.detectedLanguage,
-    this.audioFile,
   });
 }
 
@@ -66,18 +58,13 @@ class AiVoicePostSheet extends StatefulWidget {
 class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerProviderStateMixin {
   final SpeechRecognitionService _speechService = SpeechRecognitionService.instance;
   final AiCategoryClassifierService _aiClassifier = AiCategoryClassifierService.instance;
-  final AudioRecorder _audioRecorder = AudioRecorder();
 
   final TextEditingController _textController = TextEditingController();
   PostCategory _selectedCategory = PostCategory.general;
   String _detectedLang = 'hi';
-  bool _isListening = true;
+  bool _isListening = false;
   double _soundLevel = 0.0;
-  VoiceInputMode _mode = VoiceInputMode.speechToText;
-
-  int _recordingSeconds = 0;
-  Timer? _recordTimer;
-  String? _recordedAudioPath;
+  bool _speechAvailable = true;
   bool _isPermissionDenied = false;
   bool _isPublishing = false;
   String? _publishError;
@@ -109,10 +96,8 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
 
   @override
   void dispose() {
-    _recordTimer?.cancel();
     _pulseAnimController.dispose();
     _speechService.stopListening();
-    _audioRecorder.dispose();
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     super.dispose();
@@ -133,6 +118,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     setState(() {
       _isPermissionDenied = false;
       _isListening = true;
+      _publishError = null;
     });
 
     final hasPerm = await _speechService.requestPermission();
@@ -150,93 +136,67 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     }
 
     final speechAvailable = await _speechService.initialize();
-    if (speechAvailable) {
-      _mode = VoiceInputMode.speechToText;
-      final started = await _speechService.startListening(
-        onResult: (recognizedWords, isFinal) {
-          if (!mounted) return;
-          setState(() {
-            _textController.text = recognizedWords;
-            if (recognizedWords.trim().isNotEmpty) {
-              _selectedCategory = _aiClassifier.classify(recognizedWords);
-              _detectedLang = _aiClassifier.detectLanguage(recognizedWords);
-            }
-            if (isFinal) {
-              _isListening = false;
-            }
-          });
-        },
-        onSoundLevelChange: (level) {
-          if (!mounted) return;
-          setState(() {
-            _soundLevel = level.clamp(0.0, 10.0);
-          });
-        },
-        onStatusChange: (status) {
-          if (!mounted) return;
-          if (status == 'done' || status == 'notListening') {
-            setState(() {
-              _isListening = false;
-            });
-          } else if (status == 'listening') {
-            setState(() {
-              _isListening = true;
-            });
-          }
-        },
-      );
-      if (started) return;
-    }
-
-    await _startAudioRecordFallback();
-  }
-
-  Future<void> _startAudioRecordFallback() async {
-    try {
-      if (await _audioRecorder.isRecording()) {
-        await _audioRecorder.stop();
-      }
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/ai_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _audioRecorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
-        path: path,
-      );
-      _recordedAudioPath = path;
-      _mode = VoiceInputMode.audioRecord;
-      _recordingSeconds = 0;
-      _recordTimer?.cancel();
-      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) return;
-        setState(() {
-          _recordingSeconds = timer.tick;
-        });
-      });
+    if (!speechAvailable) {
       if (mounted) {
         setState(() {
-          _isListening = true;
-        });
-      }
-    } catch (e) {
-      debugPrint('Fallback audio recording failed: $e');
-      if (mounted) {
-        setState(() {
+          _speechAvailable = false;
           _isListening = false;
         });
       }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _speechAvailable = true;
+      });
+    }
+
+    final started = await _speechService.startListening(
+      onResult: (recognizedWords, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          _textController.text = recognizedWords;
+          if (recognizedWords.trim().isNotEmpty) {
+            _selectedCategory = _aiClassifier.classify(recognizedWords);
+            _detectedLang = _aiClassifier.detectLanguage(recognizedWords);
+          }
+          if (isFinal) {
+            _isListening = false;
+          }
+        });
+      },
+      onSoundLevelChange: (level) {
+        if (!mounted) return;
+        setState(() {
+          _soundLevel = level.clamp(0.0, 10.0);
+        });
+      },
+      onStatusChange: (status) {
+        if (!mounted) return;
+        if (status == 'done' || status == 'notListening') {
+          setState(() {
+            _isListening = false;
+          });
+        } else if (status == 'listening') {
+          setState(() {
+            _isListening = true;
+          });
+        }
+      },
+    );
+
+    if (!started && mounted) {
+      setState(() {
+        _isListening = false;
+      });
     }
   }
 
   Future<void> _toggleListening() async {
     HapticFeedback.lightImpact();
     if (_isListening) {
-      if (_mode == VoiceInputMode.speechToText) {
-        await _speechService.stopListening();
-      } else {
-        _recordTimer?.cancel();
-        final path = await _audioRecorder.stop();
-        if (path != null) _recordedAudioPath = path;
-      }
+      await _speechService.stopListening();
       if (mounted) setState(() => _isListening = false);
     } else {
       await _startVoiceInputAuto();
@@ -247,26 +207,14 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     if (_isPublishing) return;
     HapticFeedback.mediumImpact();
 
-    File? audioFile;
-    if (_mode == VoiceInputMode.speechToText) {
-      await _speechService.stopListening();
-    } else {
-      _recordTimer?.cancel();
-      final path = await _audioRecorder.stop();
-      final finalPath = path ?? _recordedAudioPath;
-      if (finalPath != null) {
-        final f = File(finalPath);
-        if (await f.exists()) {
-          audioFile = f;
-        }
-      }
-    }
-
+    await _speechService.stopListening();
     if (!mounted) return;
 
     final clean = _textController.text.trim();
-    if (clean.isEmpty && audioFile == null) {
-      Navigator.pop(context);
+    if (clean.length < 15) {
+      setState(() {
+        _publishError = 'Please speak or write at least 15 characters to post (currently ${clean.length}/15).';
+      });
       return;
     }
 
@@ -277,7 +225,6 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
           text: clean,
           category: _selectedCategory,
           detectedLanguage: _detectedLang,
-          audioFile: audioFile,
         ),
       );
       return;
@@ -290,14 +237,12 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       return;
     }
 
-    if (clean.isNotEmpty) {
-      final validationError = ContentFilter.validateContent(clean);
-      if (validationError != null) {
-        setState(() {
-          _publishError = validationError;
-        });
-        return;
-      }
+    final validationError = ContentFilter.validateContent(clean);
+    if (validationError != null) {
+      setState(() {
+        _publishError = validationError;
+      });
+      return;
     }
 
     setState(() {
@@ -306,38 +251,25 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     });
 
     try {
-      String? uploadedAudioUrl;
-      if (audioFile != null && await audioFile.exists()) {
-        try {
-          uploadedAudioUrl = await R2StorageService.uploadMedia(audioFile, folder: 'audio');
-        } catch (e) {
-          debugPrint('Failed to upload audio: $e');
-        }
-      }
-
       final locService = widget.repository!.locationService;
       final effectiveCity = locService.city;
       final effectiveArea = locService.area ?? effectiveCity.areas.firstOrNull;
       final double? effectiveLat = effectiveArea?.lat ?? locService.rawLat;
       final double? effectiveLng = effectiveArea?.lng ?? locService.rawLng;
 
-      final postContent = clean.isNotEmpty ? clean : 'Voice update';
-
-      final postResult = await widget.repository!.addPost(
+      await widget.repository!.addPost(
         authorHandle: widget.currentUserHandle ?? '',
-        content: postContent,
+        content: clean,
         category: _selectedCategory,
         cityId: effectiveCity.id,
         areaId: effectiveArea?.id ?? effectiveCity.id,
         areaName: effectiveArea?.name ?? effectiveCity.name,
         lat: effectiveLat,
         lng: effectiveLng,
-        audioUrl: uploadedAudioUrl,
       );
 
       if (!mounted) return;
 
-      final awarded = (postResult['pointsAwarded'] as num?)?.toInt() ?? 0;
       Navigator.pop(context, true);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -347,17 +279,15 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(
             children: [
-              Icon(
-                awarded > 0 ? Icons.star_rounded : Icons.check_circle_rounded,
-                color: const Color(0xFFFEF3C7),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFFFEF3C7),
                 size: 20,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  awarded > 0
-                      ? 'Posted to ${_selectedCategory.label} · +$awarded pts'
-                      : 'Posted to ${_selectedCategory.label} successfully!',
+                  'Posted to ${_selectedCategory.label} successfully!',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -390,18 +320,12 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     }
   }
 
-  String _formatDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final hasText = _textController.text.trim().isNotEmpty;
-    final hasAudio = _mode == VoiceInputMode.audioRecord && _recordingSeconds > 0;
-    final canContinue = hasText || hasAudio;
+    final text = _textController.text.trim();
+    final hasMinLength = text.length >= 15;
+    final hasAnyText = text.isNotEmpty;
 
     return Container(
       margin: EdgeInsets.only(bottom: bottomInset),
@@ -472,16 +396,14 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _mode == VoiceInputMode.speechToText ? Icons.language : Icons.mic,
+                          const Icon(
+                            Icons.language,
                             size: 14,
                             color: AppColors.primary,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _mode == VoiceInputMode.speechToText
-                                ? _formatLanguageLabel(_detectedLang)
-                                : (_isListening ? _formatDuration(_recordingSeconds) : 'Voice Ready'),
+                            _formatLanguageLabel(_detectedLang),
                             style: const TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -520,66 +442,55 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   width: 1.5,
                 ),
               ),
-              child: _mode == VoiceInputMode.audioRecord && !hasText
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.graphic_eq_rounded,
-                            size: 42,
-                            color: _isListening ? AppColors.primary : Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _isListening
-                                ? 'Recording voice (${_formatDuration(_recordingSeconds)})... Speak clearly'
-                                : 'Voice recording ready · ${_formatDuration(_recordingSeconds)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: _isListening ? AppColors.primary : Colors.grey.shade700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.directPublish
-                                ? 'Tap Post Now to publish directly to Feed'
-                                : 'Select category below & tap Continue to Post',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF7E727C),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : TextField(
-                      controller: _textController,
-                      maxLines: null,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A1A1A),
-                        height: 1.45,
-                      ),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        hintText: _isListening
-                            ? 'Listening now... Speak in Hindi, Gujarati, or English'
-                            : 'Tap mic or type your update here...',
-                        hintStyle: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w500,
-                          color: _isListening ? AppColors.primary : Colors.grey.shade500,
-                        ),
-                      ),
-                    ),
+              child: TextField(
+                controller: _textController,
+                maxLines: null,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                  height: 1.45,
+                ),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: _isListening
+                      ? 'Listening now... Speak in Hindi, Gujarati, or English'
+                      : 'Tap mic to speak or type your post here...',
+                  hintStyle: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                    color: _isListening ? AppColors.primary : Colors.grey.shade500,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  hasMinLength
+                      ? '✓ Ready to post (${text.length} characters)'
+                      : '${text.length} / 15 characters minimum',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: hasMinLength ? const Color(0xFF059669) : const Color(0xFFD97706),
+                  ),
+                ),
+                Text(
+                  'Auto-categorized by AI',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 const Text(
@@ -645,7 +556,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             if (_isPermissionDenied) ...[
               const SizedBox(height: 12),
               const Text(
-                'Microphone permission is required to record speech.',
+                'Microphone permission is required to listen.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -666,6 +577,49 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
+                ),
+              ),
+            ] else if (!_speechAvailable) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 16),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Speech engine not ready. You can type directly above.',
+                        style: TextStyle(
+                          color: Color(0xFFB45309),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: _startVoiceInputAuto,
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -716,10 +670,8 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             const SizedBox(height: 8),
             Text(
               _isListening
-                  ? (_mode == VoiceInputMode.speechToText
-                      ? 'Listening automatically... Speak now'
-                      : 'Recording audio... Speak now')
-                  : 'Mic paused · Tap to resume',
+                  ? 'Listening automatically... Speak now'
+                  : (_speechAvailable ? 'Mic paused · Tap to speak' : 'Type your update above'),
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -757,7 +709,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             const SizedBox(height: 18),
             Row(
               children: [
-                if (canContinue)
+                if (hasAnyText)
                   Expanded(
                     flex: 1,
                     child: OutlinedButton(
@@ -773,8 +725,6 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                           : () {
                               setState(() {
                                 _textController.clear();
-                                _recordedAudioPath = null;
-                                _recordingSeconds = 0;
                                 _selectedCategory = PostCategory.general;
                                 _publishError = null;
                               });
@@ -790,20 +740,20 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                       ),
                     ),
                   ),
-                if (canContinue) const SizedBox(width: 12),
+                if (hasAnyText) const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: canContinue ? AppColors.primary : Colors.grey.shade300,
+                      backgroundColor: hasMinLength ? AppColors.primary : Colors.grey.shade300,
                       foregroundColor: Colors.white,
-                      elevation: canContinue ? 2 : 0,
+                      elevation: hasMinLength ? 2 : 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: (canContinue && !_isPublishing) ? _submitAndProceed : null,
+                    onPressed: (hasMinLength && !_isPublishing) ? _submitAndProceed : null,
                     child: _isPublishing
                         ? const Row(
                             mainAxisAlignment: MainAxisAlignment.center,

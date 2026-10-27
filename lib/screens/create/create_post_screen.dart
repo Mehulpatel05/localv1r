@@ -130,9 +130,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           _contentController.text = result.text;
         }
         _selectedCategory = result.category;
-        if (result.audioFile != null) {
-          _recordedAudioFile = result.audioFile;
-        }
       });
     }
   }
