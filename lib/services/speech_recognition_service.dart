@@ -42,7 +42,7 @@ class SpeechRecognitionService {
         return false;
       }
 
-      _isInitialized = await _speechToText.initialize(
+      bool success = await _speechToText.initialize(
         onError: (errorNotification) {
           debugPrint('Speech recognition error: ${errorNotification.errorMsg}');
         },
@@ -51,10 +51,21 @@ class SpeechRecognitionService {
         },
         options: [
           SpeechToText.androidNoBluetooth,
-          SpeechToText.androidIntentLookup,
           SpeechToText.androidAlwaysUseStop,
         ],
       );
+
+      if (!success) {
+        success = await _speechToText.initialize(
+          options: [
+            SpeechToText.androidNoBluetooth,
+            SpeechToText.androidIntentLookup,
+            SpeechToText.androidAlwaysUseStop,
+          ],
+        );
+      }
+
+      _isInitialized = success;
       return _isInitialized;
     } catch (e) {
       debugPrint('Speech initialization failed: $e');

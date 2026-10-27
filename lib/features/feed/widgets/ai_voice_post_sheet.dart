@@ -1,19 +1,27 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../../../core/constants/areas_and_categories.dart';
 import '../../../services/ai_category_classifier_service.dart';
 import '../../../services/speech_recognition_service.dart';
 import '../../../theme/app_colors.dart';
 
+enum VoiceInputMode { speechToText, audioRecord }
+
 class AiVoicePostResult {
   final String text;
   final PostCategory category;
   final String detectedLanguage;
+  final File? audioFile;
 
   const AiVoicePostResult({
     required this.text,
     required this.category,
     required this.detectedLanguage,
+    this.audioFile,
   });
 }
 
@@ -36,16 +44,29 @@ class AiVoicePostSheet extends StatefulWidget {
 class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerProviderStateMixin {
   final SpeechRecognitionService _speechService = SpeechRecognitionService.instance;
   final AiCategoryClassifierService _aiClassifier = AiCategoryClassifierService.instance;
+  final AudioRecorder _audioRecorder = AudioRecorder();
 
   final TextEditingController _textController = TextEditingController();
-  PostCategory _suggestedCategory = PostCategory.general;
+  PostCategory _selectedCategory = PostCategory.general;
   String _detectedLang = 'hi';
   bool _isListening = true;
   double _soundLevel = 0.0;
-  String? _errorMessage;
+  VoiceInputMode _mode = VoiceInputMode.speechToText;
+
+  int _recordingSeconds = 0;
+  Timer? _recordTimer;
+  String? _recordedAudioPath;
   bool _isPermissionDenied = false;
 
   late final AnimationController _pulseAnimController;
+
+  static const List<PostCategory> _categories = [
+    PostCategory.general,
+    PostCategory.question,
+    PostCategory.events,
+    PostCategory.alerts,
+    PostCategory.safety,
+  ];
 
   @override
   void initState() {
@@ -58,14 +79,16 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     _textController.addListener(_onTextChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startVoiceListeningAuto();
+      _startVoiceInputAuto();
     });
   }
 
   @override
   void dispose() {
+    _recordTimer?.cancel();
     _pulseAnimController.dispose();
     _speechService.stopListening();
+    _audioRecorder.dispose();
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     super.dispose();
@@ -75,16 +98,15 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     final text = _textController.text.trim();
     if (text.isNotEmpty) {
       setState(() {
-        _suggestedCategory = _aiClassifier.classify(text);
+        _selectedCategory = _aiClassifier.classify(text);
         _detectedLang = _aiClassifier.detectLanguage(text);
       });
     }
   }
 
-  Future<void> _startVoiceListeningAuto() async {
+  Future<void> _startVoiceInputAuto() async {
     if (!mounted) return;
     setState(() {
-      _errorMessage = null;
       _isPermissionDenied = false;
       _isListening = true;
     });
@@ -96,79 +118,139 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       setState(() {
         _isListening = false;
         _isPermissionDenied = true;
-        _errorMessage = permanentlyDenied
-            ? 'Microphone permission is blocked in settings. Please tap below to enable.'
-            : 'Microphone permission is required to speak your post.';
       });
+      if (permanentlyDenied) {
+        await _speechService.openSettings();
+      }
       return;
     }
 
-    final started = await _speechService.startListening(
-      onResult: (recognizedWords, isFinal) {
-        if (!mounted) return;
-        setState(() {
-          _textController.text = recognizedWords;
-          if (recognizedWords.trim().isNotEmpty) {
-            _suggestedCategory = _aiClassifier.classify(recognizedWords);
-            _detectedLang = _aiClassifier.detectLanguage(recognizedWords);
-          }
-          if (isFinal) {
-            _isListening = false;
-          }
-        });
-      },
-      onSoundLevelChange: (level) {
-        if (!mounted) return;
-        setState(() {
-          _soundLevel = level.clamp(0.0, 10.0);
-        });
-      },
-      onStatusChange: (status) {
-        if (!mounted) return;
-        if (status == 'done' || status == 'notListening') {
+    final speechAvailable = await _speechService.initialize();
+    if (speechAvailable) {
+      _mode = VoiceInputMode.speechToText;
+      final started = await _speechService.startListening(
+        onResult: (recognizedWords, isFinal) {
+          if (!mounted) return;
           setState(() {
-            _isListening = false;
+            _textController.text = recognizedWords;
+            if (recognizedWords.trim().isNotEmpty) {
+              _selectedCategory = _aiClassifier.classify(recognizedWords);
+              _detectedLang = _aiClassifier.detectLanguage(recognizedWords);
+            }
+            if (isFinal) {
+              _isListening = false;
+            }
           });
-        } else if (status == 'listening') {
+        },
+        onSoundLevelChange: (level) {
+          if (!mounted) return;
           setState(() {
-            _isListening = true;
+            _soundLevel = level.clamp(0.0, 10.0);
           });
-        }
-      },
-    );
+        },
+        onStatusChange: (status) {
+          if (!mounted) return;
+          if (status == 'done' || status == 'notListening') {
+            setState(() {
+              _isListening = false;
+            });
+          } else if (status == 'listening') {
+            setState(() {
+              _isListening = true;
+            });
+          }
+        },
+      );
+      if (started) return;
+    }
 
-    if (!started && mounted) {
-      setState(() {
-        _isListening = false;
-        _errorMessage = 'Speech engine is unavailable on this device. You can type directly or retry.';
+    await _startAudioRecordFallback();
+  }
+
+  Future<void> _startAudioRecordFallback() async {
+    try {
+      if (await _audioRecorder.isRecording()) {
+        await _audioRecorder.stop();
+      }
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/ai_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _audioRecorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+        path: path,
+      );
+      _recordedAudioPath = path;
+      _mode = VoiceInputMode.audioRecord;
+      _recordingSeconds = 0;
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        setState(() {
+          _recordingSeconds = timer.tick;
+        });
       });
+      if (mounted) {
+        setState(() {
+          _isListening = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Fallback audio recording failed: $e');
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+        });
+      }
     }
   }
 
   Future<void> _toggleListening() async {
     HapticFeedback.lightImpact();
     if (_isListening) {
-      await _speechService.stopListening();
+      if (_mode == VoiceInputMode.speechToText) {
+        await _speechService.stopListening();
+      } else {
+        _recordTimer?.cancel();
+        final path = await _audioRecorder.stop();
+        if (path != null) _recordedAudioPath = path;
+      }
       if (mounted) setState(() => _isListening = false);
     } else {
-      await _startVoiceListeningAuto();
+      await _startVoiceInputAuto();
     }
   }
 
-  void _submitAndProceed() {
+  Future<void> _submitAndProceed() async {
     HapticFeedback.mediumImpact();
-    _speechService.stopListening();
+    File? audioFile;
+    if (_mode == VoiceInputMode.speechToText) {
+      await _speechService.stopListening();
+    } else {
+      _recordTimer?.cancel();
+      final path = await _audioRecorder.stop();
+      final finalPath = path ?? _recordedAudioPath;
+      if (finalPath != null) {
+        final f = File(finalPath);
+        if (await f.exists()) {
+          audioFile = f;
+        }
+      }
+    }
+
+    if (!mounted) return;
+
     final clean = _textController.text.trim();
-    if (clean.isEmpty) {
+    if (clean.isEmpty && audioFile == null) {
       Navigator.pop(context);
       return;
     }
+
     Navigator.pop(
       context,
       AiVoicePostResult(
         text: clean,
-        category: _suggestedCategory,
+        category: _selectedCategory,
         detectedLanguage: _detectedLang,
+        audioFile: audioFile,
       ),
     );
   }
@@ -188,10 +270,18 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     }
   }
 
+  String _formatDuration(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final hasText = _textController.text.trim().isNotEmpty;
+    final hasAudio = _mode == VoiceInputMode.audioRecord && _recordingSeconds > 0;
+    final canContinue = hasText || hasAudio;
 
     return Container(
       margin: EdgeInsets.only(bottom: bottomInset),
@@ -260,10 +350,16 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.language, size: 14, color: AppColors.primary),
+                      Icon(
+                        _mode == VoiceInputMode.speechToText ? Icons.language : Icons.mic,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        _formatLanguageLabel(_detectedLang),
+                        _mode == VoiceInputMode.speechToText
+                            ? _formatLanguageLabel(_detectedLang)
+                            : (_isListening ? _formatDuration(_recordingSeconds) : 'Voice Ready'),
                         style: const TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
@@ -288,106 +384,152 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   width: 1.5,
                 ),
               ),
-              child: TextField(
-                controller: _textController,
-                maxLines: null,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
-                  height: 1.45,
-                ),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: _isListening
-                      ? 'Listening now... Speak in Hindi, Gujarati, or English'
-                      : 'Tap mic or type to write update...',
-                  hintStyle: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w500,
-                    color: _isListening ? AppColors.primary : Colors.grey.shade500,
-                  ),
-                ),
-              ),
-            ),
-            if (hasText) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text(
-                    'AI Category:',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF6B5E68),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _suggestedCategory.icon,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          _suggestedCategory.label,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+              child: _mode == VoiceInputMode.audioRecord && !hasText
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.graphic_eq_rounded,
+                            size: 42,
+                            color: _isListening ? AppColors.primary : Colors.grey.shade400,
                           ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _isListening
+                                ? 'Recording voice (${_formatDuration(_recordingSeconds)})... Speak clearly'
+                                : 'Voice recording ready · ${_formatDuration(_recordingSeconds)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _isListening ? AppColors.primary : Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Select category below & tap Continue to Post',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF7E727C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : TextField(
+                      controller: _textController,
+                      maxLines: null,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A1A),
+                        height: 1.45,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        hintText: _isListening
+                            ? 'Listening now... Speak in Hindi, Gujarati, or English'
+                            : 'Tap mic or type your update here...',
+                        hintStyle: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w500,
+                          color: _isListening ? AppColors.primary : Colors.grey.shade500,
                         ),
-                      ],
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Text(
+                  'Category:',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B5E68),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: _categories.map((cat) {
+                        final isSelected = cat == _selectedCategory;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _selectedCategory = cat;
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.primary : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(cat.icon, style: const TextStyle(fontSize: 12)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    cat.label,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected ? Colors.white : const Color(0xFF333333),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
-                ],
-              ),
-            ],
-            if (_errorMessage != null) ...[
+                ),
+              ],
+            ),
+            if (_isPermissionDenied) ...[
               const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
+              const Text(
+                'Microphone permission is required to record speech.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
                   color: AppColors.error,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (_isPermissionDenied) ...[
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: () async {
-                    await _speechService.openSettings();
-                  },
-                  icon: const Icon(Icons.settings, size: 16, color: AppColors.primary),
-                  label: const Text(
-                    'Open App Settings',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: () async {
+                  await _speechService.openSettings();
+                },
+                icon: const Icon(Icons.settings, size: 16, color: AppColors.primary),
+                label: const Text(
+                  'Open Settings',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
                 ),
-              ],
+              ),
             ],
             const SizedBox(height: 16),
             GestureDetector(
@@ -435,7 +577,11 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             ),
             const SizedBox(height: 8),
             Text(
-              _isListening ? 'Listening automatically... Speak now' : 'Mic paused · Tap to resume',
+              _isListening
+                  ? (_mode == VoiceInputMode.speechToText
+                      ? 'Listening automatically... Speak now'
+                      : 'Recording audio... Speak now')
+                  : 'Mic paused · Tap to resume',
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -445,7 +591,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             const SizedBox(height: 18),
             Row(
               children: [
-                if (hasText)
+                if (canContinue)
                   Expanded(
                     flex: 1,
                     child: OutlinedButton(
@@ -459,9 +605,11 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                       onPressed: () {
                         setState(() {
                           _textController.clear();
-                          _suggestedCategory = PostCategory.general;
+                          _recordedAudioPath = null;
+                          _recordingSeconds = 0;
+                          _selectedCategory = PostCategory.general;
                         });
-                        _startVoiceListeningAuto();
+                        _startVoiceInputAuto();
                       },
                       child: const Text(
                         'Re-speak',
@@ -473,20 +621,20 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                       ),
                     ),
                   ),
-                if (hasText) const SizedBox(width: 12),
+                if (canContinue) const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: hasText ? AppColors.primary : Colors.grey.shade300,
+                      backgroundColor: canContinue ? AppColors.primary : Colors.grey.shade300,
                       foregroundColor: Colors.white,
-                      elevation: hasText ? 2 : 0,
+                      elevation: canContinue ? 2 : 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: hasText ? _submitAndProceed : null,
+                    onPressed: canContinue ? _submitAndProceed : null,
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

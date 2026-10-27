@@ -25,6 +25,7 @@ class CreatePostScreen extends StatefulWidget {
   final String authorHandle;
   final String? initialContent;
   final PostCategory? initialCategory;
+  final File? initialAudioFile;
 
   const CreatePostScreen({
     super.key,
@@ -32,6 +33,7 @@ class CreatePostScreen extends StatefulWidget {
     required this.authorHandle,
     this.initialContent,
     this.initialCategory,
+    this.initialAudioFile,
   });
 
   @override
@@ -80,6 +82,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (widget.initialCategory != null) {
       _selectedCategory = widget.initialCategory!;
     }
+    if (widget.initialAudioFile != null && widget.initialAudioFile!.existsSync()) {
+      _recordedAudioFile = widget.initialAudioFile;
+    }
     final loc = widget.repository.locationService;
     _selectedArea = loc.area ?? loc.city.areas.firstOrNull;
     _contentController.addListener(_validateLiveInput);
@@ -116,8 +121,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final result = await AiVoicePostSheet.show(context);
     if (result != null && mounted) {
       setState(() {
-        _contentController.text = result.text;
+        if (result.text.isNotEmpty) {
+          _contentController.text = result.text;
+        }
         _selectedCategory = result.category;
+        if (result.audioFile != null) {
+          _recordedAudioFile = result.audioFile;
+        }
       });
     }
   }

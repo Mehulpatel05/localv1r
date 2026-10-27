@@ -756,6 +756,7 @@ class _FeedScreenState extends State<FeedScreen> {
             authorHandle: widget.currentUserHandle,
             initialContent: result.text,
             initialCategory: result.category,
+            initialAudioFile: result.audioFile,
           ),
         ),
       );
