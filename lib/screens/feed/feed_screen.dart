@@ -746,23 +746,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _openAiVoicePostSheet() async {
-    final result = await AiVoicePostSheet.show(context);
-    if (result != null && mounted) {
-      final posted = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CreatePostScreen(
-            repository: widget.repository,
-            authorHandle: widget.currentUserHandle,
-            initialContent: result.text,
-            initialCategory: result.category,
-            initialAudioFile: result.audioFile,
-          ),
-        ),
-      );
-      if (posted == true) {
-        RewardsService.instance.fetchSummary(forceRefresh: true);
-      }
+    final result = await AiVoicePostSheet.show(
+      context,
+      repository: widget.repository,
+      currentUserHandle: widget.currentUserHandle,
+      directPublish: true,
+    );
+    if (result == true && mounted) {
+      RewardsService.instance.fetchSummary(forceRefresh: true);
       widget.repository.refresh();
     }
   }

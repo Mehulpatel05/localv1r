@@ -118,8 +118,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _openAiVoiceSheet() async {
-    final result = await AiVoicePostSheet.show(context);
-    if (result != null && mounted) {
+    final result = await AiVoicePostSheet.show(
+      context,
+      repository: widget.repository,
+      currentUserHandle: widget.authorHandle,
+      directPublish: false,
+    );
+    if (result is AiVoicePostResult && mounted) {
       setState(() {
         if (result.text.isNotEmpty) {
           _contentController.text = result.text;

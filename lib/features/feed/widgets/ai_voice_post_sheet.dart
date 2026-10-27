@@ -5,8 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../../../core/constants/areas_and_categories.dart';
+import '../../../core/utils/content_filter.dart';
 import '../../../services/ai_category_classifier_service.dart';
+import '../../../services/post_repository.dart';
+import '../../../services/r2_storage_service.dart';
 import '../../../services/speech_recognition_service.dart';
+import '../../../services/token_decision_engine.dart';
 import '../../../theme/app_colors.dart';
 
 enum VoiceInputMode { speechToText, audioRecord }
@@ -26,14 +30,32 @@ class AiVoicePostResult {
 }
 
 class AiVoicePostSheet extends StatefulWidget {
-  const AiVoicePostSheet({super.key});
+  final PostRepository? repository;
+  final String? currentUserHandle;
+  final bool directPublish;
 
-  static Future<AiVoicePostResult?> show(BuildContext context) {
-    return showModalBottomSheet<AiVoicePostResult>(
+  const AiVoicePostSheet({
+    super.key,
+    this.repository,
+    this.currentUserHandle,
+    this.directPublish = false,
+  });
+
+  static Future<dynamic> show(
+    BuildContext context, {
+    PostRepository? repository,
+    String? currentUserHandle,
+    bool directPublish = false,
+  }) {
+    return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const AiVoicePostSheet(),
+      builder: (_) => AiVoicePostSheet(
+        repository: repository,
+        currentUserHandle: currentUserHandle,
+        directPublish: directPublish,
+      ),
     );
   }
 
@@ -57,6 +79,8 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   Timer? _recordTimer;
   String? _recordedAudioPath;
   bool _isPermissionDenied = false;
+  bool _isPublishing = false;
+  String? _publishError;
 
   late final AnimationController _pulseAnimController;
 
@@ -220,7 +244,9 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   }
 
   Future<void> _submitAndProceed() async {
+    if (_isPublishing) return;
     HapticFeedback.mediumImpact();
+
     File? audioFile;
     if (_mode == VoiceInputMode.speechToText) {
       await _speechService.stopListening();
@@ -244,15 +270,109 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       return;
     }
 
-    Navigator.pop(
-      context,
-      AiVoicePostResult(
-        text: clean,
+    if (!widget.directPublish || widget.repository == null) {
+      Navigator.pop(
+        context,
+        AiVoicePostResult(
+          text: clean,
+          category: _selectedCategory,
+          detectedLanguage: _detectedLang,
+          audioFile: audioFile,
+        ),
+      );
+      return;
+    }
+
+    if (!TokenDecisionEngine.instance.canPost) {
+      setState(() {
+        _publishError = 'Your account is currently restricted from creating posts.';
+      });
+      return;
+    }
+
+    if (clean.isNotEmpty) {
+      final validationError = ContentFilter.validateContent(clean);
+      if (validationError != null) {
+        setState(() {
+          _publishError = validationError;
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _isPublishing = true;
+      _publishError = null;
+    });
+
+    try {
+      String? uploadedAudioUrl;
+      if (audioFile != null && await audioFile.exists()) {
+        try {
+          uploadedAudioUrl = await R2StorageService.uploadMedia(audioFile, folder: 'audio');
+        } catch (e) {
+          debugPrint('Failed to upload audio: $e');
+        }
+      }
+
+      final locService = widget.repository!.locationService;
+      final effectiveCity = locService.city;
+      final effectiveArea = locService.area ?? effectiveCity.areas.firstOrNull;
+      final double? effectiveLat = effectiveArea?.lat ?? locService.rawLat;
+      final double? effectiveLng = effectiveArea?.lng ?? locService.rawLng;
+
+      final postContent = clean.isNotEmpty ? clean : 'Voice update';
+
+      final postResult = await widget.repository!.addPost(
+        authorHandle: widget.currentUserHandle ?? '',
+        content: postContent,
         category: _selectedCategory,
-        detectedLanguage: _detectedLang,
-        audioFile: audioFile,
-      ),
-    );
+        cityId: effectiveCity.id,
+        areaId: effectiveArea?.id ?? effectiveCity.id,
+        areaName: effectiveArea?.name ?? effectiveCity.name,
+        lat: effectiveLat,
+        lng: effectiveLng,
+        audioUrl: uploadedAudioUrl,
+      );
+
+      if (!mounted) return;
+
+      final awarded = (postResult['pointsAwarded'] as num?)?.toInt() ?? 0;
+      Navigator.pop(context, true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              Icon(
+                awarded > 0 ? Icons.star_rounded : Icons.check_circle_rounded,
+                color: const Color(0xFFFEF3C7),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  awarded > 0
+                      ? 'Posted to ${_selectedCategory.label} · +$awarded pts'
+                      : 'Posted to ${_selectedCategory.label} successfully!',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+          _publishError = 'Failed to publish post: $e';
+        });
+      }
+    }
   }
 
   String _formatLanguageLabel(String lang) {
@@ -341,33 +461,49 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7EAF5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _mode == VoiceInputMode.speechToText ? Icons.language : Icons.mic,
-                        size: 14,
-                        color: AppColors.primary,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7EAF5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _mode == VoiceInputMode.speechToText
-                            ? _formatLanguageLabel(_detectedLang)
-                            : (_isListening ? _formatDuration(_recordingSeconds) : 'Voice Ready'),
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _mode == VoiceInputMode.speechToText ? Icons.language : Icons.mic,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _mode == VoiceInputMode.speechToText
+                                ? _formatLanguageLabel(_detectedLang)
+                                : (_isListening ? _formatDuration(_recordingSeconds) : 'Voice Ready'),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
                         ),
+                        child: Icon(Icons.close_rounded, size: 18, color: Colors.grey.shade600),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -406,9 +542,11 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Select category below & tap Continue to Post',
-                            style: TextStyle(
+                          Text(
+                            widget.directPublish
+                                ? 'Tap Post Now to publish directly to Feed'
+                                : 'Select category below & tap Continue to Post',
+                            style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF7E727C),
@@ -588,6 +726,34 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                 color: _isListening ? AppColors.primary : Colors.grey.shade600,
               ),
             ),
+            if (_publishError != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _publishError!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             Row(
               children: [
@@ -602,15 +768,18 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _textController.clear();
-                          _recordedAudioPath = null;
-                          _recordingSeconds = 0;
-                          _selectedCategory = PostCategory.general;
-                        });
-                        _startVoiceInputAuto();
-                      },
+                      onPressed: _isPublishing
+                          ? null
+                          : () {
+                              setState(() {
+                                _textController.clear();
+                                _recordedAudioPath = null;
+                                _recordingSeconds = 0;
+                                _selectedCategory = PostCategory.general;
+                                _publishError = null;
+                              });
+                              _startVoiceInputAuto();
+                            },
                       child: const Text(
                         'Re-speak',
                         style: TextStyle(
@@ -634,22 +803,48 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: canContinue ? _submitAndProceed : null,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Continue to Post',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
+                    onPressed: (canContinue && !_isPublishing) ? _submitAndProceed : null,
+                    child: _isPublishing
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Posting...',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                widget.directPublish ? 'Post Now' : 'Continue to Post',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                widget.directPublish ? Icons.send_rounded : Icons.arrow_forward_rounded,
+                                size: 18,
+                              ),
+                            ],
                           ),
-                        ),
-                        SizedBox(width: 6),
-                        Icon(Icons.arrow_forward_rounded, size: 18),
-                      ],
-                    ),
                   ),
                 ),
               ],
