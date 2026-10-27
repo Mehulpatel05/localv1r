@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import '../../../core/constants/areas_and_categories.dart';
 import '../../../core/utils/content_filter.dart';
 import '../../../services/ai_category_classifier_service.dart';
+import '../../../services/groq_whisper_service.dart';
 import '../../../services/post_repository.dart';
-import '../../../services/speech_recognition_service.dart';
 import '../../../services/token_decision_engine.dart';
 import '../../../theme/app_colors.dart';
 
@@ -56,18 +60,23 @@ class AiVoicePostSheet extends StatefulWidget {
 }
 
 class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerProviderStateMixin {
-  final SpeechRecognitionService _speechService = SpeechRecognitionService.instance;
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final GroqWhisperService _groqService = GroqWhisperService.instance;
   final AiCategoryClassifierService _aiClassifier = AiCategoryClassifierService.instance;
 
   final TextEditingController _textController = TextEditingController();
   PostCategory _selectedCategory = PostCategory.general;
   String _detectedLang = 'hi';
-  bool _isListening = false;
+  bool _isRecording = false;
+  bool _isTranscribing = false;
   double _soundLevel = 0.0;
-  bool _speechAvailable = true;
   bool _isPermissionDenied = false;
   bool _isPublishing = false;
   String? _publishError;
+  String? _currentAudioPath;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  Timer? _recordTimer;
+  int _recordSeconds = 0;
 
   late final AnimationController _pulseAnimController;
 
@@ -90,14 +99,16 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     _textController.addListener(_onTextChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startVoiceInputAuto();
+      _startRecordingAuto();
     });
   }
 
   @override
   void dispose() {
     _pulseAnimController.dispose();
-    _speechService.stopListening();
+    _amplitudeSub?.cancel();
+    _recordTimer?.cancel();
+    _audioRecorder.dispose();
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     super.dispose();
@@ -113,102 +124,144 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     }
   }
 
-  Future<void> _startVoiceInputAuto() async {
+  Future<void> _startRecordingAuto() async {
     if (!mounted) return;
     setState(() {
       _isPermissionDenied = false;
-      _isListening = true;
+      _isRecording = true;
+      _isTranscribing = false;
       _publishError = null;
+      _recordSeconds = 0;
     });
 
-    final hasPerm = await _speechService.requestPermission();
+    final hasPerm = await _audioRecorder.hasPermission();
     if (!hasPerm) {
-      if (!mounted) return;
-      final permanentlyDenied = await _speechService.isPermissionPermanentlyDenied();
-      setState(() {
-        _isListening = false;
-        _isPermissionDenied = true;
-      });
-      if (permanentlyDenied) {
-        await _speechService.openSettings();
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        if (!mounted) return;
+        setState(() {
+          _isRecording = false;
+          _isPermissionDenied = true;
+        });
+        return;
       }
-      return;
     }
 
-    final speechAvailable = await _speechService.initialize();
-    if (!speechAvailable) {
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/ai_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      _currentAudioPath = path;
+
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+
+      _amplitudeSub?.cancel();
+      _amplitudeSub = _audioRecorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
+        if (!mounted) return;
+        final normalized = ((amp.current + 50) / 50).clamp(0.0, 1.0);
+        setState(() {
+          _soundLevel = normalized * 10.0;
+        });
+      });
+
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        setState(() {
+          _recordSeconds++;
+        });
+        if (_recordSeconds >= 30) {
+          _stopAndTranscribe();
+        }
+      });
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _speechAvailable = false;
-          _isListening = false;
+          _isRecording = false;
+          _publishError = 'Could not start microphone: $e';
         });
       }
-      return;
     }
+  }
 
-    if (mounted) {
-      setState(() {
-        _speechAvailable = true;
-      });
-    }
+  Future<void> _stopAndTranscribe() async {
+    if (!_isRecording && !_isTranscribing) return;
+    HapticFeedback.lightImpact();
 
-    final started = await _speechService.startListening(
-      onResult: (recognizedWords, isFinal) {
-        if (!mounted) return;
+    _amplitudeSub?.cancel();
+    _recordTimer?.cancel();
+
+    setState(() {
+      _isRecording = false;
+      _isTranscribing = true;
+      _soundLevel = 0.0;
+    });
+
+    try {
+      final stoppedPath = await _audioRecorder.stop() ?? _currentAudioPath;
+      if (stoppedPath == null) {
+        setState(() => _isTranscribing = false);
+        return;
+      }
+
+      final transcribed = await _groqService.transcribeAudio(stoppedPath);
+      try {
+        final file = File(stoppedPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      if (transcribed != null && transcribed.trim().isNotEmpty) {
+        final clean = transcribed.trim();
         setState(() {
-          _textController.text = recognizedWords;
-          if (recognizedWords.trim().isNotEmpty) {
-            _selectedCategory = _aiClassifier.classify(recognizedWords);
-            _detectedLang = _aiClassifier.detectLanguage(recognizedWords);
-          }
-          if (isFinal) {
-            _isListening = false;
+          _textController.text = clean;
+          _selectedCategory = _aiClassifier.classify(clean);
+          _detectedLang = _aiClassifier.detectLanguage(clean);
+          _isTranscribing = false;
+        });
+      } else {
+        setState(() {
+          _isTranscribing = false;
+          if (_textController.text.trim().isEmpty) {
+            _publishError = 'Could not capture voice clearly. Please tap mic and speak again or type above.';
           }
         });
-      },
-      onSoundLevelChange: (level) {
-        if (!mounted) return;
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _soundLevel = level.clamp(0.0, 10.0);
+          _isTranscribing = false;
+          _publishError = 'Voice processing error: $e';
         });
-      },
-      onStatusChange: (status) {
-        if (!mounted) return;
-        if (status == 'done' || status == 'notListening') {
-          setState(() {
-            _isListening = false;
-          });
-        } else if (status == 'listening') {
-          setState(() {
-            _isListening = true;
-          });
-        }
-      },
-    );
-
-    if (!started && mounted) {
-      setState(() {
-        _isListening = false;
-      });
+      }
     }
   }
 
   Future<void> _toggleListening() async {
+    if (_isTranscribing) return;
     HapticFeedback.lightImpact();
-    if (_isListening) {
-      await _speechService.stopListening();
-      if (mounted) setState(() => _isListening = false);
+    if (_isRecording) {
+      await _stopAndTranscribe();
     } else {
-      await _startVoiceInputAuto();
+      await _startRecordingAuto();
     }
   }
 
   Future<void> _submitAndProceed() async {
-    if (_isPublishing) return;
+    if (_isPublishing || _isTranscribing) return;
     HapticFeedback.mediumImpact();
 
-    await _speechService.stopListening();
-    if (!mounted) return;
+    if (_isRecording) {
+      await _stopAndTranscribe();
+      if (!mounted) return;
+    }
 
     final clean = _textController.text.trim();
     if (clean.length < 15) {
@@ -438,7 +491,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                 color: const Color(0xFFF9F7FA),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: _isListening ? AppColors.primary.withValues(alpha: 0.45) : Colors.grey.shade200,
+                  color: _isRecording ? AppColors.primary.withValues(alpha: 0.45) : Colors.grey.shade200,
                   width: 1.5,
                 ),
               ),
@@ -455,13 +508,15 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
-                  hintText: _isListening
-                      ? 'Listening now... Speak in Hindi, Gujarati, or English'
-                      : 'Tap mic to speak or type your post here...',
+                  hintText: _isTranscribing
+                      ? 'Transcribing your voice with Groq Whisper AI...'
+                      : (_isRecording
+                          ? 'Listening now... Speak in Hindi, Gujarati, or English'
+                          : 'Tap mic to speak or type your post here...'),
                   hintStyle: TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w500,
-                    color: _isListening ? AppColors.primary : Colors.grey.shade500,
+                    color: _isRecording ? AppColors.primary : Colors.grey.shade500,
                   ),
                 ),
               ),
@@ -567,7 +622,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
               const SizedBox(height: 6),
               TextButton.icon(
                 onPressed: () async {
-                  await _speechService.openSettings();
+                  await openAppSettings();
                 },
                 icon: const Icon(Icons.settings, size: 16, color: AppColors.primary),
                 label: const Text(
@@ -579,44 +634,34 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   ),
                 ),
               ),
-            ] else if (!_speechAvailable) ...[
+            ] else if (_isTranscribing) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
                 ),
-                child: Row(
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 16),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Speech engine not ready. You can type directly above.',
-                        style: TextStyle(
-                          color: Color(0xFFB45309),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF16A34A),
                       ),
                     ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(44, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: _startVoiceInputAuto,
-                      child: const Text(
-                        'Retry',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
+                    SizedBox(width: 8),
+                    Text(
+                      'AI is transcribing your voice with Groq Whisper...',
+                      style: TextStyle(
+                        color: Color(0xFF15803D),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -629,7 +674,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
               child: AnimatedBuilder(
                 animation: _pulseAnimController,
                 builder: (context, child) {
-                  final pulse = _isListening
+                  final pulse = _isRecording
                       ? (1.0 + (_pulseAnimController.value * 0.12) + (_soundLevel * 0.02))
                       : 1.0;
                   return Transform.scale(
@@ -638,15 +683,15 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                       width: 66,
                       height: 66,
                       decoration: BoxDecoration(
-                        color: _isListening ? AppColors.primary : Colors.grey.shade100,
+                        color: _isRecording ? AppColors.primary : Colors.grey.shade100,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: _isListening
+                          color: _isRecording
                               ? AppColors.primary.withValues(alpha: 0.3)
                               : Colors.grey.shade300,
-                          width: _isListening ? 4 : 1.5,
+                          width: _isRecording ? 4 : 1.5,
                         ),
-                        boxShadow: _isListening
+                        boxShadow: _isRecording
                             ? [
                                 BoxShadow(
                                   color: AppColors.primary.withValues(alpha: 0.35),
@@ -657,11 +702,22 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                               ]
                             : null,
                       ),
-                      child: Icon(
-                        _isListening ? Icons.mic : Icons.mic_none,
-                        color: _isListening ? Colors.white : AppColors.primary,
-                        size: 32,
-                      ),
+                      child: _isTranscribing
+                          ? const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              _isRecording ? Icons.stop_rounded : Icons.mic_none,
+                              color: _isRecording ? Colors.white : AppColors.primary,
+                              size: 32,
+                            ),
                     ),
                   );
                 },
@@ -669,13 +725,17 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             ),
             const SizedBox(height: 8),
             Text(
-              _isListening
-                  ? 'Listening automatically... Speak now'
-                  : (_speechAvailable ? 'Mic paused · Tap to speak' : 'Type your update above'),
+              _isRecording
+                  ? 'Listening (${_recordSeconds}s) · Tap to finish speaking'
+                  : (_isTranscribing
+                      ? 'Converting speech to text...'
+                      : (text.isNotEmpty
+                          ? 'Tap mic to re-speak or edit text above'
+                          : 'Tap mic to speak · Powered by Groq AI')),
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                color: _isListening ? AppColors.primary : Colors.grey.shade600,
+                color: _isRecording ? AppColors.primary : Colors.grey.shade600,
               ),
             ),
             if (_publishError != null) ...[
@@ -720,7 +780,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: _isPublishing
+                      onPressed: (_isPublishing || _isTranscribing)
                           ? null
                           : () {
                               setState(() {
@@ -728,7 +788,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                                 _selectedCategory = PostCategory.general;
                                 _publishError = null;
                               });
-                              _startVoiceInputAuto();
+                              _startRecordingAuto();
                             },
                       child: const Text(
                         'Re-speak',
@@ -745,15 +805,15 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                   flex: 2,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: hasMinLength ? AppColors.primary : Colors.grey.shade300,
+                      backgroundColor: (hasMinLength && !_isTranscribing) ? AppColors.primary : Colors.grey.shade300,
                       foregroundColor: Colors.white,
-                      elevation: hasMinLength ? 2 : 0,
+                      elevation: (hasMinLength && !_isTranscribing) ? 2 : 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: (hasMinLength && !_isPublishing) ? _submitAndProceed : null,
+                    onPressed: (hasMinLength && !_isPublishing && !_isTranscribing) ? _submitAndProceed : null,
                     child: _isPublishing
                         ? const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -777,24 +837,47 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                               ),
                             ],
                           )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                widget.directPublish ? 'Post Now' : 'Continue to Post',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Icon(
-                                widget.directPublish ? Icons.send_rounded : Icons.arrow_forward_rounded,
-                                size: 18,
-                              ),
-                            ],
-                          ),
+                        : (_isTranscribing
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Transcribing...',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    widget.directPublish ? 'Post Now' : 'Continue to Post',
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    widget.directPublish ? Icons.send_rounded : Icons.arrow_forward_rounded,
+                                    size: 18,
+                                  ),
+                                ],
+                              )),
                   ),
                 ),
               ],

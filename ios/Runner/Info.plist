@@ -79,6 +79,8 @@
 		<string>Vadodara Local uses your location to show posts from your local area.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Vadodara Local uses your location to show local posts and send area-based alerts.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Vadodara Local needs microphone access for voice-to-text posting and voice messaging.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>
