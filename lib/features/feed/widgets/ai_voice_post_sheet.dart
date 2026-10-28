@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import '../../../core/constants/areas_and_categories.dart';
 import '../../../core/utils/content_filter.dart';
 import '../../../services/ai_category_classifier_service.dart';
+import '../../../services/speech_recognition_service.dart';
 import '../../../services/groq_whisper_service.dart';
 import '../../../services/post_repository.dart';
 import '../../../services/token_decision_engine.dart';
@@ -60,6 +61,7 @@ class AiVoicePostSheet extends StatefulWidget {
 }
 
 class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerProviderStateMixin {
+  final SpeechRecognitionService _speechService = SpeechRecognitionService.instance;
   final AudioRecorder _audioRecorder = AudioRecorder();
   final GroqWhisperService _groqService = GroqWhisperService.instance;
   final AiCategoryClassifierService _aiClassifier = AiCategoryClassifierService.instance;
@@ -108,6 +110,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     _pulseAnimController.dispose();
     _amplitudeSub?.cancel();
     _recordTimer?.cancel();
+    _speechService.cancelListening();
     _audioRecorder.dispose();
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
@@ -134,17 +137,56 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       _recordSeconds = 0;
     });
 
-    final hasPerm = await _audioRecorder.hasPermission();
+    final hasPerm = await _speechService.requestPermission();
     if (!hasPerm) {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) {
+      if (!mounted) return;
+      setState(() {
+        _isRecording = false;
+        _isPermissionDenied = true;
+      });
+      return;
+    }
+
+    bool started = false;
+    try {
+      started = await _speechService.startListening(
+        onResult: (words, isFinal) {
+          if (!mounted) return;
+          if (words.trim().isNotEmpty) {
+            setState(() {
+              _textController.value = TextEditingValue(
+                text: words,
+                selection: TextSelection.collapsed(offset: words.length),
+              );
+            });
+          }
+          if (isFinal) {
+            _stopAndTranscribe();
+          }
+        },
+        onSoundLevelChange: (level) {
+          if (!mounted) return;
+          setState(() {
+            _soundLevel = (level / 10.0).clamp(0.0, 1.0) * 10.0;
+          });
+        },
+      );
+    } catch (_) {
+      started = false;
+    }
+
+    if (started) {
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) return;
         setState(() {
-          _isRecording = false;
-          _isPermissionDenied = true;
+          _recordSeconds++;
         });
-        return;
-      }
+        if (_recordSeconds >= 45) {
+          _stopAndTranscribe();
+        }
+      });
+      return;
     }
 
     try {
@@ -197,6 +239,17 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     _amplitudeSub?.cancel();
     _recordTimer?.cancel();
 
+    if (_speechService.isListening) {
+      await _speechService.stopListening();
+    }
+
+    String? stoppedPath;
+    if (await _audioRecorder.isRecording()) {
+      stoppedPath = await _audioRecorder.stop() ?? _currentAudioPath;
+    }
+
+    final currentLiveText = _textController.text.trim();
+
     setState(() {
       _isRecording = false;
       _isTranscribing = true;
@@ -204,38 +257,68 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     });
 
     try {
-      final stoppedPath = await _audioRecorder.stop() ?? _currentAudioPath;
-      if (stoppedPath == null) {
-        setState(() => _isTranscribing = false);
-        return;
-      }
+      if (currentLiveText.isNotEmpty) {
+        final result = await _groqService.polishHinglishAndGrammar(currentLiveText);
+        if (!mounted) return;
 
-      final result = await _groqService.transcribeAudio(stoppedPath);
-      try {
-        final file = File(stoppedPath);
-        if (await file.exists()) await file.delete();
-      } catch (_) {}
-
-      if (!mounted) return;
-
-      if (result != null && result.text.trim().isNotEmpty) {
-        final clean = result.text.trim();
-        PostCategory resolvedCategory = _aiClassifier.classify(clean);
-        if (result.category != null) {
-          final catStr = result.category!.toLowerCase();
-          for (final cat in _categories) {
-            if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
-              resolvedCategory = cat;
-              break;
+        if (result != null && result.text.trim().isNotEmpty) {
+          final clean = result.text.trim();
+          PostCategory resolvedCategory = _aiClassifier.classify(clean);
+          if (result.category != null) {
+            final catStr = result.category!.toLowerCase();
+            for (final cat in _categories) {
+              if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
+                resolvedCategory = cat;
+                break;
+              }
             }
           }
+          setState(() {
+            _textController.text = clean;
+            _selectedCategory = resolvedCategory;
+            _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
+            _isTranscribing = false;
+          });
+        } else {
+          setState(() {
+            _isTranscribing = false;
+          });
         }
-        setState(() {
-          _textController.text = clean;
-          _selectedCategory = resolvedCategory;
-          _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
-          _isTranscribing = false;
-        });
+      } else if (stoppedPath != null) {
+        final result = await _groqService.transcribeAudio(stoppedPath);
+        try {
+          final file = File(stoppedPath);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+
+        if (!mounted) return;
+
+        if (result != null && result.text.trim().isNotEmpty) {
+          final clean = result.text.trim();
+          PostCategory resolvedCategory = _aiClassifier.classify(clean);
+          if (result.category != null) {
+            final catStr = result.category!.toLowerCase();
+            for (final cat in _categories) {
+              if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
+                resolvedCategory = cat;
+                break;
+              }
+            }
+          }
+          setState(() {
+            _textController.text = clean;
+            _selectedCategory = resolvedCategory;
+            _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
+            _isTranscribing = false;
+          });
+        } else {
+          setState(() {
+            _isTranscribing = false;
+            if (_textController.text.trim().isEmpty) {
+              _publishError = 'Could not capture voice clearly. Please tap mic and speak again or type above.';
+            }
+          });
+        }
       } else {
         setState(() {
           _isTranscribing = false;
@@ -248,7 +331,9 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       if (mounted) {
         setState(() {
           _isTranscribing = false;
-          _publishError = 'Voice processing error: $e';
+          if (_textController.text.trim().isEmpty) {
+            _publishError = 'Voice processing error: $e';
+          }
         });
       }
     }

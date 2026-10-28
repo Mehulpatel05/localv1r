@@ -671,10 +671,11 @@ class _FeedScreenState extends State<FeedScreen> {
           PressableScale(
             onTap: _openAiVoicePostSheet,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: const Color(0xFFF7EAF5),
-                borderRadius: BorderRadius.circular(24),
+                shape: BoxShape.circle,
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.2),
                 boxShadow: [
                   BoxShadow(
@@ -685,21 +686,11 @@ class _FeedScreenState extends State<FeedScreen> {
                 ],
               ),
               child: const Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
-                  SizedBox(width: 5),
-                  Icon(Icons.mic, color: AppColors.primary, size: 18),
-                  SizedBox(width: 4),
-                  Text(
-                    'AI Voice',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
+                  Icon(Icons.auto_awesome, color: AppColors.primary, size: 14),
+                  SizedBox(width: 2),
+                  Icon(Icons.mic_rounded, color: AppColors.primary, size: 20),
                 ],
               ),
             ),

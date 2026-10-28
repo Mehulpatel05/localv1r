@@ -294,7 +294,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     child: Center(
                       heightFactor: 1.0,
                       child: Container(
-                        width: 236,
+                        width: 204,
                         height: 52,
                         decoration: BoxDecoration(
                           color: Colors.white,

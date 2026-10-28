@@ -78,14 +78,14 @@ class GroqWhisperService {
       final data = jsonDecode(response.body);
       final rawText = (data['text'] as String?)?.trim();
       if (rawText != null && rawText.isNotEmpty) {
-        final polished = await _polishHinglishAndGrammar(rawText);
+        final polished = await polishHinglishAndGrammar(rawText);
         return polished ?? GroqVoicePostResult(text: rawText);
       }
     }
     return null;
   }
 
-  Future<GroqVoicePostResult?> _polishHinglishAndGrammar(String rawText) async {
+  Future<GroqVoicePostResult?> polishHinglishAndGrammar(String rawText) async {
     final prompt = '''You are a post transcription enhancer for Nearhood, a local neighborhood community app in Vadodara, India.
 Given a raw speech transcript:
 1. If the input is in English, keep it in natural English. Fix minor speech recognition typos.
