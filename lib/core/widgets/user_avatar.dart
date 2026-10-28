@@ -25,6 +25,7 @@ class AvatarCacheService extends ChangeNotifier {
   static const String _kMyAvatarUrlKey = 'disk_my_avatar_url';
 
   final Map<String, String?> _cache = {};
+  final Map<String, bool> _visibilityMap = {};
   final Map<String, Completer<String?>> _inFlightCompleters = {};
   String? _myPhotoUrl;
   Timer? _diskSaveDebounce;
@@ -41,8 +42,17 @@ class AvatarCacheService extends ChangeNotifier {
             _cache[key] = val;
           }
         });
-        notifyListeners();
       }
+      final visJson = prefs.getString('disk_avatar_visibility_map');
+      if (visJson != null && visJson.isNotEmpty) {
+        final Map<String, dynamic> decodedVis = jsonDecode(visJson);
+        decodedVis.forEach((key, val) {
+          if (val is bool) {
+            _visibilityMap[key] = val;
+          }
+        });
+      }
+      notifyListeners();
     } catch (e) {
       debugPrint('[AvatarCacheService] Error initializing avatar disk cache: $e');
     }
@@ -71,7 +81,32 @@ class AvatarCacheService extends ChangeNotifier {
   String? getCachedUrl(String handle) {
     final clean = handle.replaceAll('@', '').trim().toLowerCase();
     if (clean.isEmpty) return null;
+    if (_visibilityMap.containsKey(clean) && _visibilityMap[clean] == false) {
+      return null;
+    }
     return _cache[clean];
+  }
+
+  bool isPhotoVisible(String handle) {
+    final clean = handle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return true;
+    return _visibilityMap[clean] ?? true;
+  }
+
+  void setPhotoVisible(String handle, bool isVisible, {bool persist = true}) {
+    final clean = handle.replaceAll('@', '').trim().toLowerCase();
+    if (clean.isEmpty) return;
+    if (_visibilityMap[clean] != isVisible) {
+      _visibilityMap[clean] = isVisible;
+      if (persist) {
+        SharedPreferences.getInstance().then((prefs) {
+          final mapToSave = <String, bool>{};
+          _visibilityMap.forEach((k, v) => mapToSave[k] = v);
+          prefs.setString('disk_avatar_visibility_map', jsonEncode(mapToSave));
+        });
+      }
+      notifyListeners();
+    }
   }
 
   List<String> getAllCachedUrls() {
@@ -126,6 +161,10 @@ class AvatarCacheService extends ChangeNotifier {
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final user = data['user'] as Map<String, dynamic>?;
+          final showPhoto = user?['showProfilePhoto'] ?? user?['show_profile_photo'];
+          if (showPhoto != null) {
+            _visibilityMap[clean] = (showPhoto == true || showPhoto == 1);
+          }
           final photoUrl = (user?['avatarUrl'] as String?)?.trim();
           final validUrl = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
           if (_cache[clean] != validUrl) {
@@ -163,6 +202,10 @@ class AvatarCacheService extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final user = data['user'] as Map<String, dynamic>?;
+        final showPhoto = user?['showProfilePhoto'] ?? user?['show_profile_photo'];
+        if (showPhoto != null) {
+          _visibilityMap[clean] = (showPhoto == true || showPhoto == 1);
+        }
         final photoUrl = (user?['avatarUrl'] as String?)?.trim();
         final validUrl = (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null;
         setCachedUrl(clean, validUrl);
@@ -234,6 +277,8 @@ class UserAvatar extends StatefulWidget {
   final double ringGap;
   final Widget? editBadge;
   final bool enableFullViewOnTap;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   const UserAvatar({
     super.key,
@@ -253,6 +298,8 @@ class UserAvatar extends StatefulWidget {
     this.ringGap = 2.5,
     this.editBadge,
     this.enableFullViewOnTap = false,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   static const Gradient instagramGradient = LinearGradient(
@@ -485,15 +532,15 @@ class _UserAvatarState extends State<UserAvatar> {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: AppColors.avatarBg,
+      decoration: BoxDecoration(
+        color: widget.backgroundColor ?? AppColors.avatarBg,
         shape: BoxShape.circle,
       ),
       child: Center(
         child: Text(
           UserAvatar._getInitials(cleanHandle),
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: widget.foregroundColor ?? AppColors.textPrimary,
             fontSize: fontSize,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
@@ -512,8 +559,9 @@ class _UserAvatarState extends State<UserAvatar> {
     final Widget baseAvatar = ListenableBuilder(
       listenable: AvatarCacheService.instance,
       builder: (context, _) {
-        String? resolvedUrl = widget.photoUrl;
-        if (resolvedUrl == null || resolvedUrl.trim().isEmpty) {
+        final isVisible = AvatarCacheService.instance.isPhotoVisible(cleanHandle);
+        String? resolvedUrl = isVisible ? widget.photoUrl : null;
+        if (isVisible && (resolvedUrl == null || resolvedUrl.trim().isEmpty)) {
           resolvedUrl = AvatarCacheService.instance.getCachedUrl(cleanHandle);
         }
 

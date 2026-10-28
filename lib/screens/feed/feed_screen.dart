@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../chat/widgets/voice_note_bubble.dart';
 import '../../theme/app_colors.dart';
@@ -21,7 +20,6 @@ import '../../services/notification_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../profile/profile_screen.dart';
 import '../../core/services/app_image_cache_service.dart';
-import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../services/rewards_service.dart';
@@ -430,7 +428,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             addAutomaticKeepAlives: true,
                             padding: EdgeInsets.only(
                               top: 0,
-                              bottom: 88 + MediaQuery.paddingOf(context).bottom,
+                              bottom: 120 + MediaQuery.paddingOf(context).bottom,
                               left: 0,
                               right: 0,
                             ),
@@ -1096,63 +1094,36 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
       case PostCategory.alerts:
       case PostCategory.safetyAlert:
       case PostCategory.safety:
-        bg = AppColors.errorSoft;
-        fg = AppColors.errorSoftText;
+        bg = const Color(0xFFFCEBEB);
+        fg = const Color(0xFF791F1F);
+        break;
+      case PostCategory.question:
+        bg = const Color(0xFFFFF3D6);
+        fg = const Color(0xFF7A5200);
         break;
       case PostCategory.events:
         bg = const Color(0xFFEFF6FF);
         fg = const Color(0xFF1D4ED8);
         break;
-      case PostCategory.question:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFB45309);
-        break;
-      case PostCategory.food:
-        bg = const Color(0xFFFFF7ED);
-        fg = const Color(0xFFC2410C);
-        break;
-      case PostCategory.shop:
-        bg = const Color(0xFFF0FDF4);
-        fg = const Color(0xFF15803D);
-        break;
-      case PostCategory.rooms:
-        bg = const Color(0xFFF5F3FF);
-        fg = const Color(0xFF6D28D9);
-        break;
-      case PostCategory.jobs:
-        bg = const Color(0xFFECFEFF);
-        fg = const Color(0xFF0E7490);
-        break;
       default:
-        bg = AppColors.chipBg;
-        fg = AppColors.primary;
+        bg = const Color(0xFFF6EEF4);
+        fg = const Color(0xFF3B1038);
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: fg.withValues(alpha: 0.15), width: 0.8),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            category.icon,
-            style: const TextStyle(fontSize: 9.5),
-          ),
-          const SizedBox(width: 3),
-          Text(
-            category.label,
-            style: TextStyle(
-              color: fg,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+      child: Text(
+        category.label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1177,29 +1148,19 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     final dayStr = post.createdAt.day.toString().padLeft(2, '0');
     final monthStr = const ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][post.createdAt.month - 1];
 
-    final cardBg = isUrgent ? const Color(0xFFFFF9F9) : AppColors.surface;
+    final cleanHandle = post.authorHandle.replaceAll('@', '').trim();
+    final authorHandle = '@$cleanHandle';
 
     return RepaintBoundary(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
+          color: isUrgent ? const Color(0xFFFFF9F9) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isUrgent
-                ? const Color(0xFFFCA5A5)
-                : AppColors.cardBorder,
-            width: isUrgent ? 1.2 : 0.8,
+            color: isUrgent ? const Color(0xFFE24B4A) : const Color(0xFFEBDCE8),
+            width: isUrgent ? 1.5 : 0.5,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: isUrgent
-                  ? const Color(0xFFEF4444).withValues(alpha: 0.08)
-                  : AppColors.primary.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
@@ -1217,121 +1178,98 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                 ),
               );
             },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (post.isPinned)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: AppColors.divider.withValues(alpha: 0.6),
-                          width: 0.8,
-                        ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post.isPinned)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.push_pin_rounded, size: 13, color: AppColors.primary),
-                        SizedBox(width: 6),
-                        Text(
-                          'OFFICIAL CITY GUIDE',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (isUrgent)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: const Color(0xFFFCA5A5).withValues(alpha: 0.6),
-                          width: 1.0,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.crisis_alert_rounded,
-                            size: 13,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'URGENT SAFETY ALERT • LOCAL BROADCAST',
+                      child: const Row(
+                        children: [
+                          Icon(Icons.push_pin_rounded, size: 13, color: AppColors.primary),
+                          SizedBox(width: 6),
+                          Text(
+                            'OFFICIAL CITY GUIDE',
                             style: TextStyle(
-                              color: Color(0xFFB91C1C),
+                              color: AppColors.primary,
                               fontSize: 11,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                               letterSpacing: 0.5,
                             ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEE2E2),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(0xFFF87171).withValues(alpha: 0.5),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: const Text(
-                            'PRIORITY',
-                            style: TextStyle(
-                              color: Color(0xFFB91C1C),
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
-                  child: Row(
+                  if (isUrgent)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 9),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE24B4A),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Urgent safety alert · Local broadcast',
+                            style: TextStyle(
+                              color: Color(0xFFA32D2D),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEE2E2),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(
+                                color: const Color(0xFFE24B4A),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Text(
+                              'Priority',
+                              style: TextStyle(
+                                color: Color(0xFFA32D2D),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       UserAvatar(
                         handle: post.authorHandle,
-                        size: 38,
-                        fontSize: 14,
+                        size: 36,
+                        fontSize: 13,
+                        backgroundColor: isUrgent ? const Color(0xFF791F1F) : const Color(0xFF3B1038),
+                        foregroundColor: Colors.white,
                         onTap: widget.onProfileTap,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 9),
                       Expanded(
                         child: Builder(
                           builder: (context) {
-                            final authorName = getDisplayName(
-                              post.authorHandle,
-                              fallback: post.authorName,
-                            );
                             final authorBadge = BadgeCacheService.instance.getUserBadge(
                               post.authorHandle,
                               fallback: post.authorBadge,
@@ -1367,13 +1305,13 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                     children: [
                                       Flexible(
                                         child: Text(
-                                          authorName,
+                                          authorHandle,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textPrimary,
-                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF2A1027),
+                                            fontSize: 14,
                                             letterSpacing: -0.1,
                                           ),
                                         ),
@@ -1389,70 +1327,16 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    InkWell(
-                                      onTap: () async {
-                                        final lat = post.lat;
-                                        final lng = post.lng;
-                                        Uri uri;
-                                        if (lat != null && lng != null) {
-                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                                        } else {
-                                          final query = Uri.encodeComponent('$cleanArea, Gujarat, India');
-                                          uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-                                        }
-                                        try {
-                                          if (await canLaunchUrl(uri)) {
-                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                          }
-                                        } catch (_) {}
-                                      },
-                                      borderRadius: BorderRadius.circular(999),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.location_on_rounded,
-                                            size: 10,
-                                            color: AppColors.primary,
-                                          ),
-                                          const SizedBox(width: 2),
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 130),
-                                            child: Text(
-                                              locationText,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: AppColors.primary,
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Text(
-                                      '•',
-                                      style: TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 9,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _formatTimeAgo(post.createdAt),
-                                      style: const TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                    ),
-                                  ],
+                                const SizedBox(height: 1.5),
+                                Text(
+                                  '$locationText · ${_formatTimeAgo(post.createdAt)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF7A5C76),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
                               ],
                             );
@@ -1460,351 +1344,328 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _buildCategoryChip(post.category),
-                          const SizedBox(width: 2),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                            icon: const Icon(
-                              Icons.more_horiz_rounded,
-                              size: 20,
-                              color: AppColors.textMuted,
-                            ),
-                            onPressed: () {
-                              if (post.authorHandle == widget.currentUserHandle) {
-                                widget.onDelete();
-                              } else {
-                                widget.onReport();
-                              }
-                            },
-                          ),
-                        ],
+                      _buildCategoryChip(post.category),
+                      const SizedBox(width: 2),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                        icon: const Icon(
+                          Icons.more_horiz_rounded,
+                          size: 20,
+                          color: Color(0xFF7A5C76),
+                        ),
+                        onPressed: () {
+                          if (post.authorHandle == widget.currentUserHandle) {
+                            widget.onDelete();
+                          } else {
+                            widget.onReport();
+                          }
+                        },
                       ),
                     ],
                   ),
-                ),
 
-                if (isEvent)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAF7F9),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: AppColors.cardBorder,
-                          width: 0.8,
+                  if (isEvent)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAF7F9),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFEBDCE8),
+                            width: 0.5,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.15),
-                                width: 0.8,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    dayStr,
+                                    style: const TextStyle(
+                                      color: AppColors.primaryText,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  Text(
+                                    monthStr,
+                                    style: const TextStyle(
+                                      color: AppColors.primaryText,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  dayStr,
-                                  style: const TextStyle(
-                                    color: AppColors.primaryText,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.1,
-                                  ),
-                                ),
-                                Text(
-                                  monthStr,
-                                  style: const TextStyle(
-                                    color: AppColors.primaryText,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  post.eventTitle ?? post.content,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.schedule_rounded,
-                                      size: 12,
-                                      color: AppColors.textMuted,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    post.eventTitle ?? post.content,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF2A1027),
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    const SizedBox(width: 3),
-                                    Flexible(
-                                      child: Text(
-                                        '${post.eventLocationText ?? "Vadodara"} · ${post.eventDate ?? "8:00 AM"}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '${post.eventLocationText ?? "Vadodara"} · ${post.eventDate ?? "8:00 AM"}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF7A5C76),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${post.eventRsvpCount > 0 ? post.eventRsvpCount : 42} going',
-                              style: const TextStyle(
-                                color: AppColors.primaryText,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                  child: Text.rich(
-                    TextSpan(
-                      text: displayContent,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        height: 1.45,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: -0.1,
-                      ),
-                      children: [
-                        if (isLongText)
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.baseline,
-                            baseline: TextBaseline.alphabetic,
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _isExpanded = !_isExpanded;
-                                });
-                              },
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                               child: Text(
-                                _isExpanded ? '  Show less' : '  Read more',
+                                '${post.eventRsvpCount > 0 ? post.eventRsvpCount : 42} going',
                                 style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                if (post.audioUrl != null && post.audioUrl!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                    child: VoiceNoteBubble(
-                      audioUrl: post.audioUrl!,
-                      durationSeconds: 30,
-                      waveformData: const [],
-                      isMe: false,
-                      timeStr: '',
-                      isRead: true,
-                      status: 'sent',
-                    ),
-                  ),
-
-                if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                    child: PostImageView(
-                      imageUrl: (post.imageUrl != null && post.imageUrl!.isNotEmpty)
-                          ? post.imageUrl!
-                          : post.mediaUrls.first,
-                      allImages: post.mediaUrls.isNotEmpty
-                          ? post.mediaUrls
-                          : [post.imageUrl!],
-                      height: 240,
-                      borderRadius: BorderRadius.circular(14),
-                      heroTagPrefix: 'feed_post_${post.id}',
-                      caption: post.content,
-                      overlay: post.foodRating != null
-                          ? Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.75),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '${post.foodRating}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 3),
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      color: Color(0xFFFBBF24),
-                                      size: 14,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  child: Row(
-                    children: [
-                      LikeCapsule(
-                        post: post,
-                        repository: widget.repository,
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PostDetailScreen(
-                                post: post,
-                                repository: widget.repository,
-                                currentUserHandle: widget.currentUserHandle,
-                              ),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8F5F8),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppColors.cardBorder,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.chat_bubble_outline_rounded,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                '${post.commentCount}',
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 12.5,
+                                  color: AppColors.primaryText,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      InkWell(
-                        onTap: () async {
-                          final text = post.content.isNotEmpty ? post.content : 'Community update on Nearhood';
-                          final area = post.areaName ?? 'Vadodara';
-                          final shareMessage = '$text\n\n📍 $area\n🔗 https://nearhood.in/p/${post.id}\n\nJoin the Vadodara Community on Nearhood: https://nearhood.in';
-                          await SharePlus.instance.share(ShareParams(text: shareMessage, subject: 'Nearhood Update'));
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8F5F8),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppColors.cardBorder,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.share_outlined,
-                                size: 15,
-                                color: AppColors.textMuted,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Share',
-                                style: TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                    ),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text.rich(
+                      TextSpan(
+                        text: displayContent,
+                        style: const TextStyle(
+                          color: Color(0xFF2A1027),
+                          fontSize: 13,
+                          height: 1.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        children: [
+                          if (isLongText)
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.baseline,
+                              baseline: TextBaseline.alphabetic,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _isExpanded = !_isExpanded;
+                                  });
+                                },
+                                child: Text(
+                                  _isExpanded ? '  Show less' : '  Read more',
+                                  style: const TextStyle(
+                                    color: Color(0xFF3B1038),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
-                            ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (post.audioUrl != null && post.audioUrl!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: VoiceNoteBubble(
+                        audioUrl: post.audioUrl!,
+                        durationSeconds: 30,
+                        waveformData: const [],
+                        isMe: false,
+                        timeStr: '',
+                        isRead: true,
+                        status: 'sent',
+                      ),
+                    ),
+
+                  if ((post.imageUrl != null && post.imageUrl!.isNotEmpty) || post.mediaUrls.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: PostImageView(
+                        imageUrl: (post.imageUrl != null && post.imageUrl!.isNotEmpty)
+                            ? post.imageUrl!
+                            : post.mediaUrls.first,
+                        allImages: post.mediaUrls.isNotEmpty
+                            ? post.mediaUrls
+                            : [post.imageUrl!],
+                        height: 120,
+                        borderRadius: BorderRadius.circular(12),
+                        heroTagPrefix: 'feed_post_${post.id}',
+                        caption: post.content,
+                        overlay: post.foodRating != null
+                            ? Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.75),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${post.foodRating}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Color(0xFFFBBF24),
+                                        size: 13,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        LikeCapsule(
+                          post: post,
+                          repository: widget.repository,
+                          isCompact: true,
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostDetailScreen(
+                                  post: post,
+                                  repository: widget.repository,
+                                  currentUserHandle: widget.currentUserHandle,
+                                ),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(999),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6EEF4),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0xFFEBDCE8),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 15,
+                                  color: Color(0xFF3B1038),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${post.commentCount}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF3B1038),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const Spacer(),
+                        InkWell(
+                          onTap: () async {
+                            final text = post.content.isNotEmpty ? post.content : 'Community update on Nearhood';
+                            final area = post.areaName ?? 'Vadodara';
+                            final shareMessage = '$text\n\n📍 $area\n🔗 https://nearhood.in/p/${post.id}\n\nJoin the Vadodara Community on Nearhood: https://nearhood.in';
+                            await SharePlus.instance.share(ShareParams(text: shareMessage, subject: 'Nearhood Update'));
+                          },
+                          borderRadius: BorderRadius.circular(999),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6EEF4),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0xFFEBDCE8),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.share_outlined,
+                                  size: 14,
+                                  color: Color(0xFF3B1038),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Share',
+                                  style: TextStyle(
+                                    color: Color(0xFF3B1038),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

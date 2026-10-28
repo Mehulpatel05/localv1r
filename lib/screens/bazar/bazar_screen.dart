@@ -62,7 +62,8 @@ class BazarProduct {
   }) : createdAt = createdAt ?? DateTime.now();
 
   String get displaySellerName {
-    return NameCacheService.instance.getDisplayName(sellerHandle, fallback: sellerName);
+    final clean = sellerHandle.replaceAll('@', '').trim();
+    return '@$clean';
   }
 
   Map<String, dynamic> toJson() => {

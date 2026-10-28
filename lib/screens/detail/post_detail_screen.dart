@@ -15,7 +15,6 @@ import '../../core/utils/content_filter.dart';
 import '../../services/rewards_service.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/verified_badge.dart';
-import '../../core/services/name_cache_service.dart';
 import '../../core/services/badge_cache_service.dart';
 import '../profile/other_user_profile_sheet.dart';
 import '../main/main_screen.dart';
@@ -427,14 +426,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 Builder(
                                   builder: (context) {
                                     final cleanHandle = widget.post.authorHandle.replaceAll('@', '').trim();
-                                    final authorName = getDisplayName(
-                                      widget.post.authorHandle,
-                                      fallback: widget.post.authorName,
-                                    );
-                                    final showHandleText = cleanHandle.isNotEmpty &&
-                                        cleanHandle.toLowerCase() != 'anon' &&
-                                        !cleanHandle.toLowerCase().startsWith('user_') &&
-                                        authorName.toLowerCase() != cleanHandle.toLowerCase();
+                                    
                                     final isVerified = BadgeCacheService.instance.isUserVerified(
                                       widget.post.authorHandle,
                                       fallback: widget.post.isVerified,
@@ -460,7 +452,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                         children: [
                                           Flexible(
                                             child: Text(
-                                              authorName,
+                                              '@$cleanHandle',
                                               style: const TextStyle(
                                                 color: AppColors.textPrimary,
                                                 fontWeight: FontWeight.w700,
@@ -469,20 +461,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                          if (showHandleText) ...[
-                                            const SizedBox(width: 5),
-                                            Flexible(
-                                              child: Text(
-                                                '@$cleanHandle',
-                                                style: const TextStyle(
-                                                  color: AppColors.textMuted,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 12,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
+                                          
                                           if (isVerified || (badgeText != null && badgeText.isNotEmpty)) ...[
                                             const SizedBox(width: 5),
                                             VerifiedBadge(
@@ -732,10 +711,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       children: [
                                         Builder(
                                           builder: (context) {
-                                            final cName = getDisplayName(
-                                              comment.authorHandle,
-                                              fallback: comment.authorName,
-                                            );
+                                            
                                             final isVerified = BadgeCacheService.instance.isUserVerified(
                                               comment.authorHandle,
                                               fallback: comment.isVerified,
@@ -760,7 +736,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Text(
-                                                    cName,
+                                                    '@${comment.authorHandle.replaceAll('@', '').trim()}',
                                                     style: const TextStyle(
                                                       color: AppColors.textPrimary,
                                                       fontWeight: FontWeight.w700,
@@ -984,7 +960,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         fontSize: 14,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Reply as ${getDisplayName(widget.currentUserHandle)}...',
+                        hintText: 'Reply as @${widget.currentUserHandle.replaceAll('@', '').trim()}...',
                         hintStyle: const TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 13,

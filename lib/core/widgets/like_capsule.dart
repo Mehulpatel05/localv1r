@@ -124,14 +124,20 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
     final bool isLiked = _optimisticIsLiked ?? (repoVote == 1 || widget.post.userVote == 1);
     final int likeCount = _optimisticCount ?? (widget.post.upvotes > 0 ? widget.post.upvotes : 0);
 
-    final double height = widget.isCompact ? 32 : 36;
-    final double iconSize = widget.isCompact ? 16 : 18;
+    final double height = widget.isCompact ? 30 : 36;
+    final double iconSize = widget.isCompact ? 15 : 18;
     final double fontSize = widget.isCompact ? 12 : 13;
-    final double horizontalPadding = widget.isCompact ? 10 : 12;
+    final double horizontalPadding = widget.isCompact ? 11 : 12;
 
-    final Color capsuleBg = isLiked ? AppColors.primarySoft : AppColors.likeBg;
-    final Color capsuleBorder = isLiked ? AppColors.primarySoft : AppColors.divider;
-    final Color contentColor = isLiked ? AppColors.primaryText : AppColors.textMuted;
+    final Color capsuleBg = isLiked
+        ? (widget.isCompact ? const Color(0xFFF7EAF5) : AppColors.primarySoft)
+        : (widget.isCompact ? const Color(0xFFF6EEF4) : AppColors.likeBg);
+    final Color capsuleBorder = isLiked
+        ? (widget.isCompact ? const Color(0xFFEBDCE8) : AppColors.primarySoft)
+        : (widget.isCompact ? const Color(0xFFEBDCE8) : AppColors.divider);
+    final Color contentColor = isLiked
+        ? (widget.isCompact ? const Color(0xFF3B1038) : AppColors.primaryText)
+        : (widget.isCompact ? const Color(0xFF3B1038) : AppColors.textMuted);
 
     return Semantics(
       button: true,

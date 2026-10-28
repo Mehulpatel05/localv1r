@@ -57,6 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSavingBio = false;
   bool _isUploadingPhoto = false;
   bool _isRefreshing = false;
+  bool _showProfilePhoto = true;
   late TextEditingController _bioController;
   late TextEditingController _nameController;
   late TextEditingController _handleController;
@@ -73,6 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _handleController = TextEditingController();
 
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    _showProfilePhoto = AvatarCacheService.instance.isPhotoVisible(cleanHandle);
     final cachedPhoto = AvatarCacheService.instance.getCachedUrl(cleanHandle);
     _userData = {
       'handle': widget.currentUserHandle,
@@ -108,6 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfileData() async {
     final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    _showProfilePhoto = AvatarCacheService.instance.isPhotoVisible(cleanHandle);
 
     if (_userData?['photoUrl'] == null) {
       final localPhoto = await AvatarCacheService.instance.getMyPhotoUrlLocally();
@@ -180,6 +183,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (cloudProfile?['nextHandleChangeAt'] != null) 'nextHandleChangeAt': cloudProfile!['nextHandleChangeAt'],
             if (cloudProfile?['next_handle_change_at'] != null) 'nextHandleChangeAt': cloudProfile!['next_handle_change_at'],
           };
+          final serverVis = cloudProfile?['showProfilePhoto'] ?? cloudProfile?['show_profile_photo'];
+          if (serverVis != null) {
+            _showProfilePhoto = (serverVis == true || serverVis == 1);
+            AvatarCacheService.instance.setPhotoVisible(cleanHandle, _showProfilePhoto);
+          }
           if (!_isSavingBio && (_bioController.text.isEmpty || _bioController.text == _userData!['bio'])) {
             _bioController.text = (_userData!['bio'] as String?) ?? '';
           }
@@ -229,6 +237,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _isRefreshing = false);
       }
     }
+  }
+
+  Future<void> _toggleProfilePhotoVisibility(bool value) async {
+    final cleanHandle = widget.currentUserHandle.replaceAll('@', '').trim();
+    setState(() {
+      _showProfilePhoto = value;
+    });
+    AvatarCacheService.instance.setPhotoVisible(cleanHandle, value);
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${AuthService.baseUrl}/profile');
+        await http.put(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'showProfilePhoto': value,
+            'show_profile_photo': value ? 1 : 0,
+          }),
+        ).timeout(const Duration(seconds: 10));
+      }
+    } catch (_) {}
   }
 
   void _showChangeProfilePhotoSheet() {
@@ -509,6 +542,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'handle': cleanHandle,
             'displayName': cleanName.isNotEmpty ? cleanName : cleanHandle,
             'bio': cleanBio,
+            'showProfilePhoto': _showProfilePhoto,
           }),
         ).timeout(const Duration(seconds: 25));
 
@@ -793,6 +827,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.divider, width: 1.0),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _showProfilePhoto ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                            size: 18,
+                            color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Show your profile photo',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  _showProfilePhoto ? 'Visible across app' : 'Hidden across app',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: _showProfilePhoto,
+                            onChanged: (val) {
+                              setSheetState(() {
+                                _showProfilePhoto = val;
+                              });
+                              _toggleProfilePhotoVisibility(val);
+                            },
+                            activeTrackColor: AppColors.primary,
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -2239,6 +2325,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                             const SizedBox(height: 12),
                             _buildFoundingCard(),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: _showProfilePhoto ? const Color(0xFFF7EAF5) : const Color(0xFFF1F5F9),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      _showProfilePhoto ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                      color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
+                                      size: 19,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Show your profile photo',
+                                          style: TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _showProfilePhoto
+                                              ? 'Visible across Feed, Bazar and Chat'
+                                              : 'Hidden across Feed, Bazar and Chat',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch.adaptive(
+                                    value: _showProfilePhoto,
+                                    onChanged: _toggleProfilePhotoVisibility,
+                                    activeTrackColor: AppColors.primary,
+                                  ),
+                                ],
+                              ),
+                            ),
                             const SizedBox(height: 12),
                             Column(
                               mainAxisSize: MainAxisSize.min,
