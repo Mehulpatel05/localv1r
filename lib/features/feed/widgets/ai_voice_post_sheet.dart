@@ -101,7 +101,11 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
     _textController.addListener(_onTextChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startRecordingAuto();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _startRecordingAuto();
+        }
+      });
     });
   }
 
@@ -160,9 +164,6 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
               );
             });
           }
-          if (isFinal) {
-            _stopAndTranscribe();
-          }
         },
         onSoundLevelChange: (level) {
           if (!mounted) return;
@@ -182,7 +183,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
         setState(() {
           _recordSeconds++;
         });
-        if (_recordSeconds >= 45) {
+        if (_recordSeconds >= 60) {
           _stopAndTranscribe();
         }
       });

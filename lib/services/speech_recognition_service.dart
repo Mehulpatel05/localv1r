@@ -49,23 +49,8 @@ class SpeechRecognitionService {
         onStatus: (status) {
           debugPrint('Speech recognition status: $status');
         },
-        debugLogging: true,
-        options: [
-          SpeechToText.androidIntentLookup,
-          SpeechToText.androidNoBluetooth,
-          SpeechToText.androidAlwaysUseStop,
-        ],
+        debugLogging: false,
       );
-
-      if (!success) {
-        success = await _speechToText.initialize(
-          debugLogging: true,
-          options: [
-            SpeechToText.androidNoBluetooth,
-            SpeechToText.androidAlwaysUseStop,
-          ],
-        );
-      }
 
       _isInitialized = success;
       return _isInitialized;
@@ -89,14 +74,6 @@ class SpeechRecognitionService {
     }
 
     try {
-      String? effectiveLocale = localeId;
-      if (effectiveLocale == null) {
-        try {
-          final sysLocale = await _speechToText.systemLocale();
-          effectiveLocale = sysLocale?.localeId;
-        } catch (_) {}
-      }
-
       await _speechToText.listen(
         onResult: (result) {
           onResult(result.recognizedWords, result.finalResult);
@@ -105,10 +82,10 @@ class SpeechRecognitionService {
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
-          listenMode: ListenMode.dictation,
-          listenFor: const Duration(seconds: 45),
-          pauseFor: const Duration(seconds: 4),
-          localeId: effectiveLocale,
+          listenMode: ListenMode.deviceDefault,
+          listenFor: const Duration(seconds: 60),
+          pauseFor: const Duration(seconds: 5),
+          localeId: localeId,
         ),
       );
       return true;
