@@ -1066,8 +1066,6 @@ class _PostCardItem extends StatefulWidget {
 }
 
 class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveClientMixin {
-  bool _isExpanded = false;
-
   @override
   bool get wantKeepAlive => true;
 
@@ -1133,11 +1131,6 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
     super.build(context);
     final post = widget.repository.getPostById(widget.post.id) ?? widget.post;
     final isEmergency = post.isEmergency;
-    final isLongText = post.content.length > 220;
-    final displayContent = (isLongText && !_isExpanded)
-        ? '${post.content.substring(0, 220)}...'
-        : post.content;
-
     final isEvent = post.category == PostCategory.events || post.eventTitle != null;
     final isUrgent = isEmergency ||
         post.category == PostCategory.alerts ||
@@ -1464,39 +1457,64 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                     ),
 
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Text.rich(
-                      TextSpan(
-                        text: displayContent,
-                        style: const TextStyle(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        const postTextStyle = TextStyle(
                           color: Color(0xFF2A1027),
-                          fontSize: 13,
-                          height: 1.5,
+                          fontSize: 14.5,
+                          height: 1.45,
                           fontWeight: FontWeight.w400,
-                        ),
-                        children: [
-                          if (isLongText)
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.baseline,
-                              baseline: TextBaseline.alphabetic,
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _isExpanded = !_isExpanded;
-                                  });
-                                },
-                                child: Text(
-                                  _isExpanded ? '  Show less' : '  Read more',
-                                  style: const TextStyle(
-                                    color: Color(0xFF3B1038),
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
+                          letterSpacing: -0.1,
+                        );
+
+                        final span = TextSpan(text: post.content, style: postTextStyle);
+                        final tp = TextPainter(
+                          text: span,
+                          maxLines: 3,
+                          textDirection: Directionality.of(context),
+                        );
+                        tp.layout(maxWidth: constraints.maxWidth);
+                        final hasOverflow = tp.didExceedMaxLines || post.content.split('\n').length > 3;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.content,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: postTextStyle,
+                            ),
+                            if (hasOverflow)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PostDetailScreen(
+                                          post: post,
+                                          repository: widget.repository,
+                                          currentUserHandle: widget.currentUserHandle,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Read more',
+                                    style: TextStyle(
+                                      color: Color(0xFF3B1038),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+                          ],
+                        );
+                      },
                     ),
                   ),
 
@@ -1524,8 +1542,8 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                         allImages: post.mediaUrls.isNotEmpty
                             ? post.mediaUrls
                             : [post.imageUrl!],
-                        height: 120,
-                        borderRadius: BorderRadius.circular(12),
+                        height: 210,
+                        borderRadius: BorderRadius.circular(14),
                         heroTagPrefix: 'feed_post_${post.id}',
                         caption: post.content,
                         overlay: post.foodRating != null

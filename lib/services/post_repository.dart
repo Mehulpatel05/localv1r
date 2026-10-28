@@ -116,6 +116,8 @@ class PostRepository extends ChangeNotifier {
   void registerPost(Post post) {
     if (_localVotes.containsKey(post.id)) {
       post.userVote = _localVotes[post.id]!;
+    } else if (post.userVote != 0) {
+      _localVotes[post.id] = post.userVote;
     }
     if (_postsRegistry.containsKey(post.id)) {
       final existing = _postsRegistry[post.id]!;
@@ -357,7 +359,13 @@ class PostRepository extends ChangeNotifier {
       upvotes: d['upvotes'] ?? 0,
       downvotes: d['downvotes'] ?? 0,
       commentCount: d['commentCount'] ?? 0,
-      userVote: _localVotes[d['id']] ?? (d['userVote'] ?? 0),
+      userVote: (() {
+        final rawVote = _localVotes[d['id']] ?? (d['userVote'] ?? 0);
+        if (rawVote != 0 && !_localVotes.containsKey(d['id'])) {
+          _localVotes[d['id']] = rawVote;
+        }
+        return rawVote;
+      })(),
       reportCount: d['reportCount'] ?? 0,
       reporters: List<String>.from(d['reporters'] ?? []),
       createdAt: (() {
@@ -1041,7 +1049,15 @@ class PostRepository extends ChangeNotifier {
   }
 
   int getUserVote(String postId) {
-    return _localVotes[postId] ?? 0;
+    if (_localVotes.containsKey(postId)) {
+      return _localVotes[postId]!;
+    }
+    final post = _postsRegistry[postId] ?? _posts.where((p) => p.id == postId).firstOrNull;
+    if (post != null && post.userVote != 0) {
+      _localVotes[postId] = post.userVote;
+      return post.userVote;
+    }
+    return 0;
   }
 
   /// Returns total likes accumulated across all posts by a specific user handle
@@ -1073,7 +1089,7 @@ class PostRepository extends ChangeNotifier {
     }
     _pendingVotePostIds.add(postId);
 
-    final int oldVote = _localVotes[postId] ?? 0;
+    final int oldVote = getUserVote(postId);
     final int newVote = (oldVote == direction) ? 0 : direction;
 
     int upvoteDelta = 0;

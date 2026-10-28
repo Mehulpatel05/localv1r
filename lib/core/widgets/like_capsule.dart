@@ -32,7 +32,7 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
 
   bool? _optimisticIsLiked;
   int? _optimisticCount;
-  bool _isToggling = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -51,9 +51,10 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
   void didUpdateWidget(LikeCapsule oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id) {
+      _debounceTimer?.cancel();
       _optimisticIsLiked = null;
       _optimisticCount = null;
-    } else if (!_isToggling) {
+    } else if (_debounceTimer == null || !_debounceTimer!.isActive) {
       final repoVote = widget.repository.getUserVote(widget.post.id);
       _optimisticIsLiked = (repoVote == 1 || widget.post.userVote == 1);
       _optimisticCount = widget.post.upvotes > 0 ? widget.post.upvotes : 0;
@@ -62,14 +63,12 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
   void _handleToggleLike() {
-    if (_isToggling) return;
-    _isToggling = true;
-
     final repoVote = widget.repository.getUserVote(widget.post.id);
     final bool currentLiked = _optimisticIsLiked ?? (repoVote == 1 || widget.post.userVote == 1);
     final int currentCount = _optimisticCount ?? (widget.post.upvotes > 0 ? widget.post.upvotes : 0);
@@ -88,34 +87,31 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
       _optimisticCount = newCount;
     });
 
+    widget.post.upvotes = newCount;
+    widget.post.userVote = newLiked ? 1 : 0;
+
     widget.onLikeSuccess?.call();
     widget.onVoteSuccess?.call();
 
-    unawaited(() async {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 260), () async {
       try {
-        await widget.repository.votePost(widget.post.id, 1);
+        final currentRepoVote = widget.repository.getUserVote(widget.post.id);
+        final int targetVote = newLiked ? 1 : 0;
+        if (currentRepoVote != targetVote) {
+          await widget.repository.votePost(widget.post.id, 1);
+        }
       } catch (e) {
         if (mounted) {
           setState(() {
             _optimisticIsLiked = currentLiked;
             _optimisticCount = currentCount;
+            widget.post.upvotes = currentCount;
+            widget.post.userVote = currentLiked ? 1 : 0;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: AppColors.textPrimary,
-              content: Text(
-                'Like update failed: ${e.toString().replaceAll("Exception: ", "")}',
-                style: const TextStyle(fontSize: 12, color: Colors.white),
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
         }
-      } finally {
-        _isToggling = false;
       }
-    }());
+    });
   }
 
   @override
