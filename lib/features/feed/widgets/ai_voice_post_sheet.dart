@@ -79,6 +79,8 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   StreamSubscription<Amplitude>? _amplitudeSub;
   Timer? _recordTimer;
   int _recordSeconds = 0;
+  bool _isUserSelectedCategory = false;
+  bool _isSettingAiText = false;
 
   late final AnimationController _pulseAnimController;
 
@@ -122,8 +124,9 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   }
 
   void _onTextChanged() {
+    if (_isSettingAiText || _isTranscribing || _isRecording) return;
     final text = _textController.text.trim();
-    if (text.isNotEmpty) {
+    if (text.isNotEmpty && !_isUserSelectedCategory) {
       setState(() {
         _selectedCategory = _aiClassifier.classify(text);
         _detectedLang = _aiClassifier.detectLanguage(text);
@@ -139,7 +142,10 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       _isTranscribing = false;
       _publishError = null;
       _recordSeconds = 0;
+      _isUserSelectedCategory = false;
     });
+
+    _textController.clear();
 
     final hasPerm = await _speechService.requestPermission();
     if (!hasPerm) {
@@ -150,6 +156,10 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       });
       return;
     }
+
+    try {
+      await _speechService.cancelListening();
+    } catch (_) {}
 
     bool started = false;
     try {
@@ -266,19 +276,31 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
           final clean = result.text.trim();
           PostCategory resolvedCategory = _aiClassifier.classify(clean);
           if (result.category != null) {
-            final catStr = result.category!.toLowerCase();
-            for (final cat in _categories) {
-              if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
-                resolvedCategory = cat;
-                break;
-              }
+            final catStr = result.category!.toLowerCase().trim();
+            if (catStr.contains('alert')) {
+              resolvedCategory = PostCategory.alerts;
+            } else if (catStr.contains('safe')) {
+              resolvedCategory = PostCategory.safety;
+            } else if (catStr.contains('event')) {
+              resolvedCategory = PostCategory.events;
+            } else if (catStr.contains('question') || catStr.contains('ask')) {
+              resolvedCategory = PostCategory.question;
+            } else if (catStr.contains('general')) {
+              resolvedCategory = PostCategory.general;
             }
           }
           setState(() {
-            _textController.text = clean;
-            _selectedCategory = resolvedCategory;
-            _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
+            _isSettingAiText = true;
+            _textController.value = TextEditingValue(
+              text: clean,
+              selection: TextSelection.collapsed(offset: clean.length),
+            );
+            if (!_isUserSelectedCategory) {
+              _selectedCategory = resolvedCategory;
+            }
+            _detectedLang = result.language ?? 'hinglish';
             _isTranscribing = false;
+            _isSettingAiText = false;
           });
         } else {
           setState(() {
@@ -298,19 +320,31 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
           final clean = result.text.trim();
           PostCategory resolvedCategory = _aiClassifier.classify(clean);
           if (result.category != null) {
-            final catStr = result.category!.toLowerCase();
-            for (final cat in _categories) {
-              if (cat.name.toLowerCase() == catStr || cat.label.toLowerCase() == catStr) {
-                resolvedCategory = cat;
-                break;
-              }
+            final catStr = result.category!.toLowerCase().trim();
+            if (catStr.contains('alert')) {
+              resolvedCategory = PostCategory.alerts;
+            } else if (catStr.contains('safe')) {
+              resolvedCategory = PostCategory.safety;
+            } else if (catStr.contains('event')) {
+              resolvedCategory = PostCategory.events;
+            } else if (catStr.contains('question') || catStr.contains('ask')) {
+              resolvedCategory = PostCategory.question;
+            } else if (catStr.contains('general')) {
+              resolvedCategory = PostCategory.general;
             }
           }
           setState(() {
-            _textController.text = clean;
-            _selectedCategory = resolvedCategory;
-            _detectedLang = result.language ?? _aiClassifier.detectLanguage(clean);
+            _isSettingAiText = true;
+            _textController.value = TextEditingValue(
+              text: clean,
+              selection: TextSelection.collapsed(offset: clean.length),
+            );
+            if (!_isUserSelectedCategory) {
+              _selectedCategory = resolvedCategory;
+            }
+            _detectedLang = result.language ?? 'hinglish';
             _isTranscribing = false;
+            _isSettingAiText = false;
           });
         } else {
           setState(() {
@@ -669,6 +703,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                               HapticFeedback.selectionClick();
                               setState(() {
                                 _selectedCategory = cat;
+                                _isUserSelectedCategory = true;
                               });
                             },
                             child: AnimatedContainer(
@@ -884,6 +919,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                               setState(() {
                                 _textController.clear();
                                 _selectedCategory = PostCategory.general;
+                                _isUserSelectedCategory = false;
                                 _publishError = null;
                               });
                               _startRecordingAuto();

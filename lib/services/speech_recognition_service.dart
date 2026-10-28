@@ -69,9 +69,10 @@ class SpeechRecognitionService {
     final available = await initialize();
     if (!available) return false;
 
-    if (_speechToText.isListening) {
-      await _speechToText.stop();
-    }
+    try {
+      await _speechToText.cancel();
+      await Future.delayed(const Duration(milliseconds: 80));
+    } catch (_) {}
 
     try {
       await _speechToText.listen(
@@ -82,7 +83,7 @@ class SpeechRecognitionService {
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
-          listenMode: ListenMode.deviceDefault,
+          listenMode: ListenMode.dictation,
           listenFor: const Duration(seconds: 60),
           pauseFor: const Duration(seconds: 5),
           localeId: localeId,
@@ -96,14 +97,16 @@ class SpeechRecognitionService {
   }
 
   Future<void> stopListening() async {
-    if (_speechToText.isListening) {
-      await _speechToText.stop();
-    }
+    try {
+      if (_speechToText.isListening) {
+        await _speechToText.stop();
+      }
+    } catch (_) {}
   }
 
   Future<void> cancelListening() async {
-    if (_speechToText.isListening) {
+    try {
       await _speechToText.cancel();
-    }
+    } catch (_) {}
   }
 }
