@@ -50,10 +50,18 @@ class CallModel {
     DateTime parseTime(dynamic val, [DateTime? fallback]) {
       if (val is int) {
         return val > 1000000000000
-            ? DateTime.fromMillisecondsSinceEpoch(val)
-            : DateTime.fromMillisecondsSinceEpoch(val * 1000);
+            ? DateTime.fromMillisecondsSinceEpoch(val, isUtc: true).toLocal()
+            : DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true).toLocal();
       }
-      if (val is String) return DateTime.tryParse(val) ?? (fallback ?? DateTime.now());
+      if (val is String) {
+        String clean = val.trim();
+        if (!clean.endsWith('Z') && !clean.contains('+') && !RegExp(r'-\d\d:').hasMatch(clean)) {
+          clean = '${clean.replaceFirst(' ', 'T')}Z';
+        }
+        final parsed = DateTime.tryParse(clean);
+        if (parsed != null) return parsed.toLocal();
+        return DateTime.tryParse(val)?.toLocal() ?? (fallback ?? DateTime.now());
+      }
       return fallback ?? DateTime.now();
     }
 

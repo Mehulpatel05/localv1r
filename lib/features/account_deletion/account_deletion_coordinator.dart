@@ -75,12 +75,16 @@ class AccountDeletionCoordinator {
           (route) => false,
         );
 
+        final wipeMessage = result.storagePurged
+            ? 'Your account and all associated data have been permanently wiped.'
+            : 'Your account was wiped, but some files could not be purged from storage.';
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             backgroundColor: AppColors.primaryText,
             content: Text(
-              'Your account and all associated data have been permanently wiped.',
-              style: TextStyle(color: Colors.white, fontSize: 13),
+              wipeMessage,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           ),
         );

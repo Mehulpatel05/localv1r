@@ -439,6 +439,8 @@ class Post {
     int? eventRsvpCount,
     bool? isUserRsvped,
     String? audioUrl,
+    String? postType,
+    bool? isPinned,
   }) {
     return Post(
       id: id ?? this.id,
@@ -494,6 +496,8 @@ class Post {
       isUserRsvped: isUserRsvped ?? this.isUserRsvped,
       distanceKm: distanceKm ?? this.distanceKm,
       audioUrl: audioUrl ?? this.audioUrl,
+      postType: postType ?? this.postType,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

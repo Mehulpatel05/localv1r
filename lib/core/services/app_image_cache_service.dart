@@ -30,7 +30,13 @@ class AppImageCacheService {
 
   final Map<String, Uint8List> _memoryCache = {};
   final List<String> _memoryLruOrder = [];
+  int _currentMemoryBytes = 0;
   static const int _maxMemoryCacheSize = 250;
+  static const int _maxMemoryBytes = 35 * 1024 * 1024;
+  static const int _maxDownloadBytes = 15 * 1024 * 1024;
+  static const int _maxDiskCacheBytes = 100 * 1024 * 1024;
+  static const Duration _maxDiskAge = Duration(days: 14);
+  DateTime _lastDiskPruneTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   final Map<String, Completer<File?>> _inFlightDownloads = {};
   final Set<String> _prefetchedUrls = {};
@@ -46,11 +52,61 @@ class AppImageCacheService {
         }
         _cacheDir = dir;
         _isInitialized = true;
+        unawaited(_pruneDiskCache());
       } catch (e) {
         debugPrint('[AppImageCacheService] Init error: $e');
       }
     }();
     await _initFuture;
+  }
+
+  Future<void> _pruneDiskCache({bool force = false}) async {
+    if (_cacheDir == null || !await _cacheDir!.exists()) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastDiskPruneTime).inMinutes < 30) return;
+    _lastDiskPruneTime = now;
+
+    try {
+      final entities = await _cacheDir!.list().toList();
+      final fileList = <File>[];
+      int totalDiskBytes = 0;
+
+      for (final entity in entities) {
+        if (entity is File) {
+          try {
+            final stat = await entity.stat();
+            if (now.difference(stat.modified) > _maxDiskAge) {
+              await entity.delete();
+            } else {
+              fileList.add(entity);
+              totalDiskBytes += stat.size;
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (totalDiskBytes > _maxDiskCacheBytes) {
+        fileList.sort((a, b) {
+          try {
+            return a.lastModifiedSync().compareTo(b.lastModifiedSync());
+          } catch (_) {
+            return 0;
+          }
+        });
+
+        final targetBytes = (_maxDiskCacheBytes * 0.75).toInt();
+        for (final f in fileList) {
+          if (totalDiskBytes <= targetBytes) break;
+          try {
+            final len = await f.length();
+            await f.delete();
+            totalDiskBytes -= len;
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('[AppImageCacheService] Prune error: $e');
+    }
   }
 
   Future<void> ensureInitialized() async {
@@ -169,8 +225,12 @@ class AppImageCacheService {
           final response = await _httpClient.get(uri, headers: reqHeaders).timeout(const Duration(seconds: 8));
           if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
             final bytes = response.bodyBytes;
+            if (bytes.lengthInBytes > _maxDownloadBytes) {
+              break;
+            }
             if (cacheFile != null) {
               await cacheFile.writeAsBytes(bytes, flush: true);
+              unawaited(_pruneDiskCache());
             }
             _putInMemory(cleanUrl, bytes);
             result = cacheFile;
@@ -194,13 +254,27 @@ class AppImageCacheService {
   }
 
   void _putInMemory(String url, Uint8List bytes) {
-    if (_memoryLruOrder.length >= _maxMemoryCacheSize) {
-      final oldest = _memoryLruOrder.removeAt(0);
-      _memoryCache.remove(oldest);
+    if (bytes.lengthInBytes > 8 * 1024 * 1024) return;
+
+    final existing = _memoryCache.remove(url);
+    if (existing != null) {
+      _currentMemoryBytes -= existing.lengthInBytes;
+      _memoryLruOrder.remove(url);
     }
+
+    while ((_currentMemoryBytes + bytes.lengthInBytes > _maxMemoryBytes ||
+            _memoryLruOrder.length >= _maxMemoryCacheSize) &&
+        _memoryLruOrder.isNotEmpty) {
+      final oldestUrl = _memoryLruOrder.removeAt(0);
+      final removed = _memoryCache.remove(oldestUrl);
+      if (removed != null) {
+        _currentMemoryBytes -= removed.lengthInBytes;
+      }
+    }
+
     _memoryCache[url] = bytes;
-    _memoryLruOrder.remove(url);
     _memoryLruOrder.add(url);
+    _currentMemoryBytes += bytes.lengthInBytes;
   }
 
   Future<void> prefetchImages(List<String> urls) async {
@@ -224,7 +298,10 @@ class AppImageCacheService {
 
   Future<void> evict(String url) async {
     final cleanUrl = normalizeImageUrl(url);
-    _memoryCache.remove(cleanUrl);
+    final removed = _memoryCache.remove(cleanUrl);
+    if (removed != null) {
+      _currentMemoryBytes -= removed.lengthInBytes;
+    }
     _memoryLruOrder.remove(cleanUrl);
     _prefetchedUrls.remove(cleanUrl);
     try {
@@ -240,6 +317,7 @@ class AppImageCacheService {
     _memoryCache.clear();
     _memoryLruOrder.clear();
     _prefetchedUrls.clear();
+    _currentMemoryBytes = 0;
     try {
       if (_cacheDir != null && await _cacheDir!.exists()) {
         final entities = await _cacheDir!.list().toList();

@@ -191,7 +191,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
 
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'Nearhood',
+        title: 'Urban Community',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.system,
         theme: NearhoodTheme.lightTheme,
@@ -245,7 +245,7 @@ class _VadodaraLocalAppState extends State<VadodaraLocalApp> {
                 final phone = (await AuthService.instance.getPhoneNumber()) ?? prefs.getString('phone_number') ?? '';
 
                 final isNewUser = AuthService.isNewUserHandle(handle);
-                debugPrint('[MainFlow] Auth evaluation: userId=$userId, phone=$phone, handle="$handle", isNewUser=$isNewUser');
+                debugPrint('[MainFlow] Auth evaluation completed. isNewUser=$isNewUser');
 
                 if (isNewUser) {
                   debugPrint('[MainFlow] Navigating new user to CreateHandleScreen...');

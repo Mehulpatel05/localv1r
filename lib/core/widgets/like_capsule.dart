@@ -87,9 +87,6 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
       _optimisticCount = newCount;
     });
 
-    widget.post.upvotes = newCount;
-    widget.post.userVote = newLiked ? 1 : 0;
-
     widget.onLikeSuccess?.call();
     widget.onVoteSuccess?.call();
 
@@ -106,8 +103,6 @@ class _LikeCapsuleState extends State<LikeCapsule> with SingleTickerProviderStat
           setState(() {
             _optimisticIsLiked = currentLiked;
             _optimisticCount = currentCount;
-            widget.post.upvotes = currentCount;
-            widget.post.userVote = currentLiked ? 1 : 0;
           });
         }
       }

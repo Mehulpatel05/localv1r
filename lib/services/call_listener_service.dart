@@ -29,9 +29,15 @@ class CallListenerService {
 
     _pollingTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) async {
       try {
+        final token = await AuthService.instance.getAccessToken();
+        if (token == null || token.isEmpty) return;
+
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/calls/active?handle=$cleanHandle'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
         ).timeout(const Duration(seconds: 3));
 
         if (res.statusCode == 200) {
@@ -66,7 +72,8 @@ class CallListenerService {
 
           // Avoid processing stale calls older than 45 seconds
           final now = DateTime.now();
-          if (now.difference(call.createdAt).inSeconds.abs() > 45) {
+          final diffSec = now.difference(call.createdAt).inSeconds;
+          if (diffSec > 45 || diffSec < -120) {
             return;
           }
 

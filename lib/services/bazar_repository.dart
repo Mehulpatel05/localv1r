@@ -28,6 +28,7 @@ class BazarRepository extends ChangeNotifier {
   Set<String> _savedShopIds = {};
   bool _isInitialized = false;
   bool _isLoading = false;
+  String? _lastLoadedHandle;
 
   List<BazarProduct> get products => List.unmodifiable(_products);
   List<LocalShop> get shops => List.unmodifiable(_shops);
@@ -42,10 +43,11 @@ class BazarRepository extends ChangeNotifier {
   }
 
   Future<void> init({bool forceRefresh = false}) async {
-    if (_isInitialized && !forceRefresh) return;
+    final activeHandle = await _getActiveHandle();
+    if (_isInitialized && !forceRefresh && _lastLoadedHandle == activeHandle) return;
+    _lastLoadedHandle = activeHandle;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final activeHandle = await _getActiveHandle();
       
       // 1. Load local cached products first for 0ms instant UI
       final productsJsonStr = prefs.getString(_kProductsKey);
@@ -312,7 +314,10 @@ class BazarRepository extends ChangeNotifier {
       debugPrint('[BazarRepository] remote createListing warning: $e');
     }
 
-    return newProduct;
+    _products.removeWhere((p) => p.id == tempId);
+    await _persistProducts();
+    notifyListeners();
+    return null;
   }
 
   Future<bool> updateListing({
@@ -327,8 +332,8 @@ class BazarRepository extends ChangeNotifier {
   }) async {
     await init();
     final idx = _products.indexWhere((p) => p.id == id);
-    if (idx != -1) {
-      final old = _products[idx];
+    final old = idx != -1 ? _products[idx] : null;
+    if (idx != -1 && old != null) {
       _products[idx] = BazarProduct(
         id: old.id,
         title: title,
@@ -377,14 +382,21 @@ class BazarRepository extends ChangeNotifier {
 
         if (response.statusCode == 200) {
           final body = jsonDecode(response.body);
-          return body['success'] == true;
+          if (body['success'] == true) {
+            return true;
+          }
         }
       }
     } catch (e) {
       debugPrint('[BazarRepository] remote updateListing warning: $e');
     }
 
-    return idx != -1;
+    if (idx != -1 && old != null) {
+      _products[idx] = old;
+      await _persistProducts();
+      notifyListeners();
+    }
+    return false;
   }
 
   Future<void> addProduct(BazarProduct product) async {
@@ -1085,6 +1097,7 @@ class BazarRepository extends ChangeNotifier {
     _savedShopIds = {};
     _isInitialized = false;
     _isLoading = false;
+    _lastLoadedHandle = null;
     notifyListeners();
   }
 }

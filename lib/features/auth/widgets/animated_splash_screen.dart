@@ -54,17 +54,17 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     );
 
     _wordStyleDark = GoogleFonts.plusJakartaSans(
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: FontWeight.w800,
       color: Colors.white,
-      letterSpacing: -0.03 * 34,
+      letterSpacing: -0.02 * 28,
       height: 1.0,
     );
     _wordStyleLight = GoogleFonts.plusJakartaSans(
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: FontWeight.w800,
       color: AppColors.primary,
-      letterSpacing: -0.03 * 34,
+      letterSpacing: -0.02 * 28,
       height: 1.0,
     );
     _tagStyleDark = GoogleFonts.plusJakartaSans(
@@ -391,7 +391,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                             offset: Offset(0, _wordOffsetY.value),
                             child: child,
                           ),
-                          child: Text('nearhood', style: wordStyle),
+                          child: Text('Urban Community', style: wordStyle),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -403,7 +403,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                             offset: Offset(0, _tagOffsetY.value),
                             child: child,
                           ),
-                          child: Text('one app. every local need.', style: tagStyle),
+                          child: Text('Your City, Your Community', style: tagStyle),
                         ),
                       ),
                     ],

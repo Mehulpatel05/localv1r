@@ -323,10 +323,10 @@ class ChatPreferencesService {
       if (res.statusCode == 200) {
         return true;
       }
-      return true;
+      return false;
     } catch (e) {
       debugPrint('D1 savePreferences error: $e');
-      return true;
+      return false;
     }
   }
 

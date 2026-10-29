@@ -514,21 +514,6 @@ class RewardsService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[RewardsService] Error unlocking coupon: $e');
     }
-
-    final matched = defaultShopPerks.where((p) => p.id == couponId).firstOrNull;
-    if (matched != null && (_summary?.balance ?? 0) >= matched.costPoints) {
-      addPoints(-matched.costPoints);
-      final randomSuffix = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
-      final item = UnlockedCouponItem(
-        id: 'uc_${DateTime.now().millisecondsSinceEpoch}',
-        code: 'NH-${matched.codePrefix}-$randomSuffix',
-        title: matched.title,
-        expiresAt: DateTime.now().add(const Duration(days: 7)),
-      );
-      await saveUnlockedCouponLocally(item);
-      return item;
-    }
-
     return null;
   }
 
@@ -662,62 +647,14 @@ class RewardsService extends ChangeNotifier {
         }
       }
 
-      final current = _summary ?? const RewardsSummary();
-      final streakList = current.streakRewards.isNotEmpty
-          ? current.streakRewards
-          : const [5, 10, 15, 10, 15, 20, 30];
-      final targetStreak = current.nextStreakDay;
-      final pts = streakList[((targetStreak - 1).clamp(0, streakList.length - 1))];
-      final nextDay = targetStreak >= 7 ? 1 : targetStreak + 1;
-      final nextPts = streakList[((nextDay - 1).clamp(0, streakList.length - 1))];
-      final updatedBalance = current.balance + pts;
-
-      _summary = current.copyWith(
-        balance: updatedBalance,
-        streakCount: targetStreak,
-        isStreakClaimedToday: true,
-        streakAwarded: true,
-        nextStreakDay: nextDay,
-        todayStreakPoints: nextPts,
-        lifetimePoints: current.lifetimePoints + pts,
-        weeklyPoints: current.weeklyPoints + pts,
-      );
-      unawaited(_saveCachedSummary(_summary!));
-      notifyListeners();
       return {
-        'success': true,
-        'pointsAwarded': pts,
-        'streakCount': targetStreak,
-        'message': 'Claimed Day $targetStreak reward! +$pts coins added.',
+        'success': false,
+        'message': 'Failed to claim reward. Please check your connection.',
       };
     } catch (_) {
-      final current = _summary ?? const RewardsSummary();
-      final streakList = current.streakRewards.isNotEmpty
-          ? current.streakRewards
-          : const [5, 10, 15, 10, 15, 20, 30];
-      final targetStreak = current.nextStreakDay;
-      final pts = streakList[((targetStreak - 1).clamp(0, streakList.length - 1))];
-      final nextDay = targetStreak >= 7 ? 1 : targetStreak + 1;
-      final nextPts = streakList[((nextDay - 1).clamp(0, streakList.length - 1))];
-      final updatedBalance = current.balance + pts;
-
-      _summary = current.copyWith(
-        balance: updatedBalance,
-        streakCount: targetStreak,
-        isStreakClaimedToday: true,
-        streakAwarded: true,
-        nextStreakDay: nextDay,
-        todayStreakPoints: nextPts,
-        lifetimePoints: current.lifetimePoints + pts,
-        weeklyPoints: current.weeklyPoints + pts,
-      );
-      unawaited(_saveCachedSummary(_summary!));
-      notifyListeners();
       return {
-        'success': true,
-        'pointsAwarded': pts,
-        'streakCount': targetStreak,
-        'message': 'Claimed Day $targetStreak reward! +$pts coins added.',
+        'success': false,
+        'message': 'Failed to claim reward. Please check your connection.',
       };
     }
   }

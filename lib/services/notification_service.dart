@@ -248,14 +248,14 @@ class NotificationService {
 
         // 7. Keep the backend's copy of the token current
         _fcm.onTokenRefresh.listen((newToken) {
-          debugPrint('[NotificationService] Refreshed FCM Token: $newToken');
+          debugPrint('[NotificationService] Refreshed FCM token received.');
           _syncFcmToken(newToken);
         });
 
         _initialized = true;
 
         if (initialMessage != null) {
-          debugPrint('[NotificationService] Cold-start launch message: ${initialMessage.data}');
+          debugPrint('[NotificationService] Cold-start launch notification received.');
           _handleNotificationTap(initialMessage);
         } else if (localLaunchDetails?.didNotificationLaunchApp ?? false) {
           final payload = localLaunchDetails?.notificationResponse?.payload;
@@ -278,7 +278,7 @@ class NotificationService {
       try {
         final fcmToken = await _fcm.getToken();
         if (fcmToken != null && fcmToken.isNotEmpty) {
-          debugPrint('[NotificationService] Registered FCM Token: $fcmToken');
+          debugPrint('[NotificationService] Registered FCM token received.');
           _syncFcmToken(fcmToken);
         }
       } catch (e) {
@@ -367,6 +367,31 @@ class NotificationService {
       return prefs.getBool('notif_communities_enabled') ?? true;
     } else if (type == 'post' || type == 'new_post' || type == 'post_like' || type == 'post_comment' || type == 'post_upload') {
       return prefs.getBool('notif_posts_enabled') ?? true;
+    }
+    return true;
+  }
+
+  Future<bool> _shouldPresentNotification(String? type, Map<String, dynamic> data) async {
+    final isAllowed = await _checkIfCategoryAllowed(type);
+    if (!isAllowed) return false;
+
+    final myHandle = await AuthService.instance.getUserHandle();
+    final cleanHandle = (myHandle ?? '').replaceAll('@', '').trim();
+
+    if (type == 'chat' || type == 'message') {
+      final sender = (data['senderHandle'] ?? data['partnerHandle'] ?? data['sender'])?.toString().replaceAll('@', '').trim();
+      if (sender != null && activeChatPartnerHandle != null && sender.toLowerCase() == activeChatPartnerHandle!.toLowerCase()) {
+        return false;
+      }
+      if (sender != null && sender.isNotEmpty && cleanHandle.isNotEmpty) {
+        final isMuted = await ChatPreferencesService.instance.isChatMutedForUser(cleanHandle, sender);
+        if (isMuted) return false;
+      }
+    } else if (type == 'community_message' || type == 'community') {
+      final commId = (data['communityId'] ?? data['community_id'])?.toString();
+      if (commId != null && activeCommunityId != null && commId == activeCommunityId) {
+        return false;
+      }
     }
     return true;
   }
@@ -509,24 +534,8 @@ class NotificationService {
               DirectChatService.instance.getChats(cleanHandle).catchError((_) => <ChatConversation>[]);
             }
 
-            final isAllowed = await _checkIfCategoryAllowed(type);
-            if (!isAllowed) continue;
-
-            if (type == 'chat' || type == 'message') {
-              final sender = (payloadData['senderHandle'] ?? payloadData['partnerHandle'] as String?)?.replaceAll('@', '').trim();
-              if (sender != null && sender.toLowerCase() == activeChatPartnerHandle?.toLowerCase()) {
-                continue;
-              }
-              if (sender != null && sender.isNotEmpty) {
-                final isMuted = await ChatPreferencesService.instance.isChatMutedForUser(cleanHandle, sender);
-                if (isMuted) continue;
-              }
-            } else if (type == 'community_message' || type == 'community') {
-              final commId = payloadData['communityId'] as String?;
-              if (commId != null && commId == activeCommunityId) {
-                continue;
-              }
-            }
+            final shouldPresent = await _shouldPresentNotification(type, payloadData);
+            if (!shouldPresent) continue;
 
             final isEmergency = type == 'safety_alert' ||
                 payloadData['isEmergency'] == true ||
@@ -613,6 +622,9 @@ class NotificationService {
       }
       return;
     }
+
+    final shouldPresent = await _shouldPresentNotification(type, message.data);
+    if (!shouldPresent) return;
 
     final fcmMsgId = message.messageId ?? '';
     if (fcmMsgId.isNotEmpty) {
@@ -737,7 +749,7 @@ class NotificationService {
     if (response.payload != null) {
       try {
         final raw = jsonDecode(response.payload!) as Map<String, dynamic>;
-        debugPrint('[NotificationService] Local notification tapped. Raw: $raw');
+        debugPrint('[NotificationService] Local notification tapped.');
         final normalized = _normalizePayload(raw);
         _navigateWhenReady(normalized);
       } catch (e) {
@@ -747,9 +759,9 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('[NotificationService] Notification tapped. Raw data: ${message.data}');
+    debugPrint('[NotificationService] Remote notification tapped.');
     final normalized = _normalizePayload(message.data);
-    debugPrint('[NotificationService] Normalized payload: $normalized');
+    
     _navigateWhenReady(normalized);
   }
 

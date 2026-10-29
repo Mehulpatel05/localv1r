@@ -41,6 +41,7 @@ class _SafeImageState extends State<SafeImage> {
   Uint8List? _memoryBytes;
   bool _hasError = false;
   int _retryCounter = 0;
+  int _requestGeneration = 0;
 
   @override
   void initState() {
@@ -52,6 +53,12 @@ class _SafeImageState extends State<SafeImage> {
   void didUpdateWidget(SafeImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.imageUrl.trim() != widget.imageUrl.trim()) {
+      setState(() {
+        _memoryBytes = null;
+        _diskFile = null;
+        _hasError = false;
+        _requestGeneration++;
+      });
       _resolveImageSource();
     }
   }
@@ -123,31 +130,59 @@ class _SafeImageState extends State<SafeImage> {
     }
 
     _hasError = false;
+    final currentGen = _requestGeneration;
     AppImageCacheService.instance.getOrFetchImageFile(trimmedUrl).then((file) {
-      if (mounted && file != null && file.existsSync()) {
+      if (mounted && currentGen == _requestGeneration && widget.imageUrl.trim() == trimmedUrl) {
+        if (file != null && file.existsSync()) {
+          setState(() {
+            _diskFile = file;
+            _hasError = false;
+          });
+        } else {
+          setState(() {
+            _hasError = true;
+          });
+        }
+      }
+    }).catchError((_) {
+      if (mounted && currentGen == _requestGeneration && widget.imageUrl.trim() == trimmedUrl) {
         setState(() {
-          _diskFile = file;
-          _hasError = false;
+          _hasError = true;
         });
       }
-    }).catchError((_) {});
+    });
   }
 
   void _retryLoading() {
     final trimmedUrl = widget.imageUrl.trim();
     AppImageCacheService.instance.evict(trimmedUrl);
+    final currentGen = ++_requestGeneration;
     setState(() {
       _retryCounter++;
       _hasError = false;
+      _memoryBytes = null;
+      _diskFile = null;
     });
     AppImageCacheService.instance.getOrFetchImageFile(trimmedUrl).then((file) {
-      if (mounted && file != null && file.existsSync()) {
+      if (mounted && currentGen == _requestGeneration && widget.imageUrl.trim() == trimmedUrl) {
+        if (file != null && file.existsSync()) {
+          setState(() {
+            _diskFile = file;
+            _hasError = false;
+          });
+        } else {
+          setState(() {
+            _hasError = true;
+          });
+        }
+      }
+    }).catchError((_) {
+      if (mounted && currentGen == _requestGeneration && widget.imageUrl.trim() == trimmedUrl) {
         setState(() {
-          _diskFile = file;
-          _hasError = false;
+          _hasError = true;
         });
       }
-    }).catchError((_) {});
+    });
   }
 
   Widget _buildCoreImage({

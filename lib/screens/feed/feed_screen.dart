@@ -240,7 +240,7 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
               Center(
                 child: Text(
-                  'NEARHOOD',
+                  'COMMUNITY',
                   style: GoogleFonts.jersey25(
                     color: AppColors.primary,
                     fontSize: 26,

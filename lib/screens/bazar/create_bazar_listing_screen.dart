@@ -374,8 +374,16 @@ class _CreateBazarListingScreenState extends State<CreateBazarListingScreen> {
             ),
           ),
         );
+        Navigator.pop(context, newProduct);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            content: Text('Failed to publish listing. Please check connection and try again.'),
+          ),
+        );
       }
-      Navigator.pop(context, newProduct);
     }
   }
 

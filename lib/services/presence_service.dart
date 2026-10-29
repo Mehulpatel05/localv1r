@@ -84,12 +84,19 @@ class PresenceService with WidgetsBindingObserver {
     }
 
     setOnline();
+    _startHeartbeat();
+  }
 
-    // Start periodic heartbeat every 15 seconds while app is active (Fix 15: 15-sec heartbeat ping)
+  void _startHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _checkInternetAndHeartbeat();
     });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   void updateUserHandle(String userHandle) {
@@ -100,10 +107,12 @@ class PresenceService with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _startHeartbeat();
       setOnline();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
+      _stopHeartbeat();
       setOffline();
     }
   }
@@ -139,6 +148,7 @@ class PresenceService with WidgetsBindingObserver {
   }
 
   Future<void> setOffline() async {
+    _stopHeartbeat();
     if (_currentUserHandle == null || _currentUserHandle!.isEmpty) return;
     final now = DateTime.now();
 

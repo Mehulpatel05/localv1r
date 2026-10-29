@@ -7,6 +7,7 @@ class AccountDeletionClientResult {
   final bool success;
   final String message;
   final bool verifiedZeroRecords;
+  final bool storagePurged;
   final int deletedR2MediaCount;
   final String? error;
 
@@ -14,6 +15,7 @@ class AccountDeletionClientResult {
     required this.success,
     required this.message,
     this.verifiedZeroRecords = false,
+    this.storagePurged = false,
     this.deletedR2MediaCount = 0,
     this.error,
   });
@@ -59,15 +61,18 @@ class AccountDeletionClient {
             success: data['success'] == true,
             message: data['message'] ?? 'Account wiped successfully',
             verifiedZeroRecords: data['verifiedZeroRecords'] == true,
+            storagePurged: data['storagePurged'] == true,
             deletedR2MediaCount: data['deletedR2MediaCount'] is int
                 ? data['deletedR2MediaCount'] as int
                 : 0,
+            error: data['error'] as String?,
           );
         } catch (_) {
           return const AccountDeletionClientResult(
             success: true,
             message: 'Account successfully removed from server',
             verifiedZeroRecords: true,
+            storagePurged: true,
           );
         }
       } else {

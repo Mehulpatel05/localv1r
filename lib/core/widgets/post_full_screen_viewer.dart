@@ -38,7 +38,9 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex.clamp(0, widget.imageUrls.length - 1);
+    _currentIndex = widget.imageUrls.isEmpty
+        ? 0
+        : widget.initialIndex.clamp(0, widget.imageUrls.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
     _resetAnimController = AnimationController(
       vsync: this,
@@ -116,6 +118,7 @@ class _PostFullScreenViewerState extends State<PostFullScreenViewer>
   }
 
   void _shareCurrentImage() {
+    if (widget.imageUrls.isEmpty || _currentIndex >= widget.imageUrls.length) return;
     final url = widget.imageUrls[_currentIndex];
     final text = widget.caption != null && widget.caption!.isNotEmpty
         ? '${widget.caption}\n$url'

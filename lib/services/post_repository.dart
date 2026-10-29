@@ -75,9 +75,11 @@ class PostRepository extends ChangeNotifier {
 
   Future<void> _loadLocalVotes() async {
     try {
+      final handle = _currentUserHandle.replaceAll('@', '').trim();
+      if (handle.isEmpty) return;
       final prefs = await SharedPreferences.getInstance();
-      final key = '$_kLocalVotesPrefix${_currentUserHandle.replaceAll('@', '').trim()}';
-      final jsonStr = prefs.getString(key) ?? prefs.getString('cache_local_votes_global');
+      final key = '$_kLocalVotesPrefix$handle';
+      final jsonStr = prefs.getString(key);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final Map<String, dynamic> decoded = jsonDecode(jsonStr);
         decoded.forEach((k, v) {
@@ -102,12 +104,12 @@ class PostRepository extends ChangeNotifier {
 
   Future<void> _saveLocalVotes() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final handle = _currentUserHandle.replaceAll('@', '').trim();
+      if (handle.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
       final key = '$_kLocalVotesPrefix$handle';
       final encoded = jsonEncode(_localVotes);
       await prefs.setString(key, encoded);
-      await prefs.setString('cache_local_votes_global', encoded);
     } catch (e) {
       debugPrint('[PostRepository] _saveLocalVotes error: $e');
     }
@@ -619,13 +621,16 @@ class PostRepository extends ChangeNotifier {
       final newBalance = (body['newBalance'] as num?)?.toInt();
       final commentId = body['commentId'] as String? ?? 'comm_${DateTime.now().millisecondsSinceEpoch}';
 
+      final updatedPosts = <Post>{};
       final registeredPost = _postsRegistry[postId];
       if (registeredPost != null) {
         registeredPost.commentCount++;
+        updatedPosts.add(registeredPost);
       }
       for (final p in _posts) {
-        if (p.id == postId) {
+        if (p.id == postId && !updatedPosts.contains(p)) {
           p.commentCount++;
+          updatedPosts.add(p);
         }
       }
       notifyListeners();

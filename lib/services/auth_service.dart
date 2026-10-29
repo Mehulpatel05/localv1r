@@ -21,6 +21,8 @@ import 'friend_repository.dart';
 import 'presence_service.dart';
 import 'post_repository.dart';
 import 'rewards_service.dart';
+import 'call_listener_service.dart';
+import 'bazar_repository.dart';
 
 enum AuthEvent {
   signedIn,
@@ -40,6 +42,7 @@ class AuthService {
   TokenDecisionEngine get decisionEngine => _decisionEngine;
 
   Completer<String?>? _refreshCompleter;
+  int _sessionGeneration = 0;
 
   AuthService._internal() {
     _initDecisionEngine();
@@ -134,7 +137,7 @@ class AuthService {
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 35));
 
-      debugPrint('[AuthService] verifyOtp response status: ${response.statusCode}, body: ${response.body}');
+      debugPrint('[AuthService] verifyOtp response status: ${response.statusCode}');
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
@@ -184,12 +187,12 @@ class AuthService {
           final prefs = await SharedPreferences.getInstance();
           if (handle.isNotEmpty) await prefs.setString('user_handle', handle);
           if (userId.isNotEmpty) await prefs.setString('user_id', userId);
-          if (accessToken.isNotEmpty) await prefs.setString('auth_access_token', accessToken);
+          await prefs.remove('auth_access_token');
+          await prefs.remove('access_token');
           await prefs.remove('phone_number');
         } catch (_) {}
 
-
-        debugPrint('[AuthService] Login session saved. userId=$userId, handle=$handle, isNewUser=$isNewUser');
+        debugPrint('[AuthService] Login session saved.');
 
         return {
           'success': true,
@@ -213,8 +216,8 @@ class AuthService {
         'success': false,
         'error': 'Network timeout. Please check your connection and tap Verify again.',
       };
-    } catch (e, stack) {
-      debugPrint('[AuthService] verifyOtp unexpected exception: $e\n$stack');
+    } catch (e) {
+      debugPrint('[AuthService] verifyOtp unexpected exception: $e');
       return {
         'success': false,
         'error': 'Network connection error during verification ($e).',
@@ -229,10 +232,11 @@ class AuthService {
 
     final completer = Completer<String?>();
     _refreshCompleter = completer;
+    final int generationAtStart = _sessionGeneration;
 
     try {
       final currentRefresh = await _secureStorage.read(key: _kRefreshTokenKey);
-      if (currentRefresh == null) {
+      if (currentRefresh == null || currentRefresh.isEmpty) {
         completer.complete(null);
         return null;
       }
@@ -243,21 +247,25 @@ class AuthService {
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'refresh_token': currentRefresh}),
-        );
+        ).timeout(const Duration(seconds: 15));
+
+        if (_sessionGeneration != generationAtStart) {
+          completer.complete(null);
+          return null;
+        }
 
         if (response.statusCode == 200) {
           final body = jsonDecode(response.body);
           final newAccess = body['access_token'] as String;
           final newRefresh = body['refresh_token'] as String;
-          await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
-          await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('auth_access_token', newAccess);
-          } catch (_) {}
-          updateDecisionEngineFromToken(newAccess);
-          completer.complete(newAccess);
-          return newAccess;
+
+          if (_sessionGeneration == generationAtStart) {
+            await _secureStorage.write(key: _kAccessTokenKey, value: newAccess);
+            await _secureStorage.write(key: _kRefreshTokenKey, value: newRefresh);
+            updateDecisionEngineFromToken(newAccess);
+            completer.complete(newAccess);
+            return newAccess;
+          }
         } else if (response.statusCode == 401 || response.statusCode == 403) {
           debugPrint('[AuthService] Refresh rejected (${response.statusCode}). Revoking session and purging caches.');
           await forceSignOut(reason: 'Session revoked or expired');
@@ -269,6 +277,9 @@ class AuthService {
       }
       completer.complete(null);
       return null;
+    } catch (_) {
+      completer.complete(null);
+      return null;
     } finally {
       _refreshCompleter = null;
     }
@@ -278,10 +289,6 @@ class AuthService {
     try {
       final token = await _secureStorage.read(key: _kAccessTokenKey).timeout(const Duration(milliseconds: 1500));
       if (token != null && token.isNotEmpty) return token;
-    } catch (_) {}
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('auth_access_token') ?? prefs.getString('access_token');
     } catch (_) {}
     return null;
   }
@@ -328,7 +335,7 @@ class AuthService {
       final clean = handle.replaceAll('@', '').trim();
       final uri = Uri.parse('$baseUrl/auth/check-handle?handle=${Uri.encodeComponent(clean)}');
       final res = await http.get(uri).timeout(const Duration(seconds: 10));
-      debugPrint('[AuthService] checkHandleAvailable ($uri): status=${res.statusCode}, body=${res.body}');
+      debugPrint('[AuthService] checkHandleAvailable ($uri): status=${res.statusCode}');
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map<String, dynamic> && data.containsKey('available')) {
@@ -360,7 +367,7 @@ class AuthService {
     try {
       String? token = await getAccessToken();
       token ??= await refreshToken();
-      debugPrint('[AuthService] saveUserHandle: clean=$clean, name=$cleanName, tokenAvailable=${token != null && token.isNotEmpty}');
+      debugPrint('[AuthService] saveUserHandle: tokenAvailable=${token != null && token.isNotEmpty}');
       if (token != null && token.isNotEmpty) {
         final uri = Uri.parse('$baseUrl/auth/profile/handle');
         final requestBody = <String, dynamic>{
@@ -387,7 +394,7 @@ class AuthService {
           body: jsonEncode(requestBody),
         ).timeout(const Duration(seconds: 15));
 
-        debugPrint('[AuthService] saveUserHandle response ($uri): status=${response.statusCode}, body=${response.body}');
+        debugPrint('[AuthService] saveUserHandle response ($uri): status=${response.statusCode}');
 
         final body = jsonDecode(response.body);
         if (response.statusCode == 200) {
@@ -694,40 +701,60 @@ class AuthService {
 
   /// Thoroughly purges all user-specific in-memory singletons, disk docs, and secure tokens
   Future<void> _purgeUserSessionData() async {
+    _sessionGeneration++;
+
     try {
       _decisionEngine = TokenDecisionEngine.anonymous();
       TokenDecisionEngine.clear();
+    } catch (_) {}
 
+    try {
+      CallListenerService.instance.stopListening();
+    } catch (_) {}
+
+    try {
+      NotificationService.instance.stopListening();
+      NotificationService.instance.unreadBadgeNotifier.value = 0;
+    } catch (_) {}
+
+    try {
       ActionStateProvider.instance.clear();
       UserActionStateService.instance.clear();
-
       await AvatarCacheService.instance.clearAll();
       FriendRepository().clearCache();
       ChatPreferencesService.instance.clearCache();
       PresenceService.instance.clearCache();
       PostRepository.instance.clearCache();
       DirectChatService.instance.clearCache();
+      BazarRepository.instance.clearCache();
       NameCacheService.instance.clearAll();
       BadgeCacheService.instance.clear();
       RewardsService.instance.clearCache();
-
       DirectChatService.instance.unreadCountNotifier.value = 0;
-      NotificationService.instance.stopListening();
-      NotificationService.instance.unreadBadgeNotifier.value = 0;
+    } catch (e) {
+      debugPrint('[AuthService] Cache cleanup warning: $e');
+    }
 
+    try {
       await _secureStorage.deleteAll();
+    } catch (e) {
+      debugPrint('[AuthService] Error clearing secure credentials: $e');
+      rethrow;
+    }
 
+    try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('user_handle');
+      await prefs.remove('current_user_handle');
       await prefs.remove('user_id');
+      await prefs.remove('auth_user_id');
       await prefs.remove('phone_number');
+      await prefs.remove('auth_phone_number');
       await prefs.remove('user_display_name');
       await prefs.remove('auth_access_token');
       await prefs.remove('access_token');
       debugPrint('[AuthService] Multi-tenancy session purged successfully.');
-    } catch (e) {
-      debugPrint('[AuthService] Error during session purge: $e');
-    }
+    } catch (_) {}
   }
 
   // ==========================================

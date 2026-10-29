@@ -80,11 +80,11 @@ class FoundingService extends ChangeNotifier {
   }
 
   Future<Map<String, String>> _getAdminHeaders() async {
+    final token = await AuthService.instance.getAccessToken();
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'x-admin-key': 'nearhood_admin_vadodara_2026',
-      'Authorization': 'Bearer nearhood_admin_vadodara_2026',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
 

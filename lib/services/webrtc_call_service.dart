@@ -301,7 +301,14 @@ class WebRtcCallService {
     }
   }
 
-  /// Start an outgoing call (Audio or Video) via D1 REST API
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await AuthService.instance.getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<CallModel> makeCall({
     required String callerHandle,
     required String receiverHandle,
@@ -364,15 +371,17 @@ class WebRtcCallService {
 
     // 4. Send call offer to D1 REST API
     final payload = {
+      if (existingCallId != null && existingCallId.isNotEmpty) 'callId': existingCallId,
       'caller': cleanCaller,
       'receiver': cleanReceiver,
       'callType': callType.name,
       'sdpOffer': optimizedSdp,
     };
 
+    final authHeaders = await _getAuthHeaders();
     final res = await http.post(
       Uri.parse('${AuthService.baseUrl}/calls/initiate'),
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders,
       body: jsonEncode(payload),
     ).timeout(const Duration(seconds: 8));
 
@@ -381,7 +390,7 @@ class WebRtcCallService {
     }
 
     final data = jsonDecode(res.body);
-    final callId = data['callId'] as String;
+    final callId = (data['callId'] as String?) ?? existingCallId ?? '';
 
     final initialCall = CallModel(
       callId: callId,
@@ -407,14 +416,16 @@ class WebRtcCallService {
           'handle': cleanCaller,
           'candidate': candidate.toMap(),
         });
-        http.post(
-          Uri.parse('${AuthService.baseUrl}/calls/$callId/ice'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'handle': cleanCaller,
-            'candidate': candidate.toMap(),
-          }),
-        ).catchError((_) => http.Response('', 500));
+        _getAuthHeaders().then((headers) {
+          http.post(
+            Uri.parse('${AuthService.baseUrl}/calls/$callId/ice'),
+            headers: headers,
+            body: jsonEncode({
+              'handle': cleanCaller,
+              'candidate': candidate.toMap(),
+            }),
+          ).catchError((_) => http.Response('', 500));
+        });
       }
     };
 
@@ -500,23 +511,26 @@ class WebRtcCallService {
           'handle': call.receiverHandle,
           'candidate': candidate.toMap(),
         });
-        http.post(
-          Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/ice'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'handle': call.receiverHandle,
-            'candidate': candidate.toMap(),
-          }),
-        ).catchError((_) => http.Response('', 500));
+        _getAuthHeaders().then((headers) {
+          http.post(
+            Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/ice'),
+            headers: headers,
+            body: jsonEncode({
+              'handle': call.receiverHandle,
+              'candidate': candidate.toMap(),
+            }),
+          ).catchError((_) => http.Response('', 500));
+        });
       }
     };
 
     // 4. Retrieve call details for offer
     String? sdpOffer = call.offer?['sdp'];
     if (sdpOffer == null) {
+      final headers = await _getAuthHeaders();
       final res = await http.get(
         Uri.parse('${AuthService.baseUrl}/calls/${call.callId}'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -557,9 +571,10 @@ class WebRtcCallService {
       'sdp': optimizedAnswerSdp,
     });
 
+    final answerHeaders = await _getAuthHeaders();
     await http.post(
       Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/answer'),
-      headers: {'Content-Type': 'application/json'},
+      headers: answerHeaders,
       body: jsonEncode({
         'receiver': call.receiverHandle,
         'sdpAnswer': optimizedAnswerSdp,
@@ -593,9 +608,10 @@ class WebRtcCallService {
 
     _pollingTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
       try {
+        final pollingHeaders = await _getAuthHeaders();
         final res = await http.get(
           Uri.parse('${AuthService.baseUrl}/calls/$callId'),
-          headers: {'Content-Type': 'application/json'},
+          headers: pollingHeaders,
         ).timeout(const Duration(seconds: 2));
 
         if (res.statusCode == 200) {
@@ -733,9 +749,10 @@ class WebRtcCallService {
       'durationSeconds': 0,
     });
     try {
+      final rejectHeaders = await _getAuthHeaders();
       await http.post(
         Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
-        headers: {'Content-Type': 'application/json'},
+        headers: rejectHeaders,
         body: jsonEncode({
           'status': 'rejected',
           'endedBy': call.receiverHandle,
@@ -782,9 +799,10 @@ class WebRtcCallService {
     }
 
     try {
+      final endHeaders = await _getAuthHeaders();
       await http.post(
         Uri.parse('${AuthService.baseUrl}/calls/${call.callId}/status'),
-        headers: {'Content-Type': 'application/json'},
+        headers: endHeaders,
         body: jsonEncode({
           'status': endStatus.name,
           'endedBy': cleanEndedBy,

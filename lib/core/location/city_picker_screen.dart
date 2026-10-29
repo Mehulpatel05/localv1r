@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../services/founding_service.dart';
 import 'location_engine.dart';
@@ -415,6 +419,28 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
   }
 
   void _joinWaitlist(BuildContext context, String cityId, String cityName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('waitlist_joined_$cityId', true);
+
+      final phone = await AuthService.instance.getPhoneNumber() ?? '';
+      final handle = await AuthService.instance.getUserHandle() ?? '';
+      final contact = phone.isNotEmpty ? phone : (handle.isNotEmpty ? handle : 'device_${DateTime.now().millisecondsSinceEpoch}');
+
+      final token = await AuthService.instance.getAccessToken();
+      await http.post(
+        Uri.parse('${AuthService.baseUrl}/places/waitlist'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'city_text': cityName,
+          'contact_or_device_id': contact,
+        }),
+      ).timeout(const Duration(seconds: 6));
+    } catch (_) {}
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Joined waitlist for $cityName! We will notify you when we launch.')),

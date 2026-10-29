@@ -552,7 +552,7 @@ class _BazarScreenState extends State<BazarScreen> {
                   ),
                 )
               : Text(
-                  _showMyListings ? 'My Listings' : 'NEARHOOD',
+                  _showMyListings ? 'My Listings' : 'BAZAAR',
                   style: GoogleFonts.jersey25(
                     color: AppColors.primary,
                     fontSize: 26,

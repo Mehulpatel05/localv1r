@@ -40,31 +40,8 @@ class SupportTicketService {
       }
     }
 
-    list = _applySimulatedProgress(list);
     ticketsNotifier.value = List.unmodifiable(list);
     return list;
-  }
-
-  List<SupportTicketModel> _applySimulatedProgress(List<SupportTicketModel> original) {
-    final now = DateTime.now();
-    return original.map((t) {
-      if (t.isResolved) return t;
-
-      final elapsed = now.difference(t.createdAt);
-      if (t.status == 'submitted' && elapsed.inMinutes >= 3) {
-        return t.copyWith(
-          status: 'under_review',
-          updatedAt: t.createdAt.add(const Duration(minutes: 3)),
-        );
-      } else if ((t.status == 'submitted' || t.status == 'under_review') &&
-          elapsed.inMinutes >= (t.isUrgent ? 15 : 45)) {
-        return t.copyWith(
-          status: 'in_progress',
-          updatedAt: t.createdAt.add(Duration(minutes: t.isUrgent ? 15 : 45)),
-        );
-      }
-      return t;
-    }).toList();
   }
 
   Future<void> saveTicket(SupportTicketModel ticket) async {
