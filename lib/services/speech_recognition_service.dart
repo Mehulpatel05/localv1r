@@ -60,6 +60,46 @@ class SpeechRecognitionService {
     }
   }
 
+  Future<String?> findBestLocale({String? preferredLanguage}) async {
+    try {
+      final locales = await _speechToText.locales();
+      if (locales.isEmpty) return null;
+
+      final pref = (preferredLanguage ?? 'hi').toLowerCase();
+
+      if (pref.startsWith('hi')) {
+        for (final loc in locales) {
+          final id = loc.localeId.toLowerCase().replaceAll('-', '_');
+          if (id == 'hi_in' || id.startsWith('hi_')) return loc.localeId;
+        }
+      } else if (pref.startsWith('gu')) {
+        for (final loc in locales) {
+          final id = loc.localeId.toLowerCase().replaceAll('-', '_');
+          if (id == 'gu_in' || id.startsWith('gu_')) return loc.localeId;
+        }
+      } else if (pref.startsWith('en')) {
+        for (final loc in locales) {
+          final id = loc.localeId.toLowerCase().replaceAll('-', '_');
+          if (id == 'en_in' || id.startsWith('en_')) return loc.localeId;
+        }
+      }
+
+      for (final loc in locales) {
+        final id = loc.localeId.toLowerCase().replaceAll('-', '_');
+        if (id == 'hi_in' || id.startsWith('hi_')) return loc.localeId;
+      }
+      for (final loc in locales) {
+        final id = loc.localeId.toLowerCase().replaceAll('-', '_');
+        if (id == 'en_in' || id.startsWith('en_')) return loc.localeId;
+      }
+
+      final system = await _speechToText.systemLocale();
+      return system?.localeId ?? locales.first.localeId;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> startListening({
     required void Function(String recognizedWords, bool isFinal) onResult,
     void Function(double soundLevel)? onSoundLevelChange,
@@ -68,6 +108,11 @@ class SpeechRecognitionService {
   }) async {
     final available = await initialize();
     if (!available) return false;
+
+    String? effectiveLocale = localeId;
+    if (effectiveLocale == null || effectiveLocale.isEmpty) {
+      effectiveLocale = await findBestLocale(preferredLanguage: 'hi');
+    }
 
     try {
       await _speechToText.cancel();
@@ -86,7 +131,7 @@ class SpeechRecognitionService {
           listenMode: ListenMode.dictation,
           listenFor: const Duration(seconds: 60),
           pauseFor: const Duration(seconds: 5),
-          localeId: localeId,
+          localeId: effectiveLocale,
         ),
       );
       return true;

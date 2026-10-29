@@ -81,6 +81,8 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   int _recordSeconds = 0;
   bool _isUserSelectedCategory = false;
   bool _isSettingAiText = false;
+  bool _hasAiClassified = false;
+  String _speechLanguage = 'hi';
 
   late final AnimationController _pulseAnimController;
 
@@ -124,9 +126,9 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
   }
 
   void _onTextChanged() {
-    if (_isSettingAiText || _isTranscribing || _isRecording) return;
+    if (_isSettingAiText || _isTranscribing || _isRecording || _hasAiClassified || _isUserSelectedCategory) return;
     final text = _textController.text.trim();
-    if (text.isNotEmpty && !_isUserSelectedCategory) {
+    if (text.isNotEmpty) {
       setState(() {
         _selectedCategory = _aiClassifier.classify(text);
         _detectedLang = _aiClassifier.detectLanguage(text);
@@ -143,6 +145,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       _publishError = null;
       _recordSeconds = 0;
       _isUserSelectedCategory = false;
+      _hasAiClassified = false;
     });
 
     _textController.clear();
@@ -161,9 +164,12 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
       await _speechService.cancelListening();
     } catch (_) {}
 
+    final targetLocale = await _speechService.findBestLocale(preferredLanguage: _speechLanguage);
+
     bool started = false;
     try {
       started = await _speechService.startListening(
+        localeId: targetLocale,
         onResult: (words, isFinal) {
           if (!mounted) return;
           if (words.trim().isNotEmpty) {
@@ -297,6 +303,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             );
             if (!_isUserSelectedCategory) {
               _selectedCategory = resolvedCategory;
+              _hasAiClassified = true;
             }
             _detectedLang = result.language ?? 'hinglish';
             _isTranscribing = false;
@@ -341,6 +348,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
             );
             if (!_isUserSelectedCategory) {
               _selectedCategory = resolvedCategory;
+              _hasAiClassified = true;
             }
             _detectedLang = result.language ?? 'hinglish';
             _isTranscribing = false;
@@ -572,30 +580,60 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                 ),
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7EAF5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.language,
-                            size: 14,
-                            color: AppColors.primary,
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          if (_speechLanguage == 'hi') {
+                            _speechLanguage = 'en';
+                            _detectedLang = 'en';
+                          } else if (_speechLanguage == 'en') {
+                            _speechLanguage = 'gu';
+                            _detectedLang = 'gu';
+                          } else {
+                            _speechLanguage = 'hi';
+                            _detectedLang = 'hi';
+                          }
+                        });
+                        if (_isRecording) {
+                          _startRecordingAuto();
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7EAF5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            width: 1,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatLanguageLabel(_detectedLang),
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.language,
+                              size: 14,
                               color: AppColors.primary,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatLanguageLabel(_detectedLang),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(
+                              Icons.unfold_more_rounded,
+                              size: 12,
+                              color: AppColors.primary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -920,6 +958,7 @@ class _AiVoicePostSheetState extends State<AiVoicePostSheet> with SingleTickerPr
                                 _textController.clear();
                                 _selectedCategory = PostCategory.general;
                                 _isUserSelectedCategory = false;
+                                _hasAiClassified = false;
                                 _publishError = null;
                               });
                               _startRecordingAuto();

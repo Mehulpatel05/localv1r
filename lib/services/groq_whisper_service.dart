@@ -86,17 +86,18 @@ class GroqWhisperService {
   }
 
   Future<GroqVoicePostResult?> polishHinglishAndGrammar(String rawText) async {
-    final prompt = '''You are an expert transcription enhancer for Nearhood, a local neighborhood community app in Vadodara, India.
-Given a raw spoken speech transcript:
-1. If the input is in English, keep it in natural, polished English.
-2. If the input is in Hindi, Gujarati, or any Indian regional language/script, convert it into clean, natural conversational Hinglish (Roman script / English alphabets, exactly like people naturally chat on WhatsApp in India).
-3. Preserve all details, specifics, place names (e.g. Alkapuri, Gotri, Karelibaug, Manjalpur, Akshar Chowk), and full sentence length. DO NOT over-summarize, cut, or truncate the user's message.
-4. Correct speech recognition typos, grammar, and gender agreement (e.g. "ladki bol rahi thi", "light chali gayi").
-5. Accurately classify into exactly ONE of these 5 categories:
-   - "question": user is asking for information, recommendations, or help from neighbors.
+    final prompt = '''You are an expert Indian transcription enhancer for Nearhood, a local community app in Vadodara, India.
+Given a raw speech transcript:
+1. RECOVERY FROM PHONETIC MISHEARING: If the speech recognition engine misheard spoken Hindi/Gujarati as phonetic English gibberish (e.g. "He, he, gumnne, chari, gagira" -> "Guys, ghumne chale kya?"), intelligently reconstruct the intended Indian sentence in clean Hinglish!
+2. If the input is in Hindi, Gujarati, or any Indian regional language/script, convert it into clean, natural conversational Hinglish (Roman script / English alphabets, like people chat on WhatsApp in India).
+3. If the input is in English, keep it in natural, polished English.
+4. Preserve all details, specifics, place names (e.g. Alkapuri, Gotri, Karelibaug, Manjalpur, Akshar Chowk), and full sentence length. DO NOT over-summarize, cut, or truncate the user's message.
+5. Correct speech recognition typos, grammar, and gender agreement (e.g. "ladki bol rahi thi", "light chali gayi").
+6. Accurately classify into exactly ONE of these 5 categories:
+   - "question": user is asking for information, recommendations, asking to hangout/go somewhere ("chale kya?", "chaloge?"), or asking neighbors for help.
    - "alerts": infrastructure alerts, traffic jams, power/water cuts, road closures, urgent local news.
-   - "safety": security concerns, theft, suspicious activity, hazards, emergencies.
-   - "events": community gatherings, garba, festivals, society meetings, sports, workshops.
+   - "safety": security concerns, theft, suspicious activity, hazards, emergencies, warning to be alert/careful ("satark ho jao", "satark raho", "savdhan raho", "dhyan rakhna").
+   - "events": community gatherings, programs ("program hai", "karyakram"), garba, festivals, society meetings, sports, workshops, get-togethers.
    - "general": casual neighborhood thoughts, general discussions, lost & found, chit-chat.
 
 Input: "$rawText"

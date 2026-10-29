@@ -8,13 +8,14 @@ class AiCategoryClassifierService {
   static AiCategoryClassifierService get instance => _instance;
 
   static final Set<String> _alertKeywords = {
-    'alert', 'urgent', 'warning', 'emergency', 'cutoff', 'cut', 'shut',
+    'alert', 'alerts', 'urgent', 'warning', 'emergency', 'cutoff', 'cut', 'shut',
     'shutdown', 'maintenance', 'watercut', 'paani', 'pani', 'bijli', 'light',
     'power', 'electricity', 'supply', 'pipe', 'pipeline', 'leakage', 'leak',
     'bandh', 'band', 'notice', 'caution', 'attention', 'vmc', 'panioff',
     'lightoff', 'powercut', 'drainage', 'gutter', 'cleaning', 'divert',
     'diversion', 'traffic', 'jam', 'danger', 'khatra', 'ચેતવણી', 'પાણી',
-    'વીજળી', 'બંધ', 'સમારકામ', 'નોટિસ', 'ધ્યાન',
+    'વીજળી', 'બંધ', 'સમારકામ', 'નોટિસ', 'ધ્યાન', 'अलर्ट', 'पाइपलाइन',
+    'बिजली', 'कटौती', 'जाम', 'हादसा', 'दुर्घटना', 'खतरा', 'सूचना',
   };
 
   static final Set<String> _safetyKeywords = {
@@ -23,17 +24,23 @@ class AiCategoryClassifierService {
     'dog', 'dogs', 'straydog', 'kutta', 'kutte', 'bite', 'speedbreaker',
     'breaker', 'cctv', 'camera', 'safe', 'unsafe', 'accident', 'fire',
     'aag', 'smoke', 'helmet', 'robbery', 'snatching', 'kid', 'kids',
-    'suraksha', 'surakshit', 'સુરક્ષા', 'ચોરી', 'પોલીસ', 'કૂતરા', 'સાવધાન',
+    'suraksha', 'surakshit', 'satark', 'satarkta', 'savdhan', 'savdhaan',
+    'beware', 'careful', 'hoshyaar', 'bachke', 'સુરક્ષા', 'ચોરી', 'પોલીસ',
+    'કૂતરા', 'સાવધાન', 'સતર્ક', 'सतर्क', 'सतर्कता', 'सावधान', 'सुरक्षा',
+    'सुरक्षित', 'चोरी', 'चोर', 'पुलिस', 'होशियार', 'बचके',
   };
 
   static final Set<String> _eventKeywords = {
-    'event', 'events', 'match', 'cricket', 'boxcricket', 'tournament',
-    'badminton', 'football', 'sports', 'game', 'garba', 'navratri',
-    'diwali', 'holi', 'celebration', 'party', 'gathering', 'meeting',
-    'agm', 'puja', 'pooja', 'aarti', 'bhajan', 'satsang', 'festival',
-    'festive', 'amphitheatre', 'clubhouse', 'turf', 'invitation', 'invite',
-    'bhojan', 'dinner', 'lunch', 'sunday', 'weekend', 'celebrate', 'function',
-    'કાર્યક્રમ', 'ગરબા', 'મેચ', 'ટુર્નામેન્ટ', 'પૂજા', 'આરતી', 'સભા',
+    'event', 'events', 'program', 'prograam', 'programme', 'karyakram',
+    'match', 'cricket', 'boxcricket', 'tournament', 'badminton', 'football',
+    'sports', 'game', 'games', 'garba', 'navratri', 'diwali', 'holi',
+    'celebration', 'party', 'gathering', 'meeting', 'agm', 'puja', 'pooja',
+    'aarti', 'bhajan', 'satsang', 'festival', 'festive', 'amphitheatre',
+    'clubhouse', 'turf', 'invitation', 'invite', 'bhojan', 'dinner', 'lunch',
+    'sunday', 'weekend', 'celebrate', 'function', 'utsav', 'samaroh', 'mela',
+    'gettogether', 'કાર્યક્રમ', 'ગરબા', 'મેચ', 'ટુર્નામેન્ટ', 'પૂજા', 'આરતી',
+    'સભા', 'ઉત્સવ', 'મેળો', 'प्रोग्राम', 'कार्यक्रम', 'उत्सव', 'समारोह',
+    'त्योहार', 'मेला', 'सभा', 'बैठक', 'पूजा', 'आरती', 'भजन', 'गरबा',
   };
 
   static final Set<String> _questionKeywords = {
@@ -41,8 +48,11 @@ class AiCategoryClassifierService {
     'kaisa', 'kaisi', 'recommend', 'recommendation', 'suggest', 'suggestion',
     'review', 'advice', 'help', 'chahiye', 'pata', 'maloom', 'batao',
     'batana', 'contact', 'number', 'address', 'where', 'who', 'how',
-    'which', 'what', 'why', 'કોણ', 'ક્યાં', 'કેવી', 'કેમ', 'સુ',
-    'મદદ', 'નંબર',
+    'which', 'what', 'why', 'chale', 'chaloge', 'chalein', 'ghoomne',
+    'milega', 'કોણ', 'ક્યાં', 'કેવી', 'કેમ', 'સુ', 'મદદ', 'નંબર',
+    'क्या', 'कौन', 'कहाँ', 'कहा', 'किधर', 'कब', 'क्यों', 'कैसे',
+    'किसको', 'कैसा', 'कैसी', 'पता', 'मालूम', 'बताओ', 'बताना', 'चाहिए',
+    'मिलेगा', 'घूमने', 'चलना',
   };
 
   PostCategory classify(String text) {
