@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
-    <color name="ic_launcher_dark_background">#1A0A18</color>
-    <color name="ic_launcher_festive_background">#3A0F34</color>
-    <color name="splash_background">#FFFFFF</color>
-    <color name="splash_background_night">#FFFFFF</color>
-    <color name="primary_plum">#3A0F34</color>
+    <color name="ic_launcher_background">#320531</color>
+    <color name="ic_launcher_dark_background">#320531</color>
+    <color name="ic_launcher_festive_background">#320531</color>
+    <color name="splash_background">#320531</color>
+    <color name="splash_background_night">#320531</color>
+    <color name="primary_plum">#320531</color>
 </resources>

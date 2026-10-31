@@ -213,7 +213,10 @@ class BazarScreen extends StatefulWidget {
   State<BazarScreen> createState() => _BazarScreenState();
 }
 
-class _BazarScreenState extends State<BazarScreen> {
+class _BazarScreenState extends State<BazarScreen> with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
+  @override
+  bool get wantKeepAlive => true;
+  late final AnimationController _bazarShimmerController;
   late bool _showMyListings;
   String _myListingsTab = 'Active';
   bool _isSearching = false;
@@ -277,6 +280,10 @@ class _BazarScreenState extends State<BazarScreen> {
   @override
   void initState() {
     super.initState();
+    _bazarShimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
     _showMyListings = widget.initialShowMyListings;
     _activeHandle = widget.currentUserHandle;
     _resolveActiveHandle();
@@ -324,6 +331,7 @@ class _BazarScreenState extends State<BazarScreen> {
 
   @override
   void dispose() {
+    _bazarShimmerController.dispose();
     BazarRepository.instance.removeListener(_onBazarRepoChanged);
     _searchController.dispose();
     super.dispose();
@@ -447,6 +455,7 @@ class _BazarScreenState extends State<BazarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isPushedFromProfile = widget.initialShowMyListings;
     final canPop = Navigator.canPop(context);
     final showBackButton = isPushedFromProfile || _showMyListings || _isSearching;
@@ -738,9 +747,11 @@ class _BazarScreenState extends State<BazarScreen> {
               ),
             ),
 
-            products.isEmpty
-                ? _buildEmptyState('No products found matching your search.')
-                : products.length == 1
+            BazarRepository.instance.isLoading && products.isEmpty
+                ? _buildBazarLoadingSkeleton()
+                : products.isEmpty
+                    ? _buildEmptyState('No products found matching your search.')
+                    : products.length == 1
                     ? Padding(
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
                         child: LayoutBuilder(
@@ -778,6 +789,98 @@ class _BazarScreenState extends State<BazarScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBazarLoadingSkeleton() {
+    return AnimatedBuilder(
+      animation: _bazarShimmerController,
+      builder: (context, _) {
+        final shimmerValue = _bazarShimmerController.value;
+        final baseColor = AppColors.chipBg;
+        final highlightColor = Colors.white.withValues(alpha: 0.65);
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 88 + MediaQuery.paddingOf(context).bottom),
+          child: ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) {
+              return LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: [
+                  (shimmerValue - 0.3).clamp(0.0, 1.0),
+                  shimmerValue.clamp(0.0, 1.0),
+                  (shimmerValue + 0.3).clamp(0.0, 1.0),
+                ],
+                colors: [
+                  baseColor,
+                  highlightColor,
+                  baseColor,
+                ],
+              ).createShader(bounds);
+            },
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.75,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: 4,
+              itemBuilder: (context, index) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.cardBorder, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: AppColors.chipBg,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 90,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: AppColors.chipBg,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              width: 60,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: AppColors.chipBg,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

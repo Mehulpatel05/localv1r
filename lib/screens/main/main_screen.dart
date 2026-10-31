@@ -218,7 +218,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     if (page == null) return;
     _animFromIndex = page;
     _animToIndex = page;
-    _liquidAnimController.value = 1.0;
   }
 
   void _onPageChanged(int index) {
@@ -227,7 +226,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     if (!_mountedTabs.contains(index)) {
       _mountedTabs.add(index);
       _cachedTabs[index] = _createTab(index);
-      setState(() {});
     }
     _currentIndexNotifier.value = index;
     if (!_isPageAnimating) {
@@ -246,7 +244,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     if (!_mountedTabs.contains(index)) {
       _mountedTabs.add(index);
       _cachedTabs[index] = _createTab(index);
-      setState(() {});
     }
     final currentProgress = _liquidPositionAnim.value;
     _animFromIndex = _animFromIndex + (_animToIndex - _animFromIndex) * currentProgress;
@@ -279,7 +276,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       return const SizedBox.shrink();
     }
     _cachedTabs[index] ??= _createTab(index);
-    return _cachedTabs[index]!;
+    return _KeepAliveTab(child: _cachedTabs[index]!);
   }
 
   Widget _createTab(int index) {
@@ -327,7 +324,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             body: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
-              physics: const ClampingScrollPhysics(),
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               itemCount: 4,
               itemBuilder: (context, index) => _getOrCreateTab(index),
             ),
@@ -378,12 +375,14 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             const circleSize = 40.0;
 
                             return AnimatedBuilder(
-                              animation: _liquidAnimController,
+                              animation: Listenable.merge([_liquidAnimController, _pageController]),
                               builder: (context, _) {
+                                final currentPos = (!_isPageAnimating && _pageController.hasClients && _pageController.page != null)
+                                    ? _pageController.page!
+                                    : (_animFromIndex + (_animToIndex - _animFromIndex) * _liquidPositionAnim.value);
                                 final progress = _liquidPositionAnim.value;
-                                final currentPos = _animFromIndex + (_animToIndex - _animFromIndex) * progress;
                                 final totalDistance = (_animToIndex - _animFromIndex).abs();
-                                final stretchFactor = (totalDistance > 0.05)
+                                final stretchFactor = (_isPageAnimating && totalDistance > 0.05)
                                     ? (math.sin(progress.clamp(0.0, 1.0) * math.pi) * 0.38 * math.min(totalDistance, 1.7))
                                     : 0.0;
                                 final stretch = 1.0 + stretchFactor;
@@ -590,4 +589,25 @@ class _FilledPersonPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _FilledPersonPainter oldDelegate) =>
       oldDelegate.color != color;
+}
+
+class _KeepAliveTab extends StatefulWidget {
+  final Widget child;
+
+  const _KeepAliveTab({required this.child});
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
 }

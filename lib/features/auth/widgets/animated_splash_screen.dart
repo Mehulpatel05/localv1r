@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../theme/app_colors.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
   final VoidCallback? onAnimationComplete;
@@ -28,19 +27,13 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final Animation<double> _pinOpacity;
   late final Animation<double> _rippleScale;
   late final Animation<double> _rippleOpacity;
-  late final Animation<double> _node1Scale;
-  late final Animation<double> _node2Scale;
-  late final Animation<double> _node3Scale;
-  late final Animation<double> _triangleProgress;
   late final Animation<double> _wordOpacity;
   late final Animation<double> _wordOffsetY;
   late final Animation<double> _tagOpacity;
   late final Animation<double> _tagOffsetY;
 
-  late final TextStyle _wordStyleDark;
-  late final TextStyle _wordStyleLight;
-  late final TextStyle _tagStyleDark;
-  late final TextStyle _tagStyleLight;
+  late final TextStyle _wordStyle;
+  late final TextStyle _tagStyle;
 
   static const int totalDurationMs = 1500;
 
@@ -53,30 +46,17 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       duration: const Duration(milliseconds: totalDurationMs),
     );
 
-    _wordStyleDark = GoogleFonts.plusJakartaSans(
+    _wordStyle = GoogleFonts.plusJakartaSans(
       fontSize: 28,
       fontWeight: FontWeight.w800,
       color: Colors.white,
       letterSpacing: -0.02 * 28,
       height: 1.0,
     );
-    _wordStyleLight = GoogleFonts.plusJakartaSans(
-      fontSize: 28,
-      fontWeight: FontWeight.w800,
-      color: AppColors.primary,
-      letterSpacing: -0.02 * 28,
-      height: 1.0,
-    );
-    _tagStyleDark = GoogleFonts.plusJakartaSans(
+    _tagStyle = GoogleFonts.plusJakartaSans(
       fontSize: 13.5,
       fontWeight: FontWeight.w500,
       color: Colors.white.withValues(alpha: 0.70),
-      letterSpacing: 0,
-    );
-    _tagStyleLight = GoogleFonts.plusJakartaSans(
-      fontSize: 13.5,
-      fontWeight: FontWeight.w500,
-      color: AppColors.primary.withValues(alpha: 0.70),
       letterSpacing: 0,
     );
 
@@ -183,33 +163,6 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       CurvedAnimation(parent: _controller, curve: rippleInterval),
     );
 
-    const popCurve = Cubic(0.2, 0.9, 0.3, 1.45);
-    _node1Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.50, 0.68, curve: popCurve),
-      ),
-    );
-    _node2Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.55, 0.73, curve: popCurve),
-      ),
-    );
-    _node3Scale = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.60, 0.78, curve: popCurve),
-      ),
-    );
-
-    _triangleProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.55, 0.82, curve: Curves.easeOutCubic),
-      ),
-    );
-
     const wordCurve = Interval(
       0.65,
       0.90,
@@ -259,22 +212,18 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
       _controller.value = 1.0;
     }
 
-    final isDark = widget.isDarkMode ?? false;
-    final sbg = isDark ? Colors.black : Colors.white;
-    final sfg = isDark ? Colors.white : AppColors.primary;
-    final pinInnerColor = isDark ? sbg : Colors.white;
-    final wordStyle = isDark ? _wordStyleDark : _wordStyleLight;
-    final tagStyle = isDark ? _tagStyleDark : _tagStyleLight;
+    final sbg = const Color(0xFF320531);
+    final sfg = const Color(0xFFFEFEFC);
 
     return Scaffold(
       backgroundColor: sbg,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle(
+        value: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarColor: sbg,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: Color(0xFF320531),
           systemNavigationBarDividerColor: Colors.transparent,
-          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarIconBrightness: Brightness.light,
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -284,7 +233,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                 opacity: _streetsOpacity,
                 child: CustomPaint(
                   painter: _SplashStreetsPainter(
-                    strokeColor: sfg.withValues(alpha: isDark ? 0.09 : 0.08),
+                    strokeColor: sfg.withValues(alpha: 0.12),
                   ),
                 ),
               ),
@@ -297,11 +246,11 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        width: 86,
-                        height: 108,
+                        width: 96,
+                        height: 96,
                         child: Stack(
                           clipBehavior: Clip.none,
-                          alignment: Alignment.bottomCenter,
+                          alignment: Alignment.center,
                           children: [
                             AnimatedBuilder(
                               animation: _rippleOpacity,
@@ -309,26 +258,21 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                                 final opacity = _rippleOpacity.value;
                                 if (opacity <= 0.001) return const SizedBox.shrink();
                                 final scale = _rippleScale.value;
-                                return Positioned(
-                                  bottom: -24,
-                                  child: Opacity(
-                                    opacity: opacity,
-                                    child: Transform.scale(
-                                      scaleX: scale * 1.0,
-                                      scaleY: scale * 0.32,
-                                      alignment: Alignment.center,
-                                      child: child,
-                                    ),
+                                return Opacity(
+                                  opacity: opacity,
+                                  child: Transform.scale(
+                                    scale: scale,
+                                    child: child,
                                   ),
                                 );
                               },
                               child: Container(
-                                width: 160,
-                                height: 160,
+                                width: 140,
+                                height: 140,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: sfg.withValues(alpha: isDark ? 0.35 : 0.25),
+                                    color: sfg.withValues(alpha: 0.35),
                                     width: 1.5,
                                   ),
                                 ),
@@ -351,33 +295,29 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                                   ),
                                 );
                               },
-                              child: CustomPaint(
-                                size: const Size(86, 108),
-                                painter: _SplashPinPainter(
-                                  pinColor: sfg,
-                                  innerColor: pinInnerColor,
-                                  node1Scale: 0,
-                                  node2Scale: 0,
-                                  node3Scale: 0,
-                                  triangleProgress: 0,
+                              child: Container(
+                                width: 88,
+                                height: 88,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(22),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.40),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(22),
+                                  child: Image.asset(
+                                    'assets/images/app_icon.png',
+                                    width: 88,
+                                    height: 88,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
-                            ),
-                            AnimatedBuilder(
-                              animation: _controller,
-                              builder: (context, _) {
-                                return CustomPaint(
-                                  size: const Size(86, 108),
-                                  painter: _SplashPinPainter(
-                                    pinColor: Colors.transparent,
-                                    innerColor: pinInnerColor,
-                                    node1Scale: _node1Scale.value,
-                                    node2Scale: _node2Scale.value,
-                                    node3Scale: _node3Scale.value,
-                                    triangleProgress: _triangleProgress.value,
-                                  ),
-                                );
-                              },
                             ),
                           ],
                         ),
@@ -391,7 +331,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                             offset: Offset(0, _wordOffsetY.value),
                             child: child,
                           ),
-                          child: Text('Urban Community', style: wordStyle),
+                          child: Text('Urban Community', style: _wordStyle),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -403,7 +343,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                             offset: Offset(0, _tagOffsetY.value),
                             child: child,
                           ),
-                          child: Text('Your City, Your Community', style: tagStyle),
+                          child: Text('Your City, Your Community', style: _tagStyle),
                         ),
                       ),
                     ],
@@ -491,108 +431,4 @@ class _SplashStreetsPainter extends CustomPainter {
       oldDelegate.strokeColor != strokeColor;
 }
 
-class _SplashPinPainter extends CustomPainter {
-  final Color pinColor;
-  final Color innerColor;
-  final double node1Scale;
-  final double node2Scale;
-  final double node3Scale;
-  final double triangleProgress;
 
-  const _SplashPinPainter({
-    required this.pinColor,
-    required this.innerColor,
-    required this.node1Scale,
-    required this.node2Scale,
-    required this.node3Scale,
-    required this.triangleProgress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sx = size.width / 40.0;
-    final sy = size.height / 50.0;
-
-    final pinPaint = Paint()
-      ..color = pinColor
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final pinPath = Path()
-      ..moveTo(20.0 * sx, 1.0 * sy)
-      ..cubicTo(9.5 * sx, 1.0 * sy, 1.0 * sx, 9.3 * sy, 1.0 * sx, 19.5 * sy)
-      ..cubicTo(1.0 * sx, 33.0 * sy, 20.0 * sx, 49.0 * sy, 20.0 * sx, 49.0 * sy)
-      ..cubicTo(20.0 * sx, 49.0 * sy, 39.0 * sx, 33.0 * sy, 39.0 * sx, 19.5 * sy)
-      ..cubicTo(39.0 * sx, 9.3 * sy, 30.5 * sx, 1.0 * sy, 20.0 * sx, 1.0 * sy)
-      ..close();
-
-    canvas.drawPath(pinPath, pinPaint);
-
-    if (triangleProgress > 0.001) {
-      final trianglePath = Path()
-        ..moveTo(13.0 * sx, 15.0 * sy)
-        ..lineTo(27.0 * sx, 15.0 * sy)
-        ..lineTo(20.0 * sx, 28.0 * sy)
-        ..close();
-
-      final triPaint = Paint()
-        ..color = innerColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8 * sx
-        ..strokeJoin = StrokeJoin.round
-        ..strokeCap = StrokeCap.round
-        ..isAntiAlias = true;
-
-      if (triangleProgress >= 0.999) {
-        canvas.drawPath(trianglePath, triPaint);
-      } else {
-        for (final metric in trianglePath.computeMetrics()) {
-          final extractLength = metric.length * triangleProgress;
-          final subPath = metric.extractPath(0.0, extractLength);
-          canvas.drawPath(subPath, triPaint);
-        }
-      }
-    }
-
-    final nodePaint = Paint()
-      ..color = innerColor
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final baseRadius = 3.2 * sx;
-
-    if (node1Scale > 0.001) {
-      canvas.drawCircle(
-        Offset(13.0 * sx, 15.0 * sy),
-        baseRadius * node1Scale,
-        nodePaint,
-      );
-    }
-
-    if (node2Scale > 0.001) {
-      canvas.drawCircle(
-        Offset(27.0 * sx, 15.0 * sy),
-        baseRadius * node2Scale,
-        nodePaint,
-      );
-    }
-
-    if (node3Scale > 0.001) {
-      canvas.drawCircle(
-        Offset(20.0 * sx, 28.0 * sy),
-        baseRadius * node3Scale,
-        nodePaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SplashPinPainter oldDelegate) {
-    return oldDelegate.pinColor != pinColor ||
-        oldDelegate.innerColor != innerColor ||
-        oldDelegate.node1Scale != node1Scale ||
-        oldDelegate.node2Scale != node2Scale ||
-        oldDelegate.node3Scale != node3Scale ||
-        oldDelegate.triangleProgress != triangleProgress;
-  }
-}
