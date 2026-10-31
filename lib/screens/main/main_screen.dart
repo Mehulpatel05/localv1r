@@ -48,14 +48,18 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final Set<int> _mountedTabs = {0};
   late final List<Widget?> _cachedTabs = [null, null, null, null];
+  late final PageController _pageController;
   double _animFromIndex = 0.0;
   double _animToIndex = 0.0;
   late final AnimationController _liquidAnimController;
   late final Animation<double> _liquidPositionAnim;
+  bool _isPageAnimating = false;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: 0);
+    _pageController.addListener(_onPageScroll);
     _cachedTabs[0] = _createTab(0);
     _liquidAnimController = AnimationController(
       vsync: this,
@@ -200,9 +204,40 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _pageController.removeListener(_onPageScroll);
+    _pageController.dispose();
     _liquidAnimController.dispose();
     _currentIndexNotifier.dispose();
     super.dispose();
+  }
+
+  void _onPageScroll() {
+    if (_isPageAnimating) return;
+    if (!_pageController.hasClients) return;
+    final page = _pageController.page;
+    if (page == null) return;
+    _animFromIndex = page;
+    _animToIndex = page;
+    _liquidAnimController.value = 1.0;
+  }
+
+  void _onPageChanged(int index) {
+    if (_currentIndexNotifier.value == index) return;
+    HapticFeedback.selectionClick();
+    if (!_mountedTabs.contains(index)) {
+      _mountedTabs.add(index);
+      _cachedTabs[index] = _createTab(index);
+      setState(() {});
+    }
+    _currentIndexNotifier.value = index;
+    if (!_isPageAnimating) {
+      _animFromIndex = index.toDouble();
+      _animToIndex = index.toDouble();
+      _liquidAnimController.value = 1.0;
+    }
+    if (index == 0) {
+      RewardsService.instance.fetchSummary();
+    }
   }
 
   void _onTabTapped(int index) {
@@ -218,6 +253,22 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _animToIndex = index.toDouble();
     _liquidAnimController.forward(from: 0.0);
     _currentIndexNotifier.value = index;
+
+    if (_pageController.hasClients) {
+      _isPageAnimating = true;
+      _pageController
+          .animateToPage(
+            index,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.fastOutSlowIn,
+          )
+          .then((_) {
+            if (mounted) {
+              _isPageAnimating = false;
+            }
+          });
+    }
+
     if (index == 0) {
       RewardsService.instance.fetchSummary();
     }
@@ -273,9 +324,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           child: Scaffold(
             backgroundColor: Colors.white,
             extendBody: true,
-            body: IndexedStack(
-              index: currentIndex,
-              children: List.generate(4, (index) => _getOrCreateTab(index)),
+            body: PageView.builder(
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              physics: const ClampingScrollPhysics(),
+              itemCount: 4,
+              itemBuilder: (context, index) => _getOrCreateTab(index),
             ),
             bottomNavigationBar: AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
