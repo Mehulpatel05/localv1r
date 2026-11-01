@@ -247,7 +247,7 @@ class DirectChatService {
   }
 
   /// Periodic stream of user's direct chats
-  Stream<List<ChatConversation>> pollChatsStream(String userHandle, {Duration interval = const Duration(seconds: 3)}) async* {
+  Stream<List<ChatConversation>> pollChatsStream(String userHandle, {Duration interval = const Duration(seconds: 8)}) async* {
     while (true) {
       final chats = await getChats(userHandle);
       yield chats;
@@ -302,7 +302,7 @@ class DirectChatService {
   /// Periodic stream of messages for a direct chat
   Stream<List<Map<String, dynamic>>> pollMessagesStream(
     String chatId, {
-    Duration interval = const Duration(seconds: 2),
+    Duration interval = const Duration(seconds: 4),
     int limit = 50,
     String? userHandle,
   }) async* {

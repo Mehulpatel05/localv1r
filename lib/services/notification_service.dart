@@ -431,7 +431,7 @@ class NotificationService {
     _pollingTimer?.cancel();
     bool isInitialTick = true;
 
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       try {
         final token = await AuthService.instance.getAccessToken();
         final res = await http.get(

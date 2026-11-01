@@ -58,9 +58,8 @@ class FriendRepository {
   Timer? _pollingTimer;
 
   void _startPollingIfNeeded() {
-    _pollingTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
-      refreshAll();
-    });
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
   }
 
   Future<Map<String, String>> _getAuthHeaders() async {

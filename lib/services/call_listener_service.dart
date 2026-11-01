@@ -27,7 +27,7 @@ class CallListenerService {
 
     _pollingTimer?.cancel();
 
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) async {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       try {
         final token = await AuthService.instance.getAccessToken();
         if (token == null || token.isEmpty) return;
