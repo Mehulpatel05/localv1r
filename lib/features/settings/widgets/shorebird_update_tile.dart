@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../../theme/app_colors.dart';
 
@@ -14,6 +15,7 @@ class _ShorebirdUpdateTileState extends State<ShorebirdUpdateTile> {
   bool _isChecking = false;
   int? _currentPatchNumber;
   int? _nextPatchNumber;
+  String _version = '1.0.0';
 
   @override
   void initState() {
@@ -22,6 +24,15 @@ class _ShorebirdUpdateTileState extends State<ShorebirdUpdateTile> {
   }
 
   Future<void> _loadPatchInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _version = info.version;
+        });
+      }
+    } catch (_) {}
+
     if (!_updater.isAvailable) return;
 
     try {
@@ -121,16 +132,16 @@ class _ShorebirdUpdateTileState extends State<ShorebirdUpdateTile> {
     Color statusColor;
 
     if (!_updater.isAvailable) {
-      statusText = 'Development build';
+      statusText = 'Development build (v$_version)';
       statusColor = AppColors.textMuted;
     } else if (_nextPatchNumber != null) {
       statusText = 'Update ready (Restart to apply)';
       statusColor = const Color(0xFFF59E0B);
     } else if (_currentPatchNumber != null) {
-      statusText = 'App is up to date (Version 1.0.1)';
+      statusText = 'App is up to date (v$_version · Patch #$_currentPatchNumber)';
       statusColor = AppColors.primary;
     } else {
-      statusText = 'App is up to date (Version 1.0.1)';
+      statusText = 'App is up to date (v$_version)';
       statusColor = AppColors.primary;
     }
 

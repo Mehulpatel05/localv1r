@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/auth_repository.dart';
 import '../../core/models/user_profile.dart';
@@ -40,12 +41,20 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late bool _showProfilePhoto;
+  String _versionDisplay = '1.0.0';
 
   @override
   void initState() {
     super.initState();
     final cleanHandle = widget.profile.handle.replaceAll('@', '').trim();
     _showProfilePhoto = AvatarCacheService.instance.isPhotoVisible(cleanHandle);
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(() {
+          _versionDisplay = info.version;
+        });
+      }
+    }).catchError((_) {});
   }
 
   Future<void> _toggleProfilePhotoVisibility(bool value) async {
@@ -331,7 +340,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Version 1.0.1 (Vadodara Live)',
+                      'Version $_versionDisplay (Vadodara Live)',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: AppColors.textMuted.withValues(alpha: 0.7),
