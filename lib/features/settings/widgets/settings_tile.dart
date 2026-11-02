@@ -8,6 +8,7 @@ class SettingsTile extends StatefulWidget {
     required this.title,
     required this.description,
     required this.onTap,
+    this.trailing,
     this.semanticsLabel,
   });
 
@@ -15,6 +16,7 @@ class SettingsTile extends StatefulWidget {
   final String title;
   final String description;
   final VoidCallback onTap;
+  final Widget? trailing;
   final String? semanticsLabel;
 
   @override
@@ -96,7 +98,8 @@ class _SettingsTileState extends State<SettingsTile> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+                    widget.trailing ??
+                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
                   ],
                 ),
               ),

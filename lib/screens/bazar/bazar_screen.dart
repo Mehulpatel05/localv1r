@@ -283,7 +283,10 @@ class _BazarScreenState extends State<BazarScreen> with AutomaticKeepAliveClient
     _bazarShimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    );
+    if (BazarRepository.instance.isLoading && BazarRepository.instance.products.isEmpty) {
+      _bazarShimmerController.repeat();
+    }
     _showMyListings = widget.initialShowMyListings;
     _activeHandle = widget.currentUserHandle;
     _resolveActiveHandle();
@@ -314,6 +317,15 @@ class _BazarScreenState extends State<BazarScreen> with AutomaticKeepAliveClient
 
   void _onBazarRepoChanged() {
     if (!mounted) return;
+    if (BazarRepository.instance.isLoading && BazarRepository.instance.products.isEmpty) {
+      if (!_bazarShimmerController.isAnimating) {
+        _bazarShimmerController.repeat();
+      }
+    } else {
+      if (_bazarShimmerController.isAnimating) {
+        _bazarShimmerController.stop();
+      }
+    }
     setState(() {
       final seenIds = <String>{};
       final uniqueProducts = <BazarProduct>[];

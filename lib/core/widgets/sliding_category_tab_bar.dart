@@ -32,9 +32,16 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
   double _targetRight = 0.0;
   double _lastTabWidth = 0.0;
   int _prevIndex = 0;
+  List<double> _cachedTabWidths = [];
+  List<double> _cachedTabOffsets = [];
 
   static const Curve _leadCurve = Curves.easeOutCubic;
   static const Curve _trailCurve = Curves.easeInOutCubic;
+
+  void _updateCachedMetrics() {
+    _cachedTabWidths = _calculateTabWidths();
+    _cachedTabOffsets = _calculateOffsets(_cachedTabWidths);
+  }
 
   @override
   void initState() {
@@ -46,6 +53,7 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
 
     if (widget.isScrollable) {
       _scrollController = ScrollController();
+      _updateCachedMetrics();
     }
 
     final maxIndex = widget.categories.isEmpty ? 0 : widget.categories.length - 1;
@@ -56,8 +64,11 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     if (widget.isScrollable && initialIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scrollController != null && _scrollController!.hasClients) {
-          final tabWidths = _calculateTabWidths();
-          final tabOffsets = _calculateOffsets(tabWidths);
+          if (_cachedTabWidths.length != widget.categories.length) {
+            _updateCachedMetrics();
+          }
+          final tabWidths = _cachedTabWidths;
+          final tabOffsets = _cachedTabOffsets;
           if (initialIndex < tabOffsets.length) {
             final tabCenter = tabOffsets[initialIndex] + tabWidths[initialIndex] / 2 + 3.0;
             final viewportWidth = _scrollController!.position.viewportDimension;
@@ -73,11 +84,17 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
   @override
   void didUpdateWidget(covariant SlidingCategoryTabBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.categories != oldWidget.categories) {
+      _updateCachedMetrics();
+    }
     if (widget.selectedIndex != oldWidget.selectedIndex &&
         widget.selectedIndex != _prevIndex) {
       if (widget.isScrollable) {
-        final tabWidths = _calculateTabWidths();
-        final tabOffsets = _calculateOffsets(tabWidths);
+        if (_cachedTabWidths.length != widget.categories.length) {
+          _updateCachedMetrics();
+        }
+        final tabWidths = _cachedTabWidths;
+        final tabOffsets = _cachedTabOffsets;
         _animateToTab(widget.selectedIndex, 0.0, customOffsets: tabOffsets, customWidths: tabWidths);
       } else {
         _animateToTab(widget.selectedIndex, _lastTabWidth);
@@ -191,8 +208,11 @@ class _SlidingCategoryTabBarState extends State<SlidingCategoryTabBar>
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
     if (widget.isScrollable) {
-      final tabWidths = _calculateTabWidths();
-      final tabOffsets = _calculateOffsets(tabWidths);
+      if (_cachedTabWidths.length != widget.categories.length) {
+        _updateCachedMetrics();
+      }
+      final tabWidths = _cachedTabWidths;
+      final tabOffsets = _cachedTabOffsets;
       final innerWidth = tabWidths.fold<double>(0.0, (sum, w) => sum + w);
 
       if (_targetRight == 0.0 && widget.selectedIndex < tabOffsets.length) {

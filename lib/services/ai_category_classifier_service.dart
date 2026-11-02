@@ -31,17 +31,72 @@ class AiCategoryClassifierService {
   };
 
   static final Set<String> _eventKeywords = {
-    'event', 'events', 'program', 'prograam', 'programme', 'karyakram',
+    'event', 'events', 'program', 'prograam', 'programme', 'karyakram', 'karykram',
     'match', 'cricket', 'boxcricket', 'tournament', 'badminton', 'football',
-    'sports', 'game', 'games', 'garba', 'navratri', 'diwali', 'holi',
-    'celebration', 'party', 'gathering', 'meeting', 'agm', 'puja', 'pooja',
-    'aarti', 'bhajan', 'satsang', 'festival', 'festive', 'amphitheatre',
-    'clubhouse', 'turf', 'invitation', 'invite', 'bhojan', 'dinner', 'lunch',
-    'sunday', 'weekend', 'celebrate', 'function', 'utsav', 'samaroh', 'mela',
-    'gettogether', 'કાર્યક્રમ', 'ગરબા', 'મેચ', 'ટુર્નામેન્ટ', 'પૂજા', 'આરતી',
-    'સભા', 'ઉત્સવ', 'મેળો', 'प्रोग्राम', 'कार्यक्रम', 'उत्सव', 'समारोह',
-    'त्योहार', 'मेला', 'सभा', 'बैठक', 'पूजा', 'आरती', 'भजन', 'गरबा',
+    'sports', 'game', 'games', 'garba', 'navratri', 'diwali', 'holi', 'eid',
+    'celebration', 'celebrate', 'celebrating', 'ceremony', 'party', 'gathering',
+    'meeting', 'agm', 'puja', 'pooja', 'aarti', 'bhajan', 'satsang', 'festival',
+    'festive', 'amphitheatre', 'clubhouse', 'turf', 'invitation', 'invite',
+    'invited', 'bhojan', 'dinner', 'lunch', 'potluck', 'picnic', 'sunday',
+    'weekend', 'function', 'utsav', 'samaroh', 'mela', 'gettogether', 'concert',
+    'workshop', 'seminar', 'webinar', 'marathon', 'walkathon', 'cyclothon',
+    'exhibition', 'expo', 'carnival', 'fair', 'camp', 'shivir', 'inauguration',
+    'screening', 'meetup', 'katha', 'havan', 'jagran', 'chowki', 'sundarkand',
+    'dandiya', 'raas', 'bhandara', 'langar', 'prasad', 'dawat', 'anandmela',
+    'pradarshani', 'passes', 'pass', 'ticket', 'tickets', 'venue', 'tareekh',
+    'tarikh', 'timing', 'timings', 'shaam', 'dopahar', 'ravivar', 'aayojan',
+    'aayojit', 'shamil', 'padhare', 'aamantrit', 'nimantran', 'auditorium',
+    'કાર્યક્રમ', 'ગરબા', 'મેચ', 'ટુર્નામેન્ટ', 'પૂજા', 'આરતી', 'સભા', 'ઉત્સવ',
+    'મેળો', 'આયોજન', 'આયોજિત', 'મહોત્સવ', 'પ્રદર્શન', 'બેઠક', 'રાસ', 'દાંડિયા',
+    'ભજન', 'સત્સંગ', 'કીર્તન', 'કથા', 'હવન', 'મહાઆરતી', 'ભોજન', 'પ્રસાદ',
+    'ઉદ્ઘાટન', 'શુભારંભ', 'શિબિર', 'રક્તદાન', 'આમંત્રણ', 'પધારો', 'સ્થળ', 'તારીખ',
+    'प्रोग्राम', 'कार्यक्रम', 'उत्सव', 'समारोह', 'त्योहार', 'मेला', 'सभा', 'बैठक',
+    'पूजा', 'आरती', 'भजन', 'गरबा', 'आयोजन', 'आयोजित', 'महोत्सव', 'आनंद मेला',
+    'प्रदर्शनी', 'प्रतियोगिता', 'खेलकूद', 'दौड़', 'रक्तदान', 'शिविर', 'आमंत्रण',
+    'निमंत्रण', 'पधारें', 'स्थान', 'समय', 'दिनांक', 'तारीख', 'जागरण', 'कीर्तन',
+    'सुंदरकांड', 'कथा', 'हवन', 'महाआरती', 'भंडारा', 'लंगर', 'प्रसाद', 'डांडिया',
+    'रास', 'उद्घाटन', 'शुभारंभ', 'विमोचन', 'वार्षिकोत्सव',
   };
+
+  static final List<String> _eventPhrases = [
+    'box cricket',
+    'blood donation',
+    'grand opening',
+    'live music',
+    'standup comedy',
+    'open mic',
+    'mata ki chowki',
+    'sunderkand path',
+    'maha aarti',
+    'annual meeting',
+    'general meeting',
+    'society meeting',
+    'cricket match',
+    'dinner party',
+    'lunch party',
+    'free entry',
+    'entry fee',
+    'entry free',
+    'registration fee',
+    'all are invited',
+    'aao sab',
+    'sab aana',
+    'hissa le',
+    'shamil ho',
+    'padharo sa',
+    'aaj shaam',
+    'kal shaam',
+    'ravivar ko',
+    'sunday morning',
+    'sunday evening',
+    'date and time',
+    'date & time',
+    'time:',
+    'date:',
+    'venue:',
+    'samay:',
+    'sthan:',
+  ];
 
   static final Set<String> _questionKeywords = {
     '?', 'kahan', 'kidhar', 'kaun', 'kisko', 'kaise', 'kyun', 'kya',
@@ -61,17 +116,18 @@ class AiCategoryClassifierService {
       return PostCategory.general;
     }
 
-    if (clean.contains('?')) {
-      final isAlsoAlert = _containsAny(clean, _alertKeywords);
-      if (!isAlsoAlert) {
-        return PostCategory.question;
-      }
-    }
-
     int alertScore = _calculateScore(clean, _alertKeywords);
     int safetyScore = _calculateScore(clean, _safetyKeywords);
     int eventScore = _calculateScore(clean, _eventKeywords);
+    for (final phrase in _eventPhrases) {
+      if (clean.contains(phrase)) {
+        eventScore += 4;
+      }
+    }
     int questionScore = _calculateScore(clean, _questionKeywords);
+    if (clean.contains('?')) {
+      questionScore += 2;
+    }
 
     if (alertScore > 0 && alertScore >= safetyScore && alertScore >= eventScore && alertScore >= questionScore) {
       return PostCategory.alerts;
@@ -133,13 +189,6 @@ class AiCategoryClassifierService {
     }
 
     return latinChars > 0 ? 'en' : 'hi';
-  }
-
-  bool _containsAny(String text, Set<String> keywords) {
-    for (final kw in keywords) {
-      if (text.contains(kw)) return true;
-    }
-    return false;
   }
 
   int _calculateScore(String text, Set<String> keywords) {

@@ -35,7 +35,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   late final TextStyle _wordStyle;
   late final TextStyle _tagStyle;
 
-  static const int totalDurationMs = 1500;
+  static const int totalDurationMs = 2600;
 
   @override
   void initState() {

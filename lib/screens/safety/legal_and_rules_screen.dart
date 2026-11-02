@@ -3,18 +3,35 @@ import '../../theme/app_colors.dart';
 
 class LegalAndRulesScreen extends StatefulWidget {
   final int initialTabIndex;
+  final int? singleTabIndex;
 
   const LegalAndRulesScreen({
     super.key,
     this.initialTabIndex = 0,
+    this.singleTabIndex,
   });
 
-  static void open(BuildContext context, {int initialTab = 0}) {
+  static void open(BuildContext context, {int initialTab = 0, bool standalone = true}) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => LegalAndRulesScreen(initialTabIndex: initialTab),
+        builder: (_) => LegalAndRulesScreen(
+          initialTabIndex: initialTab,
+          singleTabIndex: standalone ? initialTab : null,
+        ),
       ),
     );
+  }
+
+  static void openGuidelines(BuildContext context) {
+    open(context, initialTab: 0, standalone: true);
+  }
+
+  static void openTerms(BuildContext context) {
+    open(context, initialTab: 1, standalone: true);
+  }
+
+  static void openPrivacy(BuildContext context) {
+    open(context, initialTab: 2, standalone: true);
   }
 
   @override
@@ -23,26 +40,54 @@ class LegalAndRulesScreen extends StatefulWidget {
 
 class _LegalAndRulesScreenState extends State<LegalAndRulesScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  TabController? _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 2),
-    );
+    if (widget.singleTabIndex == null) {
+      _tabController = TabController(
+        length: 3,
+        vsync: this,
+        initialIndex: widget.initialTabIndex.clamp(0, 2),
+      );
+    }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isSingle = widget.singleTabIndex != null;
+    final singleIndex = widget.singleTabIndex ?? 0;
+
+    String title;
+    String subtitle;
+    if (isSingle) {
+      switch (singleIndex) {
+        case 1:
+          title = 'Terms of Service';
+          subtitle = 'Intermediary Safe Harbor & Legal Agreement';
+          break;
+        case 2:
+          title = 'Privacy Policy';
+          subtitle = 'DPDP Act 2023 Compliance & Data Protection';
+          break;
+        case 0:
+        default:
+          title = 'Community Guidelines';
+          subtitle = 'Vadodara Neighborhood Code';
+          break;
+      }
+    } else {
+      title = 'Nearhood Legal & Safety';
+      subtitle = 'Vadodara Community Standards';
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -53,20 +98,20 @@ class _LegalAndRulesScreenState extends State<LegalAndRulesScreen>
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Nearhood Legal & Safety',
-              style: TextStyle(
+              title,
+              style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
             ),
             Text(
-              'Vadodara Community Standards',
-              style: TextStyle(
+              subtitle,
+              style: const TextStyle(
                 color: AppColors.primaryText,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -74,30 +119,46 @@ class _LegalAndRulesScreenState extends State<LegalAndRulesScreen>
             ),
           ],
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 3,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textMuted,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-          tabs: const [
-            Tab(text: 'Rules'),
-            Tab(text: 'Terms'),
-            Tab(text: 'Privacy'),
-          ],
-        ),
+        bottom: isSingle
+            ? null
+            : TabBar(
+                controller: _tabController,
+                indicatorColor: AppColors.primary,
+                indicatorWeight: 3,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textMuted,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                tabs: const [
+                  Tab(text: 'Rules'),
+                  Tab(text: 'Terms'),
+                  Tab(text: 'Privacy'),
+                ],
+              ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildCommunityRulesTab(),
-          _buildTermsOfServiceTab(),
-          _buildPrivacyPolicyTab(),
-        ],
-      ),
+      body: isSingle
+          ? _buildSingleDoc(singleIndex)
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildCommunityRulesTab(),
+                _buildTermsOfServiceTab(),
+                _buildPrivacyPolicyTab(),
+              ],
+            ),
     );
+  }
+
+  Widget _buildSingleDoc(int index) {
+    switch (index) {
+      case 1:
+        return _buildTermsOfServiceTab();
+      case 2:
+        return _buildPrivacyPolicyTab();
+      case 0:
+      default:
+        return _buildCommunityRulesTab();
+    }
   }
 
   Widget _buildCommunityRulesTab() {

@@ -1547,7 +1547,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           profile: profile,
         ),
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        final clean = userHandle.replaceAll('@', '').trim();
+        setState(() {
+          _showProfilePhoto = AvatarCacheService.instance.isPhotoVisible(clean);
+        });
+      }
+    });
   }
 
   void _shareProfile() {
@@ -2325,64 +2332,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                             const SizedBox(height: 12),
                             _buildFoundingCard(),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    decoration: BoxDecoration(
-                                      color: _showProfilePhoto ? const Color(0xFFF7EAF5) : const Color(0xFFF1F5F9),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      _showProfilePhoto ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                                      color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
-                                      size: 19,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Show your profile photo',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          _showProfilePhoto
-                                              ? 'Visible across Feed, Bazar and Chat'
-                                              : 'Hidden across Feed, Bazar and Chat',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                            color: _showProfilePhoto ? AppColors.primary : AppColors.textMuted,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Switch.adaptive(
-                                    value: _showProfilePhoto,
-                                    onChanged: _toggleProfilePhotoVisibility,
-                                    activeTrackColor: AppColors.primary,
-                                  ),
-                                ],
-                              ),
-                            ),
                             const SizedBox(height: 12),
                             Column(
                               mainAxisSize: MainAxisSize.min,

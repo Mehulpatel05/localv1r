@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import '../../core/auth_repository.dart';
 import '../../core/models/user_profile.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../features/auth/login_flow_page.dart';
 import '../../screens/profile/blocked_users_screen.dart';
 import '../../screens/profile/widgets/support_request_sheet.dart';
@@ -13,6 +16,7 @@ import 'widgets/settings_tile.dart';
 import 'widgets/shorebird_update_tile.dart';
 import '../../screens/safety/legal_and_rules_screen.dart';
 import '../../screens/admin/founding_admin_screen.dart';
+import '../../services/auth_service.dart';
 import '../../services/post_repository.dart';
 import '../../services/token_decision_engine.dart';
 import '../../theme/app_colors.dart';
@@ -35,7 +39,39 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  late bool _showProfilePhoto;
 
+  @override
+  void initState() {
+    super.initState();
+    final cleanHandle = widget.profile.handle.replaceAll('@', '').trim();
+    _showProfilePhoto = AvatarCacheService.instance.isPhotoVisible(cleanHandle);
+  }
+
+  Future<void> _toggleProfilePhotoVisibility(bool value) async {
+    final cleanHandle = widget.profile.handle.replaceAll('@', '').trim();
+    setState(() {
+      _showProfilePhoto = value;
+    });
+    AvatarCacheService.instance.setPhotoVisible(cleanHandle, value);
+    try {
+      final token = await AuthService.instance.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final uri = Uri.parse('${AuthService.baseUrl}/profile');
+        await http.put(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'showProfilePhoto': value,
+            'show_profile_photo': value ? 1 : 0,
+          }),
+        ).timeout(const Duration(seconds: 10));
+      }
+    } catch (_) {}
+  }
 
   void _navigateToLogin(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
@@ -159,6 +195,20 @@ class _SettingsPageState extends State<SettingsPage> {
               label: 'Preferences',
               tiles: [
                 SettingsTile(
+                  icon: _showProfilePhoto ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  title: 'Show profile photo',
+                  description: _showProfilePhoto
+                      ? 'Visible across Feed, Bazar and Chat'
+                      : 'Hidden across Feed, Bazar and Chat',
+                  onTap: () => _toggleProfilePhotoVisibility(!_showProfilePhoto),
+                  trailing: Switch.adaptive(
+                    value: _showProfilePhoto,
+                    onChanged: _toggleProfilePhotoVisibility,
+                    activeTrackColor: AppColors.primary,
+                  ),
+                  semanticsLabel: 'Show profile photo, switch button',
+                ),
+                SettingsTile(
                   icon: Icons.notifications_none_outlined,
                   title: 'Notification Alerts',
                   description: 'Manage push and chat alerts',
@@ -201,21 +251,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.shield_outlined,
                   title: 'Community Guidelines',
                   description: 'Vadodara neighborhood house rules & standards',
-                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 0),
+                  onTap: () => LegalAndRulesScreen.openGuidelines(context),
                   semanticsLabel: 'Community Guidelines, button',
                 ),
                 SettingsTile(
                   icon: Icons.description_outlined,
                   title: 'Terms of Service',
                   description: 'Intermediary safe harbor & legal agreement',
-                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 1),
+                  onTap: () => LegalAndRulesScreen.openTerms(context),
                   semanticsLabel: 'Terms of Service, button',
                 ),
                 SettingsTile(
                   icon: Icons.privacy_tip_outlined,
                   title: 'Privacy Policy',
                   description: 'DPDP Act 2023 compliance & GPS privacy',
-                  onTap: () => LegalAndRulesScreen.open(context, initialTab: 2),
+                  onTap: () => LegalAndRulesScreen.openPrivacy(context),
                   semanticsLabel: 'Privacy Policy, button',
                 ),
               ],

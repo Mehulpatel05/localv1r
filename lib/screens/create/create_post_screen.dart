@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
+import '../../services/ai_category_classifier_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -65,13 +64,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String? _attachedLocationName;
   bool _isFetchingLocation = false;
 
-  final AudioRecorder _audioRecorder = AudioRecorder();
   final AudioPlayer _audioPlayer = AudioPlayer();
   File? _recordedAudioFile;
-  bool _isRecordingAudio = false;
   bool _isPlayingAudioPreview = false;
-  int _audioDurationSeconds = 0;
-  Timer? _audioTimer;
+
+  bool _isCategoryManuallySelected = false;
+  PostCategory? _aiDetectedCategory;
+  Timer? _aiClassifierDebounce;
 
   @override
   void initState() {
@@ -81,13 +80,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
     if (widget.initialCategory != null) {
       _selectedCategory = widget.initialCategory!;
+      _isCategoryManuallySelected = true;
     }
     if (widget.initialAudioFile != null && widget.initialAudioFile!.existsSync()) {
       _recordedAudioFile = widget.initialAudioFile;
     }
     final loc = widget.repository.locationService;
     _selectedArea = loc.area ?? loc.city.areas.firstOrNull;
-    _contentController.addListener(_validateLiveInput);
+    _contentController.addListener(_onContentChanged);
     _audioPlayer.playerStateStream.listen((state) {
       if (!mounted) return;
       final isPlaying = state.playing && state.processingState != ProcessingState.completed;
@@ -99,12 +99,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   void dispose() {
-    _audioTimer?.cancel();
-    _audioRecorder.dispose();
+    _aiClassifierDebounce?.cancel();
     _audioPlayer.dispose();
-    _contentController.removeListener(_validateLiveInput);
+    _contentController.removeListener(_onContentChanged);
     _contentController.dispose();
     super.dispose();
+  }
+
+  void _onContentChanged() {
+    _validateLiveInput();
+    _runAiCategoryDetection();
+  }
+
+  void _runAiCategoryDetection() {
+    _aiClassifierDebounce?.cancel();
+    _aiClassifierDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      final text = _contentController.text.trim();
+      if (text.length < 3) {
+        if (_aiDetectedCategory != null) {
+          setState(() => _aiDetectedCategory = null);
+        }
+        return;
+      }
+      if (_isEmergency) return;
+
+      final detected = AiCategoryClassifierService.instance.classify(text);
+      if (detected != PostCategory.general) {
+        if (!_isCategoryManuallySelected || detected == PostCategory.events) {
+          setState(() {
+            _selectedCategory = detected;
+            _aiDetectedCategory = detected;
+          });
+        }
+      } else if (!_isCategoryManuallySelected && _selectedCategory != PostCategory.general) {
+        setState(() {
+          _selectedCategory = PostCategory.general;
+          _aiDetectedCategory = null;
+        });
+      }
+    });
   }
 
   void _validateLiveInput() {
@@ -424,58 +458,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   bool get _canPublish =>
       !_isPublishing &&
-      !_isRecordingAudio &&
       (_contentController.text.trim().isNotEmpty || _mediaFiles.isNotEmpty || _recordedAudioFile != null) &&
       _errorMessage == null;
-
-  Future<void> _startAudioRecording() async {
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        final dir = await getTemporaryDirectory();
-        final path = '${dir.path}/post_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        await _audioRecorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
-          path: path,
-        );
-        setState(() {
-          _isRecordingAudio = true;
-          _audioDurationSeconds = 0;
-          _recordedAudioFile = null;
-        });
-        _audioTimer?.cancel();
-        _audioTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          setState(() => _audioDurationSeconds++);
-          if (_audioDurationSeconds >= 120) {
-            _stopAudioRecording();
-          }
-        });
-      }
-    } catch (e) {
-      setState(() => _errorMessage = 'Microphone error: $e');
-    }
-  }
-
-  Future<void> _stopAudioRecording() async {
-    _audioTimer?.cancel();
-    try {
-      final path = await _audioRecorder.stop();
-      if (path != null && mounted) {
-        final file = File(path);
-        if (await file.exists()) {
-          setState(() {
-            _isRecordingAudio = false;
-            _recordedAudioFile = file;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isRecordingAudio = false);
-    }
-  }
 
   Future<void> _toggleAudioPreview() async {
     if (_recordedAudioFile == null) return;
@@ -489,11 +473,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   void _removeVoiceNote() {
     _audioPlayer.stop();
-    _audioTimer?.cancel();
     setState(() {
       _recordedAudioFile = null;
-      _isRecordingAudio = false;
-      _audioDurationSeconds = 0;
       _isPlayingAudioPreview = false;
     });
   }
@@ -900,57 +881,64 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     return result == true;
   }
 
-  Widget _buildToolbarPill({
+  Widget _buildActionButton({
     required IconData icon,
     required String label,
     required VoidCallback? onTap,
     bool isActive = false,
     bool isLoading = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isActive ? AppColors.primary : AppColors.cardBorder,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isLoading)
-                const SizedBox(
-                  width: 13,
-                  height: 13,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              else
-                Icon(
-                  icon,
-                  size: 14,
-                  color: isActive ? Colors.white : AppColors.textPrimary,
-                ),
-              const SizedBox(width: 4.5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: isActive ? Colors.white : AppColors.textPrimary,
-                ),
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: isActive ? AppColors.primarySoft : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isActive ? AppColors.primary : AppColors.cardBorder,
+                width: isActive ? 1.5 : 1.2,
               ),
-            ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                else
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: isActive ? AppColors.primary : const Color(0xFF475569),
+                  ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isActive ? AppColors.primary : AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -994,35 +982,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
             onPressed: _openAiVoiceSheet,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: const StadiumBorder(),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-              ),
-              onPressed: _canPublish ? _submitPost : null,
-              child: _isPublishing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text(
-                      'Publish',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                      ),
-                    ),
-            ),
-          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
@@ -1092,6 +1052,40 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ],
                 ),
               ),
+              if (_aiDetectedCategory != null && !_isEmergency)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.auto_awesome, size: 13, color: AppColors.primary),
+                            const SizedBox(width: 5),
+                            Text(
+                              'AI Selected: ${_aiDetectedCategory!.label}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               IgnorePointer(
                 ignoring: _isEmergency,
                 child: Opacity(
@@ -1105,7 +1099,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       isScrollable: true,
                       onSelected: (index) {
                         if (!_isEmergency && index >= 0 && index < _categories.length) {
-                          setState(() => _selectedCategory = _categories[index]);
+                          setState(() {
+                            _selectedCategory = _categories[index];
+                            _isCategoryManuallySelected = true;
+                          });
                         }
                       },
                     ),
@@ -1152,8 +1149,33 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 8),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        if (RewardsService.isRewardsEnabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star_rounded, size: 13, color: Color(0xFFD97706)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _isEmergency ? 'Alert' : '+5 pts',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFB45309),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          const SizedBox.shrink(),
                         GestureDetector(
                           onTap: _openAiVoiceSheet,
                           child: Container(
@@ -1219,89 +1241,48 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       const SizedBox(height: 12),
                       _buildMediaPreviews(),
                     ],
-                    if (_recordedAudioFile != null || _isRecordingAudio) ...[
+                    if (_recordedAudioFile != null) ...[
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: _isRecordingAudio ? AppColors.errorSoft : AppColors.primarySoft,
+                          color: AppColors.primarySoft,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _isRecordingAudio
-                                ? AppColors.error.withValues(alpha: 0.3)
-                                : AppColors.primary.withValues(alpha: 0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Row(
                           children: [
-                            if (_isRecordingAudio) ...[
-                              Container(
-                                width: 10,
-                                height: 10,
+                            InkWell(
+                              onTap: _toggleAudioPreview,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
                                 decoration: const BoxDecoration(
-                                  color: AppColors.error,
+                                  color: AppColors.primary,
                                   shape: BoxShape.circle,
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Recording Audio... ${_audioDurationSeconds}s',
-                                style: const TextStyle(
-                                  color: AppColors.error,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
+                                child: Icon(
+                                  _isPlayingAudioPreview ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
                               ),
-                              const Spacer(),
-                              InkWell(
-                                onTap: _stopAudioRecording,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.error,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Text(
-                                    'DONE',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Audio Attached',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
                               ),
-                            ] else ...[
-                              InkWell(
-                                onTap: _toggleAudioPreview,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    _isPlayingAudioPreview ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Voice Note Attached (${_audioDurationSeconds}s)',
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const Spacer(),
-                              InkWell(
-                                onTap: _removeVoiceNote,
-                                child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
-                              ),
-                            ],
+                            ),
+                            const Spacer(),
+                            InkWell(
+                              onTap: _removeVoiceNote,
+                              child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+                            ),
                           ],
                         ),
                       ),
@@ -1309,70 +1290,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     const Divider(height: 20, color: Color(0xFFF1F5F9)),
                     Row(
                       children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Row(
-                              children: [
-                                _buildToolbarPill(
-                                  icon: Icons.photo_library_rounded,
-                                  label: _mediaFiles.isEmpty ? 'Photos' : 'Photos (${_mediaFiles.length})',
-                                  isActive: _mediaFiles.isNotEmpty,
-                                  onTap: _isPublishing ? null : _showGalleryOptions,
-                                ),
-                                const SizedBox(width: 6),
-                                _buildToolbarPill(
-                                  icon: Icons.camera_alt_rounded,
-                                  label: 'Camera',
-                                  onTap: _isPublishing ? null : _showCameraOptions,
-                                ),
-                                const SizedBox(width: 6),
-                                _buildToolbarPill(
-                                  icon: _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
-                                  label: 'Location',
-                                  isActive: _attachedLat != null,
-                                  isLoading: _isFetchingLocation,
-                                  onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
-                                ),
-                                const SizedBox(width: 6),
-                                _buildToolbarPill(
-                                  icon: _isRecordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded,
-                                  label: _recordedAudioFile != null ? 'Voice Note' : (_isRecordingAudio ? 'Stop' : 'Voice Note'),
-                                  isActive: _recordedAudioFile != null || _isRecordingAudio,
-                                  onTap: _isPublishing
-                                      ? null
-                                      : (_isRecordingAudio ? _stopAudioRecording : _startAudioRecording),
-                                ),
-                              ],
-                            ),
-                          ),
+                        _buildActionButton(
+                          icon: Icons.photo_library_rounded,
+                          label: _mediaFiles.isEmpty ? 'Photos' : 'Photos (${_mediaFiles.length})',
+                          isActive: _mediaFiles.isNotEmpty,
+                          onTap: _isPublishing ? null : _showGalleryOptions,
                         ),
-                        if (RewardsService.isRewardsEnabled) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.star_rounded, size: 12, color: Color(0xFFD97706)),
-                                const SizedBox(width: 2),
-                                Text(
-                                  _isEmergency ? 'Alert' : '+5 pts',
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFFB45309),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        const SizedBox(width: 8),
+                        _buildActionButton(
+                          icon: Icons.camera_alt_rounded,
+                          label: 'Camera',
+                          onTap: _isPublishing ? null : _showCameraOptions,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildActionButton(
+                          icon: _attachedLat != null ? Icons.my_location_rounded : Icons.add_location_alt_outlined,
+                          label: 'Location',
+                          isActive: _attachedLat != null,
+                          isLoading: _isFetchingLocation,
+                          onTap: _isPublishing || _isFetchingLocation ? null : _attachCurrentLocation,
+                        ),
                       ],
                     ),
                   ],
@@ -1544,6 +1481,75 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ],
               const SizedBox(height: 24),
             ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 50,
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.8),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: _canPublish ? _submitPost : null,
+              child: _isPublishing
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.2,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Publishing...',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.send_rounded, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Publish Post',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),

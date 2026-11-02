@@ -137,7 +137,10 @@ class _FeedScreenState extends State<FeedScreen> with AutomaticKeepAliveClientMi
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    );
+    if (widget.repository.isLoading) {
+      _shimmerController.repeat();
+    }
     AppAssetService.instance.init();
     AppAssetService.instance.syncAllFromServer();
     widget.repository.addListener(_onRepositoryUpdated);
@@ -154,6 +157,15 @@ class _FeedScreenState extends State<FeedScreen> with AutomaticKeepAliveClientMi
   }
 
   void _onRepositoryUpdated() {
+    if (widget.repository.isLoading) {
+      if (!_shimmerController.isAnimating) {
+        _shimmerController.repeat();
+      }
+    } else {
+      if (_shimmerController.isAnimating) {
+        _shimmerController.stop();
+      }
+    }
     _triggerFeedImagePrefetch();
     if (mounted) setState(() {});
   }
@@ -1486,8 +1498,8 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
 
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
+                    child: Builder(
+                      builder: (context) {
                         const postTextStyle = TextStyle(
                           color: Color(0xFF2A1027),
                           fontSize: 14.5,
@@ -1496,14 +1508,7 @@ class _PostCardItemState extends State<_PostCardItem> with AutomaticKeepAliveCli
                           letterSpacing: -0.1,
                         );
 
-                        final span = TextSpan(text: post.content, style: postTextStyle);
-                        final tp = TextPainter(
-                          text: span,
-                          maxLines: 3,
-                          textDirection: Directionality.of(context),
-                        );
-                        tp.layout(maxWidth: constraints.maxWidth);
-                        final hasOverflow = tp.didExceedMaxLines || post.content.split('\n').length > 3;
+                        final hasOverflow = post.content.length > 130 || post.content.contains('\n');
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

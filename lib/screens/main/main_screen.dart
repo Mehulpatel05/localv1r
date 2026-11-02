@@ -71,15 +71,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
     _liquidAnimController.value = 1.0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        for (int i = 1; i < 4; i++) {
-          if (!_mountedTabs.contains(i)) {
-            _mountedTabs.add(i);
-            _cachedTabs[i] = _createTab(i);
-          }
-        }
-        setState(() {});
-      }
       _checkAreaAndCityStatus();
       NotificationService.instance.initialize();
       NotificationService.instance.startListening(widget.currentUserHandle);
@@ -245,6 +236,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       _mountedTabs.add(index);
       _cachedTabs[index] = _createTab(index);
     }
+    final previous = _currentIndexNotifier.value;
     final currentProgress = _liquidPositionAnim.value;
     _animFromIndex = _animFromIndex + (_animToIndex - _animFromIndex) * currentProgress;
     _animToIndex = index.toDouble();
@@ -252,18 +244,23 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _currentIndexNotifier.value = index;
 
     if (_pageController.hasClients) {
-      _isPageAnimating = true;
-      _pageController
-          .animateToPage(
-            index,
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.fastOutSlowIn,
-          )
-          .then((_) {
-            if (mounted) {
-              _isPageAnimating = false;
-            }
-          });
+      if ((index - previous).abs() > 1) {
+        _isPageAnimating = false;
+        _pageController.jumpToPage(index);
+      } else {
+        _isPageAnimating = true;
+        _pageController
+            .animateToPage(
+              index,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+            )
+            .then((_) {
+              if (mounted) {
+                _isPageAnimating = false;
+              }
+            });
+      }
     }
 
     if (index == 0) {
